@@ -88,8 +88,10 @@
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
           <!-- FE-19 (GT P3): the schools I belong to. The master's student
-               groups are a master-zone concept a plain user never meets. -->
+               groups are a master-zone concept a plain user never meets.
+               FE-151: the row follows the «schools» instance option. -->
           <VMenuRow
+            v-if="schoolsEnabled"
             :label="t('user.screens.userProfile.menu.mySchools')"
             @click="router.push({ name: 'user-my-schools' })"
           >
@@ -116,9 +118,10 @@
           </VMenuRow>
           <!-- BE-138: tokens for the user's AI (MCP) clients. tz-whitelabel
                §4: the row follows the «ai» edition module -- an edition
-               without it has neither the route nor the entry point. -->
+               without it has neither the route nor the entry point -- and
+               the «mcp» instance option (FE-151). -->
           <VMenuRow
-            v-if="aiEnabled"
+            v-if="aiConnectionsEnabled"
             :label="t('user.screens.userProfile.menu.aiConnections')"
             @click="onAiConnections"
           >
@@ -184,6 +187,7 @@ import { computed, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import { useUiStore } from '@/stores/ui'
 import { VAvatar, VStatCard, VCard, VMenuRow } from '@/components/ui'
 import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
@@ -269,8 +273,11 @@ function onAiConnections(): void {
   void router.push({ name: 'user-ai-connections' })
 }
 
-// tz-whitelabel §4: the «ai» edition module owns the menu row above.
-const aiEnabled = featureEnabled('ai')
+// tz-whitelabel §4: the «ai» edition module owns the AI connections row;
+// FE-151: the «mcp» instance option turns it on for the instance.
+const aiConnectionsEnabled = featureEnabled('ai') && isOptionEnabled('mcp')
+// FE-151: the «schools» instance option owns the my-schools row.
+const schoolsEnabled = isOptionEnabled('schools')
 
 function onSupport(): void {
   // User support screen (batch I): topic picker + message + honest stub submit

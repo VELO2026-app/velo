@@ -119,7 +119,7 @@ import { useRememberedCount } from '@/composables/useRememberedCount'
 import { extractApiError } from '@/composables/useApiError'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useAuthStore } from '@/stores/auth'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -270,6 +270,8 @@ function routeFor(
 
   switch (action) {
     case 'open_school':
+      // FE-151: with the schools option off the row is mark-read only.
+      if (!isOptionEnabled('schools')) return null
       return typeof params.school_id === 'string' && params.school_id
         ? { name: 'user-school', params: { id: params.school_id } }
         : null
@@ -277,6 +279,7 @@ function routeFor(
       // Links: school.master_offered has its own verb now -- the
       // consent screen, by school_id (it used to be a type check on the
       // school-page verb).
+      if (!isOptionEnabled('schools')) return null
       return typeof params.school_id === 'string' && params.school_id
         ? { name: 'school-master-offer', params: { id: params.school_id } }
         : null
@@ -291,9 +294,9 @@ function routeFor(
     case 'open_feedback':
       return practiceId ? { name: 'user-feedback', params: { practiceId } } : null
     case 'open_wallet':
-      // tz-whitelabel §4: an edition without the payments module has no
+      // tz-whitelabel §4: an instance with the payments option off (FE-151) has no
       // wallet route -- the tap degrades to no navigation, not the 404.
-      return featureEnabled('payments') ? { name: 'user-topup' } : null
+      return isOptionEnabled('payments') ? { name: 'user-topup' } : null
     case 'open_master_application':
       // BE-59: the «get verified» half of the master-appointment story --
       // the verb was named by the backend for exactly this mapping; the

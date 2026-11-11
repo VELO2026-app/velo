@@ -99,7 +99,7 @@ envsubst'ом в nginx при старте (FE-129); на переходный �
 | `telegramBotUrl` ← `TELEGRAM_BOT_URL` (шов comms) | текущий | вход/бот-ссылки |
 | `defaultLocale` ← `DEFAULT_LANGUAGE` | `'ru'` | i18n `fallbackLocale`, дефолты `format.ts`, `<html lang>`, манифест (FE-155) |
 | `locales` ← `LANGUAGES` (`en,ru,uk`, порядок паспорта) | `['ru']` | набор языков инстанса |
-| опции ← `OPTION_PAYMENTS` … `OPTION_LLM` (`true`/`false`) | нет переменной = выключено | `isOptionEnabled` (FE-151, в работе) |
+| опции ← `OPTION_PAYMENTS` … `OPTION_LLM` (`true`/`false`) | нет переменной = выключено | `isOptionEnabled` (FE-151) |
 
 **Ред. 10.11 — бренд не значение старта.** `brand` из `/config.json` убран:
 имя — `displayName` бренд-записи скин-пакета (`$extensions["velo-skin"]`),

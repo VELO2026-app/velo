@@ -7,6 +7,10 @@
 // gate literals may appear in (scripts/brand-grep.mjs). A group its gate
 // folds away is never referenced, so Rollup drops it with its screens'
 // dynamic imports.
+//
+// Instance options (FE-151) are NOT gates: their records are always
+// registered and carry meta.option; with the option off router/guards.ts
+// optionGuard sends a navigation into them to the 404 screen.
 // =============================================================================
 
 import type { RouteRecordRaw } from 'vue-router'
@@ -22,6 +26,7 @@ export const AI_USER_ROUTES: RouteRecordRaw[] = [
     // BE-138: personal tokens for the user's MCP clients.
     path: 'profile/ai-connections',
     name: 'user-ai-connections',
+    meta: { option: 'mcp' },
     component: () => import('@/views/user/AiConnectionsView.vue'),
   },
   {
@@ -31,26 +36,26 @@ export const AI_USER_ROUTES: RouteRecordRaw[] = [
   },
 ]
 
-/** The «payments» module's user screens: the top-up and its two returns. */
+/** The «payments» option's user screens: the top-up and its two returns. */
 export const PAYMENTS_USER_ROUTES: RouteRecordRaw[] = [
   {
     path: 'topup',
     name: 'user-topup',
     // [FE-3] No floating header (own inline title) -- headerless contract,
     // was the phantom 104px band.
-    meta: { headerless: true },
+    meta: { option: 'payments', headerless: true },
     component: () => import('@/views/user/TopupView.vue'),
   },
   {
     path: 'topup/success',
     name: 'user-topup-success',
-    meta: { headerless: true },
+    meta: { option: 'payments', headerless: true },
     component: () => import('@/views/user/TopupSuccessView.vue'),
   },
   {
     path: 'topup/cancel',
     name: 'user-topup-cancel',
-    meta: { headerless: true },
+    meta: { option: 'payments', headerless: true },
     component: () => import('@/views/user/TopupCancelView.vue'),
   },
 ]
@@ -58,7 +63,6 @@ export const PAYMENTS_USER_ROUTES: RouteRecordRaw[] = [
 /** The module groups of the user zone that router/index.ts lets in. */
 export interface UserModuleRoutes {
   ai: readonly RouteRecordRaw[]
-  payments: readonly RouteRecordRaw[]
 }
 
 /** The /user zone: UserShell and its screens, with the enabled modules' groups. */
@@ -103,6 +107,7 @@ export function userRoutes(modules: UserModuleRoutes): RouteRecordRaw[] {
           // user-calendar-master above.
           path: 'calendar/school/:schoolId',
           name: 'user-calendar-school',
+          meta: { option: 'schools' },
           component: () => import('@/views/user/CalendarView.vue'),
         },
         {
@@ -225,7 +230,7 @@ export function userRoutes(modules: UserModuleRoutes): RouteRecordRaw[] {
           // account section (i18n:user.screens.userProfile.section.account).
           path: 'my-schools',
           name: 'user-my-schools',
-          meta: { hideTabBar: true },
+          meta: { option: 'schools', hideTabBar: true },
           component: () => import('@/views/user/UserMySchoolsView.vue'),
         },
         {
@@ -237,12 +242,13 @@ export function userRoutes(modules: UserModuleRoutes): RouteRecordRaw[] {
           // tab visibility itself is the schoolsHub store's decision.
           path: 'schools',
           name: 'user-schools',
+          meta: { option: 'schools' },
           component: () => import('@/views/user/SchoolsView.vue'),
         },
         {
           path: 'schools/:id',
           name: 'user-school',
-          meta: { hideTabBar: true },
+          meta: { option: 'schools', hideTabBar: true },
           // ONE page for both zones (TZ 6.3) -- the master zone mounts this
           // same view below; the action set keys off viewer.relation and the
           // zone only picks the back target.
@@ -289,9 +295,8 @@ export function userRoutes(modules: UserModuleRoutes): RouteRecordRaw[] {
           // and the screen's own back button.
           meta: { headerless: true },
         },
-        // tz-whitelabel §4: the «payments» module's top-up screens (the
-        // whole group travels together), when the edition has it.
-        ...modules.payments,
+        // FE-151: the «payments» option's top-up screens (meta.option).
+        ...PAYMENTS_USER_ROUTES,
         {
           path: '',
           redirect: { name: 'user-dashboard' },

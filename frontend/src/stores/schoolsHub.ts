@@ -35,6 +35,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { getSchools, getMySchools } from '@/api/schools'
 import { useAuthStore } from '@/stores/auth'
+import { isOptionEnabled } from '@/platform/instance'
 import type { SchoolMineItem } from '@/api/types'
 
 /** Membership answer for the shells: whether this account sees the Schools tab, plus the school-create right. */
@@ -71,6 +72,9 @@ export const useSchoolsHubStore = defineStore('schoolsHub', () => {
   let generation = 0
 
   async function ensureCurator(): Promise<void> {
+    // FE-151: with the option off the backend closes the school endpoints;
+    // no probe, the store stays "no schools" (fail-closed, as before).
+    if (!isOptionEnabled('schools')) return
     const gen = generation
     const probes: Array<Promise<void>> = []
     if (!mineSettled.value) {

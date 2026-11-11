@@ -29,14 +29,17 @@
 // owns the namespace list (pure, node-safe: vite.config.ts imports it).
 // =============================================================================
 
-/** Modules an instance edition may switch off (tz-whitelabel §4). Adding a
+/** Modules an instance edition may switch off (tz-whitelabel §4). Since
+ *  10.11 velo has one edition, `ai`; `payments` left this list for the
+ *  instance options (FE-151, platform/instance.ts isOptionEnabled) -- its
+ *  code is always in the bundle, the flag arrives at container start. Adding a
  *  name: add the define in vite.config.ts, the declare in env.d.ts, and gate
  *  the module's routes. RENAMING or REMOVING a name is a coordinated
  *  skin+app release -- the same generation rule the token contract uses
  *  (tz-whitelabel §3.1), applied to the feature namespace. */
-export const FEATURE_NAMES = ['ai', 'payments'] as const
+export const FEATURE_NAMES = ['ai'] as const
 
-/** A module an instance edition may switch off ('ai', 'payments'). */
+/** A module an instance edition may switch off ('ai'). */
 export type FeatureName = (typeof FEATURE_NAMES)[number]
 
 /** VITE_FEATURES semantics (mirrors instance.ts parseFeatures): absent, empty

@@ -52,14 +52,52 @@ describe('route table: module gates resolve in the golden build (tz-whitelabel �
     expect(router.resolve({ name: 'user-topup' }).href).toBe('/user/topup')
     expect(router.resolve({ name: 'user-topup-success' }).href).toBe('/user/topup/success')
     expect(router.resolve({ name: 'user-topup-cancel' }).href).toBe('/user/topup/cancel')
-    // FE-112 (tz-whitelabel §4): the finance screen and the payout queue are
-    // the payments module's master/admin surfaces -- same gate, same golden
-    // build resolution; the «cut» side is the core/school cells of the F5 matrix.
+    // FE-112, FE-151: the finance screen and the payout queue are the
+    // payments option's master/admin surfaces -- always registered (variant
+    // A); the option's off side is meta.option (the table below).
     expect(router.resolve({ name: 'master-finance' }).href).toBe('/master/finance')
     expect(router.resolve({ name: 'admin-withdrawals' }).href).toBe('/admin/withdrawals')
     expect(router.resolve({ name: 'admin-withdrawal-detail', params: { id: 'w1' } }).href).toBe(
       '/admin/withdrawals/w1',
     )
+  })
+})
+
+describe('route table: instance options (FE-151, meta.option)', () => {
+  // Every record of an option's section, pinned: a new screen of a section
+  // that forgets meta.option stays reachable on an instance where the
+  // backend has closed its API -- add it here deliberately.
+  it('the option records are exactly these', () => {
+    const tagged = Object.fromEntries(
+      router
+        .getRoutes()
+        .filter((r) => r.meta.option !== undefined && r.name !== undefined)
+        .map((r) => [String(r.name), r.meta.option]),
+    )
+    expect(tagged).toEqual({
+      'user-topup': 'payments',
+      'user-topup-success': 'payments',
+      'user-topup-cancel': 'payments',
+      'master-finance': 'payments',
+      'master-promocodes': 'payments',
+      'master-promocode-new': 'payments',
+      'admin-withdrawals': 'payments',
+      'admin-withdrawal-detail': 'payments',
+      'user-calendar-school': 'schools',
+      'user-my-schools': 'schools',
+      'user-schools': 'schools',
+      'user-school': 'schools',
+      'master-schools': 'schools',
+      'master-school-create': 'schools',
+      'master-school': 'schools',
+      'master-school-members': 'schools',
+      'master-school-analytics': 'schools',
+      'master-school-student': 'schools',
+      'admin-schools': 'schools',
+      'school-join': 'schools',
+      'school-master-offer': 'schools',
+      'user-ai-connections': 'mcp',
+    })
   })
 })
 

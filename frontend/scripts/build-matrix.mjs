@@ -83,7 +83,6 @@ const frontendDir = () => resolve(fileURLToPath(new URL('..', import.meta.url)))
  *  features.ts) -- the unit suite pins the two lists together. */
 export const MODULE_CHUNKS = {
   ai: [/AiSummary/, /AiConnections/],
-  payments: [/Topup/, /MasterFinanceView/, /AdminWithdrawals/],
 }
 
 /** GOLDEN_SKIN.themeColor (platform/skin.ts) -- the skinless build's header
