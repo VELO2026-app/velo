@@ -22,6 +22,8 @@
 //                    Design_prototype/**, and any *.md OUTSIDE frontend/ and
 //                    packages/ (inside them a README can be a test input:
 //                    packages/velo-ui/README.md carries the token contract).
+//   spec          -- root tz-*.md: executable contracts (FE-147), the lint's
+//                    spec-coverage gate parses their headings -> frontend light.
 //   comment-only  -- an M-status edit where every added/removed line is a
 //                    comment line for that file type -> frontend light.
 //   backend       -- backend/** -> drift (a docstring is an OpenAPI
@@ -81,6 +83,7 @@ const COMMENT_BY_EXT = {
   yml: HASH, yaml: HASH, sh: HASH, py: HASH, toml: HASH,
 }
 
+const SPEC = /^tz-[^/]+\.md$/
 const isDocs = (f) => DOCS.some((re) => re.test(f)) || (f.endsWith('.md') && !CODE_TREES.test(f))
 
 function isCommentOnly(file) {
@@ -108,6 +111,7 @@ for (const row of git('diff', '--name-status', '--no-renames', base, head).split
   if (VISUAL.some((re) => re.test(file))) visual = true
   let cls
   if (FORCE_ALL.some((re) => re.test(file))) { cls = 'gate'; bump('full'); drift = true; docker = true }
+  else if (SPEC.test(file)) { cls = 'spec'; bump('light') }
   else if (isDocs(file)) cls = 'docs'
   else if (file.startsWith('backend/')) { cls = 'backend'; drift = true }
   else if (status === 'M' && isCommentOnly(file)) { cls = 'comment-only'; if (CODE_TREES.test(file)) bump('light') }
