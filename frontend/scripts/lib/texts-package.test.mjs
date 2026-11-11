@@ -19,7 +19,12 @@ const BASE = {
   en: { common: { save: 'Save' } },
 }
 
-/** A package and its base on disk; `files` are the package's. */
+/**
+ * A package and its base on disk; `files` are the package's.
+ *
+ * @param {Record<string, string>} files
+ * @param {Record<string, object>} [base]
+ */
 function check(files, base = BASE) {
   const root = mkdtempSync(join(tmpdir(), 'texts-'))
   try {

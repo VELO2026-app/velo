@@ -78,11 +78,17 @@ function stripBom(text) {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
 }
 
+/** The message of a caught value (njs and Node both throw Error objects). */
+function errorMessage(e) {
+  return String(/** @type {{ message?: string }} */ (e).message)
+}
+
 function isDir(path) {
   try {
     return fs.statSync(path).isDirectory()
   } catch (e) {
-    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') {
+    const code = /** @type {{ code?: string }} */ (e).code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
       return false
     }
     throw e
@@ -155,8 +161,13 @@ function packageFiles(dir, problems) {
   return files
 }
 
-/** primer-package.yaml, block form: `key: value` lines, `#` comments. */
+/**
+ * primer-package.yaml, block form: `key: value` lines, `#` comments.
+ *
+ * @returns {{ error?: string, fields?: Record<string, string> }}
+ */
 function parseManifest(text) {
+  /** @type {Record<string, string>} */
   const out = {}
   const lines = stripBom(text).split(/\r?\n/)
   for (let i = 0; i < lines.length; i++) {
@@ -183,8 +194,9 @@ function checkManifest(dir, files, problems) {
     report(problems, MANIFEST, '', parsed.error)
     return
   }
-  const schema = parsed.fields.schema
-  const contract = parsed.fields.contract
+  const fields = parsed.fields || {}
+  const schema = fields.schema
+  const contract = fields.contract
   if (schema !== '1') {
     report(problems, MANIFEST, '', 'schema must be 1, got ' + (schema || 'nothing'))
   }
@@ -323,13 +335,13 @@ function readJson(path, problems, file) {
     }
     text = fs.readFileSync(path, 'utf8')
   } catch (e) {
-    report(problems, file, '', 'cannot be read: ' + String(e && e.message))
+    report(problems, file, '', 'cannot be read: ' + errorMessage(e))
     return null
   }
   try {
     return JSON.parse(stripBom(text))
   } catch (e) {
-    report(problems, file, '', 'not valid JSON: ' + String(e && e.message))
+    report(problems, file, '', 'not valid JSON: ' + errorMessage(e))
     return null
   }
 }
@@ -354,7 +366,7 @@ function checkTexts(dir, builtIn) {
   files
     .filter((file) => LANGUAGE_FILE.test(file))
     .forEach((file) => {
-      const language = LANGUAGE_FILE.exec(file)[1]
+      const language = /** @type {RegExpExecArray} */ (LANGUAGE_FILE.exec(file))[1]
       if (languages.indexOf(language) < 0) {
         report(
           problems,
