@@ -270,6 +270,8 @@ function routeFor(
 
   switch (action) {
     case 'open_school':
+      // FE-151: with the schools option off the row is mark-read only.
+      if (!isOptionEnabled('schools')) return null
       return typeof params.school_id === 'string' && params.school_id
         ? { name: 'user-school', params: { id: params.school_id } }
         : null
@@ -277,6 +279,7 @@ function routeFor(
       // Links: school.master_offered has its own verb now -- the
       // consent screen, by school_id (it used to be a type check on the
       // school-page verb).
+      if (!isOptionEnabled('schools')) return null
       return typeof params.school_id === 'string' && params.school_id
         ? { name: 'school-master-offer', params: { id: params.school_id } }
         : null

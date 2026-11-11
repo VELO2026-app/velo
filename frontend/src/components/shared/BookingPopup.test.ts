@@ -27,6 +27,14 @@ import type { PracticeResponse } from '@/api/types'
 const harness = vi.hoisted(() => ({
   routerPush: vi.fn(),
   hasEnough: true,
+  purchasePractice: vi.fn(() => Promise.resolve({})),
+  createBooking: vi.fn(() => Promise.resolve({})),
+}))
+
+vi.mock('@/api/bookings', () => ({
+  purchasePractice: harness.purchasePractice,
+  createBooking: harness.createBooking,
+  previewPurchase: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -192,5 +200,35 @@ describe('BookingPopup · feature gates (tz-whitelabel §4)', () => {
     }
     await flush()
     expect(harness.routerPush).not.toHaveBeenCalled()
+  })
+
+  // FE-151: the purchase router is closed with the payments option off
+  // (BE-182); the bookings router runs the same service and stays open.
+  it('the payments option OFF: a free practice books through POST /bookings', async () => {
+    applyInstanceConfig({ options: { payments: 'false' } })
+    onTestFinished(() => applyInstanceConfig(null))
+    harness.purchasePractice.mockClear()
+    harness.createBooking.mockClear()
+    mountPopup(practice({ is_free: true, price_cents: 0 }))
+    await flush()
+    for (const button of Array.from(document.querySelectorAll('button'))) {
+      if ((button.textContent ?? '').trim() === 'Записаться') button.click()
+    }
+    await flush()
+    expect(harness.createBooking).toHaveBeenCalledWith('p1')
+    expect(harness.purchasePractice).not.toHaveBeenCalled()
+  })
+
+  it('the payments option ON (golden): the booking is a purchase, as before', async () => {
+    harness.purchasePractice.mockClear()
+    harness.createBooking.mockClear()
+    mountPopup(practice({ is_free: true, price_cents: 0 }))
+    await flush()
+    for (const button of Array.from(document.querySelectorAll('button'))) {
+      if ((button.textContent ?? '').trim() === 'Записаться') button.click()
+    }
+    await flush()
+    expect(harness.purchasePractice).toHaveBeenCalledWith('p1', undefined)
+    expect(harness.createBooking).not.toHaveBeenCalled()
   })
 })

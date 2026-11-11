@@ -175,17 +175,19 @@ export function masterRoutes(): RouteRecordRaw[] {
         {
           path: 'promocodes',
           name: 'master-promocodes',
-          meta: { hideTabBar: true },
+          // FE-151: master promo codes are a payments surface -- the backend
+          // closes /masters/me/promos with the option (BE-182).
+          meta: { option: 'payments', hideTabBar: true },
           component: () => import('@/views/master/MasterPromocodesView.vue'),
         },
         {
           path: 'promocodes/new',
           name: 'master-promocode-new',
-          meta: { hideTabBar: true },
+          meta: { option: 'payments', hideTabBar: true },
           component: () => import('@/views/master/MasterNewPromocodeView.vue'),
         },
-        // FE-112 (tz-whitelabel §4): the finance screen is the payments
-        // module's master surface -- cut from editions without it.
+        // FE-112, FE-151: the finance screen is the payments option's
+        // master surface (meta.option).
         ...PAYMENTS_MASTER_ROUTES,
         {
           path: 'students',

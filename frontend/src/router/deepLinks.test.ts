@@ -75,6 +75,23 @@ describe('parseStartParam', () => {
     // FE-112, FE-151: with the payments option off there is no wallet
     // route in ANY zone -- the user's top-up and the master's finance
     // screen are the same option; both taps degrade to no navigation.
+    it('school verbs and the school invite with the schools option off -> no route', () => {
+      const invite = `school__${'a'.repeat(43)}`
+      // Golden: every one of them is a route.
+      expect(parseStartParam(`open_school__${id}`, 'user')).not.toBeNull()
+      expect(parseStartParam(`open_master_offer__${id}`, 'user')).not.toBeNull()
+      expect(parseStartParam(invite, 'user')).not.toBeNull()
+      applyInstanceConfig({ options: { schools: 'false' } })
+      try {
+        expect(parseStartParam(`open_school__${id}`, 'user')).toBeNull()
+        expect(parseStartParam(`open_school__${id}`, 'master')).toBeNull()
+        expect(parseStartParam(`open_master_offer__${id}`, 'user')).toBeNull()
+        expect(parseStartParam(invite, 'user')).toBeNull()
+      } finally {
+        applyInstanceConfig(null)
+      }
+    })
+
     it('open_wallet with the payments option off -> no route in either zone', () => {
       applyInstanceConfig({ options: { payments: 'false' } })
       try {
