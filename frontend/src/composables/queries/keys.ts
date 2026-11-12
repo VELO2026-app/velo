@@ -134,6 +134,8 @@ export const keys = {
      * the feed's own reloads read them back from it.
      */
     feed: (filters: object) => ['diary', 'list', 'feed', filters] as const,
+    /** Prefix of every search jump window. */
+    jumps: () => ['diary', 'list', 'jump'] as const,
     /** The search jump: the window of the feed around one found event, then older pages. */
     jump: (eventId: string) => ['diary', 'list', 'jump', eventId] as const,
     /** `GET /diary/{id}` -- one entry (note / dream) in full. */

@@ -225,9 +225,9 @@ const entryId = computed(() => String(route.params.id))
 
 const entryQuery = useQuery(() => diaryEntryQuery(entryId.value))
 const { loading, failed } = screenQueryState(entryQuery)
-const entry = computed(() => entryQuery.data.value ?? null)
 // The entry is gone (deleted elsewhere) or not ours: a copy held from an
-// earlier open must not stay on screen as if editable. Read once the
+// earlier open must not stay on screen as if editable -- nor reachable by
+// the menu (edit / delete would only meet the same 404). Read once the
 // request settled -- a refetch keeps the previous error on the entry.
 const gone = computed(() => {
   const error = entryQuery.error.value
@@ -237,6 +237,7 @@ const gone = computed(() => {
     (error.status === 404 || error.status === 403)
   )
 })
+const entry = computed(() => (gone.value ? null : (entryQuery.data.value ?? null)))
 const loadError = computed(() =>
   failed.value || gone.value
     ? extractApiError(entryQuery.error.value, t('storeErrors.diary.entryNotFound'))
@@ -255,6 +256,11 @@ const mode = ref<'view' | 'edit'>('view')
 // be saved into it.
 watch(entryId, () => {
   mode.value = 'view'
+})
+// Found gone while editing (the refetch of an open answered 404): leave the
+// editor, the error rung takes the screen.
+watch(gone, (isGone) => {
+  if (isGone) mode.value = 'view'
 })
 
 // -- practice header (optional) ---------------------------------------------
@@ -346,6 +352,9 @@ watch(mode, (m) => {
 })
 
 async function startEdit(): Promise<void> {
+  // A held copy is on screen while the open's own request runs: edit what it
+  // answers, not the copy (a newer version saved elsewhere would be undone).
+  if (entryQuery.asyncStatus.value === 'loading') await entryQuery.refresh()
   if (!entry.value) return
   editTitle.value = entry.value.title ?? ''
   editContent.value = entry.value.content

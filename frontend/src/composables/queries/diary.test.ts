@@ -285,6 +285,22 @@ describe('diaryFeedChanged: the first page becomes the whole feed', () => {
 })
 
 describe('the feed off screen', () => {
+  it('a change made on another tab keeps the feed under the filters the screen last read with', async () => {
+    filters.categories = ['dreams']
+    vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page(['d1']))
+    mountScreen()
+    await flush()
+    unmountScreen()
+    vi.mocked(diaryApi.listDiaryFeed)
+      .mockClear()
+      .mockResolvedValue(page(['booked']))
+
+    // A booking: no filters passed.
+    await diaryFeedChanged(useQueryCache())
+
+    expect(feedData({ categories: ['dreams'] })?.pages).toEqual([page(['booked'])])
+  })
+
   it('reloads the feed under the filters the diary reads with, though no screen holds it', async () => {
     // The diary under a filter, then an entry opened over it (the feed unmounts).
     filters.categories = ['dreams']
@@ -304,6 +320,25 @@ describe('the feed off screen', () => {
 })
 
 describe('the feed on screen', () => {
+  it('an older page cancelled by a reload and then failing tells nothing', async () => {
+    vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page(['n2'], 'c1'))
+    mountScreen()
+    await flush()
+    const older = deferred<DiaryFeedResponse>()
+    vi.mocked(diaryApi.listDiaryFeed).mockImplementation((params) =>
+      params?.cursor ? older.promise : Promise.resolve(page(['n3'])),
+    )
+    const loading = feed.loadMore()
+    await flush()
+
+    await diaryFeedChanged(useQueryCache())
+    older.reject(new Error('offline'))
+
+    // The pages it was asked from are gone: nothing on screen failed.
+    await expect(loading).resolves.toBeUndefined()
+    expect(ids()).toEqual(['n3'])
+  })
+
   it('a failed older page does not make the next visit reload every page', async () => {
     vi.mocked(diaryApi.listDiaryFeed).mockImplementation(async (params) =>
       params?.cursor === 'c1' ? page(['n1'], 'c2') : page(['n3', 'n2'], 'c1'),
@@ -480,6 +515,50 @@ describe('the search jump window, held', () => {
     expect(diaryApi.listDiaryFeed).not.toHaveBeenCalledWith(
       expect.objectContaining({ date_to: at }),
     )
+  })
+
+  it('a failed older page of the window does not make a return reload it', async () => {
+    vi.mocked(diaryApi.listDiaryFeed).mockImplementation(async (params) =>
+      params?.date_to ? { items: [item('t1', at)], next_cursor: 'older' } : page([]),
+    )
+    jumpTarget.value = target
+    mountScreen()
+    await flush()
+    vi.mocked(diaryApi.listDiaryFeed).mockRejectedValue(new Error('offline'))
+    await expect(jump.loadMore()).rejects.toThrow('offline')
+    unmountScreen()
+    vi.mocked(diaryApi.listDiaryFeed).mockClear()
+
+    mountScreen()
+    await flush()
+
+    expect(diaryApi.listDiaryFeed).not.toHaveBeenCalled()
+    expect(jump.items.value.map((i) => i.id)).toEqual(['t1'])
+  })
+
+  it('a change in the diary makes a held window stale: the return asks again', async () => {
+    jumpTarget.value = target
+    mountScreen()
+    await flush()
+    unmountScreen()
+
+    await diaryFeedChanged(useQueryCache())
+    vi.mocked(diaryApi.listDiaryFeed).mockClear()
+    mountScreen()
+    await flush()
+
+    expect(diaryApi.listDiaryFeed).toHaveBeenCalledWith(expect.objectContaining({ date_to: at }))
+  })
+
+  it('a change in the diary refetches the window on screen at once', async () => {
+    jumpTarget.value = target
+    mountScreen()
+    await flush()
+    vi.mocked(diaryApi.listDiaryFeed).mockClear()
+
+    await diaryFeedChanged(useQueryCache())
+
+    expect(diaryApi.listDiaryFeed).toHaveBeenCalledWith(expect.objectContaining({ date_to: at }))
   })
 
   it('a new tap on the same result asks anew', async () => {

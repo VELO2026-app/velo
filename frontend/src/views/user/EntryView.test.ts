@@ -356,6 +356,68 @@ describe('EntryView', () => {
       expect(bodyEl().querySelector('.entry__card')).toBeNull()
     })
 
+    it('a 403 on a held copy shows the rung too (not ours any more)', async () => {
+      mount()
+      await flush()
+      app?.unmount()
+      host?.remove()
+      vi.mocked(diaryApi.getDiaryEntry).mockRejectedValue(
+        new ApiResponseError(403, 'Forbidden', 'forbidden'),
+      )
+
+      mount()
+      await flush()
+
+      expect(text()).toContain('Не удалось загрузить запись')
+      expect(bodyEl().querySelector('.entry__card')).toBeNull()
+    })
+
+    it('an entry found gone leaves nothing to edit or delete through the menu', async () => {
+      mount()
+      await flush()
+      app?.unmount()
+      host?.remove()
+      vi.mocked(diaryApi.getDiaryEntry).mockRejectedValue(
+        new ApiResponseError(404, 'Not found', 'not_found'),
+      )
+      mount()
+      await flush()
+
+      await startEditing()
+      openMenu()
+      await flush()
+      menuItem('Удалить')?.click()
+      await flush()
+
+      expect(bodyEl().querySelector('textarea')).toBeNull()
+      expect(diaryApi.deleteDiaryEntry).not.toHaveBeenCalled()
+      expect(replace).not.toHaveBeenCalled()
+    })
+
+    it("edit during the open's own request edits what it answers, not the held copy", async () => {
+      mount()
+      await flush()
+      app?.unmount()
+      host?.remove()
+      let answer!: (e: DiaryEntryResponse) => void
+      vi.mocked(diaryApi.getDiaryEntry).mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve
+        }),
+      )
+      mount()
+      await flush()
+
+      // The held copy is on screen; the tap lands while the refetch runs.
+      openMenu()
+      await flush()
+      menuItem('Редактировать')?.click()
+      answer(entry({ content: 'Новее, с другого устройства' }))
+      await flush()
+      await flush() // the edit waits for the answer, then lays the editor out
+      expect(bodyEl().querySelector('textarea')?.value).toBe('Новее, с другого устройства')
+    })
+
     it('the route reused for another entry leaves the editor: no edit of A is saved into B', async () => {
       vi.mocked(diaryApi.getDiaryEntry).mockImplementation(async (id: string) =>
         entry({ id, content: id === 'e2' ? 'Запись Б' : 'Запись А' }),

@@ -1034,6 +1034,32 @@ describe('DiaryFeedView', () => {
       expect(push).not.toHaveBeenCalled()
     })
 
+    it('a second tap on the same result asks for its window anew', async () => {
+      const TARGET = feedItem('t1', 'note', '2026-07-10T12:00:00Z', { content_preview: 'Цель' })
+      vi.mocked(diaryApi.listDiaryFeed)
+        .mockResolvedValueOnce(page([NOTE]))
+        .mockImplementation(async (params) =>
+          params?.date_to || params?.date_from ? page([TARGET]) : page([TARGET]),
+        )
+      mount()
+      await flush()
+      useDiaryStore().runFeedSearch('цель')
+      await flush()
+      host?.querySelector<HTMLElement>('.dsr-row')?.click()
+      await flush()
+      // Back to the results (the window is left, the query stays).
+      useDiaryStore().exitJump()
+      await flush()
+      const windowReads = () =>
+        vi.mocked(diaryApi.listDiaryFeed).mock.calls.filter(([p]) => p?.date_to).length
+      expect(windowReads()).toBe(1)
+
+      host?.querySelector<HTMLElement>('.dsr-row')?.click()
+      await flush()
+
+      expect(windowReads()).toBe(2)
+    })
+
     it('a window that fails after the search was closed tells nothing', async () => {
       let failWindow!: (e: unknown) => void
       vi.mocked(diaryApi.listDiaryFeed)
