@@ -65,6 +65,10 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://velo:velo@127.0.0.1:5432/velo
       REDIS_URL: redis://127.0.0.1:6379/0
+      # Fake on purpose: the backend checks initData with this same token, and
+      # frontend/e2e/stack/auth.ts (the Sweep step) signs with it. The bring-up
+      # step re-exports it after sourcing backend/ci.env, which has its own.
+      TELEGRAM_BOT_TOKEN: 'e2e:fake'
       # STORAGE_*: the backend's Settings require them (nothing here reaches a
       # storage); the build identity the image's ENV carries elsewhere.
       STORAGE_ENDPOINT: http://127.0.0.1:9000
@@ -96,13 +100,13 @@ jobs:
 
       # backend/ci.env is the one settings environment of CI (SERVER_ROLE=test,
       # EDITION, OPTION_*, domains, languages, invented secrets); this job adds
-      # its addresses (above). Sourced FIRST, then the token the sweep signs
-      # initData with: the backend checks it with this same value, and
-      # frontend/e2e/stack/auth.ts uses it -- fake on purpose.
+      # its addresses (above). Sourced FIRST; the job's TELEGRAM_BOT_TOKEN then
+      # wins over the one in ci.env, so the backend and the sweep agree.
       - name: Bring up the stack (migrate, seed e2e, comms stub, uvicorn)
         run: |
+          token=$TELEGRAM_BOT_TOKEN
           set -a; . backend/ci.env; set +a
-          export TELEGRAM_BOT_TOKEN='e2e:fake'
+          export TELEGRAM_BOT_TOKEN="$token"
           sh frontend/e2e/stack/up.sh
 
       - uses: pnpm/action-setup@v5
