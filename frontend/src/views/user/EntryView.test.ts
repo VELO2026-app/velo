@@ -418,6 +418,62 @@ describe('EntryView', () => {
       expect(bodyEl().querySelector('textarea')?.value).toBe('Новее, с другого устройства')
     })
 
+    it('found gone while editing (a reconnect refetch answers 404): the editor yields to the rung', async () => {
+      mount()
+      await flush()
+      await startEditing()
+      expect(bodyEl().querySelector('textarea')).not.toBeNull()
+      vi.mocked(diaryApi.getDiaryEntry).mockRejectedValue(
+        new ApiResponseError(404, 'Not found', 'not_found'),
+      )
+
+      window.dispatchEvent(new Event('online'))
+      await flush()
+
+      expect(bodyEl().querySelector('textarea')).toBeNull()
+      expect(text()).toContain('Не удалось загрузить запись')
+      // The editor is left, not hidden: one back tap leaves the screen
+      // (from the editor it would only return to the view mode).
+      host?.querySelector<HTMLButtonElement>('button[aria-label="Назад"]')?.click()
+      expect(push).toHaveBeenCalledWith({ name: 'user-diary' })
+    })
+
+    it('an edit tapped on A that waits while the route moves to B opens nothing', async () => {
+      // Both entries held from earlier opens.
+      vi.mocked(diaryApi.getDiaryEntry).mockImplementation(async (id: string) =>
+        entry({ id, content: id === 'e2' ? 'Запись Б' : 'Запись А' }),
+      )
+      mount()
+      await flush()
+      routeParams.id = 'e2'
+      await flush()
+      app?.unmount()
+      host?.remove()
+      routeParams.id = 'e1'
+      let answerA!: (e: DiaryEntryResponse) => void
+      vi.mocked(diaryApi.getDiaryEntry).mockImplementation((id: string) =>
+        id === 'e1'
+          ? new Promise((resolve) => {
+              answerA = resolve
+            })
+          : new Promise(() => {}),
+      )
+      mount()
+      await flush()
+
+      openMenu()
+      await flush()
+      menuItem('Редактировать')?.click()
+      routeParams.id = 'e2'
+      await flush()
+      answerA(entry({ id: 'e1', content: 'Запись А' }))
+      await flush()
+      await flush()
+
+      // B's own open is still running: no editor over its held copy.
+      expect(bodyEl().querySelector('textarea')).toBeNull()
+    })
+
     it('the route reused for another entry leaves the editor: no edit of A is saved into B', async () => {
       vi.mocked(diaryApi.getDiaryEntry).mockImplementation(async (id: string) =>
         entry({ id, content: id === 'e2' ? 'Запись Б' : 'Запись А' }),

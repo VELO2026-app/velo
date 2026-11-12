@@ -285,22 +285,6 @@ describe('diaryFeedChanged: the first page becomes the whole feed', () => {
 })
 
 describe('the feed off screen', () => {
-  it('a change made on another tab keeps the feed under the filters the screen last read with', async () => {
-    filters.categories = ['dreams']
-    vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page(['d1']))
-    mountScreen()
-    await flush()
-    unmountScreen()
-    vi.mocked(diaryApi.listDiaryFeed)
-      .mockClear()
-      .mockResolvedValue(page(['booked']))
-
-    // A booking: no filters passed.
-    await diaryFeedChanged(useQueryCache())
-
-    expect(feedData({ categories: ['dreams'] })?.pages).toEqual([page(['booked'])])
-  })
-
   it('reloads the feed under the filters the diary reads with, though no screen holds it', async () => {
     // The diary under a filter, then an entry opened over it (the feed unmounts).
     filters.categories = ['dreams']

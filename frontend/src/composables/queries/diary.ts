@@ -157,7 +157,6 @@ async function keepPagesOnFailure(
  */
 export function useDiaryFeed(filters: MaybeRefOrGetter<DiaryFeedFilters>) {
   const queryCache = useQueryCache()
-  screenFilters = () => toValue(filters)
   const query = useInfiniteQuery(() => ({
     ...diaryFeedQuery(toValue(filters)),
     placeholderData: (previous: DiaryFeedData | undefined) => previous,
@@ -232,24 +231,18 @@ async function reloadFirstPage(queryCache: QueryCache, entry: UseQueryEntry): Pr
 let feedChanges = 0
 
 /**
- * The filters the diary screen last read the feed with (useDiaryFeed), for a
- * change made while the screen is not mounted -- a booking on another tab.
- */
-let screenFilters: (() => DiaryFeedFilters) | null = null
-
-/**
  * The diary moved through this app (an entry sent, edited, deleted or
  * restored; a check-in, a feedback, an outside activity, a booking): reload
  * the first page of the feed on screen, of the unfiltered feed and of the
- * feed under `current` -- the filters the diary screen reads with (by
- * default the ones it last read with), off screen while an entry is open over
- * it or another tab is -- and drop the other filtered feeds: their next
+ * feed under `current` -- the filters the diary screen reads with
+ * (stores/diary.ts), off screen while an entry is open over it or another tab
+ * is -- and drop the other filtered feeds: their next
  * reader loads them fresh. Search jump windows go stale. Resolves when the
  * reloads settled; never rejects.
  */
 export async function diaryFeedChanged(
   queryCache: QueryCache,
-  current: DiaryFeedFilters | undefined = screenFilters?.(),
+  current?: DiaryFeedFilters,
 ): Promise<void> {
   feedChanges += 1
   const currentEntry = current ? queryCache.get(diaryFeedQuery(current).key) : undefined

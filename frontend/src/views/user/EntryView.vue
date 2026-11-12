@@ -354,8 +354,10 @@ watch(mode, (m) => {
 async function startEdit(): Promise<void> {
   // A held copy is on screen while the open's own request runs: edit what it
   // answers, not the copy (a newer version saved elsewhere would be undone).
+  const id = entryId.value
   if (entryQuery.asyncStatus.value === 'loading') await entryQuery.refresh()
-  if (!entry.value) return
+  // The route moved to another entry meanwhile: that one's own open decides.
+  if (entryId.value !== id || !entry.value) return
   editTitle.value = entry.value.title ?? ''
   editContent.value = entry.value.content
   mode.value = 'edit'

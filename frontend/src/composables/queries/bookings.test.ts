@@ -51,6 +51,10 @@ vi.mock('@/stores/practices', () => ({ usePracticesStore: () => stores.practices
 const diaryFeedChanged = vi.hoisted(() => vi.fn())
 vi.mock('@/composables/queries/diary', () => ({ diaryFeedChanged }))
 vi.mock('@/stores/balance', () => ({ useBalanceStore: () => stores.balance }))
+// The filters the diary screen reads with: handed to diaryFeedChanged so the
+// feed under them is kept while the diary is on another tab.
+const diaryFilters = vi.hoisted(() => ({ categories: ['dreams'] }))
+vi.mock('@/stores/diary', () => ({ useDiaryStore: () => ({ feedFilters: diaryFilters }) }))
 
 /** One page of `GET /bookings/me`. */
 function bookingsPage(items: unknown[] = []) {
@@ -195,7 +199,7 @@ describe('useCancelBooking -- success', () => {
 
     expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
     expect(when(keys.practices.detail('p1'))).toBe(0)
-    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache)
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache, diaryFilters)
   })
 
   it('re-reads the profile at once, so a refund shows in the balance', async () => {
@@ -296,7 +300,7 @@ describe('usePurchaseBooking', () => {
 
     expect(when(keys.practices.detail('p1'))).toBe(0)
     // The booking projects a "booking_confirmed" event onto the timeline.
-    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache)
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache, diaryFilters)
     // The practice on screen is left to the screen that loads it on mount.
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
     // The popup re-reads the balance itself, on success and failure alike.
@@ -350,7 +354,7 @@ describe('useConfirmWaitlist', () => {
     expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
     expect(when(keys.bookings.upcoming())).toBe(0)
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
-    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache)
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache, diaryFilters)
     // The confirmation charges the balance.
     expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
   })

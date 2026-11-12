@@ -1038,9 +1038,7 @@ describe('DiaryFeedView', () => {
       const TARGET = feedItem('t1', 'note', '2026-07-10T12:00:00Z', { content_preview: 'Цель' })
       vi.mocked(diaryApi.listDiaryFeed)
         .mockResolvedValueOnce(page([NOTE]))
-        .mockImplementation(async (params) =>
-          params?.date_to || params?.date_from ? page([TARGET]) : page([TARGET]),
-        )
+        .mockResolvedValue(page([TARGET])) // results and both window sides
       mount()
       await flush()
       useDiaryStore().runFeedSearch('цель')

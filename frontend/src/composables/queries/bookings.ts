@@ -50,6 +50,7 @@ import { keys } from '@/composables/queries/keys'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useQueryScopeStore } from '@/composables/queries/setup'
 import { useBalanceStore } from '@/stores/balance'
+import { useDiaryStore } from '@/stores/diary'
 import { usePracticesStore } from '@/stores/practices'
 
 // =============================================================================
@@ -163,6 +164,8 @@ export interface CancelBookingVars {
 export function useCancelBooking() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
+  // The filters the diary screen reads with: that feed is kept and reloaded.
+  const diary = useDiaryStore()
   const practices = usePracticesStore()
   const balance = useBalanceStore()
 
@@ -190,7 +193,7 @@ export function useCancelBooking() {
       refreshLegacyHolders(practiceId)
       // The cancellation projects a "booking_cancelled_by_user" event onto
       // the diary timeline.
-      void diaryFeedChanged(queryCache)
+      void diaryFeedChanged(queryCache, diary.feedFilters)
       await invalidateAfter(queryCache, 'cancelBooking')
     },
   })
@@ -217,6 +220,8 @@ export interface PurchaseBookingVars {
 export function usePurchaseBooking() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
+  // The filters the diary screen reads with: that feed is kept and reloaded.
+  const diary = useDiaryStore()
   return useMutation({
     onMutate: () => ({ sessionGeneration: scope.generation() }),
     // Resolves with nothing: the two endpoints answer different shapes, and
@@ -231,7 +236,7 @@ export function usePurchaseBooking() {
       // The booking projects a "booking_confirmed" event onto the diary
       // timeline. Not awaited: the screen's toast and navigation do not wait
       // for it (the popup's double tap is closed by its own flag).
-      void diaryFeedChanged(queryCache)
+      void diaryFeedChanged(queryCache, diary.feedFilters)
     },
   })
 }
@@ -252,6 +257,8 @@ export interface ConfirmWaitlistVars {
 export function useConfirmWaitlist() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
+  // The filters the diary screen reads with: that feed is kept and reloaded.
+  const diary = useDiaryStore()
   const balance = useBalanceStore()
   return useMutation({
     onMutate: () => ({ sessionGeneration: scope.generation() }),
@@ -259,7 +266,7 @@ export function useConfirmWaitlist() {
     onSuccess(_data, _vars, { sessionGeneration }) {
       if (sessionGeneration !== scope.generation()) return
       void invalidateAfter(queryCache, 'confirmWaitlist')
-      void diaryFeedChanged(queryCache) // a booking now: see usePurchaseBooking
+      void diaryFeedChanged(queryCache, diary.feedFilters) // a booking now: see usePurchaseBooking
       void balance.refresh()
     },
   })
