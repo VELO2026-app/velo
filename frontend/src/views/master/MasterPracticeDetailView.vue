@@ -399,7 +399,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useDiaryStore } from '@/stores/diary'
+import { usePracticeInsights } from '@/composables/queries/diary'
 import { cachedMyPractice, myPracticesChanged } from '@/composables/queries/master'
 import { useQueryCache } from '@pinia/colada'
 import {
@@ -444,7 +444,6 @@ import type {
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const diaryStore = useDiaryStore()
 const queryCache = useQueryCache()
 
 const practiceId = route.params.id as string
@@ -473,8 +472,9 @@ const destructiveLabel = computed((): string =>
   isDraft.value ? t('ui.delete') : t('masterScreens.masterPracticeDetail.cancelCta'),
 )
 
-// Reactive insights cache (shared with Analytics / Practices — often warm).
-const insightsCache = diaryStore.insightsCache
+// Practices' insights in the Colada cache, shared with Analytics / Practices
+// -- often warm (composables/queries/diary.ts).
+const insightsCache = usePracticeInsights(queryCache)
 const insights = computed(() => insightsCache.get(practiceId) ?? null)
 
 // -- Hero meta (shared) --
@@ -734,7 +734,7 @@ async function load(): Promise<void> {
 
     // Insights (anonymous rating distribution) only feed the PAST hero badges
     // -- load them lazily there.
-    if (isPast.value) await diaryStore.loadInsights(practiceId)
+    if (isPast.value) await insightsCache.load(practiceId)
     await attendanceDone
     if (epoch !== loadEpoch) return
 

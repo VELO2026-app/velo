@@ -26,6 +26,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, ref, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import type { useVoiceRecorder, VoiceTake } from '@/composables/useVoiceRecorder'
 import type { DiaryEntryResponse, DiaryFeedResponse, UpdateDiaryEntryRequest } from '@/api/types'
 
@@ -137,7 +139,7 @@ async function mount(): Promise<void> {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(EntryView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   await flush()
 }

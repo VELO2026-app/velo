@@ -115,8 +115,8 @@ function unmount(): void {
   host = null
 }
 
-// createEntry() awaits createDiaryEntry then feed.refresh() (-> listDiaryFeed,
-// itself awaiting useCursorPagination's own chain) then a nextTick + autogrow
+// sendEntry() awaits createDiaryEntry then diaryFeedChanged() (the feed's
+// first page reload, when a feed is held) then a nextTick + autogrow
 // before emitting. Was 8 (bisected against a real failure at 7) before this
 // component wrapped the shared Composer.vue (PROMPT №740): the extra
 // DiaryComposer -> Composer -> handleSend -> diaryStore.createEntry

@@ -7,9 +7,11 @@
 
   Data flow:
     - the entry itself (title, content, mood, practice_id) comes from
-      diaryStore.fetchEntry(id) -> GET /diary/{id};
+      diaryEntryQuery(id) -> GET /diary/{id} (Colada, composables/queries/
+      diary.ts: a held copy shows at once and is asked again on open);
     - the optional practice header (screen 56) is built from a separate
-      GET /practices/{practice_id} when the entry is linked to one; entries
+      practiceDetailQuery -> GET /practices/{practice_id} when the entry is
+      linked to one (best-effort: a failure drops the header); entries
       with no practice link render without the header (screen 57). No
       verification checkmark anywhere: it is hidden product-wide (owner
       2026-10-03), and PracticeResponse carries no verified flag.
@@ -174,9 +176,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { storeToRefs } from 'pinia'
+import { useQuery } from '@pinia/colada'
 import {
   VLoader,
   VEmptyState,
@@ -194,11 +196,14 @@ import { IconTrash } from '@/components/icons'
 import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { extractApiError } from '@/composables/useApiError'
+import { diaryEntryQuery } from '@/composables/queries/diary'
+import { practiceDetailQuery } from '@/composables/queries/practices'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { appendTranscript, useVoiceFieldInput } from '@/composables/useVoiceFieldInput'
 import { TEXTAREA_VOICE_INPUT } from '@/utils/constants'
 import VoiceRecordingPanel from '@/components/shared/VoiceRecordingPanel.vue'
 import VoiceMicButton from '@/components/shared/VoiceMicButton.vue'
-import { getPractice } from '@/api/practices'
 import { formatFeedDateTime, formatDuration, formatTime } from '@/utils/format'
 import type { PracticeResponse } from '@/api/types'
 
@@ -211,14 +216,24 @@ const diaryStore = useDiaryStore()
 const authStore = useAuthStore()
 const toast = useToast()
 
-const { selectedEntry, selectedEntryLoading, selectedEntryError } = storeToRefs(diaryStore)
-
-const entry = computed(() => selectedEntry.value)
-const loading = computed(() => selectedEntryLoading.value)
-const loadError = computed(() => selectedEntryError.value)
 const tz = computed(() => authStore.user?.timezone ?? 'UTC')
 
 const entryId = computed(() => String(route.params.id))
+
+// -- load --------------------------------------------------------------------
+
+const entryQuery = useQuery(() => diaryEntryQuery(entryId.value))
+const { loading, failed } = screenQueryState(entryQuery)
+const entry = computed(() => entryQuery.data.value ?? null)
+const loadError = computed(() =>
+  failed.value
+    ? extractApiError(entryQuery.error.value, t('storeErrors.diary.entryNotFound'))
+    : null,
+)
+
+async function reload(): Promise<void> {
+  await entryQuery.refetch()
+}
 
 // -- mode (view / edit) ------------------------------------------------------
 
@@ -226,7 +241,16 @@ const mode = ref<'view' | 'edit'>('view')
 
 // -- practice header (optional) ---------------------------------------------
 
-const practice = ref<PracticeResponse | null>(null)
+const linkedPracticeId = computed(() => entry.value?.practice_id ?? null)
+const practiceQuery = useQuery(() => ({
+  ...practiceDetailQuery(linkedPracticeId.value ?? ''),
+  enabled: linkedPracticeId.value !== null,
+}))
+// Best-effort: a missing/forbidden practice degrades to the no-header layout
+// (screen 57).
+const practice = computed<PracticeResponse | null>(() =>
+  linkedPracticeId.value !== null ? (practiceQuery.data.value ?? null) : null,
+)
 
 const practiceTime = computed(() =>
   practice.value ? formatTime(practice.value.scheduled_at, tz.value) : '',
@@ -247,25 +271,6 @@ const contextLine = computed(() => {
 const entryDate = computed(() =>
   entry.value ? formatFeedDateTime(entry.value.created_at, tz.value) : '',
 )
-
-// -- load --------------------------------------------------------------------
-
-async function reload(): Promise<void> {
-  await diaryStore.fetchEntry(entryId.value)
-  practice.value = null
-  const linked = entry.value?.practice_id
-  if (linked) {
-    try {
-      practice.value = await getPractice(linked)
-    } catch {
-      // Practice header is best-effort; a missing/forbidden practice just
-      // degrades to the no-header layout (screen 57).
-      practice.value = null
-    }
-  }
-}
-
-onMounted(reload)
 
 // -- edit --------------------------------------------------------------------
 

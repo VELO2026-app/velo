@@ -5,7 +5,7 @@
 // Not a test of app code: it pins the Colada behavior the ADR's diary
 // decision rests on, so an upgrade that changes it fails here first.
 //
-// The diary (stores/diary.ts, useCursorPagination) is a chat-like timeline:
+// The diary (composables/queries/diary.ts, since FE-182) is a chat-like timeline:
 // GET /diary/feed answers newest first, `next_cursor` walks into the past,
 // and the screen draws the oldest entry on top and loads more when the user
 // scrolls UP. In useInfiniteQuery terms "up" is simply the NEXT page (older),

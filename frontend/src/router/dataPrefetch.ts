@@ -80,8 +80,13 @@ export const TAB_DATA_WARMERS: Readonly<Record<string, Warmer>> = {
   },
   // Memory only: diary text is never persisted (composables/persistedCache).
   '/user/diary': async () => {
-    const { useDiaryStore } = await import('@/stores/diary')
-    await useDiaryStore().fetchFeed()
+    const [{ useDiaryStore }, { prefetchDiaryFeed }] = await Promise.all([
+      import('@/stores/diary'),
+      import('@/composables/queries/diary'),
+    ])
+    // The filters the screen will read the feed under (kept for the session).
+    const filters = useDiaryStore().feedFilters
+    await warmQuery((cache) => prefetchDiaryFeed(cache, filters))
   },
   '/user/schools': async () => {
     const [{ useAuthStore }, { cachedHasSchools, userSchoolsQuery }] = await Promise.all([

@@ -43,11 +43,13 @@ vi.mock('@/api/waitlist')
 
 const stores = vi.hoisted(() => ({
   practices: { selected: null as { id: string } | null, fetchPractice: vi.fn() },
-  diary: { refreshFeed: vi.fn() },
   balance: { refresh: vi.fn() },
 }))
 vi.mock('@/stores/practices', () => ({ usePracticesStore: () => stores.practices }))
-vi.mock('@/stores/diary', () => ({ useDiaryStore: () => stores.diary }))
+// The diary timeline's own reload (composables/queries/diary.ts): which feed
+// entries it reloads is diary.test.ts's business; here, that a booking calls it.
+const diaryFeedChanged = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/diary', () => ({ diaryFeedChanged }))
 vi.mock('@/stores/balance', () => ({ useBalanceStore: () => stores.balance }))
 
 /** One page of `GET /bookings/me`. */
@@ -105,7 +107,7 @@ beforeEach(async () => {
   vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(bookingsPage())
   stores.practices.selected = { id: 'p1' }
   stores.practices.fetchPractice.mockReset().mockResolvedValue(undefined)
-  stores.diary.refreshFeed.mockReset().mockResolvedValue(undefined)
+  diaryFeedChanged.mockReset().mockResolvedValue(undefined)
   stores.balance.refresh.mockReset().mockResolvedValue(undefined)
 
   app = createApp(Screen).use(createPinia()).use(PiniaColada, coladaOptions)
@@ -188,12 +190,12 @@ describe('useCancelBooking -- success', () => {
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders: practice detail, diary, balance', async () => {
+  it('refreshes the legacy holders (practice detail, balance) and the diary feed', async () => {
     await cancel(VARS)
 
     expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
     expect(when(keys.practices.detail('p1'))).toBe(0)
-    expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache)
   })
 
   it('re-reads the profile at once, so a refund shows in the balance', async () => {
@@ -231,7 +233,7 @@ describe('useCancelBooking -- the session ends while the DELETE is in flight', (
     await flush()
 
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
-    expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
+    expect(diaryFeedChanged).not.toHaveBeenCalled()
     expect(stores.balance.refresh).not.toHaveBeenCalled()
     expect(when(keys.practices.detail('p1'))).not.toBe(0)
   })
@@ -246,7 +248,7 @@ describe('useCancelBooking -- failure', () => {
     await flush()
 
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
-    expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
+    expect(diaryFeedChanged).not.toHaveBeenCalled()
     expect(stores.balance.refresh).not.toHaveBeenCalled()
     expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
     expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
@@ -289,12 +291,12 @@ describe('usePurchaseBooking', () => {
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
   })
 
-  it('refreshes the legacy holders: diary', async () => {
+  it('reloads the diary feed (the booking is a timeline event)', async () => {
     await purchase(BUY)
 
     expect(when(keys.practices.detail('p1'))).toBe(0)
     // The booking projects a "booking_confirmed" event onto the timeline.
-    expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache)
     // The practice on screen is left to the screen that loads it on mount.
     expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
     // The popup re-reads the balance itself, on success and failure alike.
@@ -348,7 +350,7 @@ describe('useConfirmWaitlist', () => {
     expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
     expect(when(keys.bookings.upcoming())).toBe(0)
     expect(when(keys.schools.detail('g1'))).toBe(pageAt)
-    expect(stores.diary.refreshFeed).toHaveBeenCalledTimes(1)
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache)
     // The confirmation charges the balance.
     expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
   })
@@ -368,7 +370,7 @@ describe('useConfirmWaitlist', () => {
     await done
     await flush()
 
-    expect(stores.diary.refreshFeed).not.toHaveBeenCalled()
+    expect(diaryFeedChanged).not.toHaveBeenCalled()
     expect(stores.balance.refresh).not.toHaveBeenCalled()
     expect(when(keys.bookings.upcoming())).not.toBe(0)
   })

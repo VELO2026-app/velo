@@ -10,7 +10,7 @@
 // day removing, so the change gets a guard rather than a promise.
 //
 // Scope is deliberately W27's blast radius, not the whole store: the two actions
-// that reach refreshAfterDiaryMutation (submitCheckin, submitFeedback), what they
+// that reload the feed (submitCheckin, submitFeedback -- diaryFeedChanged), what they
 // refresh, and -- the point of the change -- what they must NOT touch.
 //
 // THE KEY TEST is «does not touch the bookings store». It is negative space, the
@@ -25,7 +25,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { setInfiniteQueryData, useQueryCache } from '@pinia/colada'
 import { useDiaryStore } from '@/stores/diary'
+import { keys } from '@/composables/queries/keys'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
 import type { CheckinRequest, FeedbackRequest, CreateExternalActivityRequest } from '@/api/types'
@@ -70,6 +72,12 @@ beforeEach(() => {
     .mockResolvedValue({} as never)
   useBookingsStore.mockReset()
   invalidateAfter.mockReset().mockResolvedValue(undefined)
+  // The diary feed as a visit left it (composables/queries/diary.ts): a
+  // submit that moves the timeline reloads its first page.
+  setInfiniteQueryData(useQueryCache(), keys.diary.feed({}), {
+    pages: [feedPage()],
+    pageParams: [null],
+  })
 })
 
 describe('diary store', () => {

@@ -31,13 +31,12 @@
 // only recovery path the user has is gone; perform it on a failure and the feed
 // offers to undo a delete that never happened.
 //
-// PATTERN A (store-backed). The entry's whole ladder lives in useDiaryStore --
-// selectedEntry / selectedEntryLoading / selectedEntryError via storeToRefs
-// (.vue:181) -- so the store and its useCursorPagination are REAL and the seam
-// is @/api/diary, the wrapper the store imports. One pinia instance goes to BOTH
-// setActivePinia and app.use (SC-03). @/api/practices is the second seam: the
-// optional practice header is a direct getPractice() from the screen itself
-// (.vue:227), not through any store.
+// PATTERN A (query-backed). The entry's whole ladder reads diaryEntryQuery
+// (Colada, composables/queries/diary.ts) and its mutations go through
+// useDiaryStore -- both REAL, so the seam is @/api/diary, the wrapper they
+// import. One pinia instance goes to BOTH setActivePinia and app.use (SC-03).
+// @/api/practices is the second seam: the optional practice header is
+// practiceDetailQuery -> getPractice(), not through any store.
 //
 // NOT PATTERN C, though it has a form. The edit fields (editTitle/editContent,
 // .vue:239-240) are local refs, but they are not an independent half: startEdit
@@ -46,23 +45,19 @@
 // by poking the refs) but it hangs off the same seam, not a second one.
 //
 // TICKS = 8. Counted (SC-08), not copied from the sibling that also lands on 8.
-// The deepest chain is onSave, and it is deeper than the mount's:
-//   onSave -> updateEntry -> updateDiaryEntry (1) -> feed.refresh -> loadMore ->
-//   listDiaryFeed (2,3) -> loadMore returns (4) -> updateEntry resumes and
-//   re-points selectedEntry (5) -> onSave resumes, saving=false, mode='view' (6)
-//   -> re-render (7).
-// onDelete is the same shape and depth (deleteEntry also refreshes the feed).
-// The mount chain is shallower -- fetchEntry -> getDiaryEntry (1,2), then the
-// practice branch's getPractice (3), re-render (4). 8 is one over the deepest;
-// over-counting is harmless, under-counting fails loudly.
+// The deepest chain is the mount's since FE-182: Colada's fetch of the entry
+// (its async wrapper, then/finally) -> the entry's practice_id enables the
+// practice query -> getPractice through the same fetch -> re-render. onSave
+// is shallower: updateEntry -> updateDiaryEntry (1) -> the answer written
+// into the entry's cache -> diaryFeedChanged (no feed held: nothing asked)
+// -> onSave resumes, saving=false, mode='view' -> re-render. onDelete is the
+// same shape. Over-counting is harmless, under-counting fails loudly.
 //
-// listDiaryFeed IS MOCKED even though this screen never renders a feed. It is
-// not decoration: EVERY entry mutation ends in `await feed.refresh()`
-// (stores/diary.ts:300,317), so an automocked listDiaryFeed returning undefined
-// would make loadMore throw on `result.items`. It is swallowed by loadMore's own
-// catch (useCursorPagination.ts:83) rather than surfacing, which is exactly why
-// it needs stating: the mutation would still report ok:true and nothing here
-// would go red, while every save/delete test silently drove a broken refresh.
+// listDiaryFeed IS MOCKED even though this screen never renders a feed. Every
+// entry mutation ends in `await diaryFeedChanged()` (stores/diary.ts), which
+// reloads the first page of a feed held in the cache; with none held (as
+// here) it asks nothing. The mock keeps a held feed from ever meeting an
+// automocked undefined answer.
 //
 // TRAPS PRESENT:
 //  - Wall clock / timezone: entryDate and practiceTime are Intl output keyed on
@@ -123,6 +118,9 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada, setInfiniteQueryData, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
 import EntryView from '@/views/user/EntryView.vue'
 import * as diaryApi from '@/api/diary'
 import * as practicesApi from '@/api/practices'
@@ -230,7 +228,7 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(EntryView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
@@ -850,6 +848,30 @@ describe('EntryView', () => {
       // replace, not push: the dead entry's URL must not sit in the back stack.
       expect(push).not.toHaveBeenCalled()
       expect(toastError).not.toHaveBeenCalled()
+    })
+
+    it('the feed the user returns to no longer carries the deleted entry: its first page reloads first', async () => {
+      routeParams.id = 'e7'
+      vi.mocked(diaryApi.getDiaryEntry).mockResolvedValue(entry({ id: 'e7' }))
+      mount()
+      await flush()
+      // The diary as the user left it to open this entry.
+      setInfiniteQueryData(useQueryCache(), keys.diary.feed({}), {
+        pages: [{ items: [], next_cursor: null }],
+        pageParams: [null],
+      })
+      vi.mocked(diaryApi.listDiaryFeed).mockClear()
+
+      openMenu()
+      await flush()
+      menuItem('Удалить')?.click()
+      await flush()
+
+      expect(diaryApi.listDiaryFeed).toHaveBeenCalledTimes(1)
+      expect(replace).toHaveBeenCalledWith({ name: 'user-diary', query: { deleted: 'e7' } })
+      expect(vi.mocked(diaryApi.listDiaryFeed).mock.invocationCallOrder[0]).toBeLessThan(
+        replace.mock.invocationCallOrder[0]!,
+      )
     })
 
     it('a FAILED delete shows the mapped table phrase for a real code and NEVER navigates -- no undo bar for a delete that did not happen', async () => {

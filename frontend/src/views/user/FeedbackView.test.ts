@@ -31,9 +31,9 @@
 //
 // TICKS = 12. Counted, not copied (SC-08). The submit chain:
 //   onSubmit -> await submitFeedback -> await upsertFeedback (1) ->
-//   await refreshAfterDiaryMutation -> await Promise.allSettled([feed.refresh()])
+//   await diaryFeedChanged -> await Promise.allSettled([feed.refresh()])
 //   -> refresh -> await loadMore -> await listDiaryFeed (2) -> loadMore resumes
-//   (3) -> refresh resumes (4) -> allSettled (5) -> refreshAfterDiaryMutation
+//   (3) -> refresh resumes (4) -> allSettled (5) -> diaryFeedChanged
 //   resumes (6) -> submitFeedback's finally + return (7) -> onSubmit resumes,
 //   sets submitted (8); the store's invalidateAfter('submitFeedback') refetches
 //   the bookings list this screen holds -> await getMyBookings (9) -> resumes
@@ -147,7 +147,7 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
-import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { PiniaColada, setInfiniteQueryData, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
 import FeedbackView from '@/views/user/FeedbackView.vue'
@@ -376,6 +376,14 @@ afterEach(() => {
   // document.body and nothing reads the clock. Both omissions are deliberate --
   // see "TRAPS ABSENT" in the banner.
 })
+
+/** The unfiltered diary feed held in the cache, as a visit to the diary leaves it. */
+function seedDiaryFeed(): void {
+  setInfiniteQueryData(useQueryCache(), keys.diary.feed({}), {
+    pages: [{ items: [], next_cursor: null }],
+    pageParams: [null],
+  })
+}
 
 describe('FeedbackView', () => {
   // ===========================================================================
@@ -780,12 +788,15 @@ describe('FeedbackView', () => {
     })
 
     it('refreshes the diary feed too -- the feedback is a timeline event', async () => {
-      // submitFeedback -> refreshAfterDiaryMutation -> feed.refresh (diary.ts:103).
+      // submitFeedback -> diaryFeedChanged -> the feed's first page reloaded.
       // Verified one level down rather than from the .vue comment.
       mount()
       await flush()
       expect(listDiaryFeedMock).not.toHaveBeenCalled()
 
+      // The diary as a visit left it: the submit reloads its first page
+      // (composables/queries/diary.ts, diaryFeedChanged).
+      seedDiaryFeed()
       submitBtn()?.click()
       await flush()
 

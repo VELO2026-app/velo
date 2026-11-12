@@ -10,7 +10,10 @@
 // Mutations: cancel (the pilot), purchase and waitlist confirmation (step 1),
 // join and skip check-in (step 3). The diary's submits (check-in, feedback,
 // reflection) live in the diary store and call `invalidateAfter()` there;
-// every row is in ./invalidation.ts.
+// every row is in ./invalidation.ts. A booking made or cancelled is an event
+// on the diary timeline too: its first page is reloaded through
+// `diaryFeedChanged()` (./diary.ts) -- not an invalidation, which would
+// refetch every page the reader scrolled through.
 //
 // Cancel a booking: the first mutation on Colada. Before the pilot the
 // bookings store cancelled and refreshed only its own list, so the dashboard's
@@ -41,12 +44,12 @@ import {
   skipCheckin,
 } from '@/api/bookings'
 import { confirmWaitlist } from '@/api/waitlist'
+import { diaryFeedChanged } from '@/composables/queries/diary'
 import { invalidateAfter } from '@/composables/queries/invalidation'
 import { keys } from '@/composables/queries/keys'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useQueryScopeStore } from '@/composables/queries/setup'
 import { useBalanceStore } from '@/stores/balance'
-import { useDiaryStore } from '@/stores/diary'
 import { usePracticesStore } from '@/stores/practices'
 
 // =============================================================================
@@ -161,7 +164,6 @@ export function useCancelBooking() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
   const practices = usePracticesStore()
-  const diary = useDiaryStore()
   const balance = useBalanceStore()
 
   /** Legacy holders of the same server data (each line leaves with its store's migration). */
@@ -170,9 +172,6 @@ export function useCancelBooking() {
     // already shown. Its cache entry is a Colada key (practices.root()).
     if (practices.selected?.id === practiceId) void practices.fetchPractice(practiceId)
     // The calendar week is a Colada key (practices.root(), FE-166 step 4).
-    // The cancellation projects a "booking_cancelled_by_user" event onto the
-    // diary timeline.
-    void diary.refreshFeed()
     // The refund (if the cancellation earned one) changed the balance, which
     // is the auth profile. fetchMe() never rejects and drops an answer that
     // lands after the session changed.
@@ -189,6 +188,9 @@ export function useCancelBooking() {
       // load the next session's data on this session's behalf.
       if (sessionGeneration !== scope.generation()) return
       refreshLegacyHolders(practiceId)
+      // The cancellation projects a "booking_cancelled_by_user" event onto
+      // the diary timeline.
+      void diaryFeedChanged(queryCache)
       await invalidateAfter(queryCache, 'cancelBooking')
     },
   })
@@ -200,27 +202,6 @@ export interface PurchaseBookingVars {
   promoCode?: string
   /** `false` when the instance has the payments option off: book through `POST /bookings` (FE-151). */
   viaPurchase: boolean
-}
-
-/**
- * The legacy holders of the data a NEW booking changes (purchase, waitlist
- * confirmation): the diary feed, until the diary moves to Colada. Built in a
- * component's setup, like useCancelBooking's.
- *
- * @remarks
- * Fire-and-forget: the mutation resolves once the server booked, so the
- * screen's toast and navigation do not wait for these reads (the popup's
- * double tap is closed by its own flag, unlike the cancel control). Not
- * refreshed: the practice on screen -- both callers leave it for a screen
- * that loads the practice on mount (PracticeDetailView.onPurchased,
- * WaitlistConfirmView.openPractice).
- */
-function useNewBookingHolders() {
-  const diary = useDiaryStore()
-  return (): void => {
-    // The booking projects a "booking_confirmed" event onto the diary timeline.
-    void diary.refreshFeed()
-  }
 }
 
 /**
@@ -236,7 +217,6 @@ function useNewBookingHolders() {
 export function usePurchaseBooking() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
-  const refreshHolders = useNewBookingHolders()
   return useMutation({
     onMutate: () => ({ sessionGeneration: scope.generation() }),
     // Resolves with nothing: the two endpoints answer different shapes, and
@@ -248,7 +228,10 @@ export function usePurchaseBooking() {
     onSuccess(_data, _vars, { sessionGeneration }) {
       if (sessionGeneration !== scope.generation()) return
       void invalidateAfter(queryCache, 'purchaseBooking')
-      refreshHolders()
+      // The booking projects a "booking_confirmed" event onto the diary
+      // timeline. Not awaited: the screen's toast and navigation do not wait
+      // for it (the popup's double tap is closed by its own flag).
+      void diaryFeedChanged(queryCache)
     },
   })
 }
@@ -269,7 +252,6 @@ export interface ConfirmWaitlistVars {
 export function useConfirmWaitlist() {
   const queryCache = useQueryCache()
   const scope = useQueryScopeStore()
-  const refreshHolders = useNewBookingHolders()
   const balance = useBalanceStore()
   return useMutation({
     onMutate: () => ({ sessionGeneration: scope.generation() }),
@@ -277,7 +259,7 @@ export function useConfirmWaitlist() {
     onSuccess(_data, _vars, { sessionGeneration }) {
       if (sessionGeneration !== scope.generation()) return
       void invalidateAfter(queryCache, 'confirmWaitlist')
-      refreshHolders()
+      void diaryFeedChanged(queryCache) // a booking now: see usePurchaseBooking
       void balance.refresh()
     },
   })

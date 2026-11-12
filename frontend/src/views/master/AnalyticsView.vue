@@ -259,7 +259,7 @@ import { t, getLocale } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMyPractices } from '@/composables/queries/master'
-import { useDiaryStore } from '@/stores/diary'
+import { usePracticeInsights } from '@/composables/queries/diary'
 import {
   VLoader,
   VButton,
@@ -288,10 +288,9 @@ import type {
 } from '@/api/types'
 
 const router = useRouter()
-const diaryStore = useDiaryStore()
-
-// Reactive Map<practiceId, insights> -- computeds below track additions.
-const insightsCache = diaryStore.insightsCache
+// Practices' insights in the Colada cache (composables/queries/diary.ts):
+// get/has read it reactively -- computeds below track arrivals.
+const insightsCache = usePracticeInsights()
 
 // =========================================================================
 // Tabs (track+thumb segment) + period toggle (visual-only)
@@ -542,7 +541,7 @@ watch(period, () => {
 // the inline practice-card badges. loadInsights() skips already-cached ids, so
 // this is idempotent across re-runs and load-more.
 function loadVisibleInsights(): Promise<void[]> {
-  return Promise.all(pastPractices.value.map((p) => diaryStore.loadInsights(p.id)))
+  return Promise.all(pastPractices.value.map((p) => insightsCache.load(p.id)))
 }
 
 async function onLoadMore(): Promise<void> {

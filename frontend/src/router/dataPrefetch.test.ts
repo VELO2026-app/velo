@@ -62,13 +62,17 @@ vi.mock('@/api/practices', () => ({
     return Promise.reject(new Error('offline')) // must not stop the rest
   },
 }))
-vi.mock('@/stores/diary', () => ({
-  useDiaryStore: () => ({
-    fetchFeed: () => {
-      calls.push('diary')
-      return Promise.resolve()
-    },
-  }),
+// The diary warmer loads the feed under the store's filters; what the load
+// skips is composables/queries/diary.test.ts's business.
+const diaryFilters = vi.hoisted(() => ({ categories: ['dreams'] }))
+const prefetchedFilters = vi.hoisted(() => [] as unknown[])
+vi.mock('@/stores/diary', () => ({ useDiaryStore: () => ({ feedFilters: diaryFilters }) }))
+vi.mock('@/composables/queries/diary', () => ({
+  prefetchDiaryFeed: (_cache: unknown, filters: unknown) => {
+    calls.push('diary')
+    prefetchedFilters.push(filters)
+    return Promise.resolve()
+  },
 }))
 const session = vi.hoisted(() => ({
   auth: null as null | { token: string | null; user: object | null; role: string },
@@ -243,6 +247,14 @@ describe('warmTabData (dock finger-down)', () => {
     warmTabData('/user/diary')
     await settle()
     expect(calls).toEqual(['diary', 'diary'])
+  })
+
+  it('the diary is warmed under the filters its screen will read it with', async () => {
+    prefetchedFilters.length = 0
+    await vi.advanceTimersByTimeAsync(60_000) // past the touches of the tests before
+    warmTabData('/user/diary')
+    await settle()
+    expect(prefetchedFilters).toEqual([{ categories: ['dreams'] }])
   })
 
   it('a path without a warmer, or a constrained link: nothing', async () => {

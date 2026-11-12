@@ -14,20 +14,23 @@
 // error/loadMoreError split usePagination got in №442, and the tripwire went red
 // on cue and was flipped. The feed now toasts. See "THE SPLIT" below.
 //
-// PATTERN A (store-backed): every rung lives in useDiaryStore (feedItems /
-// feedLoading / feedError / feedHasMore / feedFilters via storeToRefs, .vue:282),
-// so the seam is @/api/diary -- the wrapper the store imports. The store and its
-// useCursorPagination are REAL; only the network boundary is faked. One pinia
-// instance goes to BOTH setActivePinia and app.use (SC-03).
+// PATTERN A (store-backed): every rung reads the feed query (Colada,
+// composables/queries/diary.ts -- useDiaryFeed / useDiaryJump) under the
+// filters the diary store holds, so the seam is @/api/diary -- the wrapper the
+// queries import. The store, the queries and Colada are REAL; only the network
+// boundary is faked. One pinia instance goes to BOTH setActivePinia and
+// app.use (SC-03).
 //
-// TICKS = 8. Counted, not copied (SC-08). The mount chain is deeper than any
-// screen in the table in velo-idiom §3:
-//   onMounted -> fetchFeed -> feed.refresh -> feed.loadMore -> listDiaryFeed
-//   (4 awaits) -> onMounted resumes -> await nextTick -> scroll restore ->
-//   await nextTick -> setupObserver  (2 more) -> +1 final re-render = ~7.
-// 8 is one over, which is harmless; the "attaches an observer" test below is the
-// canary -- if the count were short, sentinelEl would still be null, no observer
-// would exist, and that test fails loudly rather than silently skipping.
+// TICKS = 24. Counted, not copied (SC-08). Since FE-182 the feed is a Colada
+// infinite query: a request runs through Colada's fetch (an async wrapper,
+// then/catch/finally) and the infinite query's own async page loop before the
+// screen's await resumes, and the search jump adds two parallel requests and
+// a Promise.all on top. The deepest chain is the jump's (tap -> jumpToEntry ->
+// settled() -> two GETs -> merged page -> state -> await resumes -> nextTick
+// -> reveal): 16 ticks left it short, 24 covers it with room. The "attaches an
+// observer" test below is the canary for the mount chain -- if the count were
+// short, sentinelEl would still be null, no observer would exist, and that
+// test fails loudly rather than silently skipping.
 //
 // TRAPS PRESENT:
 //  - IntersectionObserver: happy-dom SHIPS one (typeof === 'function'), but it is
@@ -74,22 +77,26 @@
 //    only through `?.` (DiaryComposer.vue:163,215), so it needs no stub.
 //
 // THE SPLIT (read before touching a failure assertion here):
-// useCursorPagination routes a failure by WHICH page failed -- `error` when
-// nothing is on screen (the rung is owed), `loadMoreError` when the feed is
-// intact and must stay (a toast is owed). Before №443 it had one shared `error`
-// for both, and the screen bound it in exactly one place, behind
-// `v-else-if="feedError && items.length === 0"` (.vue:172) and nowhere else -- so
-// a failed page-2 set feedError, rendered NOTHING, and the sentinel would not
-// re-fire on its own. Two tests below hold that split from both sides: a page-N
-// failure must toast and never touch the rung, and an INITIAL failure must fill
-// the rung and never toast. The second is what stops the fix degenerating into a
-// blanket redirect that silences the first page too.
+// a failure is routed by WHAT IS ON SCREEN -- the rung when nothing is (the
+// feed query's `failed`: no data, last request failed), a toast when the feed
+// is intact and must stay (the older page's loadMore() rejects, Colada keeps
+// the loaded pages). Before №443 the store had one shared `error` for both,
+// and the screen bound it in exactly one place, behind the rung -- so a failed
+// page-2 rendered NOTHING, and the sentinel would not re-fire on its own. Two
+// tests below hold that split from both sides: a page-N failure must toast and
+// never touch the rung, and an INITIAL failure must fill the rung and never
+// toast. The second is what stops the fix degenerating into a blanket redirect
+// that silences the first page too.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
+import type { DiaryFeedData } from '@/composables/queries/diary'
 import DiaryFeedView from '@/views/user/DiaryFeedView.vue'
 import * as diaryApi from '@/api/diary'
 // The REAL store, read where the assertion is about which ref a failure landed
@@ -252,14 +259,36 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(DiaryFeedView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
-// 8 ticks -- counted in the banner, not copied.
+/** The state of the feed the screen reads under the given filters (Colada, composables/queries/diary.ts). */
+function feedState(
+  filters: object = {},
+): { data: DiaryFeedData | undefined; error: unknown } | undefined {
+  return useQueryCache().get(keys.diary.feed(filters))?.state.value as
+    { data: DiaryFeedData | undefined; error: unknown } | undefined
+}
+
+/** Requests for the first page of the unfiltered feed (no filter, no cursor, no window bound). */
+function unfilteredReads(): number {
+  return vi
+    .mocked(diaryApi.listDiaryFeed)
+    .mock.calls.filter(
+      ([params]) =>
+        !params?.cursor &&
+        !params?.search &&
+        !params?.categories?.length &&
+        !params?.date_from &&
+        !params?.date_to,
+    ).length
+}
+
+// 24 ticks -- counted in the banner, not copied.
 async function flush(): Promise<void> {
-  for (let i = 0; i < 8; i++) await nextTick()
+  for (let i = 0; i < 24; i++) await nextTick()
 }
 
 /** The feed pane ONLY. */
@@ -359,17 +388,16 @@ describe('DiaryFeedView', () => {
     })
 
     it('error: the REAL backend message never reaches the DOM -- the copy is hardcoded', async () => {
-      // SC-05. useCursorPagination stores e.message verbatim (.ts:61), but unlike
-      // MyBookingsView (which binds :description="store.error") this screen hard-
-      // codes the check-connection copy (i18n:common.checkConnection, .vue:175). So the rung
-      // shows, and the reason is dropped. Pinning both halves so nobody reads the
-      // rung above as proof that error propagation works -- it does not.
+      // SC-05. The feed query keeps the raw error (ADR: the screen turns it into
+      // text), and this screen hard-codes the check-connection copy
+      // (i18n:common.checkConnection, .vue:175). So the rung shows, and the
+      // reason is dropped. Pinning both halves so nobody reads the rung above as
+      // proof that error propagation works -- it does not.
       vi.mocked(diaryApi.listDiaryFeed).mockRejectedValue(new Error('Сервис недоступен'))
       mount()
       await flush()
 
-      const store = useDiaryStore()
-      expect(store.feedError).toBe('Сервис недоступен')
+      expect(feedState()?.error).toMatchObject({ message: 'Сервис недоступен' })
       expect(bodyText()).toContain('Проверьте соединение и попробуйте ещё раз')
       expect(bodyText()).not.toContain('Сервис недоступен')
     })
@@ -387,6 +415,19 @@ describe('DiaryFeedView', () => {
 
       expect(bodyText()).not.toContain('Не удалось загрузить дневник')
       expect(cardPreviews()).toEqual(['Сегодня было спокойно'])
+    })
+
+    it('nothing answered yet is a skeleton, never «empty» -- not even on the first frame', async () => {
+      // The first request leaves at mount, a frame after the first render: a
+      // screen keyed on "a request in flight" painted the empty state for that
+      // frame (FE-166 lesson: no "empty" before an answer).
+      vi.mocked(diaryApi.listDiaryFeed).mockReturnValue(new Promise(() => {}))
+      mount()
+
+      expect(bodyText()).not.toContain('Дневник пуст')
+      await flush()
+      expect(bodyText()).not.toContain('Дневник пуст')
+      expect(feedBody().querySelector('.diary-feed__state--skeleton')).not.toBeNull()
     })
 
     it('empty: shows the empty state when the feed is genuinely empty', async () => {
@@ -523,12 +564,12 @@ describe('DiaryFeedView', () => {
       // at all -- refs are the entire defence.
       //
       // WHICH ref, precisely (the SC-02 half of SC-17): TWO guards stand here and
-      // the comment must name the one that actually trips. loadMore sets
-      // `loading.value = true` SYNCHRONOUSLY, before its first await
-      // (useCursorPagination.ts:51), so by the second hit feedLoading is already
-      // true and the OBSERVER's own `!feedLoading.value` check (.vue:586) returns
-      // first. useCursorPagination's `if (loading.value) return false` (.ts:48) is
-      // the backstop behind it, never reached from this path.
+      // the comment must name the one that actually trips. Colada's fetch sets
+      // the entry's asyncStatus to 'loading' SYNCHRONOUSLY, before its first
+      // await, so by the second hit the feed is already `fetching` and the
+      // OBSERVER's own `!historyBusy` check returns first. loadMore's
+      // `cancelRefetch: false` (it joins a request in flight) is the backstop
+      // behind it, never reached from this path.
       vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE], 'c1'))
       mount()
       await flush()
@@ -546,7 +587,7 @@ describe('DiaryFeedView', () => {
     it('a failed older page KEEPS the feed and TELLS the user (was the silence tripwire; fixed №443)', async () => {
       // This was pinned as a BUG in the previous commit -- the last known instance
       // of the silence we chased all session -- and it went red the moment
-      // useCursorPagination learned to split the two failures. Flipped, not
+      // the feed learned to split the two failures. Flipped, not
       // weakened (SC-10). Both halves are asserted; drop either and it fails.
       vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(
         page(
@@ -564,18 +605,19 @@ describe('DiaryFeedView', () => {
       fireSentinel()
       await flush()
 
-      const store = useDiaryStore()
-      // The failure routes to loadMoreError, NOT to the rung's error. That split
-      // is what makes the surviving feed structural rather than a guard the
-      // screen has to remember.
-      expect(store.feedError).toBeNull()
-      expect(store.feedLoadMoreError).toBe('Сеть отвалилась')
+      // The failed page leaves the loaded one in place (Colada keeps the data
+      // of an entry in error), and the rung keys on "nothing to show". That
+      // split is what makes the surviving feed structural rather than a guard
+      // the screen has to remember.
+      expect(feedState()?.error).toMatchObject({ message: 'Сеть отвалилась' })
+      expect(feedState()?.data?.pages).toHaveLength(1)
 
-      // The user is TOLD, with the real message. This is the channel that did not
-      // exist before: the feed loads from a sentinel, so there is no button left
-      // looking broken -- the toast is the only thing standing between the reader
-      // and a feed that has silently stopped.
-      expect(toastError).toHaveBeenCalledWith('Сеть отвалилась')
+      // The user is TOLD, in the screen's own words (the raw reason never
+      // reaches them, ADR). This is the channel that did not exist before: the
+      // feed loads from a sentinel, so there is no button left looking broken --
+      // the toast is the only thing standing between the reader and a feed that
+      // has silently stopped.
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить записи')
 
       // ...and the rung still does NOT hijack the screen -- the content survives.
       expect(bodyText()).not.toContain('Не удалось загрузить дневник')
@@ -591,16 +633,15 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      const store = useDiaryStore()
-      expect(store.feedError).toBe('Сеть отвалилась')
-      expect(store.feedLoadMoreError).toBeNull()
+      expect(feedState()?.error).toMatchObject({ message: 'Сеть отвалилась' })
+      expect(feedState()?.data).toBeUndefined()
       expect(bodyText()).toContain('Не удалось загрузить дневник')
       expect(toastError).not.toHaveBeenCalled()
     })
 
     it('after a silent failure the feed is not even wedged -- a later hit retries, but only the observer can fire it', async () => {
-      // The other half of why this is bad rather than merely rude: hasMore is
-      // untouched by the catch (useCursorPagination.ts:60-63), so the feed WOULD
+      // The other half of why this is bad rather than merely rude: the older
+      // page's cursor survives the failure (the loaded pages stay), so the feed WOULD
       // recover on the next intersection. But an IntersectionObserver only calls
       // back when intersection CHANGES, and the sentinel is already in view and
       // stays there -- nothing re-fires, and .vue offers no manual control. The
@@ -613,8 +654,7 @@ describe('DiaryFeedView', () => {
       fireSentinel()
       await flush()
 
-      const store = useDiaryStore()
-      expect(store.feedHasMore).toBe(true)
+      expect(feedState()?.data?.pages.at(-1)?.next_cursor).toBe('c1')
       expect(feedBody().querySelector('.diary-feed__sentinel')).not.toBeNull()
 
       // Simulated re-intersection (which the real screen cannot produce): proves
@@ -626,7 +666,7 @@ describe('DiaryFeedView', () => {
       await flush()
 
       expect(cardPreviews()).toEqual(['догрузилась', 'Сегодня было спокойно'])
-      expect(store.feedError).toBeNull()
+      expect(feedState()?.error).toBeNull()
     })
   })
 
@@ -662,7 +702,7 @@ describe('DiaryFeedView', () => {
       expect(host?.querySelector('.composer')).not.toBeNull()
 
       const store = useDiaryStore()
-      await store.setFeedFilters({ categories: ['practices'] })
+      store.setFeedFilters({ categories: ['practices'] })
       await flush()
 
       // diaryWriteTarget(['practices']) === null -> composer unmounts, so the
@@ -677,7 +717,7 @@ describe('DiaryFeedView', () => {
       expect(host?.querySelector('textarea')?.placeholder).toBe('Начните писать...')
 
       const store = useDiaryStore()
-      await store.setFeedFilters({ categories: ['dreams'] })
+      store.setFeedFilters({ categories: ['dreams'] })
       await flush()
 
       expect(host?.querySelector('textarea')?.placeholder).toBe('Запишите сон...')
@@ -733,7 +773,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
       const store = useDiaryStore()
-      await store.runFeedSearch('сон')
+      store.runFeedSearch('сон')
       await flush()
       expect(host?.querySelector('.dsr-row')).not.toBeNull()
 
@@ -753,7 +793,8 @@ describe('DiaryFeedView', () => {
       // ...the results reset (owner 2026-09-09: an empty field is NO
       // filter -- the bug was the stale results staying)...
       expect(store.feedFilters.search).toBeUndefined()
-      expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]?.search).toBeUndefined()
+      // The full feed comes back from its held answer: it was asked once, at mount.
+      expect(unfilteredReads()).toBe(1)
       expect(host?.querySelector('.timeline')).not.toBeNull()
       // ...but the editing session CONTINUES: the bar stays up in the
       // header slot with the empty, focused field (the mode reopened).
@@ -773,7 +814,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
       const store = useDiaryStore()
-      await store.runFeedSearch('сон')
+      store.runFeedSearch('сон')
       await flush()
 
       openKebab()
@@ -796,7 +837,8 @@ describe('DiaryFeedView', () => {
       ).toBe(false)
       expect(host?.querySelector('.composer')).not.toBeNull()
       expect(store.feedFilters.search).toBeUndefined()
-      expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]?.search).toBeUndefined()
+      // The full feed comes back from its held answer: it was asked once, at mount.
+      expect(unfilteredReads()).toBe(1)
     })
   })
 
@@ -858,7 +900,7 @@ describe('DiaryFeedView', () => {
       await flush()
 
       const store = useDiaryStore()
-      await store.runFeedSearch('сон')
+      store.runFeedSearch('сон')
       await flush()
 
       // The honest rung: NOT the empty title (i18n:user.screens.diaryFeed.empty.title) -- the diary has entries, the
@@ -870,7 +912,8 @@ describe('DiaryFeedView', () => {
       buttonIn(feedBody(), 'Сбросить поиск')?.click()
       await flush()
 
-      expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]?.search).toBeUndefined()
+      // The full feed comes back from its held answer: it was asked once, at mount.
+      expect(unfilteredReads()).toBe(1)
       expect(host?.querySelector('.timeline')).not.toBeNull()
       // No query, no bar in the header slot: the row returns as it was.
       expect(host?.querySelector('.diary-feed__search--up')).toBeNull()
@@ -909,7 +952,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      await useDiaryStore().runFeedSearch('запись')
+      useDiaryStore().runFeedSearch('запись')
       await flush()
 
       const row = host?.querySelector<HTMLElement>('.dsr-row')
@@ -967,7 +1010,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      await useDiaryStore().runFeedSearch('сон')
+      useDiaryStore().runFeedSearch('сон')
       await flush()
 
       // Committed search, mode closed: the outer x is the close control.
@@ -978,7 +1021,8 @@ describe('DiaryFeedView', () => {
 
       // Deactivation: the query is reset, the full timeline is back, and the
       // header row returns exactly as it was (owner 2026-09-09).
-      expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]?.search).toBeUndefined()
+      // The full feed comes back from its held answer: it was asked once, at mount.
+      expect(unfilteredReads()).toBe(1)
       expect(host?.querySelector('.timeline')).not.toBeNull()
       expect(host?.querySelector('.diary-feed__search--up')).toBeNull()
       expect(
@@ -987,6 +1031,36 @@ describe('DiaryFeedView', () => {
           ?.classList.contains('diary-feed__header--replaced'),
       ).toBe(false)
       expect(push).not.toHaveBeenCalled()
+    })
+
+    it('a window that fails after the search was closed tells nothing', async () => {
+      let failWindow!: (e: unknown) => void
+      vi.mocked(diaryApi.listDiaryFeed)
+        .mockResolvedValueOnce(page([NOTE]))
+        .mockResolvedValueOnce(page([NOTE]))
+        .mockImplementation((params) =>
+          params?.date_to || params?.date_from
+            ? new Promise((_, reject) => {
+                failWindow = reject
+              })
+            : Promise.resolve(page([NOTE])),
+        )
+      mount()
+      await flush()
+      useDiaryStore().runFeedSearch('сон')
+      await flush()
+      host?.querySelector<HTMLElement>('.dsr-row')?.click()
+      await flush()
+
+      // The reader leaves before the window answers...
+      host?.querySelector<HTMLButtonElement>('.diary-search__close')?.click()
+      await flush()
+      failWindow(new Error('window down'))
+      await flush()
+
+      // ...so its failure belongs to nothing on screen.
+      expect(toastError).not.toHaveBeenCalled()
+      expect(host?.querySelector('.timeline')).not.toBeNull()
     })
 
     it('a failed window fetch keeps the results list and surfaces the failure', async () => {
@@ -998,7 +1072,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      await useDiaryStore().runFeedSearch('сон')
+      useDiaryStore().runFeedSearch('сон')
       await flush()
 
       host?.querySelector<HTMLElement>('.dsr-row')?.click()
@@ -1032,7 +1106,7 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
       const store = useDiaryStore()
-      await store.setFeedFilters({ categories: ['dreams'] })
+      store.setFeedFilters({ categories: ['dreams'] })
       await flush()
 
       const backBtn = host?.querySelector<HTMLButtonElement>('.diary-feed__back')
@@ -1044,9 +1118,9 @@ describe('DiaryFeedView', () => {
       // contextual back.
       expect(push).not.toHaveBeenCalled()
       expect(store.feedFilters.categories).toEqual([])
-      expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls.at(-1)?.[0]).toMatchObject({
-        categories: [],
-      })
+      // The full feed comes back from its held answer: it was asked once, at mount.
+      expect(unfilteredReads()).toBe(1)
+      expect(cardPreviews()).toEqual(['Сегодня было спокойно'])
     })
   })
 
@@ -1170,6 +1244,24 @@ describe('DiaryFeedView', () => {
 
       expect(diaryApi.restoreDiaryEntry).toHaveBeenCalledWith('entry_7')
       expect(host?.querySelector('.diary-feed__undo')).toBeNull()
+    })
+
+    it('a restored entry comes back on the timeline: the feed reloads its first page', async () => {
+      routeQuery.deleted = 'entry_7'
+      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([NOTE]))
+      vi.mocked(diaryApi.restoreDiaryEntry).mockResolvedValue(undefined as never)
+      mount()
+      await flush()
+      const RESTORED = feedItem('r1', 'note', '2026-07-16T11:00:00Z', {
+        content_preview: 'Вернулась',
+      })
+      vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page([RESTORED, NOTE]))
+
+      buttonIn(host!, 'Отменить')?.click()
+      await flush()
+
+      expect(unfilteredReads()).toBe(2)
+      expect(cardPreviews()).toEqual(['Сегодня было спокойно', 'Вернулась'])
     })
 
     it('a failed restore surfaces the mapped table phrase for a real code as a toast', async () => {
