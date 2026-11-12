@@ -141,6 +141,14 @@ describe('planCells (FE-152: golden x editions, skins x full)', () => {
     expect(planCells(REPO_EDITIONS, []).map((c) => c.name)).toEqual(['golden/ai'])
   })
 
+  it('with one edition in editions.json the skins ride that edition (CI passes --skin)', () => {
+    expect(planCells(REPO_EDITIONS, SKINS).map((c) => c.name)).toEqual([
+      'golden/ai',
+      'acme/ai',
+      'nova/ai',
+    ])
+  })
+
   it('with no --skin the matrix is golden x editions (the default and CI run)', () => {
     expect(planCells(EDITIONS, []).map((c) => c.name)).toEqual([
       'golden/core',
@@ -172,9 +180,9 @@ describe('planCells (FE-152: golden x editions, skins x full)', () => {
   })
 
   it('an edition missing from editions.json is a named error', () => {
-    expect(() => planCells({ schema: 1, editions: { core: { modules: [] } } }, SKINS)).toThrow(
-      /"full" is not in editions\.json/,
-    )
+    expect(() =>
+      planCells({ schema: 1, editions: { core: { modules: [] }, school: { modules: [] } } }, SKINS),
+    ).toThrow(/"full" is not in editions\.json/)
   })
 })
 
@@ -317,6 +325,15 @@ describe('per-cell CI mode: the fan-in (--check-assets)', () => {
     ])
     expect(fails).toHaveLength(1)
     expect(fails[0]).toContain('goodo/full:393')
+  })
+
+  it('invariant d holds per edition: the golden cell and the skin cells of `ai` must agree', () => {
+    expect(assetCountFails([entry('golden/ai', 'ai', 385), entry('acme/ai', 'ai', 385)])).toEqual(
+      [],
+    )
+    expect(
+      assetCountFails([entry('golden/ai', 'ai', 385), entry('acme/ai', 'ai', 386)]),
+    ).toHaveLength(1)
   })
 
   it('a planned cell without a facts file fails -- never a silent green', () => {

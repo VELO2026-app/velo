@@ -17,7 +17,10 @@
 # docker-compose.yml), the backend installed with pip (not the app image: its
 # build is slower than the whole sweep), the comms stub, uvicorn on :8000, the
 # golden build under `vite preview` (its /api proxy goes to :8000).
-# Telegram, Zoom, Stripe: stubs and a fake bot token -- nothing leaves the runner.
+# Telegram: a fake bot token and the comms stub; Stripe: the stub of SERVER_ROLE=test;
+# Zoom: no stub since BE-192, so a meeting create at seed time fails against zoom.us
+# with the invented keys of ci.env (the practice is seeded without a link) -- the
+# pollers are off, nothing else calls out.
 # =============================================================================
 name: e2e sweep
 
@@ -77,10 +80,13 @@ jobs:
       PRIMER_COMMIT: ${{ github.sha }}
       # Invite screens need it: the backend mints t.me links from it.
       TELEGRAM_BOT_URL: https://t.me/velo_e2e_bot
-      PUBLIC_LINK_BASE: http://127.0.0.1:4173
       COMMS_API_URL: http://127.0.0.1:8899
       COMMS_SERVICE_TOKEN: e2e-comms
       COMMS_RELAY_ENABLED: 'false'
+      # Zoom has no stub on any role (BE-192) and ci.env carries invented Zoom
+      # keys: keep the two background pollers from calling zoom.us with them.
+      ZOOM_RETRY_ENABLED: 'false'
+      ZOOM_REPORT_ENABLED: 'false'
       E2E_LOG_DIR: ${{ github.workspace }}/stack-logs
       # The schedule has no inputs: both engines.
       PROJECTS: ${{ inputs.projects || 'sweep sweep-webkit' }}
