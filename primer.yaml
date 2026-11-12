@@ -34,17 +34,19 @@ stacks:
     frontend: { service: frontend, port: 3000 }
     migrate:  python -m alembic upgrade head
     test:     { run: python -m pytest tests/ --junitxml=/tmp/junit.xml, target: test }
+    # Demo people and their data: never on prod (the machine refuses a seed
+    # outside its roles; the resets of primer.yaml's verbs have the same).
     seeds:
-      02102026-demo:            { run: python scripts/seed.py --profile 02102026-demo, when: command }
-      02102026-invest_demo_new: { run: python scripts/seed.py --profile 02102026-invest_demo_new, when: command }
-      11102026-loadtest:        { run: python scripts/seed.py --profile 11102026-loadtest, when: command }
-      "15082026":               { run: python scripts/seed.py --profile 15082026, when: command }
-      23092026-cf-388101:       { run: python scripts/seed.py --profile 23092026-cf-388101, when: command }
-      "26082026":               { run: python scripts/seed.py --profile 26082026, when: command }
-      26082026-1:               { run: python scripts/seed.py --profile 26082026-1, when: command }
+      02102026-demo:            { run: python scripts/seed.py --profile 02102026-demo, when: command, roles: [test, preview] }
+      02102026-invest_demo_new: { run: python scripts/seed.py --profile 02102026-invest_demo_new, when: command, roles: [test, preview] }
+      11102026-loadtest:        { run: python scripts/seed.py --profile 11102026-loadtest, when: command, roles: [test, preview] }
+      "15082026":               { run: python scripts/seed.py --profile 15082026, when: command, roles: [test, preview] }
+      23092026-cf-388101:       { run: python scripts/seed.py --profile 23092026-cf-388101, when: command, roles: [test, preview] }
+      "26082026":               { run: python scripts/seed.py --profile 26082026, when: command, roles: [test, preview] }
+      26082026-1:               { run: python scripts/seed.py --profile 26082026-1, when: command, roles: [test, preview] }
       # The key is the machine's name (lower case, DM-78); the profile is
       # the file seed_profiles/FE-54.json.
-      fe-54:                    { run: python scripts/seed.py --profile FE-54, when: command }
+      fe-54:                    { run: python scripts/seed.py --profile FE-54, when: command, roles: [test, preview] }
   velo-storage:
     compose: docker-compose.storage.yml
     persistent: true

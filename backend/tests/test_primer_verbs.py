@@ -65,6 +65,11 @@ def _verbs() -> dict:
 
 
 def test_every_profile_is_a_seed_and_every_seed_a_profile() -> None:
+    """Each file of seed_profiles/ is a seed, and each seed is a file -- run
+    on command, and on the roles test and preview only: a profile is demo
+    people and their data (BE-195 part 2). The set of roles is NOT_ON_PROD,
+    the same as the resets of the seeds. Was `{run, when}` exactly -- right
+    while the machine took no `roles` on a seed."""
     files = sorted(p.stem for p in PROFILES.glob("*.json"))
     assert files, f"{PROFILES} holds profiles"
     seeds = _seeds()
@@ -74,6 +79,7 @@ def test_every_profile_is_a_seed_and_every_seed_a_profile() -> None:
         assert spec == {
             "run": f"python scripts/seed.py --profile {stem}",
             "when": "command",
+            "roles": NOT_ON_PROD,
         }, stem
 
 
