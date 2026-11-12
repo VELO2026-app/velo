@@ -507,9 +507,10 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue(txPage([TX_SALE, TX_FEE]))
 
-  // The real store puts whatever this resolves into its reactive cache; a
-  // practice with no fixture rejects, which is the honest shape of an insights
-  // fetch that failed (stores/diary.ts:363-380 swallows it into insightsErrorMap).
+  // The real insights reader (composables/queries/diary.ts) puts whatever this
+  // resolves into the Colada cache; a practice with no fixture rejects, which is
+  // the honest shape of an insights fetch that failed (load() swallows it and
+  // the practice stays absent).
   vi.mocked(diaryApi.getPracticeInsights)
     .mockReset()
     .mockImplementation(async (id: string) => {
@@ -1304,8 +1305,8 @@ describe('AnalyticsView', () => {
   // - VStatCard / VRatingDistribution / VRatingBadges / VShowMore / VSegmentTrack
   //   internals: DS primitives with their own homes. Asserted here only through
   //   the values this screen feeds them.
-  // - The insights LRU eviction and the "skip if already cached" guard
-  //   (stores/diary.ts:363-380): store behaviour, and probekit-unit-test's ground.
+  // - The insights "skip if already held" guard: the query's behaviour, covered
+  //   in composables/queries/diary.test.ts.
   // - The send button (i18n:common.submitSend) in the send-message modal: that
   //   component's own open-then-send
   //   behaviour (SendMessageModal.test.ts). It belongs to that component's own

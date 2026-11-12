@@ -288,16 +288,17 @@ describe('the end of a session leaves every store in its initial state', () => {
     const inFlight = [
       useAdminStore().fetchDashboard(true),
       useAdminStore().fetchOverview('week'),
-      useDiaryStore().fetchFeed(),
-      useDiaryStore().fetchEntry('entry_1'),
-      useDiaryStore().loadInsights('practice_1'),
+      // The diary's optimistic send: its row is the store's state.
+      useDiaryStore().sendEntry({ content: 'previous account' }),
+      useDiaryStore().updateEntry('entry_1', { content: 'previous account' }),
       usePracticesStore().fetchPractice('practice_1'),
       // The bookings and calendar stores hold no server data since FE-166
       // steps 3-4, and neither do the schools hub (no store at all) and the
-      // master store since step 5, nor the bell's badge since step 6; their
-      // queries are Colada entries, emptied by the account scope
+      // master store since step 5, nor the bell's badge since step 6, nor the
+      // diary's feed, entry and insights since step 8; their queries are
+      // Colada entries, emptied by the account scope
       // (composables/queries/setup.test.ts, schoolsHub.test.ts,
-      // master.test.ts, notifications.test.ts).
+      // master.test.ts, notifications.test.ts, diary.test.ts).
     ]
 
     await useAuthStore().logout()
@@ -312,9 +313,8 @@ describe('the end of a session leaves every store in its initial state', () => {
   const ownRequests: Array<[string, () => Promise<unknown>]> = [
     ['admin dashboard', () => useAdminStore().fetchDashboard(true)],
     ['admin overview', () => useAdminStore().fetchOverview('week')],
-    ['diary feed', () => useDiaryStore().fetchFeed()],
-    ['diary entry', () => useDiaryStore().fetchEntry('entry_1')],
-    ['diary insights', () => useDiaryStore().loadInsights('practice_1')],
+    ['diary send', () => useDiaryStore().sendEntry({ content: 'x' })],
+    ['diary check-in', () => useDiaryStore().submitCheckin('practice_1', { mood: 3 } as never)],
     ['practice detail', () => usePracticesStore().fetchPractice('practice_1')],
   ]
   for (const [name, run] of ownRequests) {

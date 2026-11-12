@@ -10,7 +10,7 @@
 // day removing, so the change gets a guard rather than a promise.
 //
 // Scope is deliberately W27's blast radius, not the whole store: the two actions
-// that reach refreshAfterDiaryMutation (submitCheckin, submitFeedback), what they
+// that reload the feed (submitCheckin, submitFeedback -- diaryFeedChanged), what they
 // refresh, and -- the point of the change -- what they must NOT touch.
 //
 // THE KEY TEST is «does not touch the bookings store». It is negative space, the
@@ -25,7 +25,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { setInfiniteQueryData, useQueryCache } from '@pinia/colada'
 import { useDiaryStore } from '@/stores/diary'
+import { keys } from '@/composables/queries/keys'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
 import type { CheckinRequest, FeedbackRequest, CreateExternalActivityRequest } from '@/api/types'
@@ -70,6 +72,12 @@ beforeEach(() => {
     .mockResolvedValue({} as never)
   useBookingsStore.mockReset()
   invalidateAfter.mockReset().mockResolvedValue(undefined)
+  // The diary feed as a visit left it (composables/queries/diary.ts): a
+  // submit that moves the timeline reloads its first page.
+  setInfiniteQueryData(useQueryCache(), keys.diary.feed({}), {
+    pages: [feedPage()],
+    pageParams: [null],
+  })
 })
 
 describe('diary store', () => {
@@ -301,6 +309,29 @@ describe('diary store', () => {
       await store.submitExternalActivity(ACTIVITY)
 
       expect(useBookingsStore).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('updateEntry (FE-182)', () => {
+    it('reloads the feed under the active filter, held off screen while the entry is open', async () => {
+      vi.mocked(diaryApi.updateDiaryEntry)
+        .mockReset()
+        .mockResolvedValue({ id: 'e1', content: 'edited' } as never)
+      const store = useDiaryStore()
+      store.setFeedFilters({ categories: ['dreams'] })
+      setInfiniteQueryData(useQueryCache(), keys.diary.feed({ categories: ['dreams'] }), {
+        pages: [feedPage()],
+        pageParams: [null],
+      })
+
+      await store.updateEntry('e1', { content: 'edited' })
+
+      expect(diaryApi.listDiaryFeed).toHaveBeenCalledWith({ categories: ['dreams'], limit: 40 })
+      expect(useQueryCache().get(keys.diary.feed({ categories: ['dreams'] }))).toBeDefined()
+      // ...and the entry screen reads the server's answer.
+      expect(useQueryCache().getQueryData(keys.diary.entry('e1'))).toMatchObject({
+        content: 'edited',
+      })
     })
   })
 

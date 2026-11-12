@@ -40,9 +40,9 @@
 //
 // TICKS = 10. Counted, not copied (SC-08). The submit chain is the deep one:
 //   onSubmit -> submitCheckin -> await upsertCheckin (1) ->
-//   await refreshAfterDiaryMutation -> await Promise.allSettled([feed.refresh()])
+//   await diaryFeedChanged -> await Promise.allSettled([feed.refresh()])
 //   -> feed.refresh -> await loadMore -> await listDiaryFeed (2,3) -> refresh
-//   resumes (4) -> allSettled (5) -> refreshAfterDiaryMutation resumes (6) ->
+//   resumes (4) -> allSettled (5) -> diaryFeedChanged resumes (6) ->
 //   submitCheckin returns (7) -> onSubmit resumes, sets submitted (the booking
 //   keys were marked stale by the store, FE-166) -> +1 final re-render = ~8.
 // The mount chain is shallower (~5): useMyBookings (Colada) -> fetch ->
@@ -105,7 +105,7 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
-import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { PiniaColada, setInfiniteQueryData, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
 import CheckinView from '@/views/user/CheckinView.vue'
@@ -340,6 +340,14 @@ afterEach(() => {
   // No overlay purge: nothing in this tree teleports to document.body. See the
   // "TRAPS ABSENT" note in the banner -- this omission is deliberate, not missed.
 })
+
+/** The unfiltered diary feed held in the cache, as a visit to the diary leaves it. */
+function seedDiaryFeed(): void {
+  setInfiniteQueryData(useQueryCache(), keys.diary.feed({}), {
+    pages: [{ items: [], next_cursor: null }],
+    pageParams: [null],
+  })
+}
 
 describe('CheckinView', () => {
   describe('state ladder', () => {
@@ -848,12 +856,15 @@ describe('CheckinView', () => {
     })
 
     it('refreshes the diary feed too -- the check-in is a timeline event', async () => {
-      // submitCheckin -> refreshAfterDiaryMutation -> feed.refresh (diary.ts:76).
+      // submitCheckin -> diaryFeedChanged -> the feed's first page reloaded.
       // Verified one level down rather than from the .vue comment.
       mount()
       await flush()
       expect(listDiaryFeedMock).not.toHaveBeenCalled()
 
+      // The diary as a visit left it: the submit reloads its first page
+      // (composables/queries/diary.ts, diaryFeedChanged).
+      seedDiaryFeed()
       submitBtn()?.click()
       await flush()
 

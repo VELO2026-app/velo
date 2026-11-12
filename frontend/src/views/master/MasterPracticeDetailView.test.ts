@@ -28,15 +28,16 @@
 // in load() (.vue:571-593). That module is the seam, auto-mocked. The master's
 // practice lists (Colada) and the diary store are not where the state lives --
 // the lists contribute a warm CACHE to read through (cachedMyPractice) plus
-// myPracticesChanged() as a post-mutation side-effect, and diaryStore contributes the insights CACHE the PAST hero
+// myPracticesChanged() as a post-mutation side-effect, and the insights reader
+// (usePracticeInsights, composables/queries/diary.ts) contributes the CACHE the PAST hero
 // badges read. Both are dependencies, so both are mocked wholesale behind
 // getters over mutable objects (velo-idiom §5). Mocking the API seam alone
 // would leave the cache-hit branch unreachable; mocking the stores alone would
 // leave every ladder rung unreachable.
 //
 // insightsCache is mocked as a REAL reactive(new Map()) and the loadInsights
-// mock WRITES to it, mirroring the store (stores/diary.ts:363-380). The screen
-// grabs the map once at setup and derives `insights` from it (.vue:371-372), so
+// mock WRITES to it, mirroring the Colada cache the real reader reads. The
+// screen derives `insights` from the reader's get() (.vue:371-372), so
 // a plain Map would render the badges only if pre-seeded and would never prove
 // the reactive read. The write path is the thing under test.
 //
@@ -112,17 +113,18 @@ vi.mock('@/composables/queries/master', () => ({
   myPracticesChanged: (...args: unknown[]) => myPracticesChangedSpy(...args),
 }))
 
-// -- diary store (dependency): the insights cache the PAST hero badges read --
-// A real reactive Map, exactly as the store holds it (stores/diary.ts:352). The
-// screen captures it by reference at setup, so the mock must return the SAME
-// object every call -- a fresh Map per useDiaryStore() would hand the screen a
+// -- insights reader (dependency): the cache the PAST hero badges read --
+// A real reactive Map standing in for the Colada cache (get() reads it
+// reactively, like the real reader). The reader must close over the SAME map
+// every call -- a fresh Map per usePracticeInsights() would hand the screen a
 // map nobody writes to.
 const insightsCache = reactive(new Map<string, PracticeInsightsResponse>())
 const loadInsights = vi.fn()
-vi.mock('@/stores/diary', () => ({
-  useDiaryStore: () => ({
-    insightsCache,
-    loadInsights,
+vi.mock('@/composables/queries/diary', () => ({
+  usePracticeInsights: () => ({
+    get: (id: string) => insightsCache.get(id),
+    has: (id: string) => insightsCache.has(id),
+    load: loadInsights,
   }),
 }))
 
@@ -347,7 +349,7 @@ beforeEach(() => {
     .mockResolvedValue(practice({ status: 'cancelled' }))
   vi.mocked(practicesApi.deletePractice).mockReset().mockResolvedValue(undefined)
 
-  // Mirrors the real store (stores/diary.ts:363-380): fills the reactive cache
+  // Mirrors the real reader's load(): fills the reactive cache
   // the screen reads. Tests that want badges seed `insightsFixture` first.
   loadInsights.mockReset().mockImplementation(async (id: string) => {
     if (insightsFixture) insightsCache.set(id, insightsFixture)

@@ -31,6 +31,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { setInfiniteQueryData, useQueryCache } from '@pinia/colada'
+import { keys } from '@/composables/queries/keys'
 import ExternalActivityCreateView from '@/views/user/ExternalActivityCreateView.vue'
 import UserShell from '@/views/shells/UserShell.vue'
 import * as diaryApi from '@/api/diary'
@@ -109,8 +111,8 @@ function unmount(): void {
 }
 
 async function flush(): Promise<void> {
-  // 12 ticks: the submit chain is POST -> feed.refresh() (useCursorPagination
-  // has its own nextTick hops) -> result -> toast/push; 6 left the toast
+  // 12 ticks: the submit chain is POST -> diaryFeedChanged() (the feed's first
+  // page reload) -> result -> toast/push; 6 left the toast
   // unflushed (measured), 12 keeps the same margin DiaryComposer.test uses.
   for (let i = 0; i < 12; i++) await nextTick()
 }
@@ -306,6 +308,14 @@ afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
 })
+
+/** The unfiltered diary feed held in the cache, as a visit to the diary leaves it. */
+function seedDiaryFeed(): void {
+  setInfiniteQueryData(useQueryCache(), keys.diary.feed({}), {
+    pages: [{ items: [], next_cursor: null }],
+    pageParams: [null],
+  })
+}
 
 describe('ExternalActivityCreateView', () => {
   describe('rendering + initial state', () => {
@@ -730,6 +740,9 @@ describe('ExternalActivityCreateView', () => {
       mount()
       await fillValidForm()
 
+      // The diary as a visit left it: the submit reloads its first page
+      // (composables/queries/diary.ts, diaryFeedChanged).
+      seedDiaryFeed()
       saveBtn().click()
       await flush()
 

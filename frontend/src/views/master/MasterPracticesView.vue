@@ -23,7 +23,7 @@
              (checkin_count / max, owner-only -- E12 swap, PROMPT №419: was
              insights.checkins mood tally, now distinct PRE check-ins, see
              practiceCardMeta.ts) + rating distribution (insights.feedbacks,
-             reused from diaryStore cache like AnalyticsView, PAST tab only).
+             reused from the insights cache like AnalyticsView, PAST tab only).
              Also REAL (practiceCardMeta.ts): recurrence days from
              recurrence_days ("Regular" i18n:practice.regular only for a
              series without a day list) and the remaining-sessions line
@@ -204,7 +204,7 @@ import {
 } from '@/components/icons'
 import { useMyPractices } from '@/composables/queries/master'
 import { extractApiError } from '@/composables/useApiError'
-import { useDiaryStore } from '@/stores/diary'
+import { usePracticeInsights } from '@/composables/queries/diary'
 import { useToast } from '@/composables/useToast'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
@@ -216,10 +216,9 @@ import type { PracticeResponse } from '@/api/types'
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const diaryStore = useDiaryStore()
-
-// Reactive insights cache (shared with Analytics / PracticeReviews — often warm).
-const insightsCache = diaryStore.insightsCache
+// Practices' insights in the Colada cache, shared with Analytics / the
+// practice screen -- often warm (composables/queries/diary.ts).
+const insightsCache = usePracticeInsights()
 
 // Active tab is mirrored in the URL query (?tab=past) so that returning from a
 // practice detail via router.back() restores the tab the user left from
@@ -333,7 +332,7 @@ function ratingPcts(id: string): Record<MoodScaleKey, number> {
  *  entirely. */
 function loadTabInsights(): Promise<void[]> {
   if (activeTab.value !== 'past') return Promise.resolve([])
-  return Promise.all(pastPractices.value.map((p) => diaryStore.loadInsights(p.id)))
+  return Promise.all(pastPractices.value.map((p) => insightsCache.load(p.id)))
 }
 
 /** Eager-load insights for the visible tab. Bounded to the currently-loaded page;

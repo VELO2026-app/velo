@@ -294,8 +294,8 @@ function mount(): HTMLElement {
 //   (1) await getMyPractices inside the Colada infinite query
 //   (2)-(4) the entry's state lands the page -> the pastPractices
 //   watch calls loadTabData
-//   (5) await getPracticeInsights inside diaryStore.loadInsights
-//   (6) loadInsights' own continuation -> (7) the Promise.all over them
+//   (5) await getPracticeInsights inside the insights reader's load()
+//   (6) load()'s own continuation -> (7) the Promise.all over them
 //   (8) loadTabInsights resolves -> (9) loadTabData's await resumes
 //   (10) onMounted resumes -> (11) re-render.
 // Eleven counted, plus the Colada cache's own hops (a load-more's rejection
@@ -396,10 +396,10 @@ beforeEach(() => {
   vi.mocked(mastersApi.getMyPractices).mockReset()
   mockBucketedPractices(ALL)
 
-  // The real store writes whatever this resolves into its reactive cache; a
-  // practice with no fixture REJECTS, which is the honest shape of an insights
-  // fetch that failed (stores/diary.ts:363-380 swallows it into
-  // insightsErrorMap, leaving the id absent from the cache).
+  // The real insights reader writes whatever this resolves into the Colada
+  // cache; a practice with no fixture REJECTS, which is the honest shape of an
+  // insights fetch that failed (load() swallows it, leaving the id absent from
+  // the cache).
   vi.mocked(diaryApi.getPracticeInsights)
     .mockReset()
     .mockImplementation(async (id: string) => {
@@ -1414,8 +1414,8 @@ describe('MasterPracticesView', () => {
   //   own ground, and already unit-tested territory. The fixtures carry no
   //   `direction`, so every card renders the IconDots fallback -- which is why
   //   no assertion here reads the icon.
-  // - diaryStore.loadInsights' skip-if-cached guard and its LRU eviction
-  //   (stores/diary.ts:363-380): store behaviour -> probekit-unit-test.
+  // - the insights reader's skip-if-held guard: the query's behaviour, covered
+  //   in composables/queries/diary.test.ts.
   // - a load-more racing a refetch (queries/master.ts, cancelRefetch): the
   //   lists' behaviour, covered in composables/queries/master.test.ts.
   // - masterStatusGuard, which fronts this route: the guard layer ->

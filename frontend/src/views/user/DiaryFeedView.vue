@@ -7,7 +7,7 @@
   Replaces the old tab-based DiaryView.
 
   Pagination: cursor-based infinite scroll. An IntersectionObserver sentinel
-  at the bottom calls loadMoreFeed() when it scrolls into view (the project's
+  at the top calls the feed's loadMore() when it scrolls into view (the project's
   other lists use a "show more" button, but the diary is a chat-like timeline
   where auto-load reads more naturally -- agreed deviation).
 
@@ -210,7 +210,7 @@
 
       <!-- Error (only when nothing loaded yet) -->
       <VEmptyState
-        v-else-if="feedError && items.length === 0"
+        v-else-if="feedFailed && items.length === 0"
         icon="warning"
         :title="t('user.screens.diaryFeed.loadFailed')"
         :description="t('common.checkConnection')"
@@ -424,6 +424,8 @@ import DiarySearchResults from '@/components/shared/DiarySearchResults.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
+import { extractApiError } from '@/composables/useApiError'
+import { useDiaryFeed, useDiaryJump } from '@/composables/queries/diary'
 import { diaryWriteTarget } from '@/utils/diaryComposeTarget'
 import type { DiaryFeedItem, DiaryFeedCategory } from '@/api/types'
 
@@ -433,21 +435,17 @@ const diaryStore = useDiaryStore()
 const authStore = useAuthStore()
 const toast = useToast()
 
-const {
-  feedItems,
-  feedLoading,
-  feedLoaded,
-  feedError,
-  feedHasMore,
-  feedFilters,
-  jumpItems,
-  jumpTargetId,
-  jumpLoading,
-  jumpMoreLoading,
-  pendingEntries,
-} = storeToRefs(diaryStore)
+const { feedFilters, jumpTarget, pendingEntries } = storeToRefs(diaryStore)
 
-const items = computed<DiaryFeedItem[]>(() => feedItems.value)
+// The feed under the active filters, and the search jump's window (Colada,
+// composables/queries/diary.ts); the store holds what they are read under.
+const feed = useDiaryFeed(() => diaryStore.feedFilters)
+const jump = useDiaryJump(() => diaryStore.jumpTarget)
+
+const items = feed.items
+const feedHasMore = feed.hasMore
+const feedFailed = feed.failed
+const jumpLoading = jump.loading
 const timezone = computed(() => authStore.user?.timezone ?? 'UTC')
 
 // Optimistic entries (the composer's send): shown at the newest end of the
@@ -470,35 +468,37 @@ function pendingStateOf(item: DiaryFeedItem): 'sending' | 'failed' | 'sent' | un
 }
 
 // Loading split: first page (full-screen loader) vs subsequent pages (inline).
-// A pending entry is something to show: never a skeleton over it.
+// Nothing answered yet is a skeleton, not "the diary is empty" -- the first
+// request leaves at mount, a frame after the first render. A pending entry is
+// something to show: never a skeleton over it.
 const initialLoading = computed(
   () =>
-    feedLoading.value &&
-    !feedLoaded.value &&
+    !feed.loaded.value &&
+    !feed.failed.value &&
     items.value.length === 0 &&
     pendingItems.value.length === 0,
 )
-const loadingMore = computed(() => feedLoading.value && items.value.length > 0)
+const loadingMore = computed(() => feed.fetching.value && items.value.length > 0)
 
 // -- Jump window (Telegram-style scroll to the found entry) -------------------
 
-const jumpActive = computed(() => jumpTargetId.value !== null)
+const jumpActive = computed(() => jumpTarget.value !== null)
 
 // The thread renders the jump window while one is open (the search results
 // stay loaded in the feed behind it -- exiting the jump returns to them).
 const timelineItems = computed<DiaryFeedItem[]>(() =>
-  jumpActive.value ? jumpItems.value : [...pendingItems.value, ...items.value],
+  jumpActive.value ? jump.items.value : [...pendingItems.value, ...items.value],
 )
 
 // The "loading older" indicator + sentinel guard follow whichever history is
 // on screen: the feed's pagination, or the jump window's own cursor.
 const loadingOlderPage = computed(() =>
-  jumpActive.value ? jumpMoreLoading.value : loadingMore.value,
+  jumpActive.value ? jump.loadingMore.value : loadingMore.value,
 )
 const historyCanLoadMore = computed(() =>
-  jumpActive.value ? diaryStore.jumpCursor !== null : feedHasMore.value,
+  jumpActive.value ? jump.hasMore.value : feedHasMore.value,
 )
-const historyBusy = computed(() => feedLoading.value || jumpLoading.value || jumpMoreLoading.value)
+const historyBusy = computed(() => feed.fetching.value || jump.fetching.value)
 
 // -- Tap handling ------------------------------------------------------------
 
@@ -716,14 +716,14 @@ function closeSearch(): void {
 // while the feed behind returns to its full state. Same-value non-empty
 // emits (the bar's initial sync, an edit that lands back on the active
 // query) owe nothing.
-async function onLiveSearch(query: string): Promise<void> {
+function onLiveSearch(query: string): void {
   if (query === '') {
     searchOpen.value = true
-    if (diaryStore.feedFilters.search !== undefined) await diaryStore.runFeedSearch('')
+    if (diaryStore.feedFilters.search !== undefined) diaryStore.runFeedSearch('')
     return
   }
   if (query === (diaryStore.feedFilters.search ?? '')) return
-  await diaryStore.runFeedSearch(query)
+  diaryStore.runFeedSearch(query)
 }
 
 async function onApplyFilter(payload: {
@@ -731,12 +731,14 @@ async function onApplyFilter(payload: {
   date_from?: string
   date_to?: string
 }): Promise<void> {
-  // setFeedFilters resets the feed to the first page with the new filter set.
-  await diaryStore.setFeedFilters({
+  // The feed reads from the first page under the new filter set; scroll once
+  // it answered.
+  diaryStore.setFeedFilters({
     categories: payload.categories,
     date_from: payload.date_from,
     date_to: payload.date_to,
   })
+  await feed.settled()
   await nextTick()
   // Filter results go at the TOP (top-align); the full feed stays chat-bottom.
   if (filterActive.value) scrollToTop()
@@ -746,7 +748,8 @@ async function onApplyFilter(payload: {
 // The no-results rung's way out: reset the SEARCH only (categories/dates may
 // still be intentionally active) and return to the chat-bottom feed.
 async function onResetSearch(): Promise<void> {
-  await diaryStore.runFeedSearch('')
+  diaryStore.runFeedSearch('')
+  await feed.settled()
   await nextTick()
   scrollToBottom()
 }
@@ -758,7 +761,8 @@ async function onResetSearch(): Promise<void> {
 async function onSearchCancel(): Promise<void> {
   searchOpen.value = false
   if (searchActive.value || jumpActive.value) {
-    await diaryStore.runFeedSearch('')
+    diaryStore.runFeedSearch('')
+    await feed.settled()
     await nextTick()
     scrollToBottom()
   }
@@ -767,11 +771,18 @@ async function onSearchCancel(): Promise<void> {
 // -- Jump to a found entry (Telegram reference) --------------------------------
 
 async function onJumpToEntry(item: DiaryFeedItem): Promise<void> {
-  const ok = await diaryStore.jumpToEntry(item)
-  if (!ok) {
-    // The store reset jumpTargetId -- the results list is still on screen;
+  if (jump.loading.value) return
+  // A tap asks anew (a return from an entry opened inside the window does not).
+  jump.forget(item)
+  diaryStore.jumpToEntry(item)
+  const state = await jump.settled()
+  // Left meanwhile (the search changed, another result was opened).
+  if (diaryStore.jumpTarget?.id !== item.id) return
+  if (state.status === 'error') {
+    // Back to the results list, which stayed loaded behind the window;
     // surface the failure at the boundary that owns the action.
-    if (diaryStore.jumpError) toast.error(diaryStore.jumpError)
+    diaryStore.exitJump()
+    toast.error(extractApiError(state.error, t('storeErrors.diary.jump')))
     return
   }
   await nextTick()
@@ -821,9 +832,10 @@ const filterActive = computed(
 )
 
 async function clearFilter(): Promise<void> {
-  // Full reset: categories + date range + search (clearFeedFilters reloads
-  // the feed from the first page).
-  await diaryStore.clearFeedFilters()
+  // Full reset: categories + date range + search (the feed reads from the
+  // first page of the unfiltered set).
+  diaryStore.clearFeedFilters()
+  await feed.settled()
   await nextTick()
   scrollToBottom()
 }
@@ -892,11 +904,15 @@ async function onUndoDelete(): Promise<void> {
 // -- Data load ---------------------------------------------------------------
 
 async function reload(): Promise<void> {
-  await diaryStore.refreshFeed()
+  await feed.refetch()
 }
 
 onMounted(async () => {
-  await diaryStore.fetchFeed()
+  // An answered EMPTY feed is data, held since the last visit: revalidate it
+  // quietly (the skeleton keys on "answered", not on an empty list). A held
+  // non-empty feed is not asked again -- see composables/queries/diary.ts.
+  if (feed.loaded.value && items.value.length === 0) void feed.refetch()
+  await feed.settled()
   // A skeleton that was seen stays its minimum; the thread (and the scroll
   // target) mounts only after it. No extra tick when nothing was held.
   if (feedSkeleton.value) await feedSettled()
@@ -1023,8 +1039,8 @@ function scrollToTop(): void {
   chatScroll.scrollToTop()
 }
 
-// Composer just created a note: the store refreshed the feed to the newest
-// page, so jump to the bottom to reveal it.
+// Composer just created a note: the store reloaded the feed's newest page, so
+// jump to the bottom to reveal it.
 async function onComposerCreated(): Promise<void> {
   await nextTick()
   scrollToBottom()
@@ -1041,7 +1057,7 @@ async function onComposerCreated(): Promise<void> {
 // FIRST element, reached while scrolling UP, so only the TOP margin matters:
 // ~two screens (1500px) of lead means the older page is in flight long before
 // the reader reaches the seam -- combined with the 40-event pages
-// (stores/diary.ts) the thread effectively never runs out mid-scroll.
+// (composables/queries/diary.ts) the thread effectively never runs out mid-scroll.
 // hasMore/loading guard the lead to one page ahead.
 const topSentinel = chatScroll.observeSentinel(sentinelEl, {
   rootMargin: '1500px 0px 0px 0px',
@@ -1056,19 +1072,22 @@ const topSentinel = chatScroll.observeSentinel(sentinelEl, {
 // shift scrollTop by the delta. In a jump window the same mechanics serve
 // the window's own cursor.
 async function onLoadMore(): Promise<void> {
-  await chatScroll.preservePosition(async () => {
-    if (jumpActive.value) {
-      await diaryStore.loadMoreJump()
-      if (diaryStore.jumpError) toast.error(diaryStore.jumpError)
-    } else {
-      await diaryStore.loadMoreFeed()
-      // The feed survives a failed page (the rung is initial-load-only), but
-      // this fires from a scroll sentinel -- there is no button left sitting
-      // there to look broken, so without a toast the user just scrolls into
-      // nothing and is told nothing at all.
-      if (diaryStore.feedLoadMoreError) toast.error(diaryStore.feedLoadMoreError)
-    }
-  })
+  await chatScroll.preservePosition(() => loadOlder(jumpActive.value ? jump : feed))
+}
+
+/**
+ * Load the next older page of the feed or of the jump window. Either survives
+ * a failed page (the rung is initial-load-only), but this fires from a scroll
+ * sentinel -- there is no button left sitting there to look broken, so
+ * without a toast the user just scrolls into nothing and is told nothing at
+ * all.
+ */
+async function loadOlder(history: { loadMore: () => Promise<unknown> }): Promise<void> {
+  try {
+    await history.loadMore()
+  } catch (e) {
+    toast.error(extractApiError(e, t('storeErrors.diary.loadEntries')))
+  }
 }
 
 // -- Results-list pagination ---------------------------------------------------
@@ -1081,7 +1100,7 @@ const resultsSentinelEl = ref<HTMLElement | null>(null)
 chatScroll.observeSentinel(resultsSentinelEl, {
   rootMargin: '0px 0px 800px 0px',
   onIntersect: () => {
-    if (feedHasMore.value && !feedLoading.value) void diaryStore.loadMoreFeed()
+    if (feedHasMore.value && !feed.fetching.value) void loadOlder(feed)
   },
 })
 

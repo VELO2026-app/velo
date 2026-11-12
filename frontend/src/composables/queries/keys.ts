@@ -122,6 +122,27 @@ export const keys = {
     /** The unread badge riding `GET /notifications` (no separate unread endpoint exists). */
     unread: () => ['notifications', 'unread'] as const,
   },
+  /** The signed-in user's diary: the feed, the search jump window, entries; a practice's diary insights. */
+  diary: {
+    /** Prefix of every diary key. */
+    root: () => ['diary'] as const,
+    /** Prefix of every feed -- one per filter set (composables/queries/diary.ts). */
+    feeds: () => ['diary', 'list', 'feed'] as const,
+    /**
+     * `GET /diary/feed` for one filter set, every page loaded so far. The
+     * filters ride the key as the API takes them (unset ones left out), so
+     * the feed's own reloads read them back from it.
+     */
+    feed: (filters: object) => ['diary', 'list', 'feed', filters] as const,
+    /** Prefix of every search jump window. */
+    jumps: () => ['diary', 'list', 'jump'] as const,
+    /** The search jump: the window of the feed around one found event, then older pages. */
+    jump: (eventId: string) => ['diary', 'list', 'jump', eventId] as const,
+    /** `GET /diary/{id}` -- one entry (note / dream) in full. */
+    entry: (entryId: string) => ['diary', 'detail', entryId] as const,
+    /** `GET /practices/{id}/insights` -- a practice's anonymous check-in / feedback tallies (the master's view). */
+    insights: (practiceId: string) => ['diary', 'insights', practiceId] as const,
+  },
   /** Bookings of the signed-in user and what is derived from them. */
   bookings: {
     /** Prefix of every booking key. */
