@@ -56,12 +56,13 @@ from app.core.events.reminders import (
     schedule_master_practice_reminder,
 )
 from app.core.events.service import EVENT_REMINDER_CANCEL
+from app.modules.ai import transcription
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.masters.models import MasterProfile
 from app.modules.payments.models import Purchase, PurchaseStatus
 from app.modules.practices.models import Practice
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.helpers import auth_headers, full_cleanup_range, login_user, sent_data
 
 _TID_MIN = 88000
 _TID_MAX = 88099
@@ -287,7 +288,7 @@ class TestEnvelopeStrings:
 
         (event,) = await _synth_events(db_session)
         assert event.event_type == EVENT_REMINDER_CANCEL
-        assert set(event.payload) == {"v", "types", "correlation"}
+        assert set(sent_data(event)) == {"v", "types", "correlation"}
 
 
 # ===========================================================================
@@ -730,6 +731,7 @@ class TestProfileV2:
         doc = self._doc()
         assert set(doc) == {"version", "types"}
         assert doc["version"] == 2
+        # 54 since BE-184 (voice.transcribe, the third llm type);
         # 53 since BE-162 delivery 2 (support.ticket_assigned / _released);
         # 51 since BE-162 delivery 3 (prompt.rate_support);
         # 50 since BE-166 (support.translate_for_support / _for_user, the
@@ -741,7 +743,7 @@ class TestProfileV2:
         # (practice_created_for_master); 39 after BE-59 B1 (member_demoted);
         # 38 after BE-59 A (master_verification_required,
         # master_offer_closed); 36 before.
-        assert len(doc["types"]) == 53
+        assert len(doc["types"]) == 54
 
     def test_every_record_is_closed(self) -> None:
         """An unknown key refuses comms startup; only x-... is tolerated.
@@ -755,11 +757,23 @@ class TestProfileV2:
         BE-166 brought the first llm types, a record of another kind: comms
         refuses `category` and `recipient_schedule` on it and needs
         `llm_sets`; so the set is per kind -- a type for people as before,
-        an llm type (channels: [llm]) its own. Which llm types, and their
-        values, is test_the_llm_types_are_the_two_translations's.
+        an llm type (channels: [llm]) its own. BE-184 widened the llm set
+        by the three fields voice declares: retry_max_attempts, answer_keep
+        and max_audio_bytes (comms deploy/INTEGRATION.md section 3, the type
+        record). Which llm types, and their values, is
+        test_the_llm_types_are_the_two_translations_and_voice's.
         """
         people = {"category", "channels", "recipient_schedule"}
-        llm = {"channels", "llm_sets", "lane", "push_on", "expires_after"}
+        llm = {
+            "channels",
+            "llm_sets",
+            "lane",
+            "push_on",
+            "expires_after",
+            "retry_max_attempts",
+            "answer_keep",
+            "max_audio_bytes",
+        }
         for key, record in self._doc()["types"].items():
             assert isinstance(record, dict), key
             allowed = llm if record.get("channels") == ["llm"] else people
@@ -787,7 +801,7 @@ class TestProfileV2:
         # BE-162 delivery 3 (prompt.rate_support), +2 BE-162 delivery 2
         # (support.ticket_assigned / _released). The
         # llm types are not for people and have no telegram to lose:
-        # test_the_llm_types_are_the_two_translations.
+        # test_the_llm_types_are_the_two_translations_and_voice.
         assert len(velo) == 48
         assert sorted(comms_own) == [
             "msg.participant_message",
@@ -800,16 +814,37 @@ class TestProfileV2:
             assert "channels" not in record, key
             assert record["category"], key
 
-    def test_the_llm_types_are_the_two_translations(self) -> None:
+    def test_the_llm_types_are_the_two_translations_and_voice(self) -> None:
         """BE-166: one llm type per direction, both in the interactive lane,
         read back at their outcome, given up after 15 minutes (owner
         ruling), routed to the key set the owner defines on the box -- and
-        nothing a type for people carries."""
+        nothing a type for people carries.
+
+        Until BE-184 the two translations were the only llm types, and this
+        test said so (test_the_llm_types_are_the_two_translations); BE-184
+        added voice.transcribe, pinned below against the backend's own
+        numbers rather than as bare literals: each field is a rung of
+        modules/ai/transcription.py's time ladder or its size ceiling, and
+        the two sides drifting apart is the failure worth catching."""
         types = self._doc()["types"]
         llm = {k: v for k, v in types.items() if v.get("channels") == ["llm"]}
         assert sorted(llm) == [
-            "support.translate_for_support", "support.translate_for_user",
+            "support.translate_for_support",
+            "support.translate_for_user",
+            transcription.VOICE_TYPE,
         ]
+        # No push_on in it: the backend reads its own job, and the listener
+        # claims no llm-voice: key -- a push would be acknowledged unread.
+        voice = llm.pop(transcription.VOICE_TYPE)
+        assert voice == {
+            "channels": ["llm"],
+            "llm_sets": ["llm.audio"],
+            "lane": "interactive",
+            "expires_after": f"{transcription.JOB_EXPIRES_SECONDS}s",
+            "retry_max_attempts": 1,
+            "answer_keep": "10m",
+            "max_audio_bytes": transcription.MAX_AUDIO_BYTES,
+        }
         for key, record in llm.items():
             assert record == {
                 "channels": ["llm"],

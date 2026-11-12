@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_reader, get_db_session
+from app.core.options import option_dependency
 from app.modules.auth.dependencies import get_current_master
 from app.modules.masters.models import MasterProfile
 from app.modules.promos.schemas import (
@@ -36,7 +37,12 @@ from app.modules.users.models import User
 
 logger = structlog.get_logger()
 
-router = APIRouter(prefix="/api/v1/masters", tags=["promos"])
+router = APIRouter(
+    prefix="/api/v1/masters",
+    tags=["promos"],
+    # BE-182: the option `payments` closes this router (app/core/options.py).
+    dependencies=[option_dependency("payments")],
+)
 
 
 @router.post(

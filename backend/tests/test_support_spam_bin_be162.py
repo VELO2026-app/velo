@@ -32,7 +32,6 @@ from httpx import AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.support import purge, service
@@ -653,21 +652,6 @@ class TestBin:
         assert (await fresh_execute(select(SupportThreadPurge))).scalars().all() == []
         assert old and str(old) in comms.gone
 
-    async def test_a_retention_of_zero_takes_spam_at_once(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        comms: _Comms,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """The owner's live check: the retention set to 0 days empties the
-        bin of every spam ticket on the next step."""
-        monkeypatch.setattr(settings, "support_spam_retention_days", 0)
-        user = await _person(client, db_session, 27)
-        fresh = await _ticket(db_session, user["user"]["id"], status="spam")
-        assert await purge.purge_spam_step() == (1, 1)
-        assert await _row(fresh) is None
-
     async def test_statistics_keep_the_gone_spam(
         self,
         client: AsyncClient,
@@ -745,29 +729,15 @@ class TestBin:
             assert resp.status_code == 404, suffix
 
 
-@pytest.mark.parametrize("raw,days", [("", 30), ("  ", 30), ("0", 0), ("30", 30)])
-def test_the_retention_setting_reads_the_owners_values(
-    monkeypatch: pytest.MonkeyPatch,
-    raw: str,
-    days: int,
-) -> None:
-    """The owner sets it with `velo env set SUPPORT_SPAM_RETENTION_DAYS`,
-    whose empty answer writes the key EMPTY ("empty clears it"): that must
-    read as the 30 days, not stop the backend from starting."""
-    from app.core.config import Settings
+def test_the_retention_is_thirty_days() -> None:
+    """The owner's number, a constant in the code since BE-192 (it was a
+    setting so the owner could watch the bin empty on the stand; the
+    deploy machine has no such knob) -- and the one number both the purge
+    and "not spam" read."""
+    from app.modules.support import service
 
-    monkeypatch.setenv("SUPPORT_SPAM_RETENTION_DAYS", raw)
-    assert Settings().support_spam_retention_days == days
-
-
-def test_a_negative_retention_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    from pydantic import ValidationError
-
-    from app.core.config import Settings
-
-    monkeypatch.setenv("SUPPORT_SPAM_RETENTION_DAYS", "-1")
-    with pytest.raises(ValidationError):
-        Settings()
+    assert purge.SUPPORT_SPAM_RETENTION_DAYS == 30
+    assert service.SUPPORT_SPAM_RETENTION_DAYS is purge.SUPPORT_SPAM_RETENTION_DAYS
 
 
 # ---------------------------------------------------------------------------

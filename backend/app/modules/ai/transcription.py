@@ -1,5 +1,6 @@
 # =============================================================================
-# VELO Backend -- Voice transcription (GT-41)
+# VELO Backend -- Voice transcription through an llm job of comms (GT-41,
+# BE-184)
 # =============================================================================
 #
 # WHY THIS IS A SEPARATE PROTOCOL AND NOT A SECOND METHOD ON
@@ -17,45 +18,101 @@
 #      configured differently. Sharing a protocol would put one configuration
 #      surface on two unrelated external calls.
 #
-# WHAT MOVED HERE FROM THE BROWSER, and why it is more than transport. The
-# frontend module this replaces (src/api/openrouter.ts) was about a third
-# HTTP call and two thirds "how we ask the model and how we clean its
-# answer": the prompt, the [NO_SPEECH] marker, the model slug, the response
-# shape, and the fence/quote stripping. All of that belongs next to the key,
-# so the browser is left with one request and a message table.
+# HOW A TAKE TRAVELS (BE-184). The product has no way out to the internet on
+# the deploy machine (protocol 4.1), so the model is asked by comms, over its
+# llm channel (comms deploy/INTEGRATION.md section 11):
 #
-# THE KEY NEVER LEAVES THIS PROCESS. It is read from settings, sent in one
-# Authorization header, and never logged, never echoed into an error, never
-# included in a response -- asserted by a test, not by intent.
+#   1. the recording goes into the `voice` bucket of velo-storage under
+#      <person>/<take>, and is signed for LINK_TTL_SECONDS (core/storage.py);
+#   2. an llm job of type VOICE_TYPE is queued through the OUTBOX, in a
+#      transaction of this service's own that commits before anything waits:
+#      the letter is the prompt, the envelope carries the signed link as
+#      `llm_audio` (core/llm.py). comms fetches the body and appends it, as
+#      the LAST message, to the letter;
+#   3. the job is read back by its key (section 8) every POLL_SECONDS until
+#      it has an outcome, and the answer is cleaned as it always was;
+#   4. the recording is deleted whatever happened (_discard).
+#
+# The endpoint stays synchronous -- the frontend sends a recording and waits
+# for the text -- and the whole of it is bounded by WAIT_SECONDS.
+#
+# THE TIME LADDER. Whoever gives up first must not be the one holding the
+# bill, and every number below is read together with the type's record in
+# comms-profile/types.yaml:
+#
+#   browser 30 s (frontend/src/api/transcription.ts)
+#     > WAIT_SECONDS 25: this service, the storage write and the queueing
+#       included
+#     < JOB_EXPIRES_SECONDS 30 (`expires_after: 30s`): a job comms has not
+#       started by then is never started, and `retry_max_attempts: 1` never
+#       starts a second attempt -- a model answer after the person has been
+#       told "no" is paid for and read by nobody;
+#     <= the job's longest life: JOB_EXPIRES_SECONDS + one call of comms'
+#       LLM_DELIVER_TIMEOUT_SECONDS (120 by default) + 35 s to fetch the body;
+#     < LINK_TTL_SECONDS 600, the signed link's life.
+#
+# Pinned by tests/test_comms_protocol_3.py (the record against these
+# constants) and tests/test_ai_transcription.py (the ladder itself).
+#
+# KNOWN CEILING -- a backlog in the outbox outlasts the wait:
+#   1. Mechanics: the job reaches comms through the outbox relay, which ships
+#      comms_relay_batch_size rows (100) per comms_relay_interval_seconds
+#      (2 s), in id order (core/events/relay.py). Behind a backlog of more
+#      than about a thousand rows -- a mass send of notifications -- the job
+#      is not even in comms when WAIT_SECONDS run out, and the person gets
+#      transcription_unavailable. The quota unit is spent; no model is asked
+#      (the recording is deleted first, see _discard).
+#   2. Status: acknowledged by design.
+#   3. Task: none -- accepted at the BE-184 gate as the price of keeping
+#      the endpoint synchronous; the trigger says when it bites.
+#   4. Trigger: transcription_deadline in the app log while the outbox has
+#      more than comms_relay_batch_size unpublished rows.
+#   5. Agreed fix form: a relay pass that keeps shipping while a batch comes
+#      back full (no sleep between full batches), or an llm job shipped ahead
+#      of notifications.
+#   6. Rejected: an XADD into the comms stream straight from this service --
+#      the outbox is the one way a request reaches comms (one relay, one
+#      order, a request id per entry, redaction of shipped payloads), and a
+#      second producer would have to repeat all four.
+#
+# NOTHING OF A TAKE IN A LOG. Not the link (a working read of the recording
+# for its whole life), not the transcript: only the job's key, the reason of
+# a failure, and sizes. core/storage.py holds botocore's loggers at WARNING
+# for the same reason.
 #
 # FAILURE MODEL: every failure is a VeloError with a MACHINE CODE, never a
 # bare HTTPException with a {"detail": ...} envelope. core/comms.py raises
 # nine of those and the frontend cannot read a code off any of them; that is
-# a known defect, not a pattern to copy.
+# a known defect, not a pattern to copy -- the polling loop below swallows
+# them and reads again.
 #
 # WHAT IS NOT HERE, deliberately: the per-person quota. It is spent at the
 # route, before this service is called (BE-67, modules/ai/quota.py), because
-# it is VELO's budget rule and must outlive this module when voice moves to
-# comms (BE-136).
+# it is VELO's budget rule: comms knows the request key, not a person's
+# budget.
 #
-# SESSION RULES: no database access at all -- this service never touches a
-# session.
+# SESSION RULES: one short transaction of this service's own, holding one
+# INSERT (the outbox row) and no lock -- the outbox has no foreign key -- and
+# committed before the first read of the job: the relay ships only committed
+# rows. No HTTP call is made inside it. The route takes no session.
 # =============================================================================
 
+import asyncio
 import base64
 import binascii
 import re
-from typing import Any, Protocol
+from typing import Protocol
+from uuid import UUID, uuid4
 
-import httpx
 import structlog
+from fastapi import HTTPException
 
-from app.core.config import settings
+from app.core import storage
+from app.core.database import get_session_factory
 from app.core.exceptions import BadRequestError, VeloError
+from app.core.llm import LlmAudio, LlmResult, enqueue_llm_job, read_llm_job
 
 logger = structlog.get_logger()
-
-_OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # 60 s of the recorder's own format -- 16 kHz mono PCM16, i.e. 32 000 bytes a
 # second (frontend/src/utils/audio.ts) -- is 1 920 044 bytes. This is that,
@@ -67,6 +124,37 @@ _OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 # carries client_max_body_size on the API server blocks for exactly that
 # reason, and the two numbers are meant to be read together.
 MAX_AUDIO_BYTES = 2 * 1024 * 1024
+
+
+# The llm type of comms-profile/types.yaml, and the prefix of its keys. No
+# other key of this product starts with it, and no handler of the push
+# listener claims it: the listener acknowledges our pushes without a read,
+# because this service reads its own job (core/comms_listener.py handle_key).
+VOICE_TYPE = "voice.transcribe"
+JOB_PREFIX = "llm-voice:"
+# The registry type the recordings go to (core/storage_registry.yaml).
+VOICE_BUCKET = "voice"
+# What the recorder produces (frontend/src/utils/audio.ts), as comms tells
+# the model.
+AUDIO_FORMAT = "wav"
+AUDIO_CONTENT_TYPE = "audio/wav"
+
+# The time ladder (module header). Only these four are this code's; comms'
+# own two are named for the ladder's test.
+WAIT_SECONDS = 25
+POLL_SECONDS = 1.0
+JOB_EXPIRES_SECONDS = 30
+LINK_TTL_SECONDS = 600
+COMMS_LLM_CALL_SECONDS = 120
+COMMS_AUDIO_FETCH_SECONDS = 35
+
+# The model's parameters, as they were sent to the provider before BE-184.
+_PARAMS = {"temperature": 0, "max_tokens": 1000}
+
+# An answer that came, but whose shape holds no text (core/llm.py reasons):
+# the old "no content field" -- silence to the person, who can record again.
+# Every other unreadable answer is the transport's or the provider's.
+_NO_SPEECH_REASONS = frozenset({"no_choices", "choice_not_an_object", "blank_answer"})
 
 # "ONLY the transcript" is load-bearing: audio models like to wrap the
 # transcript in conversational dressing, which would land verbatim in the
@@ -97,23 +185,9 @@ _FENCE = re.compile(r"^```[a-zA-Z]*\r?\n?([\s\S]*?)\r?\n?```$")
 _WRAPS = (('"', '"'), ("«", "»"), ("\u201c", "\u201d"))
 
 
-class TranscriptionNotConfiguredError(VeloError):
-    """No key on this server -- the feature is off, and it says so (400).
-
-    Not a 500: nothing failed. Someone did not provision a key, and the
-    honest answer is a code the client can turn into one sentence.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(
-            message="Transcription is not configured on this server",
-            code="transcription_not_configured",
-            status_code=400,
-        )
-
-
 class TranscriptionUnavailableError(VeloError):
-    """The provider did not answer at all -- timeout or connection failure."""
+    """No outcome in time: the storage, the outbox or comms did not get the
+    take to the model and back within WAIT_SECONDS."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -124,9 +198,9 @@ class TranscriptionUnavailableError(VeloError):
 
 
 class TranscriptionFailedError(VeloError):
-    """The provider answered, and the answer was an error.
+    """The job ended without an answer, or with one that is no answer.
 
-    One code for every provider-side failure, including 402 "out of credit".
+    One code for every failure behind comms, including a key out of credit.
     The client is told that transcription failed, NOT which vendor we use or
     what our balance is: that is our billing, and the person on the other end
     can do nothing about it either way.
@@ -192,27 +266,6 @@ def is_no_speech(text: str) -> bool:
     )
 
 
-def _extract_content(payload: Any) -> str | None:
-    """Pull choices[0].message.content out of a chat-completions body.
-
-    Every step is checked because the body is a third party's: a shape we did
-    not expect must become "no transcript", never a stack trace.
-    """
-    if not isinstance(payload, dict):
-        return None
-    choices = payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        return None
-    first = choices[0]
-    if not isinstance(first, dict):
-        return None
-    message = first.get("message")
-    if not isinstance(message, dict):
-        return None
-    content = message.get("content")
-    return content if isinstance(content, str) else None
-
-
 def decode_audio(audio_base64: str) -> bytes:
     """Decode the request's base64 payload, or refuse it with a code.
 
@@ -238,11 +291,77 @@ def decode_audio(audio_base64: str) -> bytes:
     return audio
 
 
+def job_key(take_id: UUID) -> str:
+    """The key of one take's job: a fresh request every time (comms section
+    7, "the idempotency key names the request"). The take's id is also the
+    id of its recording in the bucket."""
+    return f"{JOB_PREFIX}{take_id}"
+
+
+def letter() -> list[dict[str, str]]:
+    """The model's letter: the instruction alone. comms appends the audio
+    as the next message (section 11) -- the prompt speaks of "this audio"
+    knowing it comes last."""
+    return [{"role": "user", "content": _TRANSCRIBE_PROMPT}]
+
+
+def transcript_of(result: LlmResult) -> str:
+    """What one finished job gives the person: the cleaned transcript, or a
+    coded failure. Pure; `in_progress` is the caller's to wait on."""
+    if result.kind == "answer" and result.text is not None:
+        text = clean_transcript(result.text)
+        if is_no_speech(text):
+            raise SpeechNotRecognizedError()
+        return text
+    if result.kind == "unreadable" and result.reason in _NO_SPEECH_REASONS:
+        raise SpeechNotRecognizedError()
+    raise TranscriptionFailedError()
+
+
+# Deletions in flight: asyncio keeps only a weak reference to a task.
+_DISCARDS: set[asyncio.Task[None]] = set()
+
+
+async def _delete_recording(
+    where: storage.Bucket, owner_id: UUID, take_id: UUID,
+) -> None:
+    try:
+        await storage.delete_object(where, owner_id, take_id)
+    except storage.StorageError:
+        # The bucket's own rule removes it within two days (registry).
+        logger.warning("transcription_recording_not_deleted", key=job_key(take_id))
+
+
+def _discard(where: storage.Bucket, owner_id: UUID, take_id: UUID) -> None:
+    """Delete the recording -- on EVERY way out of the service, without
+    making the person wait for it.
+
+    THE DEPARTURE FROM THE CONTRACT, deliberate (decided at the BE-184
+    gate). comms section 11 asks that "the link and the object live at least
+    as long as the job". On an answer or a failure the job is over and the
+    rule holds. On WAIT_SECONDS running out it is broken on purpose: the
+    person has been told "no" already, and a job that has not fetched the
+    body yet then fetches a 404 -- `failed`, message_rejected, no model
+    asked, nothing billed. Keeping the object would let an abandoned job
+    still reach the model and cost money for an answer nobody reads.
+
+    A task and not FastAPI's BackgroundTasks: those run only after a
+    response built from the route's RETURN value (fastapi routing.py,
+    get_request_handler) -- a route that raises gets its response from the
+    exception handler, and three of the four ways out of here are raises.
+    The task uses no session. A process that dies first leaves the object to
+    the bucket's one-day rule.
+    """
+    task = asyncio.create_task(_delete_recording(where, owner_id, take_id))
+    _DISCARDS.add(task)
+    task.add_done_callback(_DISCARDS.discard)
+
+
 class TranscriptionServiceProtocol(Protocol):
     """Interface for the voice transcription service."""
 
-    async def transcribe(self, audio: bytes) -> str:
-        """Return the transcript of one WAV recording.
+    async def transcribe(self, audio: bytes, owner_id: UUID) -> str:
+        """Return the transcript of one WAV recording made by `owner_id`.
 
         Raises a VeloError subclass from this module for every failure; never
         returns an empty string.
@@ -250,85 +369,75 @@ class TranscriptionServiceProtocol(Protocol):
         ...
 
 
-class OpenRouterTranscriptionService:
-    """Transcription through OpenRouter's chat-completions endpoint."""
+class CommsTranscriptionService:
+    """Transcription through an llm job of comms (module header)."""
 
-    async def transcribe(self, audio: bytes) -> str:
-        """One request to the provider, one transcript or one coded failure.
+    async def transcribe(self, audio: bytes, owner_id: UUID) -> str:
+        """One take: store, queue, wait for the outcome, clean -- within
+        WAIT_SECONDS, and the recording deleted whatever happens.
 
-        The key is checked before the request is built, so an unprovisioned
-        server never opens a connection. The payload was already validated by
-        the caller: a malformed or oversized recording is refused before this
-        is reached, because that is the failure the person can act on.
+        The payload was already validated by the caller and the quota spent:
+        a malformed or oversized recording is refused before this is
+        reached, because that is the failure the person can act on.
+
+        Raises:
+            TranscriptionUnavailableError: no outcome within WAIT_SECONDS,
+                or the storage refused the recording.
+            TranscriptionFailedError: the job ended without an answer.
+            SpeechNotRecognizedError: the answer holds no speech.
+            sqlalchemy errors: the database refused the outbox row --
+                propagated, a 500 like any write that cannot be made.
         """
-        api_key = settings.openrouter_api_key.strip()
-        if not api_key:
-            raise TranscriptionNotConfiguredError()
-
-        body = {
-            "model": settings.openrouter_transcribe_model,
-            "temperature": 0,
-            "max_tokens": 1000,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": _TRANSCRIBE_PROMPT},
-                        {
-                            "type": "input_audio",
-                            "input_audio": {
-                                "data": base64.b64encode(audio).decode(),
-                                "format": "wav",
-                            },
-                        },
-                    ],
-                },
-            ],
-        }
-
+        take_id = uuid4()
+        where = storage.bucket(VOICE_BUCKET)
         try:
-            async with httpx.AsyncClient(
-                timeout=settings.openrouter_http_timeout_seconds,
-            ) as client:
-                response = await client.post(
-                    _OPENROUTER_CHAT_URL,
-                    json=body,
-                    headers={"Authorization": f"Bearer {api_key}"},
-                )
-        except httpx.TimeoutException as exc:
-            logger.warning("transcription_timeout")
+            async with asyncio.timeout(WAIT_SECONDS):
+                return await self._take(audio, owner_id, take_id, where)
+        except TimeoutError as exc:
+            logger.warning("transcription_deadline", key=job_key(take_id))
             raise TranscriptionUnavailableError() from exc
-        except httpx.HTTPError as exc:
-            # Deliberately NOT logging the exception object: httpx puts the
-            # request into its repr, and the request carries the key.
-            logger.warning("transcription_transport_error")
-            raise TranscriptionUnavailableError() from exc
+        finally:
+            _discard(where, owner_id, take_id)
 
-        if response.status_code >= 400:
-            # The status goes to the log, where an operator can tell 401
-            # (bad key) from 402 (no credit) from 429 (too fast). The client
-            # gets one code: none of those are its business or its fault.
-            logger.warning(
-                "transcription_provider_error",
-                status_code=response.status_code,
+    async def _take(
+        self, audio: bytes, owner_id: UUID, take_id: UUID, where: storage.Bucket,
+    ) -> str:
+        key = job_key(take_id)
+        try:
+            await storage.put_object(
+                where, owner_id, take_id, audio, AUDIO_CONTENT_TYPE,
             )
-            raise TranscriptionFailedError()
+            link = await storage.signed_read_link(
+                where, owner_id, take_id, LINK_TTL_SECONDS,
+            )
+        except storage.StorageError as exc:
+            # The error names the bucket and an S3 code, never the link.
+            logger.warning(
+                "transcription_storage_failed", key=key, error=type(exc).__name__,
+            )
+            raise TranscriptionUnavailableError() from exc
 
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            logger.warning("transcription_response_not_json")
-            raise TranscriptionFailedError() from exc
+        # Committed here: from now on the relay may ship the job.
+        async with get_session_factory()() as session, session.begin():
+            await enqueue_llm_job(
+                session,
+                idempotency_key=key,
+                type=VOICE_TYPE,
+                messages=letter(),
+                params=_PARAMS,
+                audio=LlmAudio(url=link, format=AUDIO_FORMAT),
+            )
 
-        content = _extract_content(payload)
-        if content is None:
-            logger.warning("transcription_response_without_content")
-            raise SpeechNotRecognizedError()
-
-        text = clean_transcript(content)
-        if is_no_speech(text):
-            raise SpeechNotRecognizedError()
-        return text
+        while True:
+            await asyncio.sleep(POLL_SECONDS)
+            try:
+                result = await read_llm_job(key)
+            except HTTPException:
+                # comms did not answer this read; the deadline bounds the
+                # next ones (core/comms.py logged the failure).
+                continue
+            if result.kind != "in_progress":
+                return transcript_of(result)
 
 
 def get_transcription_service() -> TranscriptionServiceProtocol:
@@ -338,4 +447,4 @@ def get_transcription_service() -> TranscriptionServiceProtocol:
     independently, and today one of them is real while the other is still a
     stub. See this module's header for why they do not share a protocol.
     """
-    return OpenRouterTranscriptionService()
+    return CommsTranscriptionService()

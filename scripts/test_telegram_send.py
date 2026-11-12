@@ -25,6 +25,7 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.core.config import settings
+from app.core.telegram_links import TELEGRAM_LINK_DOMAIN
 
 # Test accounts registered with @velo_testbot.
 TEST_ACCOUNTS = [
@@ -88,7 +89,7 @@ async def main() -> None:
     # make aiogram reject the keyboard, so fail loudly and early instead.
     if not settings.telegram_bot_url:
         print("ERROR: TELEGRAM_BOT_URL is not set in .env.")
-        print(f"Expected something like https://{settings.telegram_link_domain}/veloappbot")
+        print(f"Expected something like https://{TELEGRAM_LINK_DOMAIN}/veloappbot")
         sys.exit(1)
 
     print(f"Bot token: ...{token[-8:]}")

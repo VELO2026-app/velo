@@ -4,9 +4,11 @@
 #
 # Owner ruling 2026-11-03; PRIMER-PROTOCOL v1.7 5.2.2 (the product declares
 # every language it can do). Pinned here:
-#   - core/i18n.py normalize_language: the three codes (any case, any
-#     region) land on themselves, everything else -- de and es included --
-#     on the default, en;
+#   - Settings.language_of with every product language on and en the
+#     default (the suite's pin, tests/conftest.py): the three codes (any
+#     case, any region) land on themselves, everything else -- de and es
+#     included -- on the default (BE-196 replaced normalize_language; an
+#     instance with fewer languages: tests/test_instance_languages.py);
 #   - PATCH /users/me: language is exactly one of the three, or 422 with the
 #     row and the comms snapshot untouched;
 #   - support/translation.py LANGUAGE_NAMES names exactly the product's
@@ -24,9 +26,11 @@ from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import i18n
+from app.core.config import settings
 from app.core.events.models import OutboxEvent
 from app.core.events.service import EVENT_USER_UPSERTED
-from app.core.i18n import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, normalize_language
+from app.core.i18n import SUPPORTED_LANGUAGES
 from app.modules.support.translation import LANGUAGE_NAMES
 from app.modules.users.models import User
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -52,8 +56,14 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 def test_the_product_languages_are_en_ru_uk() -> None:
+    """BE-188 also pinned DEFAULT_LANGUAGE == "en" here: the product had one
+    default, and every code outside its set landed on it. BE-196 removed it
+    -- the default is the instance's (Settings.default_language, from the
+    passport), and a product-wide one would be a second answer to the same
+    question. So: the set is the three, and core/i18n.py names no default."""
     assert sorted(SUPPORTED_LANGUAGES) == ["en", "ru", "uk"]
-    assert DEFAULT_LANGUAGE == "en"
+    assert not hasattr(i18n, "DEFAULT_LANGUAGE")
+    assert not hasattr(i18n, "normalize_language")
 
 
 def test_every_translation_target_has_a_name_and_nothing_else_does() -> None:
@@ -64,7 +74,7 @@ def test_every_translation_target_has_a_name_and_nothing_else_does() -> None:
     assert all(LANGUAGE_NAMES.values())
 
 
-# -- normalize_language -------------------------------------------------------
+# -- language_of, every product language on -----------------------------------
 
 
 @pytest.mark.parametrize(
@@ -89,8 +99,16 @@ def test_every_translation_target_has_a_name_and_nothing_else_does() -> None:
         (None, "en"),
     ],
 )
-def test_normalize_language(value: str | None, expected: str) -> None:
-    assert normalize_language(value) == expected
+def test_language_of_with_every_language_on(
+    value: str | None, expected: str
+) -> None:
+    """The table normalize_language held for the product (BE-188), now
+    read through Settings.language_of on the suite's pin -- every product
+    language on, en the default (tests/conftest.py) -- where it gives the
+    same answers. The pair: the pin is what this table assumes."""
+    assert settings.languages == ("en", "ru", "uk")
+    assert settings.default_language == "en"
+    assert settings.language_of(value) == expected
 
 
 # -- PATCH /users/me ----------------------------------------------------------

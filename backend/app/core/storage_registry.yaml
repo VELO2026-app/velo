@@ -26,14 +26,17 @@ test_bucket_suffix: "-test"
 
 buckets:
   voice:
-    # Recordings sent to comms for transcription (BE-136). The lifecycle rule
+    # Recordings sent to comms for transcription (BE-184). The lifecycle rule
     # is Days=1, and "a day" here is NOT 24 hours: RustFS, like S3, rounds the
     # expiry UP to the next midnight UTC, so an object lives from 24 to 48
     # hours, plus up to one scanner cycle before it is actually removed.
-    # BE-136 signs its links for 30 minutes, far inside the shortest of those.
+    # The backend signs its links for 10 minutes (modules/ai/transcription.py
+    # LINK_TTL_SECONDS), far inside the shortest of those, and deletes each
+    # recording when its take is over; this rule is what is left for a
+    # process that died first.
     expire_days: 1
     backup: false
-    # Only comms reads it, by a signed GET link on velo-storage:9000.
+    # Only comms reads it, by a signed GET link on the storage's point.
     reader: signed_link
 
   master-documents:

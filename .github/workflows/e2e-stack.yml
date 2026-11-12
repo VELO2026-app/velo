@@ -17,7 +17,10 @@
 # docker-compose.yml), the backend installed with pip (not the app image: its
 # build is slower than the whole sweep), the comms stub, uvicorn on :8000, the
 # golden build under `vite preview` (its /api proxy goes to :8000).
-# Telegram, Zoom, Stripe: stubs and a fake bot token -- nothing leaves the runner.
+# Telegram: a fake bot token and the comms stub; Stripe: the stub of SERVER_ROLE=test;
+# Zoom: no stub since BE-192, so a meeting create at seed time fails against zoom.us
+# with the invented keys of ci.env (the practice is seeded without a link) -- the
+# pollers are off, nothing else calls out.
 # =============================================================================
 name: e2e sweep
 
@@ -63,21 +66,27 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 5s --health-retries 30
     env:
-      APP_ENV: development
       DATABASE_URL: postgresql+asyncpg://velo:velo@127.0.0.1:5432/velo
       REDIS_URL: redis://127.0.0.1:6379/0
-      # Fake on purpose: the backend checks initData with this same token,
-      # and frontend/e2e/stack/auth.ts signs with it.
+      # Fake on purpose: the backend checks initData with this same token, and
+      # frontend/e2e/stack/auth.ts (the Sweep step) signs with it. The bring-up
+      # step re-exports it after sourcing backend/ci.env, which has its own.
       TELEGRAM_BOT_TOKEN: 'e2e:fake'
+      # STORAGE_*: the backend's Settings require them (nothing here reaches a
+      # storage); the build identity the image's ENV carries elsewhere.
+      STORAGE_ENDPOINT: http://127.0.0.1:9000
+      STORAGE_SECRET_KEY: e2e-no-storage
+      PRIMER_RELEASE: ci
+      PRIMER_COMMIT: ${{ github.sha }}
       # Invite screens need it: the backend mints t.me links from it.
       TELEGRAM_BOT_URL: https://t.me/velo_e2e_bot
-      PUBLIC_LINK_BASE: http://127.0.0.1:4173
-      ALLOW_ZOOM_STUB: 'true'
-      ALLOW_STRIPE_STUB: 'true'
       COMMS_API_URL: http://127.0.0.1:8899
       COMMS_SERVICE_TOKEN: e2e-comms
       COMMS_RELAY_ENABLED: 'false'
-      VELO_ROLE: test
+      # Zoom has no stub on any role (BE-192) and ci.env carries invented Zoom
+      # keys: keep the two background pollers from calling zoom.us with them.
+      ZOOM_RETRY_ENABLED: 'false'
+      ZOOM_REPORT_ENABLED: 'false'
       E2E_LOG_DIR: ${{ github.workspace }}/stack-logs
       # The schedule has no inputs: both engines.
       PROJECTS: ${{ inputs.projects || 'sweep sweep-webkit' }}
@@ -88,17 +97,23 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: backend/requirements.txt
 
-      - name: Install the backend (same pattern as drift-check)
+      # The lock the backend image installs (same as drift-check).
+      - name: Install the backend (backend/requirements.txt)
         working-directory: backend
-        run: |
-          tmp=$(mktemp -d)
-          cp pyproject.toml "$tmp/"
-          pip install --no-cache-dir "$tmp"
+        run: 'pip install --no-cache-dir --require-hashes --only-binary :all: -r requirements.txt'
 
+      # backend/ci.env is the one settings environment of CI (SERVER_ROLE=test,
+      # EDITION, OPTION_*, domains, languages, invented secrets); this job adds
+      # its addresses (above). Sourced FIRST; the job's TELEGRAM_BOT_TOKEN then
+      # wins over the one in ci.env, so the backend and the sweep agree.
       - name: Bring up the stack (migrate, seed e2e, comms stub, uvicorn)
-        run: sh frontend/e2e/stack/up.sh
+        run: |
+          token=$TELEGRAM_BOT_TOKEN
+          set -a; . backend/ci.env; set +a
+          export TELEGRAM_BOT_TOKEN="$token"
+          sh frontend/e2e/stack/up.sh
 
       - uses: pnpm/action-setup@v5
         with:

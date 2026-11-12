@@ -66,7 +66,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.modules.schools.router as schools_router_module
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.main import app
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.masters.models import MasterProfile
@@ -108,7 +108,7 @@ _TID_BOOKER = 65611
 _TID_OUTSIDER = 65630
 _TID_ADMIN = 65690
 
-_FLAG = "schools_enabled"
+_FLAG = "option_schools"
 
 
 def _off():
@@ -117,7 +117,7 @@ def _off():
 
 
 def _on():
-    """The killswitch in its default position, stated explicitly.
+    """The option on, stated explicitly (BE-182: the flag has no default).
 
     Used where a test asserts the "works as before" half. Written as a
     patch rather than relying on the ambient default so the two halves of
@@ -263,23 +263,30 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 
 @pytest.mark.asyncio
-async def test_the_flag_defaults_to_on_and_the_feature_works_under_it(
+async def test_the_option_has_no_default_and_the_feature_works_with_it_on(
     client: AsyncClient, db_session: AsyncSession,
 ) -> None:
-    """The default is True, and under the default a school works end to end.
+    """The flag has no default, the suite runs with the option on, and with
+    it on a school works end to end.
 
-    TWO ASSERTIONS, AND THE SECOND IS WHY THE FIRST IS NOT ENOUGH. The
-    literal `settings.schools_enabled is True` catches somebody
-    flipping the default -- which would 404 every school endpoint and take
-    down the 213 tests across the five curator files plus the three GT-15..17
-    files, with nothing in the failure output pointing at a config line.
+    BE-182 changed the first half: it used to say "the default is True".
+    The killswitch became the passport's option `schools`, which has no
+    default (protocol 5.2: a passport value); the suite's environment
+    (backend/ci.env) turns it on. A config that quietly regained a default
+    -- or a ci.env that lost the flag -- is what the two literals catch.
+
+    TWO ASSERTIONS, AND THE SECOND IS WHY THE FIRST IS NOT ENOUGH. With the
+    option off every school endpoint would 404 and take down the 213 tests
+    across the five curator files plus the three GT-15..17 files, with
+    nothing in the failure output pointing at a config line.
 
     But that assertion alone would still pass in a world where the default
     is True and the dependency refuses anyway. So the same test drives the
     feature: create, read the page, read the journal. If the killswitch is
     wired wrong, this fails here rather than in 213 places.
     """
-    assert settings.schools_enabled is True
+    assert Settings.model_fields["option_schools"].is_required()
+    assert settings.option_schools is True
 
     curator = await _make_verified_master(client, db_session, _TID_CURATOR)
     headers = auth_headers(curator["session_token"])

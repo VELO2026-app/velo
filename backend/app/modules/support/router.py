@@ -82,6 +82,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.comms import IDEMPOTENCY_HEADER
 from app.core.database import get_db_session
 from app.core.exceptions import BadRequestError
+from app.core.options import option_dependency
 from app.modules.auth.dependencies import get_current_admin, get_current_user
 from app.modules.support.service import (
     assign_ticket,
@@ -396,7 +397,11 @@ async def claim_thread(
     )
 
 
-@router.post("/threads/{thread_id}/messages/{message_id}/translation/retry")
+@router.post(
+    "/threads/{thread_id}/messages/{message_id}/translation/retry",
+    # BE-182: a translation is an LLM job -- the option `llm` closes it.
+    dependencies=[option_dependency("llm")],
+)
 async def retry_translation(
     thread_id: UUID,
     message_id: UUID,

@@ -19,12 +19,12 @@
 # =============================================================================
 
 import asyncio
-from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
+from app.core.logging import configure_stdlib_logging
 from app.core.database import Base
 
 # Import all models so Alembic can detect them via Base.metadata.
@@ -96,9 +96,9 @@ from app.modules.auth.models import MiniAppSignatureSeen  # noqa: F401  # BE-201
 # ---------------------------------------------------------------------------
 config = context.config
 
-# Setup Python logging from alembic.ini [loggers] section.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+# Log lines of protocol 9.4 (BE-190): `migrate` is a step of the stack, and
+# its output is read by the machine like every other line of it.
+configure_stdlib_logging()
 
 # ---------------------------------------------------------------------------
 # Target metadata — Alembic compares this against DB to find changes.

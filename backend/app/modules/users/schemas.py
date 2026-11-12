@@ -47,7 +47,7 @@ from uuid import UUID
 from email_validator import EmailNotValidError, validate_email
 from pydantic import BaseModel, Field, computed_field, field_validator
 
-from app.core.i18n import SUPPORTED_LANGUAGES
+from app.core.config import settings
 from app.core.timezones import UnknownTimezoneError, canonical_timezone
 from app.modules.users.models import UserRole
 
@@ -189,6 +189,10 @@ class UserResponse(BaseModel):
     last_name: str | None
     avatar_url: str | None
     timezone: str
+    # The person's language ON THIS INSTANCE (BE-196): settings.language_of
+    # of the stored users.language -- the validator below. The stored value
+    # is never rewritten; a language the instance has off reads as its
+    # default.
     language: str
     is_active: bool
     balance_cents: int
@@ -226,6 +230,12 @@ class UserResponse(BaseModel):
     # master-only /masters/me endpoint. Set by the GET /users/me router after
     # model_validate (needs a MasterProfile lookup); None when never applied.
     master_application: MasterApplicationInfo | None = None
+
+    @field_validator("language")
+    @classmethod
+    def _instance_language(cls, v: str) -> str:
+        """The stored users.language as this instance shows it (BE-196)."""
+        return settings.language_of(v)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -548,20 +558,20 @@ class UserUpdate(BaseModel):
     @field_validator("language")
     @classmethod
     def validate_language(cls, v: str | None) -> str | None:
-        """Accept exactly one of the product's languages (BE-188).
+        """Accept exactly one of the instance's languages (BE-196;
+        BE-188 held it to the product's).
 
-        Strict, not normalized: the frontend sends a code from its own list
-        (SUPPORTED_LOCALES, the same set), so anything else -- "de", "EN",
-        "en-US", " " -- is a client error and answers 422 rather than being
-        quietly stored as something the client did not send. Runs after
-        _reject_null_for_required_fields (mode="before").
+        Strict, not normalized: a code the instance has off, or anything
+        else -- "de", "EN", "en-US", " " -- is a client error and answers 422
+        rather than being quietly stored as something the client did not
+        send. Runs after _reject_null_for_required_fields (mode="before").
         """
         if v is None:
             return v
-        if v not in SUPPORTED_LANGUAGES:
+        if v not in settings.languages:
             raise ValueError(
                 f"Unknown language: {v!r}. "
-                f"Allowed: {', '.join(sorted(SUPPORTED_LANGUAGES))}"
+                f"Allowed: {', '.join(settings.languages)}"
             )
         return v
 

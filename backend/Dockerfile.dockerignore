@@ -1,0 +1,49 @@
+# =============================================================================
+# VELO Backend -- the build context of backend/Dockerfile
+# =============================================================================
+# The backend is built from the REPOSITORY ROOT (context `.`,
+# `-f backend/Dockerfile`). BuildKit reads THIS file, the one beside the
+# Dockerfile, instead of a root .dockerignore -- which belongs to the frontend
+# build and leaves backend/ out.
+#
+# An ALLOWLIST: everything is out, then exactly what backend/Dockerfile COPYs
+# is back in. The root holds frontend/, .git, prototypes, load tests and
+# documents; listing what to leave out would miss the next directory added.
+# .env never enters the context: no line below names it, and the re-exclusions
+# at the end catch one left inside an allowed directory.
+# =============================================================================
+
+*
+
+!backend/requirements.txt
+!backend/requirements-dev.txt
+!backend/app/
+!backend/scripts/
+!backend/alembic.ini
+!backend/logging.json
+# BE-182: the edition table at the repository root, read by the runtime.
+!editions.json
+!backend/migrations/
+!backend/tests/
+!backend/pyproject.toml
+# BE-192: the test stage needs them (tests/test_primer_env.py); no values.
+!primer.yaml
+!docker-compose.yml
+# BE-193: the test stage needs it too (tests/test_primer_env.py, the root
+# login of the storage stack).
+!docker-compose.storage.yml
+# BE-190 fix: the test stage needs them too (tests/test_primer_env.py).
+!backend/ci.env
+!.github/workflows/ci.yml
+!.github/workflows/backend-tests.yml
+!comms-profile/
+
+# Inside the allowed directories: local leftovers, never part of a build.
+**/.env
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/*.egg-info/

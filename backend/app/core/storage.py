@@ -7,14 +7,18 @@ What the backend can do with an object, and nothing more:
                          itself is gone (the two are different answers);
 * ``delete_object``   -- idempotent, as in S3: deleting what is not there is
                          not an error;
-* ``signed_read_link``-- a presigned GET for velo-storage:9000, signed LOCALLY
+* ``signed_read_link``-- a presigned GET on the storage's endpoint, signed LOCALLY
                          (no request to the storage), for bucket types whose
                          registry reader is ``signed_link`` only.
 
 Buckets come from the registry (app/core/storage_registry.yaml) through
 ``bucket("voice")``; ``bucket("voice", test=True)`` is its test twin, the only
 place the suite writes. The key's NAME comes from the registry, its secret
-from ``settings.storage_secret_key``.
+from ``settings.storage_secret_key``; the address from
+``settings.storage_endpoint`` -- the point of the stack velo-storage, which
+the machine gives the app and comms under one name (BE-193). A signed link
+is valid for exactly the host it was signed for, so that is also the host
+of every link comms opens.
 
 Object keys are two UUIDs: whose data it is (the person who recorded the
 voice, the master whose document it is), then the object. No names, no
@@ -42,10 +46,6 @@ from botocore.exceptions import BotoCoreError, ClientError
 from app.core.config import settings
 from app.core.storage_registry import BucketType, load_registry
 
-# The one address of the storage: the docker network name comms also uses
-# (LLM_BODY_HOSTS = velo-storage:9000). A signed link is valid for exactly
-# the host it was signed for, so this is also the host of every link.
-STORAGE_ENDPOINT = "http://velo-storage:9000"
 # SigV4 needs a region; RustFS answers to the default one.
 STORAGE_REGION = "us-east-1"
 # SigV4 caps a presigned URL at 7 days.
@@ -64,10 +64,6 @@ for _name in ("botocore", "aiobotocore"):
 
 class StorageError(Exception):
     """Base of every storage failure. Never carries a URL or a secret."""
-
-
-class StorageNotConfiguredError(StorageError):
-    """STORAGE_SECRET_KEY is empty; `velo update` writes it."""
 
 
 class StorageUnavailableError(StorageError):
@@ -106,10 +102,9 @@ def object_key(owner_id: UUID, object_id: UUID) -> str:
 
 
 def _credentials() -> tuple[str, str]:
-    secret = settings.storage_secret_key
-    if not secret:
-        raise StorageNotConfiguredError(f"{_SECRET_ENV} is empty")
-    return load_registry().key_for_secret(_SECRET_ENV).name, secret
+    """The backend's key: its name from the registry, its secret from the
+    settings, which refuse to start without one (core/config.py)."""
+    return load_registry().key_for_secret(_SECRET_ENV).name, settings.storage_secret_key
 
 
 @asynccontextmanager
@@ -127,7 +122,7 @@ async def _client() -> AsyncIterator[Any]:
     session = get_session()
     async with session.create_client(
         "s3",
-        endpoint_url=STORAGE_ENDPOINT,
+        endpoint_url=settings.storage_endpoint,
         region_name=STORAGE_REGION,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
@@ -223,7 +218,7 @@ async def delete_object(where: Bucket, owner_id: UUID, object_id: UUID) -> None:
 async def signed_read_link(
     where: Bucket, owner_id: UUID, object_id: UUID, ttl_seconds: int
 ) -> str:
-    """A presigned GET link for velo-storage:9000, valid for ``ttl_seconds``.
+    """A presigned GET link on the storage's endpoint, valid for ``ttl_seconds``.
 
     Signed locally -- nothing is sent to the storage, so this works (and
     proves nothing about the object) while the storage is down. Refused:

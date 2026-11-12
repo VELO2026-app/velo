@@ -3,19 +3,22 @@
 # VELO Backend -- Profile-driven database seed
 # =============================================================================
 #
-# USAGE (through the management command, which gates on VELO_ROLE=test):
-#   velo seed                        -- seed from the default profile
-#   velo seed --profile 15082026     -- seed from a named profile
-#   velo seed --reset                -- wipe seeded data, then seed
-#   velo seed --reset-all            -- wipe the data of EVERY profile, stop
-#   velo seed --reset-all --resync-comms
-#                                    -- the same, then velo-manage.sh resyncs
-#                                       comms (deletes every chat; asks first)
-#   velo seed --list                 -- list available profiles
+# USAGE, through the deploy machine (primer.yaml, BE-195):
+#   seed <profile>              -- a seed of the stack `velo`: one per file of
+#                                  seed_profiles/, `--profile <file name>`
+#   seed-reset <profile>        -- verb: wipe that profile's data, then seed
+#   seed-reset-only <profile>   -- verb: wipe that profile's data, stop
+#   seed-reset-all              -- verb: wipe the data of EVERY profile, stop
+# The three resets are `destructive` and limited to the roles test and
+# preview in primer.yaml; the seeds get their roles when the machine takes
+# `roles` on a seed.
 #
 # DIRECTLY (inside the app container):
-#   python scripts/seed.py [--profile NAME] [--reset] [--list] [--dry-run]
+#   python scripts/seed.py --profile NAME [--reset | --reset-only] [--dry-run]
 #   python scripts/seed.py --reset-all
+#   python scripts/seed.py --list
+# There is no default profile: a seed names its profile, and the name is
+# one of the files of seed_profiles/.
 #
 # -----------------------------------------------------------------------------
 # WHY THIS REPLACED THREE SCRIPTS
@@ -176,13 +179,18 @@ def list_profiles() -> list[str]:
 
 
 def load_profile(name: str) -> dict:
-    path = PROFILES_DIR / f"{name}.json"
-    if not path.is_file():
-        available = ", ".join(list_profiles()) or "none"
+    """The profile NAME -- one of list_profiles(), nothing else. The name is
+    the argument of a verb of the machine, so it is matched against the
+    files of seed_profiles/ before any path is built from it: ``../x``, a
+    name with a slash or one that is simply not there is refused (exit 1,
+    with the list) and no file outside the directory is read."""
+    available = list_profiles()
+    if name not in available:
         raise SystemExit(
             f"Profile '{name}' not found in {PROFILES_DIR}.\n"
-            f"Available: {available}"
+            f"Available: {', '.join(available) or 'none'}"
         )
+    path = PROFILES_DIR / f"{name}.json"
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -970,9 +978,10 @@ def _warn_comms_projection_diverged(removed_users: int) -> None:
 
     --reset deletes seeded users and the comms protocol has no deletion
     event, so comms' address book still holds them: the projection has
-    diverged. The fix is a full resync, and it is destructive -- so this
-    only NAMES it, and never runs it. Silent when the reset removed no user:
-    then nothing diverged, and a warning would be a false alarm.
+    diverged. Realigning it is comms' own work (its projection, its
+    database): velo has no verb for it, so this only says that the two
+    have diverged. Silent when the reset removed no user: then nothing
+    diverged, and a warning would be a false alarm.
     """
     if removed_users <= 0:
         return
@@ -982,9 +991,8 @@ def _warn_comms_projection_diverged(removed_users: int) -> None:
         "projection now diverges from velo."
     )
     warn(
-        "  To realign it: velo resync-comms -- WARNING: it truncates the "
-        "projection and DELETES EVERY CHAT on this stand. Not run "
-        "automatically."
+        "  velo cannot realign it: comms has no deletion event, and the "
+        "projection is comms' own data -- only comms can rebuild it."
     )
 
 
@@ -1087,14 +1095,17 @@ async def main_async(args: argparse.Namespace) -> int:
         await dispose_engine()
 
 
-def main() -> int:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """The arguments, checked before the database is touched. A seed and the
+    two resets of one profile name it (--profile, no default); --reset-all
+    and --list stand alone."""
     parser = argparse.ArgumentParser(
         description="Seed the stand from a profile (test contour only)."
     )
     parser.add_argument(
         "--profile",
-        default="default",
-        help="profile name in scripts/seed_profiles/ (default: default)",
+        default=None,
+        help="profile name: a file of scripts/seed_profiles/ without .json",
     )
     parser.add_argument(
         "--reset",
@@ -1122,14 +1133,28 @@ def main() -> int:
         action="store_true",
         help="print the plan without writing anything",
     )
-    args = parser.parse_args()
-    if args.reset_all and (args.reset or args.reset_only or args.dry_run):
-        # --dry-run must never reach a delete; --reset/--reset-only name one
-        # profile and would make "all" ambiguous.
-        parser.error("--reset-all stands alone (no --reset, --reset-only, --dry-run)")
+    args = parser.parse_args(argv)
+    one_profile = args.profile is not None
+    if args.reset_all and (
+        args.reset or args.reset_only or args.dry_run or one_profile
+    ):
+        # --dry-run must never reach a delete; --reset/--reset-only and
+        # --profile name one profile and would make "all" ambiguous.
+        parser.error(
+            "--reset-all stands alone "
+            "(no --profile, --reset, --reset-only, --dry-run)"
+        )
+    if args.list and one_profile:
+        parser.error("--list stands alone (no --profile)")
+    if not (args.reset_all or args.list or one_profile):
+        parser.error("name the profile: --profile NAME (there is no default)")
     if args.reset_only:
         args.reset = True
-    return asyncio.run(main_async(args))
+    return args
+
+
+def main() -> int:
+    return asyncio.run(main_async(_parse_args()))
 
 
 if __name__ == "__main__":

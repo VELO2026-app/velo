@@ -259,27 +259,30 @@ async def test_switched_off_mcp_is_the_apps_plain_404(
     client: AsyncClient, mcp, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _, _, token = await _student(client, 89068)
-    monkeypatch.setattr(settings, "mcp_enabled", False)
+    monkeypatch.setattr(settings, "option_mcp", False)
     for kw in ({}, {"token": token}):
         resp = await _rpc(client, "tools/list", **kw)
         assert resp.status_code == 404
         assert resp.json() == {"error": "not_found", "message": "Not found"}
-    monkeypatch.setattr(settings, "mcp_enabled", True)
+    monkeypatch.setattr(settings, "option_mcp", True)
     assert (await _rpc(client, "tools/list", token=token)).status_code == 200
 
 
-async def test_the_public_link_host_never_serves_mcp(
+async def test_the_public_link_host_serves_mcp(
     client: AsyncClient, mcp, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """tz-mcp §3. Pair: the same request on the API host goes through."""
+    """BE-192: the public /z/{code} links live on the API's own host
+    (https://<domains.api>), so /mcp is served on the very host the links
+    are built from -- the old refusal on the short-link host would have
+    closed /mcp on every instance. Pair: the link really is on that host."""
+    from app.modules.zoom.service import build_public_practice_link
+
     _, _, token = await _student(client, 89069)
-    monkeypatch.setattr(settings, "public_link_base", "https://go.velo.test")
-    for host in ("go.velo.test", "GO.velo.test:443"):
+    monkeypatch.setattr(settings, "domain_api", "api.velo.test")
+    assert build_public_practice_link(uuid4()).startswith("https://api.velo.test/z/")
+    for host in ("api.velo.test", "API.velo.test:443"):
         resp = await _rpc(client, "tools/list", token=token, host=host)
-        assert resp.status_code == 404, host
-    assert (
-        await _rpc(client, "tools/list", token=token, host="api.velo.test")
-    ).status_code == 200
+        assert resp.status_code == 200, host
 
 
 async def test_every_bad_credential_gets_the_same_401(

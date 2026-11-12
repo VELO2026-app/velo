@@ -37,6 +37,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.database import get_session_factory
 from app.core.exceptions import BadRequestError
+from app.core.options import option_dependency
 from app.modules.payments.stripe import (
     handle_checkout_completed,
     handle_checkout_expired_or_failed,
@@ -47,6 +48,8 @@ logger = structlog.get_logger()
 
 webhook_router = APIRouter(
     prefix="/webhooks", tags=["webhooks"],
+    # BE-182: the option `payments` closes this router (app/core/options.py).
+    dependencies=[option_dependency("payments")],
 )
 
 # Events we handle. Others are logged and ignored.

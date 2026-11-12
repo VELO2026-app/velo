@@ -90,8 +90,15 @@ export const MODULE_CHUNKS = {
  *  the manifest comments pin it. No env seam exists for colors (§1). */
 const GOLDEN_THEME = '#334D6E'
 
-/** The edition every skin cell is built at. */
+/** The edition every skin cell is built at: `full` while editions.json has
+ *  it, and the one edition there is once the file holds a single one
+ *  (BE-182 left `ai`) -- a skin repaints the whole product, whatever the
+ *  product is called. */
 const SKIN_EDITION = 'full'
+export function skinEditionOf(editions) {
+  const names = Object.keys(editions.editions)
+  return names.length === 1 ? names[0] : SKIN_EDITION
+}
 
 /** The cells: golden x every edition, every skin x full. `skins` are
  *  { label, source } pairs; `editions` is the parsed editions.json. Each
@@ -114,6 +121,7 @@ export function planCells(editions, skins) {
   const dup = labels.find((label, i) => labels.indexOf(label) !== i)
   if (dup !== undefined)
     throw new Error(`two skins share the label "${dup}" -- their cells would overwrite each other`)
+  const skinEdition = skinEditionOf(editions)
   return [
     ...Object.keys(editions.editions).map((edition) => ({
       name: `golden/${edition}`,
@@ -122,10 +130,10 @@ export function planCells(editions, skins) {
       modules: modulesOf(edition),
     })),
     ...skins.map((skin) => ({
-      name: `${skin.label}/${SKIN_EDITION}`,
+      name: `${skin.label}/${skinEdition}`,
       skin,
-      edition: SKIN_EDITION,
-      modules: modulesOf(SKIN_EDITION),
+      edition: skinEdition,
+      modules: modulesOf(skinEdition),
     })),
   ]
 }
@@ -235,25 +243,42 @@ export function evaluateMatrix({ cells, facts, expected }) {
     }
   }
 
-  // d. asset-count invariant across the full cells that built
-  const full = cells.filter((c) => c.edition === SKIN_EDITION && facts[c.name])
-  const counts = full.map((c) => facts[c.name].assets)
-  if (new Set(counts).size > 1)
-    fails.push(
-      `asset count differs across full cells (${full.map((c) => `${c.name}:${facts[c.name].assets}`).join(' ')}) -- a skin must repaint, not re-chunk`,
-    )
+  // d. asset-count invariant across the cells of one edition that built (a
+  //    skin repaints, it never adds or removes chunks)
+  const built = cells.filter((c) => facts[c.name])
+  for (const group of byEdition(built, (c) => c.edition)) {
+    const counts = group.map((c) => facts[c.name].assets)
+    if (new Set(counts).size > 1)
+      fails.push(
+        `asset count differs across ${group[0].edition} cells (${group.map((c) => `${c.name}:${facts[c.name].assets}`).join(' ')}) -- a skin must repaint, not re-chunk`,
+      )
+  }
   return fails
+}
+
+/** The items grouped by their edition, in first-seen order. */
+function byEdition(items, editionOf) {
+  const groups = new Map()
+  for (const item of items) {
+    const key = editionOf(item)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(item)
+  }
+  return [...groups.values()]
 }
 
 /** Invariant d on its own, for the fan-in of per-cell runs: `entries` are
  *  the --facts-out records ({ cell, edition, assets }). Same rule as in
- *  evaluateMatrix(): every `full`-edition cell has the same asset count. */
+ *  evaluateMatrix(): the cells of one edition have the same asset count. */
 export function assetCountFails(entries) {
-  const full = entries.filter((e) => e.edition === SKIN_EDITION)
-  if (new Set(full.map((e) => e.assets)).size <= 1) return []
-  return [
-    `asset count differs across full cells (${full.map((e) => `${e.cell}:${e.assets}`).join(' ')}) -- a skin must repaint, not re-chunk`,
-  ]
+  const fails = []
+  for (const group of byEdition(entries, (e) => e.edition)) {
+    if (new Set(group.map((e) => e.assets)).size <= 1) continue
+    fails.push(
+      `asset count differs across ${group[0].edition} cells (${group.map((e) => `${e.cell}:${e.assets}`).join(' ')}) -- a skin must repaint, not re-chunk`,
+    )
+  }
+  return fails
 }
 
 /** The whole fan-in verdict (--check-assets): every planned cell reported --

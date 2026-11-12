@@ -4,8 +4,8 @@
 #
 # ENDPOINTS:
 #   GET /        -> API name + version
-#   GET /health  -> DB + Redis connectivity check (always 200)
-#   GET /ready   -> Readiness probe (503 if degraded)
+#   GET /health  -> protocol 9.1, always 200 (core/report.py)
+#   GET /ready   -> protocol 9.2, 503 when a check fails
 #
 # B-03: allow_headers now lists headers explicitly instead of ["*"].
 #   Fetch spec forbids allow_headers=["*"] with allow_credentials=True.
@@ -19,15 +19,15 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 from starlette.requests import Request
 
 from app.core.config import settings
-from app.core.database import dispose_engine, get_engine
+from app.core.database import dispose_engine
 from app.core.exceptions import VeloError
 from app.core.logging import setup_logging
-from app.core.middleware import TraceIdMiddleware
-from app.core.redis import close_redis, get_redis, init_redis
+from app.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from app.core.report import Report
+from app.core.redis import close_redis, init_redis
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.masters.router import router as masters_router
@@ -144,74 +144,8 @@ mcp_app = build_mcp_app()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application lifecycle: startup and shutdown."""
-    setup_logging(
-        log_level=settings.log_level,
-        json_logs=settings.app_env == "production",
-    )
-
-    # W6 fix: WARNING-5 (core/config.py) documents this guard as living here
-    # because config.py is imported by Alembic before app startup -- it was
-    # never actually added. Without it, STRIPE_SECRET_KEY="TEST" left over in
-    # a production .env silently free-credits every topup (stub mode skips
-    # Stripe and instantly succeeds) with no warning anywhere.
-    #
-    # W6 hotfix: the first version of this guard used
-    # `app_env != "development"`, which took down TEST -- the TEST server's
-    # own .env sets APP_ENV=production, so the env name can't distinguish
-    # TEST (where the stub is intentional) from real prod. The gate is now
-    # the explicit ALLOW_STRIPE_STUB flag (settings.is_stripe_stub_blocked
-    # -- see core/config.py, three conditions: not dev, is_stripe_stub, NOT
-    # allow_stripe_stub), set on TEST only.
-    #
-    # PROMPT №509 (owner-measured, 2026-07-17): prod is NOT currently running
-    # a real Stripe key -- it has STRIPE_SECRET_KEY=TEST and no
-    # ALLOW_STRIPE_STUB set, i.e. it is in exactly the state this guard
-    # exists to refuse. It only still runs because the currently-deployed
-    # prod build predates this guard; the next prod release with this code
-    # WILL raise the RuntimeError below and refuse to start unless prod's
-    # env is fixed first (real key, or an explicit ALLOW_STRIPE_STUB=true if
-    # the stub is genuinely intended there). Do not release this to prod
-    # without checking that first.
-    if settings.is_stripe_stub_blocked:
-        raise RuntimeError(
-            "STRIPE_SECRET_KEY='TEST' (stub mode) is not allowed here -- "
-            "set a real Stripe secret key, or set ALLOW_STRIPE_STUB=true "
-            "if this is genuinely a test server."
-        )
-
-    # T-35: the same refusal for Zoom, and it is not symmetry for its own
-    # sake. Under the stub every meeting is a fabricated zoom.us URL that
-    # opens nothing, so no registrant is ever matched and attendance can
-    # never be written -- which is precisely what this release exists to
-    # fix. A server was found running exactly like that with nobody aware:
-    # the links looked real in the UI and nothing said otherwise.
-    # Deliberately loud and at startup, where somebody is watching.
-    if settings.is_zoom_stub_blocked:
-        raise RuntimeError(
-            "Zoom is not configured (stub mode) -- meetings would be fake "
-            "and attendance would never be recorded. Set ZOOM_ACCOUNT_ID, "
-            "ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET from a Server-to-Server "
-            "OAuth app, or set ALLOW_ZOOM_STUB=true if this server is "
-            "genuinely meant to run without real meetings."
-        )
-
-    # T-14: refuse to start on a literal backend/.env.example placeholder
-    # left over from copying that file instead of running the installer
-    # (which generates real secrets via openssl). Same reason as the two
-    # guards above for living HERE and not in config.py's validator:
-    # config.py is imported by Alembic before app startup, and a raise
-    # there would take migrations down with it. Unlike Stripe/Zoom, there
-    # is no ALLOW_* opt-out -- no server has a legitimate reason to run
-    # production secrets equal to "change-me".
-    if settings.is_placeholder_secret_blocked:
-        raise RuntimeError(
-            "Refusing to start: still running on the literal placeholder "
-            "value(s) from backend/.env.example, not a real secret -- "
-            + ", ".join(settings.placeholder_secret_keys) + ". "
-            "This usually means .env was copied verbatim instead of "
-            "generated by install_velo.sh. Set real value(s) for the "
-            "key(s) named above."
-        )
+    # Log lines of protocol 9.4 on every role (BE-190, core/logging.py).
+    setup_logging(log_level=settings.log_level)
 
     relay_task: asyncio.Task | None = None
     listener_task: asyncio.Task | None = None
@@ -268,7 +202,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Gated by settings for the same reason as the two workers above:
         # tests disable it so the loop can't race manual test calls via
         # FOR UPDATE SKIP LOCKED.
-        if settings.zoom_retry_enabled:
+        # BE-182: the Zoom pollers run only with the option `zoom` on.
+        if settings.zoom_retry_enabled and settings.option_zoom:
             zoom_retry_task = asyncio.create_task(
                 run_zoom_retry_poller(), name="zoom_retry_poller",
             )
@@ -278,7 +213,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Start Zoom report poller -- the attendance decision (E21 step F).
         # Gated for the same reason as every worker above: tests disable it
         # so the loop can't race manual test calls via FOR UPDATE SKIP LOCKED.
-        if settings.zoom_report_enabled:
+        if settings.zoom_report_enabled and settings.option_zoom:
             zoom_report_task = asyncio.create_task(
                 run_zoom_report_poller(), name="zoom_report_poller",
             )
@@ -296,7 +231,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         logger.info(
             "app_started",
-            env=settings.app_env,
+            role=settings.server_role,
             log_level=settings.log_level,
         )
         # BE-139: the MCP SDK's session manager -- stateless, it keeps no MCP
@@ -360,13 +295,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # ---------------------------------------------------------------------------
 # BE-114 item 2 (owner decision: no Swagger outside): the schema and its two
 # viewers are NOT SERVED -- not /openapi.json, not /docs, not /redoc -- on any
-# box, in any APP_ENV. Unconditional on purpose: the TEST server also runs
-# with APP_ENV=production (core/config.py), so an env-gated switch could not
-# tell it from prod, and a flag forgotten on one box would leave that box
-# open. The schema itself still exists: app.openapi() builds it in-process
-# whether or not it is served, and that is what type generation reads
-# (backend/scripts/dump_openapi.py, run inside the app container by `velo
-# update`, `velo gen-types` and the installer) and what CI reads.
+# box, on any role. Unconditional on purpose: a switch keyed on the role, or
+# a flag forgotten on one box, would leave that box open. The schema itself
+# still exists: app.openapi() builds it in-process whether or not it is
+# served, and that is what type generation reads (backend/scripts/
+# dump_openapi.py, run inside the app container by `velo update`, `velo
+# gen-types` and the installer) and what CI reads.
 app = FastAPI(
     title="VELO API",
     description="Platform for wellness practice facilitators",
@@ -429,7 +363,7 @@ app.include_router(mcp_tokens_router)              # BE-138 (MCP tokens)
 app.router.add_route(MCP_PATH, mcp_app.asgi, include_in_schema=False)
 # BE-141: the OAuth paths of /mcp (discovery, registration, authorize, token,
 # Telegram sign-in, consent) -- one ASGI door in front of them all, which
-# answers the plain 404 while MCP is off or OAuth is not configured. Exact
+# answers the plain 404 while MCP is off. Exact
 # paths, every method (the door's own router answers 405); not in OpenAPI.
 _oauth_door = OAuthDoor()
 for _path in OAUTH_PATHS:
@@ -487,25 +421,27 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
-_cors_origins = [o.strip() for o in settings.cors_origins.split(",")]
-_allow_all = _cors_origins == ["*"]
-
+# The one origin of the instance's frontend (BE-192: https://<domains.frontend>).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=not _allow_all,
+    allow_origins=[settings.frontend_origin],
+    allow_credentials=True,
     allow_methods=["*"],
     # B-03: Fetch spec forbids allow_headers=["*"] with allow_credentials=True.
-    # List headers explicitly. X-Trace-ID is our custom tracing header.
-    allow_headers=["Authorization", "Content-Type", "X-Trace-ID"],
+    # List headers explicitly. X-Request-ID is the request id (protocol 9.6).
+    allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER],
+    # The frontend is on another origin (domains.frontend) and shows the
+    # request id with an error (frontend/src/api/client.ts): a response
+    # header it may read only when exposed.
+    expose_headers=[REQUEST_ID_HEADER],
 )
 
 # ---------------------------------------------------------------------------
-# Trace ID (Pre-6.1)
+# Request context: request id, client address, User-Agent (BE-190)
 # ---------------------------------------------------------------------------
 # Added AFTER CORSMiddleware so Starlette applies it as the outermost
 # layer (LIFO order).
-app.add_middleware(TraceIdMiddleware)
+app.add_middleware(RequestContextMiddleware)
 
 
 # ---------------------------------------------------------------------------
@@ -517,37 +453,6 @@ async def root() -> dict:
     return {"name": "VELO API", "version": "0.1.0"}
 
 
-@app.get("/health")
-async def health() -> dict:
-    """Health check -- DB and Redis connectivity."""
-    result = {"status": "ok", "db": "ok", "redis": "ok"}
-
-    # Check DB.
-    try:
-        engine = get_engine()
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-    except Exception:
-        result["db"] = "error"
-        result["status"] = "degraded"
-        logger.exception("health_check_db_failed")
-
-    # Check Redis.
-    try:
-        redis = get_redis()
-        await asyncio.wait_for(redis.ping(), timeout=2.0)
-    except Exception:
-        result["redis"] = "error"
-        result["status"] = "degraded"
-        logger.exception("health_check_redis_failed")
-
-    return result
-
-
-@app.get("/ready")
-async def readiness() -> JSONResponse:
-    """Readiness probe -- returns 503 if degraded (TD-003)."""
-    check = await health()
-    if check["status"] != "ok":
-        return JSONResponse(status_code=503, content=check)
-    return JSONResponse(status_code=200, content=check)
+# GET /health and GET /ready of protocol 9 (core/report.py).
+report_instance = Report()
+app.include_router(report_instance.router)

@@ -25,11 +25,10 @@ from app.core.database import get_db_session
 from app.core.exceptions import (
     BadRequestError,
     ForbiddenError,
-    NotFoundError,
     TooManyRequestsError,
     VeloError,
 )
-from app.core.i18n import normalize_language
+from app.core.middleware import client_ip
 from app.modules.auth import browser_login, signature_stats, telegram_oidc
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import (
@@ -81,12 +80,12 @@ async def auth_telegram(
     # guessing bounded only by the cost of a HMAC. This one keys on the
     # client address the middleware already validated, so it applies to
     # attempts that never get as far as naming an account.
-    # The address comes from the middleware's contextvars, not from the
-    # request here: TraceIdMiddleware already resolved it once, applying the
-    # trust and form checks (T-47 finding 2), and record_audit reads the same
-    # binding. One resolution, one value -- re-deriving it here would be a
+    # The address comes from the middleware (client_ip), not from the
+    # request here: RequestContextMiddleware already resolved it once,
+    # applying the trust and form checks (T-47 finding 2), and record_audit
+    # reads the same value. One resolution, one value -- re-deriving it here would be a
     # second place that could disagree with the audit trail about who this is.
-    source = structlog.contextvars.get_contextvars().get("ip_address")
+    source = client_ip()
     await check_source_rate_limit(source)
 
     # Step 1: Validate initData from Telegram. This also rejects initData
@@ -111,10 +110,9 @@ async def auth_telegram(
     try:
         await check_auth_rate_limit(telegram_user["id"])
     except TelegramValidationError as e:
-        logger.warning(
-            "telegram_auth_rate_limited",
-            telegram_id=telegram_user["id"],
-        )
+        # No id in the line: the person has no internal id yet, and
+        # telegram_id is a person's data (protocol 9.4, BE-190).
+        logger.warning("telegram_auth_rate_limited")
         raise TooManyRequestsError(str(e)) from e
 
     # Step 3: Create or update user.
@@ -162,8 +160,6 @@ async def auth_telegram(
 # ---------------------------------------------------------------------------
 #
 # Every refusal is a code the login screen turns into a phrase:
-#   404 login_not_configured  -- no Telegram login keys, or CORS_ORIGINS is
-#                                not exactly one https origin (return_url);
 #   400 login_expired         -- the state is unknown, expired or taken;
 #   400 login_foreign         -- the return came to a browser that did not
 #                                start this sign-in (the mark does not match);
@@ -181,17 +177,10 @@ def _unavailable() -> VeloError:
     )
 
 
-def _not_configured() -> NotFoundError:
-    return NotFoundError(
-        "Browser sign-in is not configured on this server",
-        code="login_not_configured",
-    )
-
-
 async def _source_limit() -> None:
     """The /auth/telegram per-source limiter (T-47), on the same counter --
     a source spends one budget on both doors. Redis down -> 503."""
-    source = structlog.contextvars.get_contextvars().get("ip_address")
+    source = client_ip()
     try:
         await check_source_rate_limit(source)
     except RedisError:
@@ -208,12 +197,9 @@ async def browser_login_start(
     touches the database.
     """
     await _source_limit()
-    redirect_uri = browser_login.return_url()
-    if redirect_uri is None or not telegram_oidc.configured():
-        raise _not_configured()
     try:
         url, state = await browser_login.start(
-            redirect_uri=redirect_uri, mark=body.mark
+            redirect_uri=browser_login.return_url(), mark=body.mark
         )
     except RedisError:
         raise _unavailable() from None
@@ -241,9 +227,6 @@ async def browser_login_complete(
       6. upsert -> refuse a deactivated account -> session in Redis.
     """
     await _source_limit()
-    if browser_login.return_url() is None or not telegram_oidc.configured():
-        raise _not_configured()
-
     try:
         started = await browser_login.take(body.state)
     except RedisError:
@@ -274,7 +257,8 @@ async def browser_login_complete(
     try:
         await check_auth_rate_limit(identity.telegram_id)
     except TelegramValidationError as e:
-        logger.warning("telegram_auth_rate_limited", telegram_id=identity.telegram_id)
+        # No id in the line -- as in auth_telegram (BE-190).
+        logger.warning("telegram_auth_rate_limited")
         raise TooManyRequestsError(str(e)) from e
     except RedisError:
         raise _unavailable() from None
@@ -282,8 +266,9 @@ async def browser_login_complete(
     # The same dict shape initData gives upsert_user_on_login. A claim
     # Telegram did not send is None, and the upsert writes it as such -- the
     # same as a field initData leaves out. The browser's language tag is
-    # untrusted: only its normalized form goes in, and the upsert applies the
-    # language column on INSERT only.
+    # untrusted: only the instance's language for it goes in
+    # (settings.language_of, BE-196), and the upsert applies the language
+    # column on INSERT only.
     user = await upsert_user_on_login(
         {
             "id": identity.telegram_id,
@@ -292,7 +277,7 @@ async def browser_login_complete(
             "username": identity.username,
             "photo_url": identity.photo_url,
             "language_code": (
-                normalize_language(body.language) if body.language else None
+                settings.language_of(body.language) if body.language else None
             ),
         },
         session,

@@ -1,9 +1,6 @@
 {
   "schema": 1,
   "editions": {
-    "core":            { "modules": [] },
-    "school":          { "modules": [] },
-    "school-payments": { "modules": ["payments"] },
-    "full":            { "modules": ["ai", "payments"] }
+    "ai": { "modules": ["ai"] }
   }
 }

@@ -733,7 +733,9 @@ async def sync_meeting_reschedule(
             "zoom_registrant_refetch_failed",
             practice_id=str(practice.id),
             status_code=exc.status_code,
-            error=str(exc),
+            # The class, not str(exc): the message embeds Zoom's response
+            # body -- here a list of registrants (BE-190).
+            error=type(exc).__name__,
         )
         return
 
@@ -1068,11 +1070,10 @@ def decode_practice_code(code: str) -> UUID | None:
 
 def build_public_practice_link(practice_id: UUID) -> str:
     """The full, shareable link for a practice. Assembled at the edge from
-    settings.public_link_base (arch decision 13, late binding: the intent
-    lives in the data, the domain in env, the URL is built at send time) --
+    settings.api_origin (arch decision 13, late binding: the intent lives in
+    the data, the domain in the passport, the URL is built at send time) --
     no domain is ever stored on a row."""
-    base = settings.public_link_base.rstrip("/")
-    return f"{base}/z/{encode_practice_code(practice_id)}"
+    return f"{settings.api_origin}/z/{encode_practice_code(practice_id)}"
 
 
 class ZoomEntryKind(enum.StrEnum):
@@ -1168,6 +1169,20 @@ _LIVE_BOOKING_STATUSES = (
 )
 
 
+# KNOWN CEILING -- with the option `zoom` off a student is told PENDING.
+#   1. Mechanics: with the option off no meeting row is made (BE-182:
+#      practices/service.py, practices/series_service.py), so step 3 of the
+#      ladder below answers a student PENDING -- "being prepared" -- for a
+#      meeting that will never exist on this instance.
+#   2. Status: acknowledged by design.
+#   3. Task: none -- unreachable while Zoom is on everywhere (owner ruling,
+#      BE-182): no passport turns the option off.
+#   4. Unfreeze trigger: the first passport of an instance with the option
+#      `zoom` off.
+#   5. Agreed fix: a step "no online room on this instance" in the API and
+#      on the frontend.
+#   6. Rejected: making that step now -- code and a frontend change for a
+#      state no instance is in.
 async def resolve_zoom_entry(
     practice: Practice,
     user: User | None,
@@ -1539,7 +1554,6 @@ async def claim_guest_name(
             logger.info(
                 "zoom_guest_name_race_lost",
                 practice_id=str(practice.id),
-                display_name=candidate.display,
             )
             continue
         return row

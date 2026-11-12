@@ -184,7 +184,8 @@ def telegram(monkeypatch: pytest.MonkeyPatch) -> FakeTelegram:
 
 @pytest.fixture(autouse=True)
 def configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "mcp_oauth_issuer_url", ISSUER)
+    # BE-192: the issuer is api_origin, https://<domains.api>.
+    monkeypatch.setattr(settings, "domain_api", ISSUER.removeprefix("https://"))
     monkeypatch.setattr(settings, "telegram_login_client_id", TG_CLIENT_ID)
     monkeypatch.setattr(settings, "telegram_login_client_secret", TG_SECRET)
 
@@ -410,51 +411,35 @@ async def test_a_401_leads_to_the_authorization_server(client: AsyncClient) -> N
     assert "revocation_endpoint" not in meta  # owner ruling: off
 
 
-async def test_without_oauth_configured_the_401_is_the_old_one(
+async def test_mcp_off_closes_every_oauth_path_with_the_plain_404(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(settings, "telegram_login_client_secret", "")
-    resp = await client.post("/mcp", json={}, headers=MCP_HEADERS)
-    assert resp.status_code == 401
-    assert resp.headers["www-authenticate"] == 'Bearer realm="velo-mcp"'
+    """MCP off: every OAuth path is the app's plain 404. Pair: MCP on, the
+    same paths answer.
 
-
-@pytest.mark.parametrize(
-    "setting",
-    [
-        "mcp_enabled",
-        "mcp_oauth_issuer_url",
-        "telegram_login_client_id",
-        "telegram_login_client_secret",
-        "public_host",
-    ],
-)
-async def test_the_door_answers_the_plain_404(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, setting: str
-) -> None:
-    """MCP off, any of the three keys unset, or the public host: every OAuth
-    path is the app's plain 404. Pair: configured, the same paths answer."""
-    host = {}
-    if setting == "mcp_enabled":
-        monkeypatch.setattr(settings, "mcp_enabled", False)
-    elif setting == "public_host":
-        monkeypatch.setattr(settings, "public_link_base", "https://go.velo.test")
-        host = {"Host": "go.velo.test"}
-    else:
-        monkeypatch.setattr(settings, setting, "")
+    The other ways this door used to close are gone with BE-192: the issuer
+    and the two Telegram login keys are required at start (OAuth is always
+    configured), and the public short-link host no longer exists (the /z
+    links live on the API's own host) -- so they have no case here."""
+    monkeypatch.setattr(settings, "option_mcp", False)
     for path in OAUTH_PATHS:
         for method in ("GET", "POST"):
-            resp = await client.request(method, path, headers=host)
+            resp = await client.request(method, path)
             assert resp.status_code == 404, (path, method)
             assert resp.json() == {"error": "not_found", "message": "Not found"}
-    # Pair: back to configured (undo drops the autouse `configured` too,
-    # so it is re-applied), the same door answers.
-    monkeypatch.undo()
-    monkeypatch.setattr(settings, "mcp_oauth_issuer_url", ISSUER)
-    monkeypatch.setattr(settings, "telegram_login_client_id", TG_CLIENT_ID)
-    monkeypatch.setattr(settings, "telegram_login_client_secret", TG_SECRET)
+    monkeypatch.setattr(settings, "option_mcp", True)
     assert (await client.get(AS_METADATA_PATH)).status_code == 200
     assert (await client.get(PRM_PATH)).status_code == 200
+
+
+async def test_the_api_host_is_not_refused(client: AsyncClient) -> None:
+    """BE-192: the public /z/{code} links and /mcp share the API's host, so
+    a request on it is served -- the short-link refusal would have closed
+    OAuth and /mcp on every instance."""
+    host = {"Host": ISSUER.removeprefix("https://")}
+    assert (await client.get(AS_METADATA_PATH, headers=host)).status_code == 200
+    resp = await client.post("/mcp", json={}, headers={**MCP_HEADERS, **host})
+    assert resp.status_code == 401
 
 
 def test_main_routes_exactly_the_paths_the_door_serves() -> None:
@@ -1813,16 +1798,20 @@ async def test_a_fresh_document_changes_what_is_kept(
     assert row.client_info["client_name"] == new_name
 
 
-async def test_the_allowed_hosts_are_a_setting(
+async def test_the_allowed_hosts_are_the_constant(
     client: AsyncClient, cimd: FakeCimd, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The fetch is gated by MCP_OAUTH_CIMD_ALLOWED_HOSTS and nothing else:
+    a host outside it is refused unfetched; put into it, the same URL is
+    fetched."""
     url = "https://claude.com/oauth/be141-test-" + secrets.token_hex(4)
     cimd.answers[url] = httpx.Response(200, json=_cimd_doc(url))
     assert (await _authorize(client, url, _pkce()[1])).status_code == 400
     assert cimd.fetches == []
-    # Exact host, case and spaces ignored.
     monkeypatch.setattr(
-        settings, "mcp_oauth_cimd_allowed_hosts", "claude.ai, Claude.COM "
+        mcp_oauth,
+        "MCP_OAUTH_CIMD_ALLOWED_HOSTS",
+        mcp_oauth.MCP_OAUTH_CIMD_ALLOWED_HOSTS | {"claude.com"},
     )
     resp = await _authorize(client, url, _pkce()[1])
     assert resp.status_code == 302 and resp.headers["location"].startswith(
@@ -1990,18 +1979,10 @@ async def test_the_rendered_consent_page_has_no_ascii_dashes_or_arrows(
 #
 # ChatGPT's document (the form OpenAI publishes, MCP SEP-3149) prefers
 # private_key_jwt and lists ["none", "private_key_jwt"]; it is accepted
-# through the list and kept as "none" (oauth.py, _offers_none). The tests
-# run on the setting's CODE default, not on whatever the environment sets:
-# what is checked is the default this delivery ships, so the color is the
-# code's, not the box's.
+# through the list and kept as "none" (oauth.py, _offers_none). The hosts are
+# the code's constant (BE-192), so no environment can change them.
 
 GPT_CB = "https://chatgpt.com/connector/oauth/be170-cb"
-_GPT_DEFAULT = type(settings).model_fields["mcp_oauth_cimd_allowed_hosts"].default
-
-
-@pytest.fixture
-def gpt_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "mcp_oauth_cimd_allowed_hosts", _GPT_DEFAULT)
 
 
 def _gpt_url() -> str:
@@ -2044,13 +2025,14 @@ def _refusals(out: str) -> list[str]:
     return [ln for ln in out.splitlines() if "mcp_oauth_cimd_refused" in ln]
 
 
-def test_the_default_hosts_are_claude_and_chatgpt(gpt_hosts: None) -> None:
+def test_the_hosts_are_claude_and_chatgpt() -> None:
     """Both, and nothing else: chatgpt.com added, claude.ai still there."""
-    assert mcp_oauth._cimd_allowed_hosts() == {"claude.ai", "chatgpt.com"}
+    hosts = mcp_oauth.MCP_OAUTH_CIMD_ALLOWED_HOSTS
+    assert hosts == {"claude.ai", "chatgpt.com"}
 
 
 async def test_chatgpt_connects_through_cimd_as_a_public_client(
-    client: AsyncClient, telegram: FakeTelegram, cimd: FakeCimd, gpt_hosts: None
+    client: AsyncClient, telegram: FakeTelegram, cimd: FakeCimd
 ) -> None:
     """The whole path of ChatGPT's form: /authorize -> consent naming
     chatgpt.com -> code exchanged on /token with "none" and PKCE -> tokens
@@ -2116,7 +2098,7 @@ async def test_chatgpt_connects_through_cimd_as_a_public_client(
     ],
 )
 async def test_a_document_offering_none_is_kept_as_none(
-    client: AsyncClient, cimd: FakeCimd, gpt_hosts: None, over: dict
+    client: AsyncClient, cimd: FakeCimd, over: dict
 ) -> None:
     url = _gpt_url()
     cimd.answers[url] = httpx.Response(200, json=_gpt_doc(url, **over))
@@ -2161,7 +2143,6 @@ async def test_a_document_offering_none_is_kept_as_none(
 async def test_a_document_not_offering_none_is_refused_and_not_kept(
     client: AsyncClient,
     cimd: FakeCimd,
-    gpt_hosts: None,
     capsys: pytest.CaptureFixture,
     over: dict,
 ) -> None:
@@ -2188,7 +2169,7 @@ async def test_a_document_not_offering_none_is_refused_and_not_kept(
     ],
 )
 async def test_a_chatgpt_lookalike_url_is_never_fetched(
-    client: AsyncClient, cimd: FakeCimd, gpt_hosts: None, url: str
+    client: AsyncClient, cimd: FakeCimd, url: str
 ) -> None:
     resp = await _authorize(client, url, _pkce()[1], redirect_uri=GPT_CB)
     assert resp.status_code == 400
@@ -2200,7 +2181,6 @@ async def test_chatgpt_losing_none_on_refetch_is_refused_until_it_returns(
     client: AsyncClient,
     telegram: FakeTelegram,
     cimd: FakeCimd,
-    gpt_hosts: None,
     capsys: pytest.CaptureFixture,
 ) -> None:
     """The KNOWN CEILING's trigger, built: the kept copy past its time, the
@@ -2234,7 +2214,7 @@ async def test_chatgpt_losing_none_on_refetch_is_refused_until_it_returns(
 
 
 async def test_chatgpt_token_request_with_a_client_assertion(
-    client: AsyncClient, telegram: FakeTelegram, cimd: FakeCimd, gpt_hosts: None
+    client: AsyncClient, telegram: FakeTelegram, cimd: FakeCimd
 ) -> None:
     """What the SDK does with private_key_jwt's fields once the client is
     kept as "none": with client_id they are ignored (PKCE carries the

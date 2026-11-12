@@ -1,0 +1,100 @@
+# =============================================================================
+# VELO CI -- `pridem check`: the repository checked by the deploy machine
+# itself (BE-194, DM-57; protocol 10.1)
+#
+# WHY. backend/tests/test_primer_env.py checks primer.yaml and compose as WE
+# read them. `pridem check` runs the machine's own loaders and lists on them:
+# contract 3 for primer.yaml and primer.lock, the agreed egress list, the
+# compose of every stack against what the machine allows, every compose
+# variable ${VAR:?} and a key of env. Its complaints show up on every push,
+# not on the day velo-test is rolled out.
+#
+# The step's result IS the check's exit code: 0 green; 1 a violation; 2 the
+# check could not run in full (no `docker compose`) -- red too. No pipe and
+# no `|| true` after it.
+#
+# WHAT IT DOES NOT SAY.
+#   - primer.lock: only its form and the range are checked; the tag and the
+#     commit are checked by the box over the network. A placeholder commit of
+#     seven hex digits passes here.
+#   - packages: no package directory is given, so the skin slot is reported
+#     as not checked -- the step stays green.
+#
+# No `paths` filter: what the check reads is named by primer.yaml itself
+# (compose files of the stacks, build contexts, bind sources), so a static
+# list would go stale. The check needs no value and no secret.
+# =============================================================================
+name: Primer check
+
+on:
+  push:
+    branches: [deploy-machine]
+  pull_request:
+    branches: [deploy-machine]
+
+concurrency:
+  group: primer-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: pridem check -- the repository as the deploy machine reads it
+    # The runner image the machine's README names: it has `docker compose`
+    # (the binary is enough; the check starts no daemon).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # KNOWN CEILING -- pridem is installed from a commit of the machine, not
+      # from a release.
+      #   1. Mechanics: the machine has no release tag yet (version 0.0.0, no
+      #      GitHub Release), so the wheel and the lock README pins by tag do
+      #      not exist. pridem is built here from the commit below, by the
+      #      path of the machine's own release.yml: runtime wheels from its
+      #      wheels/ by requirements.lock (--no-index --require-hashes),
+      #      flit_core by requirements-build.lock, then the package without
+      #      dependencies and without build isolation.
+      #   2. Status: acknowledged by design.
+      #   3. Task: DM-57 -- the first tag of the machine.
+      #   4. Unfreeze when: inzoddwetrust/primer has its first tag vX.Y.Z.
+      #   5. Fix: README's recipe -- the wheel of the GitHub Release by that
+      #      tag, its sha256 and the sha256 of requirements.lock at the tag.
+      #   6. Rejected: waiting for the tag -- the step would stay out of CI
+      #      with no date.
+      PRIDEM_REPOSITORY: inzoddwetrust/primer
+      # BE-193 part 2b: jobs of a stack and the length of a minted value
+      # (DM-22), and `check` as the runner's own user -- HOME from passwd,
+      # DOCKER_CONFIG at $HOME/.docker (DM-88); no sudo.
+      PRIDEM_COMMIT: c4b380041b3a8937dd1ebd1db439e12b159176a1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: velo
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PRIDEM_REPOSITORY }}
+          ref: ${{ env.PRIDEM_COMMIT }}
+          path: pridem-src
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: pridem, pinned by commit
+        working-directory: pridem-src
+        run: |
+          # The checkout is the pinned commit, not whatever the ref resolved to.
+          have=$(git rev-parse HEAD)
+          if [ "$have" != "$PRIDEM_COMMIT" ]; then
+            echo "pridem checkout is $have, want $PRIDEM_COMMIT"; exit 1
+          fi
+          python -m pip install --no-index --find-links wheels/ --require-hashes -r requirements.lock
+          python -m pip install --require-hashes -r requirements-build.lock
+          python -m pip install --no-deps --no-build-isolation .
+          pridem version
+
+      - name: pridem check
+        run: pridem check velo

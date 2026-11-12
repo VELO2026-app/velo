@@ -1,0 +1,313 @@
+# =============================================================================
+# VELO CI -- the backend pytest suite on branch deploy-machine (BE-197)
+#
+# WHY. The stand rolls out only `test`, and ci.yml has no backend suite, so
+# without this job nothing checks the backend on deploy-machine: BE-191,
+# BE-189 and BE-192 would meet their first test run on the machine's
+# velo-test, all at once.
+#
+# TEMPORARY. When velo-test on the deploy machine is green and deploy-machine
+# is merged into `test`, the machine itself runs the tests before every
+# migration (protocol test.run), and this workflow is deleted -- it never
+# runs on `test` anyway (the branch filter below).
+#
+# THE SUITE AS THE DEPLOY MACHINE RUNS IT, NOT A SUITE OF ITS OWN. The
+# command is the one of the stand, `python -m pytest tests/ -v --tb=short`
+# with SERVER_ROLE=test (BE-192), and it runs in the stage `test` of
+# backend/Dockerfile (BE-189: the suite no longer ships in the runtime
+# image), built from the repository root with the build arguments the deploy
+# machine gives. The database is the machine's (protocol 7.1, BE-191): a
+# ready `velo_test`, created by the Postgres service itself (POSTGRES_DB)
+# with the role the application would use, and handed to the suite as
+# DATABASE_URL -- the suite only empties it, never creates or drops it, and
+# refuses a name without `_test`. The role is the image's POSTGRES_USER, a
+# superuser, as on the machine (docker-compose.yml): an owner without
+# CREATEDB is not what this job reproduces. One docker network with:
+#   postgres, redis    -- the images docker-compose.yml pins, read FROM that
+#                         file (one place for the digests, BE-157);
+#   velo-storage       -- the stack docker-compose.storage.yml itself,
+#                         server and velo-storage-init: test_storage.py talks
+#                         to the live storage at velo-storage:9000 -- the
+#                         service's name on this network, given to the suite
+#                         as STORAGE_ENDPOINT (on the machine it is the
+#                         point's alias) -- and works only in the test-twin
+#                         buckets the init makes.
+# comms-profile/ is NOT mounted: the test stage carries it at /comms-profile,
+# so a test image without it is red here.
+#
+# THE IMAGE ITSELF (BE-189). Before the suite, this job also builds the stage
+# `runtime` and checks what it must and must not hold, checks that a build
+# without PRIMER_RELEASE or with an empty PRIMER_COMMIT is refused, and that a
+# build with another commit takes every dependency layer from the cache.
+#
+# FORM OF THE COMPOSE FILES. Both are read as they are, and BE-193 will
+# change docker-compose.storage.yml. Every step that depends on their form
+# checks it and fails LOUDLY when it moves -- a missing service, an image
+# without a digest, a stack on more than one network -- rather than testing
+# against something else.
+#
+# Every value below is invented for this job: none is a secret. The suite's
+# environment is what docker-compose.yml's app.environment passes (BE-192):
+# every required key of app/core/config.py, none it does not read.
+# =============================================================================
+name: Backend tests
+
+on:
+  push:
+    branches: [deploy-machine]
+    paths:
+      - backend/**
+      - comms-profile/**
+      - docker-compose.yml
+      - docker-compose.storage.yml
+      - primer.yaml
+      - .github/workflows/backend-tests.yml
+  pull_request:
+    branches: [deploy-machine]
+    paths:
+      - backend/**
+      - comms-profile/**
+      - docker-compose.yml
+      - docker-compose.storage.yml
+      - primer.yaml
+      - .github/workflows/backend-tests.yml
+
+concurrency:
+  group: backend-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: backend -- pytest (full suite, backend image)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT: velo-ci
+      IMAGE: velo-ci-backend
+      # The storage stack's own two variables (docker-compose.storage.yml;
+      # the root login is a constant of that file).
+      RUSTFS_SECRET_KEY: velo-ci-root-secret-0123456789abcdef0123
+      # Both of the form the machine mints (primer.yaml: length 40): the
+      # service key is made at the edge RustFS takes (tests/test_primer_env.py).
+      STORAGE_SECRET_KEY: velo-ci-storage-secret-0123456789abcdef0
+      POSTGRES_PASSWORD: velo-ci-postgres-password
+      REDIS_PASSWORD: velo-ci-redis-password
+      # The build arguments the deploy machine gives (protocol 3.4); CI has
+      # no release tag, the commit is the real one.
+      RELEASE: ci-${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the backend test image (backend/Dockerfile, stage test)
+        run: |
+          docker build -f backend/Dockerfile --target test \
+            --build-arg PRIMER_RELEASE="$RELEASE" \
+            --build-arg PRIMER_COMMIT="$GITHUB_SHA" \
+            -t "$IMAGE" .
+
+      - name: Check the runtime image and the test image
+        run: |
+          docker build -f backend/Dockerfile --target runtime \
+            --build-arg PRIMER_RELEASE="$RELEASE" \
+            --build-arg PRIMER_COMMIT="$GITHUB_SHA" \
+            -t "$IMAGE-runtime" .
+          # Every "X is absent" goes with a "Y is present": an image that
+          # holds nothing at all must not pass.
+          check='
+          import importlib.util, os, sys
+          kind = sys.argv[1]
+          bad = []
+          def absent(path):
+              if os.path.exists(path):
+                  bad.append("present, must be absent: " + path)
+          def present(path):
+              if not os.path.exists(path):
+                  bad.append("absent, must be present: " + path)
+          def module(name, want):
+              if (importlib.util.find_spec(name) is not None) != want:
+                  bad.append("module %s: importable=%s, want %s" % (name, not want, want))
+          for name in ("PRIMER_RELEASE", "PRIMER_COMMIT"):
+              if os.environ.get(name) != os.environ.get("WANT_" + name):
+                  bad.append("%s=%r, want %r" % (name, os.environ.get(name), os.environ.get("WANT_" + name)))
+          for path in ("/app/app/main.py", "/app/alembic.ini", "/app/logging.json",
+                       "/app/migrations/env.py",
+                       "/app/migrations/versions", "/app/scripts/seed.py",
+                       "/app/scripts/seed_profiles"):
+              present(path)
+          if os.path.isdir("/app/migrations/versions") and not os.listdir("/app/migrations/versions"):
+              bad.append("empty: /app/migrations/versions")
+          for name in ("uvicorn", "fastapi", "alembic", "sqlalchemy"):
+              module(name, True)
+          dev = kind == "test"
+          for path in ("/app/tests", "/app/pyproject.toml", "/primer.yaml", "/docker-compose.yml",
+                       "/docker-compose.storage.yml", "/comms-profile/types.yaml", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
+              (present if dev else absent)(path)
+          for name in ("pytest", "pytest_asyncio", "ruff"):
+              module(name, dev)
+          if os.getuid() != 1000:
+              bad.append("uid %d, want 1000 (velo)" % os.getuid())
+          for line in bad:
+              print(kind + ": " + line)
+          sys.exit(1 if bad else 0)
+          '
+          for kind in runtime test; do
+            image="$IMAGE-runtime"; [ "$kind" = test ] && image="$IMAGE"
+            docker run --rm \
+              -e WANT_PRIMER_RELEASE="$RELEASE" -e WANT_PRIMER_COMMIT="$GITHUB_SHA" \
+              "$image" python -c "$check" "$kind"
+            echo "$kind image: as expected"
+          done
+
+      - name: A build without its arguments is refused
+        run: |
+          # Each case must fail AND name the argument: a build that fails for
+          # another reason proves nothing about the check. The message is
+          # matched as the step's OUTPUT (`#<n> <seconds> ...`), not anywhere:
+          # the step's header line quotes the RUN itself.
+          refused() {
+            want="$1"; shift
+            if docker build -f backend/Dockerfile --target runtime --progress=plain "$@" . > build.log 2>&1; then
+              echo "built, but must be refused: $*"; exit 1
+            fi
+            if ! grep -Eq "^#[0-9]+ [0-9]+\.[0-9]+ build argument $want is required" build.log; then
+              echo "failed without naming $want:"; tail -n 40 build.log; exit 1
+            fi
+            echo "refused, names $want: $*"
+          }
+          refused PRIMER_RELEASE --build-arg PRIMER_COMMIT="$GITHUB_SHA"
+          refused PRIMER_COMMIT --build-arg PRIMER_RELEASE="$RELEASE" --build-arg PRIMER_COMMIT=
+
+      - name: Another commit takes the dependency layers from the cache
+        run: |
+          docker build -f backend/Dockerfile --target test --progress=plain \
+            --build-arg PRIMER_RELEASE="$RELEASE" \
+            --build-arg PRIMER_COMMIT=0000000000000000000000000000000000000000 \
+            . > rebuild.log 2>&1 || { tail -n 60 rebuild.log; exit 1; }
+          python3 - <<'PY'
+          import re, sys
+          log = open("rebuild.log", encoding="utf-8").read().splitlines()
+          steps, cached = {}, set()
+          for line in log:
+              m = re.match(r"#(\d+) \[([^\]]+)\] (.*)", line)
+              if m:
+                  steps.setdefault(m.group(1), (m.group(2), m.group(3)))
+              m = re.match(r"#(\d+) CACHED$", line)
+              if m:
+                  cached.add(m.group(1))
+          deps = {n: s for n, s in steps.items() if "pip install" in s[1]}
+          marker = "for name in PRIMER_RELEASE PRIMER_COMMIT"
+          check = {n: s for n, s in steps.items() if marker in s[1]}
+          bad = []
+          # Both dependency layers, and only they: builder and builder-test.
+          if sorted(s[0].split()[0] for s in deps.values()) != ["builder", "builder-test"]:
+              bad.append("dependency steps found: %r" % sorted(s[0] for s in deps.values()))
+          bad += ["rebuilt with another commit: [%s] %s" % s for n, s in deps.items() if n not in cached]
+          # And the build really saw the new commit: the argument check ran.
+          if not check or any(n in cached for n in check):
+              bad.append("the PRIMER_* check did not run again: %r" % check)
+          for line in bad:
+              print(line)
+          if bad:
+              sys.exit(1)
+          print("dependency layers cached: " + ", ".join(s[0] for s in deps.values()))
+          PY
+
+      - name: Read the Postgres and Redis images from docker-compose.yml
+        id: images
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/docker-compose.yml:/compose.yml:ro" \
+            "$IMAGE" python -c '
+          import sys, yaml
+          services = (yaml.safe_load(open("/compose.yml")) or {}).get("services") or {}
+          for name in ("postgres", "redis"):
+              image = (services.get(name) or {}).get("image")
+              if not isinstance(image, str) or not image.strip():
+                  sys.exit("docker-compose.yml: services.%s.image is missing or empty" % name)
+              if "@sha256:" not in image:
+                  sys.exit("docker-compose.yml: services.%s.image is not pinned by digest: %s" % (name, image))
+              print("%s=%s" % (name, image))
+          ' >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+      - name: Start velo-storage and run velo-storage-init
+        run: |
+          compose() { docker compose -p "$PROJECT" -f docker-compose.storage.yml "$@"; }
+          compose up -d --wait velo-storage
+          # `up -d` does not wait for a one-shot job: the init runs in the
+          # foreground and its exit code decides this step.
+          compose run --rm -T velo-storage-init
+          # The network the tests join is the one the storage is on -- read
+          # from the running container, not assumed from the project name.
+          storage=$(compose ps -q velo-storage)
+          nets=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "$storage")
+          count=$(echo "$nets" | wc -w)
+          if [ "$count" -ne 1 ]; then
+            echo "velo-storage is on $count networks ($nets); this job expects exactly one"
+            exit 1
+          fi
+          net=$(echo "$nets" | tr -d ' ')
+          echo "NET=$net" >> "$GITHUB_ENV"
+          echo "network: $net"
+
+      - name: Start Postgres and Redis on the same network
+        env:
+          PG_IMAGE: ${{ steps.images.outputs.postgres }}
+          REDIS_IMAGE: ${{ steps.images.outputs.redis }}
+        run: |
+          # -h 127.0.0.1, unlike compose's own healthcheck: during initdb the
+          # image runs a temporary server on the unix socket only, and a
+          # socket check reports it ready before the real server restarts.
+          docker run -d --name velo-ci-postgres --network "$NET" --network-alias postgres \
+            -e POSTGRES_USER=velo -e POSTGRES_DB=velo_test -e POSTGRES_PASSWORD \
+            --health-cmd "pg_isready -h 127.0.0.1 -U velo -d velo_test" \
+            --health-interval 2s --health-timeout 3s --health-retries 60 \
+            "$PG_IMAGE"
+          # The command and the check of docker-compose.yml's redis service.
+          docker run -d --name velo-ci-redis --network "$NET" --network-alias redis \
+            -e REDIS_PASSWORD \
+            --health-cmd 'export REDISCLI_AUTH=$REDIS_PASSWORD; redis-cli ping | grep -q PONG' \
+            --health-interval 2s --health-timeout 3s --health-retries 60 \
+            "$REDIS_IMAGE" sh -c 'exec redis-server --requirepass "$REDIS_PASSWORD" --appendonly yes'
+          for c in velo-ci-postgres velo-ci-redis; do
+            for _ in $(seq 1 90); do
+              status=$(docker inspect -f '{{.State.Health.Status}}' "$c")
+              [ "$status" = healthy ] && break
+              sleep 2
+            done
+            if [ "$status" != healthy ]; then
+              echo "$c is $status after 180 s"
+              docker logs "$c"
+              exit 1
+            fi
+            echo "$c: healthy"
+          done
+
+      - name: Run the backend suite (python -m pytest tests/)
+        # Every required key of Settings from backend/ci.env, the one settings
+        # environment of CI (tests/test_primer_env.py); here only what this
+        # place has of its own: the addresses of its services (the storage's
+        # included), the storage secret it minted, the bot's link. PRIMER_*
+        # come from the image's ENV.
+        run: |
+          docker run --rm --network "$NET" \
+            --env-file backend/ci.env \
+            -e DATABASE_URL="postgresql+asyncpg://velo:${POSTGRES_PASSWORD}@postgres:5432/velo_test" \
+            -e REDIS_URL="redis://:${REDIS_PASSWORD}@redis:6379/0" \
+            -e TELEGRAM_BOT_URL=https://telegram.me/velo_ci_bot \
+            -e STORAGE_ENDPOINT=http://velo-storage:9000 \
+            -e STORAGE_SECRET_KEY \
+            "$IMAGE" python -m pytest tests/ -v --tb=short
+
+      - name: Logs of the services (on failure)
+        if: failure()
+        run: |
+          for c in velo-ci-postgres velo-ci-redis; do
+            echo "::group::$c"; docker logs "$c" 2>&1 | tail -n 200 || true; echo "::endgroup::"
+          done
+          echo "::group::velo-storage"
+          docker compose -p "$PROJECT" -f docker-compose.storage.yml logs --no-color --tail 200 || true
+          echo "::endgroup::"

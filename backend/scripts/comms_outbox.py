@@ -5,12 +5,14 @@
 # Operator's view of the outbox dead-letter queue -- see and revive
 # dead rows without hand-written psql. Thin argparse wrapper: ALL logic
 # lives in app/core/events/outbox_admin.py (importable, tested at the
-# service level). Wired as `velo comms-outbox ...` in velo-manage.sh,
-# mirroring resync-comms.
+# service level). Three verbs of primer.yaml run it (BE-195):
 #
-#   python scripts/comms_outbox.py list-dead
-#   python scripts/comms_outbox.py requeue <event-id> [<event-id> ...]
-#   python scripts/comms_outbox.py requeue --all
+#   comms-outbox-list-dead    python scripts/comms_outbox.py list-dead
+#   comms-outbox-requeue      python scripts/comms_outbox.py requeue <ids>
+#   comms-outbox-requeue-all  python scripts/comms_outbox.py requeue --all
+#
+# <ids> is ONE argument, event ids joined by commas (12,15,20): a verb of
+# the machine passes each of its args as one value.
 #
 # SESSION: own session factory + explicit commit, dispose_engine() in
 # a finally -- same skeleton as backfill_comms_sync.py.
@@ -52,6 +54,23 @@ def _event_id(raw: str) -> int:
     return value
 
 
+def _event_ids(raw: str) -> list[int]:
+    """argparse type for the one `ids` argument: event ids joined by commas.
+    Every element goes through _event_id; an empty element (``""``,
+    ``12,,15``, a trailing comma) and an id named twice are refused -- a
+    repeated id would be counted once by requeue_events and the operator's
+    list would not say what was revived."""
+    ids: list[int] = []
+    for part in raw.split(","):
+        if part == "":
+            raise ValueError(f"an empty event id in {raw!r}")
+        value = _event_id(part)
+        if value in ids:
+            raise ValueError(f"event id {value} is named twice")
+        ids.append(value)
+    return ids
+
+
 async def _list_dead() -> None:
     session_factory = get_session_factory()
     async with session_factory() as session:
@@ -83,7 +102,7 @@ async def _requeue(ids: list[int], requeue_all: bool) -> None:
     )
 
 
-async def main() -> None:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="comms-outbox",
         description="Inspect / revive dead-lettered comms outbox events.",
@@ -96,21 +115,32 @@ async def main() -> None:
         "requeue", help="revive dead events (attempts kept -- history)",
     )
     requeue.add_argument(
-        "event_ids", nargs="*", type=_event_id,
-        help="event id(s) to revive (OutboxEvent.id, an integer)",
+        "event_ids", nargs="?", type=_event_ids, default=[],
+        help="event ids to revive, joined by commas (OutboxEvent.id, integers)",
     )
     requeue.add_argument(
         "--all", action="store_true", dest="requeue_all",
         help="revive every dead event",
     )
+    return parser
 
-    args = parser.parse_args()
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """The arguments, checked before any session is opened: exactly one of
+    the event ids and --all for requeue."""
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if args.command == "requeue" and args.requeue_all == bool(args.event_ids):
+        parser.error("pass the event ids OR --all, exactly one")
+    return args
+
+
+async def main() -> None:
+    args = _parse_args()
     try:
         if args.command == "list-dead":
             await _list_dead()
         else:
-            if args.requeue_all == bool(args.event_ids):
-                parser.error("pass event id(s) OR --all, exactly one")
             await _requeue(args.event_ids, args.requeue_all)
     finally:
         await dispose_engine()

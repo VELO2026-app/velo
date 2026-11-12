@@ -40,11 +40,13 @@ from app.core.config import settings
 from app.core.database import dispose_engine, get_session_factory
 from app.core.redis import close_redis, get_redis, init_redis
 from app.main import app
+from tests import pg_isolation
 from tests.notification_guard import GUARD
 from tests.pg_isolation import (
     PgIsolationError,
-    isolated_database_url,
-    recreate_database,
+    acquire_session_lock,
+    reset_schema,
+    test_database_url,
 )
 from tests.redis_isolation import RedisIsolationError, isolated_redis_url
 
@@ -71,44 +73,61 @@ async def setup_infrastructure():
     # Phase 6 / T0: relay tests drive relay_pending_batch manually --
     # the same no-background-race rationale as the workers above.
     settings.comms_relay_enabled = False
-    # PROMPT №543: pin Zoom to stub mode for the whole suite. Until now every
-    # test server happened to have no real Zoom credentials, so
-    # settings.is_zoom_stub was True by ambient accident -- several tests
-    # asserted on that accident instead of pinning it (see the four tests
-    # named in the PROMPT №543 postmortem). The day the deploy container
-    # gained real credentials (owner connected them), is_zoom_stub flipped
-    # to False mid-suite and those tests took the opposite branch. Setting
-    # the secret to the "TEST" sentinel is_zoom_stub already checks for
-    # mirrors the existing is_stripe_stub convention (config.py) and reads
-    # honestly: this is a deliberate stub marker, not a blanked-out real
-    # value that could be misread as "never configured". A test that
-    # explicitly wants non-stub Zoom (e.g.
-    # test_zoom_attendance_decision.py's
+    # PROMPT №543: pin Zoom to stub mode for the whole suite. Several tests
+    # once asserted on a server that happened to have no Zoom keys instead of
+    # pinning the stub, and took the opposite branch the day real keys
+    # arrived. Since BE-192 the stub exists for the suite alone (no role runs
+    # it, owner ruling) and every instance -- velo-test, whose environment
+    # the deploy machine runs this suite with, included -- carries real Zoom
+    # keys, so the pin is what keeps every test away from Zoom. A test that
+    # explicitly wants non-stub Zoom (e.g. test_zoom_attendance_decision.py's
     # test_zoom_tracked_practice_defers_instead_of_deciding_immediately)
-    # monkeypatches all three credential fields itself and is unaffected --
-    # monkeypatch snapshots and restores whatever was here before it ran.
-    settings.zoom_client_secret = "TEST"
+    # monkeypatches _zoom_stub to False itself -- monkeypatch snapshots and
+    # restores whatever was here before it ran.
+    settings._zoom_stub = True
+    # BE-192: the Stripe stub follows SERVER_ROLE (test and preview). The
+    # suite runs only on `test` (protocol 6.2), and is pinned to it all the
+    # same, for the reason of the Zoom pin above: a test's branch must not
+    # depend on the environment it happens to run in.
+    settings.server_role = "test"
+    # BE-196: every product language on, en the default -- for the reason of
+    # the two pins above. On the deploy machine the suite runs with velo-test's
+    # passport, whose languages may be any subset; a test that PATCHes uk or
+    # expects a person's language to read as en must not turn on which. A
+    # test of another set monkeypatches these two itself. SUPPORT_LANGUAGE is
+    # not pinned: the support tests read settings.support_language as they
+    # find it (test_support_t1.py says why), and it is among these languages
+    # whatever the passport says.
+    settings.languages = ("en", "ru", "uk")
+    settings.default_language = "en"
 
-    # BE-86: the suite runs in a Postgres database of its own, DROPPED,
-    # CREATED and migrated from zero here -- never in the application's
-    # (tests/pg_isolation.py says why, and why the name is fixed). The URL
-    # is moved BEFORE anything touches the lazy engine, and handed to the
-    # alembic subprocess through its environment (it does not see
-    # `settings`). Any refusal stops the whole run, before any statement.
-    app_database_url = settings.database_url
+    # BE-86 / BE-191: the suite runs in the `*_test` database it is GIVEN
+    # (DATABASE_URL, made by the deploy machine), never in the application's,
+    # and never creates or drops a database (tests/pg_isolation.py says
+    # why). Before anything touches the lazy engine: the name is checked,
+    # this run takes its lock on the database (held to the end of the
+    # session), and the content is emptied -- `public` dropped and created
+    # again -- for alembic to build from zero. Any refusal stops the whole
+    # run, with exit code 3, before any statement that changes anything.
     try:
-        test_database_url = isolated_database_url(app_database_url)
-        await recreate_database(app_database_url)
+        suite_database_url = test_database_url(settings.database_url)
+        session_lock = await acquire_session_lock(suite_database_url)
     except PgIsolationError as refusal:
-        pytest.exit(f"BE-86 Postgres isolation: {refusal}", returncode=3)
-    settings.database_url = test_database_url
+        pytest.exit(f"BE-191 Postgres isolation: {refusal}", returncode=3)
+    try:
+        pg_isolation.session_reset_xact_id = await reset_schema(
+            suite_database_url,
+        )
+    except PgIsolationError as refusal:
+        await session_lock.release()
+        pytest.exit(f"BE-191 Postgres isolation: {refusal}", returncode=3)
 
     # Run Alembic migrations (ensures tables exist).
     result = subprocess.run(
         ["python", "-m", "alembic", "upgrade", "head"],
         capture_output=True,
         text=True,
-        env={**os.environ, "DATABASE_URL": test_database_url},
+        env={**os.environ, "DATABASE_URL": suite_database_url},
     )
     if result.returncode != 0:
         raise RuntimeError(
@@ -135,6 +154,7 @@ async def setup_infrastructure():
     # Cleanup.
     await close_redis()
     await dispose_engine()
+    await session_lock.release()
 
 
 @pytest.fixture(autouse=True)
