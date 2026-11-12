@@ -47,12 +47,6 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back }),
 }))
 
-// Nothing on this screen reads the diary; mocked wholesale so nothing from
-// that store's own network path evaluates here.
-vi.mock('@/stores/diary', () => ({
-  useDiaryStore: () => ({ refreshFeed: vi.fn() }),
-}))
-
 // A failed show-more tap (i18n:common.showMore) toasts (.vue:onLoadMore) --
 // the toast IS the entire user-facing half of that path, so it has to be a
 // real assertion seam.

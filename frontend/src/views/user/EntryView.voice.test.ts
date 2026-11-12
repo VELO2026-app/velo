@@ -16,10 +16,10 @@
 // TICKS = 8, counted for the deepest chain here -- the dictation-then-save
 // flow: stop -> transcribe (1) -> onTranscript sets editContent (2) ->
 // re-render (3) -> the save button (i18n:ui.save) click -> onSave -> updateEntry ->
-// updateDiaryEntry (4) -> feed.refresh -> loadMore -> listDiaryFeed (5,6) ->
-// updateEntry resumes and re-points selectedEntry (7) -> re-render (8).
-// listDiaryFeed is mocked resolved for the same reason as the main file: every
-// mutation ends in feed.refresh().
+// updateDiaryEntry (4) -> the answer written into the entry's cache, then
+// diaryFeedChanged (no feed held: nothing asked) (5) -> updateEntry resumes (6)
+// -> onSave resumes (7) -> re-render (8). listDiaryFeed is mocked resolved for
+// the same reason as the main file: every mutation ends in diaryFeedChanged().
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'

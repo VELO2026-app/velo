@@ -29,10 +29,17 @@
 // (useDiaryFeed().hasMore). `loadNextPage()` recomputes the cursor from the
 // data itself, so it is right after a write.
 //
+// A failed older page must not leave the entry in error: Colada keeps the
+// pages, but the entry's next refresh (a remount, a filter switched back)
+// would then reload every one of them. The pages shown are still right, so
+// the entry goes back to success and only the caller hears of the failure
+// (keepPagesOnFailure).
+//
 // The unfiltered feed stays in memory for the session (gcTime Infinity), so
 // the diary reopens without a skeleton; a filtered or searched one (an entry
-// per debounced keystroke) goes after Colada's default gcTime. The account
-// scope empties all of it (queries/setup.ts). Diary text is never persisted
+// per debounced keystroke) for FEED_GC_MS after its screen let go -- long
+// enough for a visit to an entry and back. The account scope empties all of
+// it (queries/setup.ts). Diary text is never persisted
 // (composables/persistedCache).
 // =============================================================================
 
@@ -69,6 +76,9 @@ export const DIARY_FEED_PAGE_SIZE = 40
 /** Events per side of a search jump window, and per older page inside it. */
 export const DIARY_JUMP_PAGE_SIZE = 20
 
+/** How long a filtered feed or a jump window stays in memory once no screen reads it (ms). */
+export const FEED_GC_MS = 30 * 60_000
+
 /** The data of a feed entry: the pages loaded so far, newest first, and their cursors. */
 export interface DiaryFeedData {
   pages: DiaryFeedResponse[]
@@ -100,7 +110,7 @@ export const diaryFeedQuery = defineInfiniteQueryOptions((filters: DiaryFeedFilt
     initialPageParam: null as string | null,
     getNextPageParam: (last: DiaryFeedResponse) => last.next_cursor,
     staleTime: Number.POSITIVE_INFINITY,
-    ...(unfiltered ? { gcTime: Number.POSITIVE_INFINITY } : {}),
+    gcTime: unfiltered ? Number.POSITIVE_INFINITY : FEED_GC_MS,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   }
@@ -109,6 +119,32 @@ export const diaryFeedQuery = defineInfiniteQueryOptions((filters: DiaryFeedFilt
 /** Whether the feed's last loaded page says there is an older one. */
 function feedHasMore(data: DiaryFeedData | undefined): boolean {
   return data?.pages.at(-1)?.next_cursor != null
+}
+
+/**
+ * Load the next older page; on failure put the entry back to success with
+ * the pages it holds (see the header), then reject with the error.
+ */
+async function keepPagesOnFailure(
+  queryCache: QueryCache,
+  key: readonly unknown[],
+  loadNextPage: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await loadNextPage()
+  } catch (error) {
+    const entry = queryCache.get(key as Parameters<QueryCache['get']>[0])
+    const data = entry?.state.value.data
+    if (
+      entry &&
+      data !== undefined &&
+      entry.state.value.status === 'error' &&
+      entry.asyncStatus.value === 'idle'
+    ) {
+      queryCache.setEntryState(entry, { data, error: null, status: 'success' })
+    }
+    throw error
+  }
 }
 
 /**
@@ -121,6 +157,7 @@ function feedHasMore(data: DiaryFeedData | undefined): boolean {
  * no stale results -- the placeholder ends with the request.
  */
 export function useDiaryFeed(filters: MaybeRefOrGetter<DiaryFeedFilters>) {
+  const queryCache = useQueryCache()
   const query = useInfiniteQuery(() => ({
     ...diaryFeedQuery(toValue(filters)),
     placeholderData: (previous: DiaryFeedData | undefined) => previous,
@@ -148,7 +185,10 @@ export function useDiaryFeed(filters: MaybeRefOrGetter<DiaryFeedFilters>) {
      * cancelRefetch false: a scroll during a reload waits for it instead of
      * cancelling it.
      */
-    loadMore: () => query.loadNextPage({ throwOnError: true, cancelRefetch: false }),
+    loadMore: () =>
+      keepPagesOnFailure(queryCache, diaryFeedQuery(toValue(filters)).key, () =>
+        query.loadNextPage({ throwOnError: true, cancelRefetch: false }),
+      ),
     /** The answer for the current filters once it settled (joins the request in flight). Never rejects. */
     settled: () => query.refresh(),
     /** Ask again (every loaded page). Never rejects. */
@@ -188,19 +228,30 @@ async function reloadFirstPage(queryCache: QueryCache, entry: UseQueryEntry): Pr
   queryCache.setQueryData<DiaryFeedData>(entry.key, { pages: [page], pageParams: [null] })
 }
 
+/** Bumped by every diaryFeedChanged(): a prefetch asked before it must not write its answer. */
+let feedChanges = 0
+
 /**
  * The diary moved through this app (an entry sent, edited, deleted or
  * restored; a check-in, a feedback, an outside activity, a booking): reload
- * the first page of the feed on screen and of the unfiltered feed, and drop
- * the other filtered feeds -- their next reader loads them fresh. Resolves
- * when the reloads settled; never rejects.
+ * the first page of the feed on screen, of the unfiltered feed and of the
+ * feed under `current` -- the filters the diary screen reads with, which is
+ * off screen while an entry is open over it -- and drop the other filtered
+ * feeds: their next reader loads them fresh. Resolves when the reloads
+ * settled; never rejects.
  */
-export async function diaryFeedChanged(queryCache: QueryCache): Promise<void> {
+export async function diaryFeedChanged(
+  queryCache: QueryCache,
+  current?: DiaryFeedFilters,
+): Promise<void> {
+  feedChanges += 1
+  const currentEntry = current ? queryCache.get(diaryFeedQuery(current).key) : undefined
   const reloads: Promise<void>[] = []
   for (const entry of queryCache.getEntries({ key: keys.diary.feeds() })) {
     const filters = entry.key[3] as DiaryFeedFilters | undefined
     const unfiltered = filters !== undefined && Object.keys(filters).length === 0
-    if (entry.active || (unfiltered && entry.state.value.data !== undefined)) {
+    const held = entry.state.value.data !== undefined
+    if (entry.active || (held && (unfiltered || entry === currentEntry))) {
       reloads.push(reloadFirstPage(queryCache, entry))
     } else {
       queryCache.remove(entry)
@@ -223,8 +274,10 @@ export async function prefetchDiaryFeed(
   if (held && (held.state.value.data !== undefined || held.asyncStatus.value === 'loading')) return
   const scope = useQueryScopeStore()
   const generation = scope.generation()
+  const changes = feedChanges
   const page = await fetchFeedPage(key[3] as DiaryFeedFilters, null)
-  if (scope.generation() !== generation) return
+  // The session ended, or the diary moved meanwhile: this answer predates it.
+  if (scope.generation() !== generation || feedChanges !== changes) return
   // The screen answered first (it may have loaded older pages since): keep that.
   if (queryCache.get(key)?.state.value.data !== undefined) return
   setInfiniteQueryData<DiaryFeedResponse, string | null>(queryCache, key, {
@@ -243,8 +296,10 @@ export async function prefetchDiaryFeed(
 // is in BOTH answers -- mergeJumpWindow dedupes); the next pages go further
 // into the past through the older answer's cursor. The newer side ends at what
 // the window fetched -- the cursor only walks into the past; the search bar's
-// outer x is the way back to the live feed. Asked again on every jump
-// (staleTime 0).
+// outer x is the way back to the live feed. Asked anew on every jump tap
+// (useDiaryJump().forget drops the window a previous tap left), but not on a
+// return from an entry opened inside it: the window is held, like the feed
+// (staleTime Infinity, FEED_GC_MS), and a failed older page keeps it.
 
 /** The event a jump opens the window around. */
 export type DiaryJumpTarget = Pick<DiaryFeedItem, 'id' | 'occurred_at'>
@@ -265,7 +320,8 @@ export const diaryJumpQuery = defineInfiniteQueryOptions((target: DiaryJumpTarge
   },
   initialPageParam: null as string | null,
   getNextPageParam: (last: DiaryFeedResponse) => last.next_cursor,
-  staleTime: 0,
+  staleTime: Number.POSITIVE_INFINITY,
+  gcTime: FEED_GC_MS,
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
 }))
@@ -275,6 +331,7 @@ const NO_JUMP: DiaryJumpTarget = { id: '', occurred_at: '' }
 
 /** The jump window around the target, or nothing while the target is null. */
 export function useDiaryJump(target: MaybeRefOrGetter<DiaryJumpTarget | null>) {
+  const queryCache = useQueryCache()
   const query = useInfiniteQuery(() => {
     const current = toValue(target)
     return { ...diaryJumpQuery(current ?? NO_JUMP), enabled: current !== null }
@@ -296,9 +353,20 @@ export function useDiaryJump(target: MaybeRefOrGetter<DiaryJumpTarget | null>) {
     /** An older page exists. */
     hasMore: computed(() => feedHasMore(query.data.value)),
     /** Load the next older page. Rejects with its error and keeps the window. */
-    loadMore: () => query.loadNextPage({ throwOnError: true, cancelRefetch: false }),
+    loadMore: () => {
+      const current = toValue(target)
+      if (!current) return Promise.resolve()
+      return keepPagesOnFailure(queryCache, diaryJumpQuery(current).key, () =>
+        query.loadNextPage({ throwOnError: true, cancelRefetch: false }),
+      )
+    },
     /** The window's state once its request settled. Never rejects. */
     settled: () => query.refresh(),
+    /** Drop the window a previous tap left around this event, so the next jump asks anew. */
+    forget: (around: DiaryJumpTarget) => {
+      const held = queryCache.get(diaryJumpQuery(around).key)
+      if (held && !held.active) queryCache.remove(held)
+    },
   }
 }
 

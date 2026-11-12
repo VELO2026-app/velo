@@ -124,7 +124,7 @@ export const useDiaryStore = defineStore('diary', () => {
       // flag -- refresh both so the diary feed and dashboard banner update.
       // Not awaited: the check-in is saved, so the «done» screen shows now;
       // the timeline catches up in the background (it never fails the submit).
-      if (gen === generation) void diaryFeedChanged(queryCache)
+      if (gen === generation) void diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.sendCheckin'))
@@ -156,7 +156,7 @@ export const useDiaryStore = defineStore('diary', () => {
       // The feedback is now a feed event and flips the booking's has_feedback
       // flag -- refresh both so the diary feed and dashboard banner update.
       // Not awaited -- see submitCheckin.
-      if (gen === generation) void diaryFeedChanged(queryCache)
+      if (gen === generation) void diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.sendFeedback'))
@@ -224,7 +224,7 @@ export const useDiaryStore = defineStore('diary', () => {
     const gen = generation
     try {
       await createExternalActivity(body)
-      if (gen === generation) await diaryFeedChanged(queryCache)
+      if (gen === generation) await diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.saveEvent'))
@@ -364,7 +364,7 @@ export const useDiaryStore = defineStore('diary', () => {
       keyByEntryId.set(entry.id, p.key)
       p.item = { ...p.item, source_id: entry.id }
       p.status = 'sent'
-      await diaryFeedChanged(queryCache)
+      await diaryFeedChanged(queryCache, feedFilters)
       // The feed now carries the entry under the same row key (or does not
       // show it at all under an active filter): the stand-in has done its job.
       pendingEntries.value = pendingEntries.value.filter((x) => x.key !== p.key)
@@ -437,7 +437,7 @@ export const useDiaryStore = defineStore('diary', () => {
       const entry = await updateDiaryEntry(id, body)
       if (gen !== generation) return { ok: true, error: '', entry }
       queryCache.setQueryData(keys.diary.entry(id), entry)
-      await diaryFeedChanged(queryCache)
+      await diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '', entry }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.update'))
@@ -450,7 +450,7 @@ export const useDiaryStore = defineStore('diary', () => {
     const gen = generation
     try {
       await deleteDiaryEntry(id)
-      if (gen === generation) await diaryFeedChanged(queryCache)
+      if (gen === generation) await diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.delete'))
@@ -466,7 +466,7 @@ export const useDiaryStore = defineStore('diary', () => {
     const gen = generation
     try {
       await restoreDiaryEntry(id)
-      if (gen === generation) await diaryFeedChanged(queryCache)
+      if (gen === generation) await diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.restore'))

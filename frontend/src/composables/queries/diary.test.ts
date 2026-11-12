@@ -284,7 +284,47 @@ describe('diaryFeedChanged: the first page becomes the whole feed', () => {
   })
 })
 
+describe('the feed off screen', () => {
+  it('reloads the feed under the filters the diary reads with, though no screen holds it', async () => {
+    // The diary under a filter, then an entry opened over it (the feed unmounts).
+    filters.categories = ['dreams']
+    vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page(['n1']))
+    mountScreen()
+    await flush()
+    unmountScreen()
+    vi.mocked(diaryApi.listDiaryFeed)
+      .mockClear()
+      .mockResolvedValue(page(['edited']))
+
+    await diaryFeedChanged(useQueryCache(), { categories: ['dreams'] })
+
+    expect(feedData({ categories: ['dreams'] })?.pages).toEqual([page(['edited'])])
+    expect(diaryApi.listDiaryFeed).toHaveBeenCalledWith({ categories: ['dreams'], limit: 40 })
+  })
+})
+
 describe('the feed on screen', () => {
+  it('a failed older page does not make the next visit reload every page', async () => {
+    vi.mocked(diaryApi.listDiaryFeed).mockImplementation(async (params) =>
+      params?.cursor === 'c1' ? page(['n1'], 'c2') : page(['n3', 'n2'], 'c1'),
+    )
+    mountScreen()
+    await flush()
+    await feed.loadMore()
+    vi.mocked(diaryApi.listDiaryFeed).mockRejectedValue(new Error('offline'))
+    await expect(feed.loadMore()).rejects.toThrow('offline')
+    await flush()
+    expect(ids()).toEqual(['n3', 'n2', 'n1'])
+    unmountScreen()
+    vi.mocked(diaryApi.listDiaryFeed).mockClear()
+
+    mountScreen()
+    await flush()
+
+    expect(diaryApi.listDiaryFeed).not.toHaveBeenCalled()
+    expect(ids()).toEqual(['n3', 'n2', 'n1'])
+  })
+
   it('a filter change keeps the previous answer until the new one lands', async () => {
     vi.mocked(diaryApi.listDiaryFeed).mockResolvedValue(page(['n2', 'n1']))
     mountScreen()
@@ -369,6 +409,21 @@ describe('prefetchDiaryFeed', () => {
   })
 })
 
+describe('prefetchDiaryFeed and a change made meanwhile', () => {
+  it('a prefetch asked before the diary moved does not write its older answer', async () => {
+    const prefetched = deferred<DiaryFeedResponse>()
+    vi.mocked(diaryApi.listDiaryFeed).mockReturnValueOnce(prefetched.promise)
+    const prefetch = prefetchDiaryFeed(useQueryCache(), {})
+
+    // A check-in lands while the prefetch is in flight (no feed held yet).
+    await diaryFeedChanged(useQueryCache())
+    prefetched.resolve(page(['before_the_checkin']))
+    await prefetch
+
+    expect(feedData()).toBeUndefined()
+  })
+})
+
 describe('the search jump window', () => {
   it('opens on the merged window around the event, then walks into the past', async () => {
     const at = '2026-07-10T12:00:00Z'
@@ -396,6 +451,51 @@ describe('the search jump window', () => {
     await flush()
     expect(jump.items.value.map((i) => i.id)).toEqual(['w1', 't1', 'o1', 'o2'])
     expect(jump.hasMore.value).toBe(false)
+  })
+})
+
+describe('the search jump window, held', () => {
+  const at = '2026-07-10T12:00:00Z'
+  const target = { id: 't1', occurred_at: at }
+
+  beforeEach(() => {
+    vi.mocked(diaryApi.listDiaryFeed).mockImplementation(async (params) =>
+      params?.date_to || params?.date_from
+        ? { items: [item('t1', at)], next_cursor: null }
+        : page([]),
+    )
+  })
+
+  it('a return from an entry opened inside the window reads it without asking', async () => {
+    jumpTarget.value = target
+    mountScreen()
+    await flush()
+    unmountScreen()
+    vi.mocked(diaryApi.listDiaryFeed).mockClear()
+
+    mountScreen()
+    await flush()
+
+    expect(jump.items.value.map((i) => i.id)).toEqual(['t1'])
+    expect(diaryApi.listDiaryFeed).not.toHaveBeenCalledWith(
+      expect.objectContaining({ date_to: at }),
+    )
+  })
+
+  it('a new tap on the same result asks anew', async () => {
+    mountScreen()
+    await flush()
+    jumpTarget.value = target
+    await flush()
+    jumpTarget.value = null
+    await flush()
+    vi.mocked(diaryApi.listDiaryFeed).mockClear()
+
+    jump.forget(target)
+    jumpTarget.value = target
+    await flush()
+
+    expect(diaryApi.listDiaryFeed).toHaveBeenCalledWith(expect.objectContaining({ date_to: at }))
   })
 })
 

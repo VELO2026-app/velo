@@ -197,6 +197,7 @@ import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
+import { ApiResponseError } from '@/api/client'
 import { diaryEntryQuery } from '@/composables/queries/diary'
 import { practiceDetailQuery } from '@/composables/queries/practices'
 import { screenQueryState } from '@/composables/queries/screenState'
@@ -225,8 +226,19 @@ const entryId = computed(() => String(route.params.id))
 const entryQuery = useQuery(() => diaryEntryQuery(entryId.value))
 const { loading, failed } = screenQueryState(entryQuery)
 const entry = computed(() => entryQuery.data.value ?? null)
+// The entry is gone (deleted elsewhere) or not ours: a copy held from an
+// earlier open must not stay on screen as if editable. Read once the
+// request settled -- a refetch keeps the previous error on the entry.
+const gone = computed(() => {
+  const error = entryQuery.error.value
+  return (
+    entryQuery.asyncStatus.value === 'idle' &&
+    error instanceof ApiResponseError &&
+    (error.status === 404 || error.status === 403)
+  )
+})
 const loadError = computed(() =>
-  failed.value
+  failed.value || gone.value
     ? extractApiError(entryQuery.error.value, t('storeErrors.diary.entryNotFound'))
     : null,
 )
@@ -239,12 +251,21 @@ async function reload(): Promise<void> {
 
 const mode = ref<'view' | 'edit'>('view')
 
+// The route reused for another entry: an edit of the previous one must not
+// be saved into it.
+watch(entryId, () => {
+  mode.value = 'view'
+})
+
 // -- practice header (optional) ---------------------------------------------
 
 const linkedPracticeId = computed(() => entry.value?.practice_id ?? null)
 const practiceQuery = useQuery(() => ({
   ...practiceDetailQuery(linkedPracticeId.value ?? ''),
   enabled: linkedPracticeId.value !== null,
+  // Best-effort header: a practice that answered 403/404 is not asked again
+  // on every return to the app.
+  refetchOnWindowFocus: false,
 }))
 // Best-effort: a missing/forbidden practice degrades to the no-header layout
 // (screen 57).

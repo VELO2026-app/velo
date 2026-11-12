@@ -605,11 +605,12 @@ describe('DiaryFeedView', () => {
       fireSentinel()
       await flush()
 
-      // The failed page leaves the loaded one in place (Colada keeps the data
-      // of an entry in error), and the rung keys on "nothing to show". That
-      // split is what makes the surviving feed structural rather than a guard
-      // the screen has to remember.
-      expect(feedState()?.error).toMatchObject({ message: 'Сеть отвалилась' })
+      // The failed page leaves the loaded one in place, and the entry is not
+      // left in error (its next refresh would reload every page): the rung,
+      // keyed on "nothing to show", is never reached. That split is what makes
+      // the surviving feed structural rather than a guard the screen has to
+      // remember.
+      expect(feedState()?.error).toBeNull()
       expect(feedState()?.data?.pages).toHaveLength(1)
 
       // The user is TOLD, in the screen's own words (the raw reason never

@@ -538,7 +538,7 @@ watch(period, () => {
 // =========================================================================
 
 // Eager-load insights for the visible page -- feeds both the aggregate stats and
-// the inline practice-card badges. loadInsights() skips already-cached ids, so
+// the inline practice-card badges. The reader's load() skips ids already held, so
 // this is idempotent across re-runs and load-more.
 function loadVisibleInsights(): Promise<void[]> {
   return Promise.all(pastPractices.value.map((p) => insightsCache.load(p.id)))

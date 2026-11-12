@@ -119,7 +119,7 @@ function unmount(): void {
 // first page reload, when a feed is held) then a nextTick + autogrow
 // before emitting. Was 8 (bisected against a real failure at 7) before this
 // component wrapped the shared Composer.vue (PROMPT №740): the extra
-// DiaryComposer -> Composer -> handleSend -> diaryStore.createEntry
+// DiaryComposer -> Composer -> handleSend -> diaryStore.sendEntry
 // indirection adds one more microtask hop, so 8 started under-flushing
 // (createdCount stayed 0, confirmed reproduced). Re-bisected: FAILS at 8,
 // PASSES at 9 -- 10 kept as the same one-tick margin the original 8-over-7

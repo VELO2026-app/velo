@@ -772,6 +772,8 @@ async function onSearchCancel(): Promise<void> {
 
 async function onJumpToEntry(item: DiaryFeedItem): Promise<void> {
   if (jump.loading.value) return
+  // A tap asks anew (a return from an entry opened inside the window does not).
+  jump.forget(item)
   diaryStore.jumpToEntry(item)
   const state = await jump.settled()
   // Left meanwhile (the search changed, another result was opened).
@@ -1055,7 +1057,7 @@ async function onComposerCreated(): Promise<void> {
 // FIRST element, reached while scrolling UP, so only the TOP margin matters:
 // ~two screens (1500px) of lead means the older page is in flight long before
 // the reader reaches the seam -- combined with the 40-event pages
-// (stores/diary.ts) the thread effectively never runs out mid-scroll.
+// (composables/queries/diary.ts) the thread effectively never runs out mid-scroll.
 // hasMore/loading guard the lead to one page ahead.
 const topSentinel = chatScroll.observeSentinel(sentinelEl, {
   rootMargin: '1500px 0px 0px 0px',

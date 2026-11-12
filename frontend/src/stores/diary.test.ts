@@ -312,6 +312,29 @@ describe('diary store', () => {
     })
   })
 
+  describe('updateEntry (FE-182)', () => {
+    it('reloads the feed under the active filter, held off screen while the entry is open', async () => {
+      vi.mocked(diaryApi.updateDiaryEntry)
+        .mockReset()
+        .mockResolvedValue({ id: 'e1', content: 'edited' } as never)
+      const store = useDiaryStore()
+      store.setFeedFilters({ categories: ['dreams'] })
+      setInfiniteQueryData(useQueryCache(), keys.diary.feed({ categories: ['dreams'] }), {
+        pages: [feedPage()],
+        pageParams: [null],
+      })
+
+      await store.updateEntry('e1', { content: 'edited' })
+
+      expect(diaryApi.listDiaryFeed).toHaveBeenCalledWith({ categories: ['dreams'], limit: 40 })
+      expect(useQueryCache().get(keys.diary.feed({ categories: ['dreams'] }))).toBeDefined()
+      // ...and the entry screen reads the server's answer.
+      expect(useQueryCache().getQueryData(keys.diary.entry('e1'))).toMatchObject({
+        content: 'edited',
+      })
+    })
+  })
+
   describe('W27: the diary store does NOT reach into the bookings store', () => {
     // The guard on the fix. Before PROMPT №438 both of these fired
     // useBookingsStore().refreshBookings() from inside the store, which was

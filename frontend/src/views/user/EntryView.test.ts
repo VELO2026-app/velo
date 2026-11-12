@@ -116,7 +116,7 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import { PiniaColada, setInfiniteQueryData, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
@@ -141,7 +141,8 @@ vi.mock('@/api/practices')
 const push = vi.fn()
 const replace = vi.fn()
 const back = vi.fn()
-const routeParams: { id: string } = { id: 'e1' }
+// Reactive, like the real route: the screen keys its query on the param.
+const routeParams = reactive<{ id: string }>({ id: 'e1' })
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, replace, back }),
@@ -303,7 +304,7 @@ beforeEach(() => {
   vi.mocked(diaryApi.getDiaryEntry).mockReset().mockResolvedValue(entry())
   vi.mocked(diaryApi.updateDiaryEntry).mockReset().mockResolvedValue(entry())
   vi.mocked(diaryApi.deleteDiaryEntry).mockReset().mockResolvedValue(undefined)
-  // Not decoration -- every mutation ends in feed.refresh(). See the banner.
+  // Not decoration -- every mutation ends in diaryFeedChanged(). See the banner.
   vi.mocked(diaryApi.listDiaryFeed).mockReset().mockResolvedValue(EMPTY_FEED)
   vi.mocked(practicesApi.getPractice).mockReset().mockResolvedValue(practice())
 
@@ -335,6 +336,40 @@ describe('EntryView', () => {
       expect(bodyEl().querySelector('.entry__state')).not.toBeNull()
       expect(bodyEl().querySelector('.entry__card')).toBeNull()
       expect(text()).not.toContain('Не удалось загрузить запись')
+    })
+
+    it('an entry deleted elsewhere shows the rung, not its copy from an earlier open', async () => {
+      // Opened once (the copy stays in the cache), then deleted in another
+      // client: the next open answers 404 while the copy is still held.
+      mount()
+      await flush()
+      app?.unmount()
+      host?.remove()
+      vi.mocked(diaryApi.getDiaryEntry).mockRejectedValue(
+        new ApiResponseError(404, 'Not found', 'not_found'),
+      )
+
+      mount()
+      await flush()
+
+      expect(text()).toContain('Не удалось загрузить запись')
+      expect(bodyEl().querySelector('.entry__card')).toBeNull()
+    })
+
+    it('the route reused for another entry leaves the editor: no edit of A is saved into B', async () => {
+      vi.mocked(diaryApi.getDiaryEntry).mockImplementation(async (id: string) =>
+        entry({ id, content: id === 'e2' ? 'Запись Б' : 'Запись А' }),
+      )
+      mount()
+      await flush()
+      await startEditing()
+      expect(bodyEl().querySelector('textarea')).not.toBeNull()
+
+      routeParams.id = 'e2'
+      await flush()
+
+      expect(bodyEl().querySelector('textarea')).toBeNull()
+      expect(bodyEl().querySelector('.entry__content')?.textContent).toBe('Запись Б')
     })
 
     it('fetches THIS entry by the route id', async () => {
@@ -678,8 +713,8 @@ describe('EntryView', () => {
     })
 
     it("on success it shows the SERVER's entry, not the text that was typed", async () => {
-      // updateEntry re-points selectedEntry at the RESPONSE (stores/diary.ts:301-303),
-      // so the view rung re-renders from the server's record. If the screen echoed
+      // updateEntry writes the RESPONSE into the entry's cache (stores/diary.ts,
+      // keys.diary.entry), so the view rung re-renders from the server's record. If the screen echoed
       // the local ref instead, a backend that normalised or rejected part of the
       // edit would be invisible until reload.
       mount()
@@ -928,9 +963,9 @@ describe('EntryView', () => {
       // does elsewhere. And `close()` only flips `open`, which takes effect on the
       // NEXT render -- so with no tick between the taps the panel and its handler
       // are still live and the second tap genuinely re-enters onDelete. The store
-      // cannot save it either: deleteEntry nulls selectedEntry only AFTER its await
-      // (stores/diary.ts:317-320), long after a second call would have read
-      // `entry.value` and gone.
+      // cannot save it either: deleteEntry holds no in-flight flag, and the entry
+      // stays in its cache after the DELETE -- `entry.value` is still there for a
+      // second call to read.
       //
       // Mutation-verified: removing `|| deleting.value` from .vue:287 turns this
       // back to 2 and fails. Nothing else in the file catches that.
