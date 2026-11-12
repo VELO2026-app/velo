@@ -24,7 +24,11 @@ packages:
 # that must land sooner: add the exact `name@version` to the exclude list below,
 # with a comment saying why and when it can go.
 minimumReleaseAge: 20160
-minimumReleaseAgeExclude: []
+minimumReleaseAgeExclude:
+  # FE-174: owner decision of 2026-11-12 -- take Colada 1.4.9 one day before it
+  # turns 14 days old (published 2026-10-30; matures 2026-11-13). Exact version,
+  # not the package name. Remove this entry after 2026-11-13 (FE-171).
+  - '@pinia/colada@1.4.9'
 
 # pnpm settings (pnpm >= 10 reads config from this file, not package.json).
 # Dependency build-script allowlist; packages not listed stay unexecuted.

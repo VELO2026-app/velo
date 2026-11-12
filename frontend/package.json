@@ -33,7 +33,7 @@
     "e2e:sweep:ci": "playwright test --reporter=github,./e2e/support/crash-reporter.ts"
   },
   "dependencies": {
-    "@pinia/colada": "1.4.8",
+    "@pinia/colada": "1.4.9",
     "@tma.js/sdk-vue": "^1.0.19",
     "@velo/ui": "workspace:*",
     "@vue/devtools-api": "8.2.1",
