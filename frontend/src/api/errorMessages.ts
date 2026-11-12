@@ -45,7 +45,7 @@
 // 4 above plus 9 that arrived after GT-15 without a phrase (audio_invalid,
 // audio_too_large, curator_cannot_cancel_series, delivery_window_empty,
 // recipient_override_not_allowed, speech_not_recognized,
-// transcription_failed, transcription_not_configured,
+// transcription_failed,
 // transcription_unavailable -- recorded in the BE-92 report, not added
 // here). Total table size: 38 (34 + the 2 constant-raised codes below +
 // practice_not_found + validation_error).
@@ -128,6 +128,9 @@ export const ERROR_CODES = [
   'mcp_token_not_found',
   'mcp_token_name_taken',
   'delivery_window_empty',
+  // FE-151: 409 on a practice becoming paid (created paid, or edited from
+  // free to paid) while the instance's «payments» option is off (BE-182).
+  'payments_unavailable',
   'unauthorized',
   'not_found',
   'forbidden',

@@ -162,6 +162,8 @@ import type { SchoolPageResponse } from '@/api/types'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
+import { useQueryCache } from '@pinia/colada'
+import { membershipChanged } from '@/composables/queries/schools'
 import { VButton, VLoader } from '@/components/ui'
 import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
 
@@ -169,6 +171,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const authStore = useAuthStore()
+const queryCache = useQueryCache()
 
 const loading = ref(true)
 const transientError = ref(false)
@@ -213,6 +216,9 @@ async function accept(): Promise<void> {
   try {
     await acceptSchoolMasterOffer(page.value.id)
     toast.success(t('masterScreens.schoolMasterOffer.acceptedToast', { name: page.value.name }))
+    // A new membership: this route sits outside the shells, so the hub is
+    // re-read HERE, before the shell the navigation lands in (FE-88).
+    await membershipChanged(queryCache, 'acceptSchoolMasterOffer')
     void router.replace(schoolRoute(page.value.id))
   } catch (e) {
     if (e instanceof ApiResponseError) {

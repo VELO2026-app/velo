@@ -121,7 +121,7 @@ import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
-import { useBookingsStore } from '@/stores/bookings'
+import { useMyBookings } from '@/composables/queries/bookings'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
@@ -135,7 +135,7 @@ import { MOOD_SCALE_DEFAULT_SCORE } from '@/utils/moodScale'
 const route = useRoute()
 const router = useRouter()
 const practicesStore = usePracticesStore()
-const bookingsStore = useBookingsStore()
+const { bookings, settled: bookingsSettled } = useMyBookings()
 const diaryStore = useDiaryStore()
 const toast = useToast()
 
@@ -167,7 +167,7 @@ const submitted = ref(false)
 // booking list rather than an extra request. Sibling screens diverging is the habit
 // that has bitten this repo four times; matching the shape IS the fix.
 const alreadyGaveFeedback = computed<boolean>(() =>
-  bookingsStore.bookings.some((b) => b.practice_id === practiceId && b.has_feedback),
+  bookings.value.some((b) => b.practice_id === practiceId && b.has_feedback),
 )
 
 /**
@@ -178,12 +178,11 @@ const alreadyGaveFeedback = computed<boolean>(() =>
  * guess, then says whether the feedback lands.
  */
 type FeedbackGate = 'loading' | 'open' | 'waiting' | 'not_attended' | 'cancelled'
-/** Set once the booking list has been fetched on mount -- until then the
- * gate cannot know, and neither a form nor a verdict is shown. */
-const bookingsReady = ref(false)
 const feedbackGate = computed<FeedbackGate>(() => {
-  if (!bookingsReady.value) return 'loading'
-  const ofPractice = bookingsStore.bookings.filter((b) => b.practice_id === practiceId)
+  // Until the booking list answered, the gate cannot know: neither a form nor
+  // a verdict. A failed list falls back to the form and the server judges.
+  if (!bookingsSettled.value) return 'loading'
+  const ofPractice = bookings.value.filter((b) => b.practice_id === practiceId)
   const live = ofPractice.find((b) => b.status !== 'cancelled')
   if (live) {
     if (live.status === 'attended') return 'open'
@@ -208,9 +207,8 @@ async function onSubmit(): Promise<void> {
       /* silent fallback */
     }
     submitted.value = true
-    // Refresh bookings so `has_feedback` is up to date this session -- the
-    // dashboard feedback banner and the practice-detail button read it.
-    void bookingsStore.refreshBookings()
+    // `has_feedback` (the dashboard banner, the practice-detail button) comes
+    // back with the booking keys the submit made stale (INVALIDATES.submitFeedback).
   } else {
     toast.error(result.error)
   }
@@ -243,31 +241,21 @@ function loadPractice(): void {
   void practicesStore.fetchPractice(practiceId)
 }
 
-// If the flag flips while the form is open -- another screen refreshes the list,
-// or the post-submit refreshBookings lands -- swap to the success screen rather
-// than leave a live form over a review that already exists. Mirrors CheckinView:216.
-watch(alreadyGaveFeedback, (done) => {
-  if (done) submitted.value = true
-})
+// If the flag is set -- already in the cached list, or flipped while the form
+// is open (another screen's refetch, the post-submit invalidation) -- swap to
+// the success screen rather than leave a live form over a review that already
+// exists. Mirrors CheckinView.
+watch(
+  alreadyGaveFeedback,
+  (done) => {
+    if (done) submitted.value = true
+  },
+  { immediate: true },
+)
 
-onMounted(async () => {
+onMounted(() => {
   if (practicesStore.selected?.id !== practiceId) {
     loadPractice()
-  }
-  // Ensure bookings are loaded so `has_feedback` is available -- this screen did
-  // not load them at all before, which is why it had no gate to build on.
-  // fetchMyBookings is a no-op when the list is already populated (arriving from
-  // the dashboard); on a direct deep-link it performs the initial load
-  // (bookings.ts:132). Mirrors CheckinView:234.
-  try {
-    await bookingsStore.fetchMyBookings()
-  } finally {
-    // A failed fetch leaves the list as it was; the gate then falls back to
-    // the form and the server judges, exactly as before F4.
-    bookingsReady.value = true
-  }
-  if (alreadyGaveFeedback.value) {
-    submitted.value = true
   }
 })
 </script>

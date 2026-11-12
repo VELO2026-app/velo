@@ -1,0 +1,391 @@
+// =============================================================================
+// VELO Frontend -- the cancel-booking mutation (FE-157 4F pilot)
+// =============================================================================
+//
+// The review finding this pins: cancelling refreshed only the bookings list,
+// so the dashboard's upcoming list, the practice's seats and the calendar week
+// went on showing the cancelled booking. useCancelBooking now refreshes every
+// holder of that data: the Colada keys of INVALIDATES.cancelBooking and,
+// until they move to Colada, the legacy stores.
+//
+// The legacy stores are mocked (their own refresh logic has its own tests);
+// Colada is real, so "stale" and "refetched" are
+// observed on the caches themselves. Covered from the old store test
+// (stores/bookings.test.ts, cancelBooking): the API call, the list refresh,
+// the diary refresh, no side effects on failure.
+// =============================================================================
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createApp, defineComponent, h, nextTick, type App } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada, useQuery, useQueryCache, type QueryCache } from '@pinia/colada'
+import { coladaOptions, useQueryScopeStore } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
+import { schoolFeedQuery } from '@/composables/queries/schools'
+import {
+  useMyBookings,
+  useCancelBooking,
+  useConfirmWaitlist,
+  usePurchaseBooking,
+  type CancelBookingVars,
+  type ConfirmWaitlistVars,
+  type PurchaseBookingVars,
+} from '@/composables/queries/bookings'
+import { ApiResponseError } from '@/api/client'
+import * as bookingsApi from '@/api/bookings'
+import * as schoolsApi from '@/api/schools'
+import * as waitlistApi from '@/api/waitlist'
+import type { PracticeResponse } from '@/api/types'
+
+vi.mock('@/api/bookings')
+vi.mock('@/api/schools')
+vi.mock('@/api/waitlist')
+
+const stores = vi.hoisted(() => ({
+  practices: { selected: null as { id: string } | null, fetchPractice: vi.fn() },
+  balance: { refresh: vi.fn() },
+}))
+vi.mock('@/stores/practices', () => ({ usePracticesStore: () => stores.practices }))
+// The diary timeline's own reload (composables/queries/diary.ts): which feed
+// entries it reloads is diary.test.ts's business; here, that a booking calls it.
+const diaryFeedChanged = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/diary', () => ({ diaryFeedChanged }))
+vi.mock('@/stores/balance', () => ({ useBalanceStore: () => stores.balance }))
+// The filters the diary screen reads with: handed to diaryFeedChanged so the
+// feed under them is kept while the diary is on another tab.
+const diaryFilters = vi.hoisted(() => ({ categories: ['dreams'] }))
+vi.mock('@/stores/diary', () => ({ useDiaryStore: () => ({ feedFilters: diaryFilters }) }))
+
+/** One page of `GET /bookings/me`. */
+function bookingsPage(items: unknown[] = []) {
+  return { items, total: items.length, limit: 20, offset: 0 } as never
+}
+
+const VARS: CancelBookingVars = { bookingId: 'b7', practiceId: 'p1' }
+const practice = { id: 'p1' } as PracticeResponse
+
+let app: App | null = null
+let cancel: (vars: CancelBookingVars) => Promise<unknown>
+let purchase: (vars: PurchaseBookingVars) => Promise<unknown>
+let confirmSpot: (vars: ConfirmWaitlistVars) => Promise<unknown>
+let queryCache: QueryCache
+
+/** A screen holding the school feed on screen and the cancel mutation. */
+const Screen = defineComponent({
+  setup() {
+    useQuery(() => schoolFeedQuery({ schoolId: 'g1', limit: 5 }))
+    // The bookings list on screen (PracticeDetailView derives its cancel control from it).
+    useMyBookings()
+    cancel = useCancelBooking().mutateAsync
+    purchase = usePurchaseBooking().mutateAsync
+    confirmSpot = useConfirmWaitlist().mutateAsync
+    queryCache = useQueryCache()
+    return () => h('div')
+  },
+})
+
+async function flush(): Promise<void> {
+  for (let i = 0; i < 4; i++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+/** `when` of an entry: 0 once invalidated (entries written by setQueryData carry no staleTime). */
+function when(key: readonly unknown[]): number | undefined {
+  return queryCache.get(key as Parameters<QueryCache['get']>[0])?.when
+}
+
+beforeEach(async () => {
+  vi.mocked(bookingsApi.cancelBooking).mockReset().mockResolvedValue(undefined)
+  vi.mocked(bookingsApi.purchasePractice)
+    .mockReset()
+    .mockResolvedValue({} as never)
+  vi.mocked(bookingsApi.createBooking)
+    .mockReset()
+    .mockResolvedValue({} as never)
+  vi.mocked(waitlistApi.confirmWaitlist)
+    .mockReset()
+    .mockResolvedValue({} as never)
+  vi.mocked(schoolsApi.getSchoolPractices)
+    .mockReset()
+    .mockResolvedValue({ items: [practice], total: 1, limit: 5, offset: 0 })
+  vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(bookingsPage())
+  stores.practices.selected = { id: 'p1' }
+  stores.practices.fetchPractice.mockReset().mockResolvedValue(undefined)
+  diaryFeedChanged.mockReset().mockResolvedValue(undefined)
+  stores.balance.refresh.mockReset().mockResolvedValue(undefined)
+
+  app = createApp(Screen).use(createPinia()).use(PiniaColada, coladaOptions)
+  app.mount(document.createElement('div'))
+  await flush()
+  // Off screen: another school's feed, a bookings entry, and the school page
+  // (a cancellation does not change it).
+  queryCache.setQueryData(keys.practices.schoolFeed('g2', 5), [practice])
+  queryCache.setQueryData(keys.bookings.upcoming(), [])
+  queryCache.setQueryData(keys.schools.detail('g1'), { name: 'School' })
+  queryCache.setQueryData(keys.practices.detail('p1'), practice)
+})
+
+afterEach(() => {
+  app?.unmount()
+  app = null
+})
+
+describe('useCancelBooking -- success', () => {
+  it('cancels the booking, then refetches the bookings list on screen before it resolves', async () => {
+    expect(bookingsApi.getMyBookings).toHaveBeenCalledTimes(1)
+    let releaseList!: () => void
+    vi.mocked(bookingsApi.getMyBookings).mockReturnValue(
+      new Promise((resolve) => {
+        releaseList = () => resolve(bookingsPage())
+      }),
+    )
+    let settled = false
+    const done = cancel(VARS).then(() => {
+      settled = true
+    })
+    await flush()
+
+    expect(bookingsApi.cancelBooking).toHaveBeenCalledWith('b7')
+    expect(bookingsApi.getMyBookings).toHaveBeenCalledTimes(2)
+    // The screen's cancel control derives from that list: no second tap.
+    expect(settled).toBe(false)
+    releaseList()
+    await done
+    expect(settled).toBe(true)
+  })
+
+  it('waits for the bookings list even when another refetch of the map fails first', async () => {
+    let releaseList!: () => void
+    vi.mocked(bookingsApi.getMyBookings).mockReturnValue(
+      new Promise((resolve) => {
+        releaseList = () => resolve(bookingsPage())
+      }),
+    )
+    // The school feed on screen (practices.root()) fails at once.
+    vi.mocked(schoolsApi.getSchoolPractices).mockRejectedValue(new Error('offline'))
+    let settled = false
+    const done = cancel(VARS).then(() => {
+      settled = true
+    })
+    await flush()
+
+    expect(settled).toBe(false)
+    releaseList()
+    await done
+    expect(settled).toBe(true)
+  })
+
+  it('invalidates every Colada key of the map: the feed on screen refetches, the rest go stale', async () => {
+    const feedOnScreen = keys.practices.schoolFeed('g1', 5)
+    expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
+    const pageAt = when(keys.schools.detail('g1'))
+
+    await cancel(VARS)
+    await flush()
+
+    // keys.practices.root(): the active feed refetched...
+    expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(2)
+    expect(queryCache.get(feedOnScreen)?.state.value.status).toBe('success')
+    // ...the feed off screen is stale until its screen reads it.
+    expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
+    // keys.bookings.root()
+    expect(when(keys.bookings.upcoming())).toBe(0)
+    // Not in the map: untouched.
+    expect(when(keys.schools.detail('g1'))).toBe(pageAt)
+  })
+
+  it('refreshes the legacy holders (practice detail, balance) and the diary feed', async () => {
+    await cancel(VARS)
+
+    expect(stores.practices.fetchPractice).toHaveBeenCalledWith('p1')
+    expect(when(keys.practices.detail('p1'))).toBe(0)
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache, diaryFilters)
+  })
+
+  it('re-reads the profile at once, so a refund shows in the balance', async () => {
+    await cancel(VARS)
+
+    expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the practice detail alone when it shows another practice', async () => {
+    stores.practices.selected = { id: 'p9' }
+
+    await cancel(VARS)
+
+    expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
+    // The cached detail still goes stale: the next open refetches it.
+    expect(when(keys.practices.detail('p1'))).toBe(0)
+  })
+})
+
+describe('useCancelBooking -- the session ends while the DELETE is in flight', () => {
+  it('refreshes nothing on the reset stores, and still resolves', async () => {
+    let answer!: () => void
+    vi.mocked(bookingsApi.cancelBooking).mockReturnValue(
+      new Promise<undefined>((resolve) => {
+        answer = () => resolve(undefined)
+      }),
+    )
+    const done = cancel(VARS)
+    await flush()
+
+    // Logout / 401: resetAccountScope calls every member's $reset.
+    useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
+    answer()
+    await done
+    await flush()
+
+    expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
+    expect(diaryFeedChanged).not.toHaveBeenCalled()
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
+    expect(when(keys.practices.detail('p1'))).not.toBe(0)
+  })
+})
+
+describe('useCancelBooking -- failure', () => {
+  it('rejects with the API error and refreshes nothing', async () => {
+    const error = new ApiResponseError(400, 'practice completed', 'practice_completed')
+    vi.mocked(bookingsApi.cancelBooking).mockRejectedValue(error)
+
+    await expect(cancel(VARS)).rejects.toBe(error)
+    await flush()
+
+    expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
+    expect(diaryFeedChanged).not.toHaveBeenCalled()
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
+    expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
+    expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
+    expect(when(keys.practices.detail('p1'))).not.toBe(0)
+  })
+})
+
+// =============================================================================
+// Booking appears: purchase and waitlist confirmation (FE-166 step 1)
+// =============================================================================
+
+const BUY: PurchaseBookingVars = { practiceId: 'p1', promoCode: 'SPRING', viaPurchase: true }
+const SPOT: ConfirmWaitlistVars = { waitlistId: 'w1' }
+
+describe('usePurchaseBooking', () => {
+  it('buys through the purchase endpoint with the promo code', async () => {
+    await purchase(BUY)
+
+    expect(bookingsApi.purchasePractice).toHaveBeenCalledWith('p1', 'SPRING')
+    expect(bookingsApi.createBooking).not.toHaveBeenCalled()
+  })
+
+  it('books through POST /bookings when payments are off (FE-151)', async () => {
+    await purchase({ practiceId: 'p1', viaPurchase: false })
+
+    expect(bookingsApi.createBooking).toHaveBeenCalledWith('p1')
+    expect(bookingsApi.purchasePractice).not.toHaveBeenCalled()
+  })
+
+  it('invalidates practices and bookings: the feed on screen refetches with the new seat', async () => {
+    const pageAt = when(keys.schools.detail('g1'))
+
+    await purchase(BUY)
+    await flush()
+
+    expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(2)
+    expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
+    expect(when(keys.bookings.upcoming())).toBe(0)
+    // A booking makes nobody a school member: the school page stays.
+    expect(when(keys.schools.detail('g1'))).toBe(pageAt)
+  })
+
+  it('reloads the diary feed (the booking is a timeline event)', async () => {
+    await purchase(BUY)
+
+    expect(when(keys.practices.detail('p1'))).toBe(0)
+    // The booking projects a "booking_confirmed" event onto the timeline.
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache, diaryFilters)
+    // The practice on screen is left to the screen that loads it on mount.
+    expect(stores.practices.fetchPractice).not.toHaveBeenCalled()
+    // The popup re-reads the balance itself, on success and failure alike.
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
+  })
+
+  it('resolves without waiting for the refreshes (the toast and navigation do not wait)', async () => {
+    vi.mocked(bookingsApi.getMyBookings).mockReturnValue(new Promise(() => {}))
+
+    await expect(purchase(BUY)).resolves.toBeUndefined()
+  })
+
+  it('rejects with the API error and refreshes nothing', async () => {
+    const error = new ApiResponseError(400, 'full', 'practice_full')
+    vi.mocked(bookingsApi.purchasePractice).mockRejectedValue(error)
+
+    await expect(purchase(BUY)).rejects.toBe(error)
+    await flush()
+
+    expect(schoolsApi.getSchoolPractices).toHaveBeenCalledTimes(1)
+    expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
+  })
+
+  it('refreshes nothing when the session ended while the purchase was in flight', async () => {
+    let answer!: () => void
+    vi.mocked(bookingsApi.purchasePractice).mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve({} as never)
+      }),
+    )
+    const done = purchase(BUY)
+    await flush()
+
+    useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
+    answer()
+    await done
+    await flush()
+
+    expect(when(keys.practices.schoolFeed('g2', 5))).not.toBe(0)
+  })
+})
+
+describe('useConfirmWaitlist', () => {
+  it('confirms the spot, invalidates practices and bookings, refreshes the practice holders', async () => {
+    const pageAt = when(keys.schools.detail('g1'))
+
+    await confirmSpot(SPOT)
+    await flush()
+
+    expect(waitlistApi.confirmWaitlist).toHaveBeenCalledWith('w1')
+    expect(when(keys.practices.schoolFeed('g2', 5))).toBe(0)
+    expect(when(keys.bookings.upcoming())).toBe(0)
+    expect(when(keys.schools.detail('g1'))).toBe(pageAt)
+    expect(diaryFeedChanged).toHaveBeenCalledExactlyOnceWith(queryCache, diaryFilters)
+    // The confirmation charges the balance.
+    expect(stores.balance.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes nothing when the session ended while the confirmation was in flight', async () => {
+    let answer!: () => void
+    vi.mocked(waitlistApi.confirmWaitlist).mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve({} as never)
+      }),
+    )
+    const done = confirmSpot(SPOT)
+    await flush()
+
+    useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
+    answer()
+    await done
+    await flush()
+
+    expect(diaryFeedChanged).not.toHaveBeenCalled()
+    expect(stores.balance.refresh).not.toHaveBeenCalled()
+    expect(when(keys.bookings.upcoming())).not.toBe(0)
+  })
+
+  it('rejects with the API error and refreshes nothing', async () => {
+    const error = new ApiResponseError(400, 'expired', 'waitlist_expired')
+    vi.mocked(waitlistApi.confirmWaitlist).mockRejectedValue(error)
+
+    await expect(confirmSpot(SPOT)).rejects.toBe(error)
+    await flush()
+
+    expect(when(keys.bookings.upcoming())).not.toBe(0)
+  })
+})

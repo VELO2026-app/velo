@@ -59,4 +59,39 @@ describe('extractApiError', () => {
     const result = extractApiError('a raw string throw', 'fallback message')
     expect(result).toBe('fallback message')
   })
+
+  describe('trace code suffix', () => {
+    /** An error as api/client.ts builds it from a response with X-Request-ID. */
+    function traced(status: number, code: string, traceId: string | null): ApiResponseError {
+      const e = new ApiResponseError(status, 'raw backend detail', code)
+      e.traceId = traceId
+      return e
+    }
+
+    it('appends the trace code to a catalog phrase', () => {
+      const result = extractApiError(
+        traced(400, 'insufficient_balance', 'a1b2c3d4e5f6'),
+        'fallback',
+      )
+      expect(result).toBe(`${errorMessage('insufficient_balance')} · код a1b2c3`)
+    })
+
+    it('appends the trace code to the caller fallback for an unmapped code', () => {
+      const result = extractApiError(
+        traced(500, 'some_unmapped_future_code', 'a1b2c3d4e5f6'),
+        'fallback',
+      )
+      expect(result).toBe('fallback · код a1b2c3')
+    })
+
+    it('adds nothing when the response carried no trace id', () => {
+      const result = extractApiError(traced(500, 'some_unmapped_future_code', null), 'fallback')
+      expect(result).toBe('fallback')
+    })
+
+    it('reads the trace id from the error, not from the text of the detail', () => {
+      const e = new ApiResponseError(500, 'raw · код zzzzzz', 'some_unmapped_future_code')
+      expect(extractApiError(e, 'fallback')).toBe('fallback')
+    })
+  })
 })

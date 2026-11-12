@@ -24,6 +24,13 @@ import { hasErrorMessage } from '@/api/errorMessages'
 
 export { errorMessage } from '@/api/errorMessages'
 
+/** Append the trace code (when the error carries one) to a user-facing message. */
+function withTrace(message: string, e: ApiResponseError): string {
+  // The same six-character prefix api/client.ts folds into `detail`.
+  const code = e.traceId?.slice(0, 6)
+  return code ? i18n.global.t('common.traceSuffix', { message, code }) : message
+}
+
 /**
  * Extract a human-readable error message from a caught exception.
  *
@@ -36,15 +43,19 @@ export { errorMessage } from '@/api/errorMessages'
  * caller's own fallback, which is already Russian at every existing call
  * site -- so nothing downstream needed to change to stop leaking English.
  *
+ * The backend trace code, when the response carried one, is appended through
+ * i18n:common.traceSuffix so support can find the request in the box log.
+ *
  * @returns For an ApiResponseError whose code has a catalog entry (locales
  *   errors.*), that phrase -- if a code has a phrase, it wins; anything else
  *   (an unmapped code, or not an ApiResponseError at all) returns the
- *   caller-provided fallback string.
+ *   caller-provided fallback string. Either result carries the trace suffix
+ *   when the error has a trace code.
  */
 export function extractApiError(e: unknown, fallback: string): string {
   if (e instanceof ApiResponseError) {
     const key = `errors.${e.code}`
-    if (hasErrorMessage(e.code)) return i18n.global.t(key)
+    return withTrace(hasErrorMessage(e.code) ? i18n.global.t(key) : fallback, e)
   }
   return fallback
 }

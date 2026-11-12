@@ -79,6 +79,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
+import { useMyBookings, useSkipCheckin } from '@/composables/queries/bookings'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
@@ -94,6 +95,8 @@ const route = useRoute()
 const router = useRouter()
 const practicesStore = usePracticesStore()
 const bookingsStore = useBookingsStore()
+const { bookings } = useMyBookings()
+const skipCheckin = useSkipCheckin()
 const diaryStore = useDiaryStore()
 const toast = useToast()
 
@@ -144,7 +147,7 @@ const windowClosed = computed<boolean>(() => {
 // instead of an extra request. When true, the form is replaced by the success
 // screen and submit is blocked.
 const alreadyCheckedIn = computed<boolean>(() =>
-  bookingsStore.bookings.some((b) => b.practice_id === practiceId && b.has_checkin),
+  bookings.value.some((b) => b.practice_id === practiceId && b.has_checkin),
 )
 
 // SW4: viewer's own profile timezone, matching flow siblings
@@ -168,11 +171,9 @@ async function onSubmit(): Promise<void> {
       /* silent fallback */
     }
     submitted.value = true
-    // Refresh bookings so `has_checkin` is up to date this session: the
-    // dashboard banner, the dashboard "Check-in" button and the practice-detail
-    // button all read it. Without this they keep offering a check-in until a
-    // full reload (fetchMyBookings is a no-op while the list is non-empty).
-    void bookingsStore.refreshBookings()
+    // `has_checkin` (the dashboard banner and button, the practice-detail
+    // button) comes back with the booking keys: the submit made them stale
+    // (INVALIDATES.submitCheckin), and the lists on screen refetch.
   } else {
     toast.error(closedPracticeMessage(result.code) ?? result.error)
   }
@@ -206,12 +207,12 @@ function onSkip(): void {
   // session, so navigation feels immediate.
   bookingsStore.dismissCheckin(practiceId)
   // Persist the skip (B2) so the prompt stays hidden across sessions/devices.
-  // Fire-and-forget: the booking is in the store (loaded for has_checkin); if
+  // Fire-and-forget: the booking is in the list (loaded for has_checkin); if
   // it is missing or the request fails, the session dismiss above still hides
   // the banner this session.
-  const booking = bookingsStore.bookings.find((b) => b.practice_id === practiceId)
+  const booking = bookings.value.find((b) => b.practice_id === practiceId)
   if (booking) {
-    void bookingsStore.skipCheckin(booking.id)
+    skipCheckin.mutateAsync(booking.id).catch(() => undefined)
   }
   toast.info(t('user.screens.checkin.toast.skipped'))
   void router.push({ name: 'user-dashboard' })
@@ -236,9 +237,15 @@ function goToPracticeLive(): void {
 // If the user has already checked in for this booking, show the success
 // screen straight away (hard one-time rule) instead of an editable form.
 // Skip while the user is mid-success from a fresh submit this session.
-watch(alreadyCheckedIn, (done) => {
-  if (done) submitted.value = true
-})
+watch(
+  alreadyCheckedIn,
+  (done) => {
+    if (done) submitted.value = true
+  },
+  // The bookings list may already be in the cache (arriving from the
+  // dashboard), or land later (a deep link) -- both cases end here.
+  { immediate: true },
+)
 
 // Named so the error rung's retry button (i18n:common.retry) can re-run exactly what onMounted ran.
 // Unconditional: the guard below is a cache check for the mount path, but a retry
@@ -247,16 +254,9 @@ function loadPractice(): void {
   void practicesStore.fetchPractice(practiceId)
 }
 
-onMounted(async () => {
+onMounted(() => {
   if (practicesStore.selected?.id !== practiceId) {
     loadPractice()
-  }
-  // Ensure bookings are loaded so `has_checkin` is available. fetchMyBookings
-  // is a no-op when the list is already populated (e.g. arriving from the
-  // dashboard); on a direct deep-link it performs the initial load.
-  await bookingsStore.fetchMyBookings()
-  if (alreadyCheckedIn.value) {
-    submitted.value = true
   }
   tickHandle = setInterval(() => {
     nowMs.value = Date.now()

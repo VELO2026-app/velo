@@ -1,13 +1,45 @@
 # =============================================================================
 # VELO CI — the deterministic gate (factory Phase 1, docs/ai-dev-factory-tz.md §8.4)
 #
-# Two jobs, no agents, no judgment:
-#   frontend    — the FE-73 zero-warning budget + prettier + vitest + vue-tsc
-#                 build, mirroring the pre-push hook (closes --no-verify).
-#   drift-check — regenerate frontend/src/api/generated.ts from the app's own
-#                 OpenAPI schema and fail on any diff. Read-only w.r.t. the
-#                 backend. The generator is deterministic by contract
-#                 (backend/scripts/generate_ts_types.py).
+# No agents, no judgment. Jobs (FE-157 s1: the former single `frontend` job is
+# split so the pieces run in parallel; every step it had is kept, see below):
+#   scope        — classifies the PR diff, sizes the jobs below.
+#   lint         — the FE-73 zero-warning budget (eslint over the app AND
+#                  packages/velo-ui; its cache is reused only for identical
+#                  lint inputs) + the other lint gates + prettier, both
+#                  packages. Closes --no-verify past the pre-commit
+#                  lint-staged pass.
+#   test         — vue-tsc typecheck + vitest of the whole workspace
+#                  (frontend with v8 coverage + the coverage ratchet, then
+#                  @velo/ui).
+#   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
+#                  vue-tsc + vite build with the FE-153 build-log gate.
+#   e2e          — Playwright smoke scenarios on the golden build served by
+#                  `vite preview`, API mocked (frontend/e2e/); Chromium cached.
+#                  Every test runs under the crash detector (FE-161).
+#   e2e-stack    — FE-161: the sweep -- every route x role on a REAL backend
+#                  seeded with the `e2e` profile (.github/workflows/e2e-stack.yml,
+#                  which also runs nightly on test with WebKit). Advisory
+#                  during burn-in, see the job.
+#   visual       — FE-162: key screens of the head and the base build from
+#                  recorded API answers, pixel-compared; informational, red
+#                  only for a PR labeled `no-visual-change` (see the job).
+#   matrix-plan, matrix, matrix-gate
+#                — the whitelabel build matrix (FE-114, FE-152) fanned out one
+#                  runner per cell (`build-matrix.mjs --cell`); matrix-gate
+#                  is the fan-in (invariant d spans cells) and the one check
+#                  to require.
+#   image        — FE-159: docker build of frontend/Dockerfile (gha layer
+#                  cache, never pushed) + the image smoke
+#                  (.github/scripts/docker-smoke.mjs): /config.json rendered
+#                  from the env under primer.yaml names, no brand, no ${...};
+#                  / 200; /health and /ready 404; manifest lang of the
+#                  instance. Catches what only the machine used to see.
+#                  Runs only when scope's `docker` output says so.
+#   drift-check  — regenerate frontend/src/api/generated.ts from the app's own
+#                  OpenAPI schema and fail on any diff. Read-only w.r.t. the
+#                  backend. The generator is deterministic by contract
+#                  (backend/scripts/generate_ts_types.py).
 #
 # The BACKEND lint gate (ruff) is deliberately absent: the backend is
 # owned outside this contour — first CI run measured 383 ruff errors at the
@@ -17,8 +49,26 @@
 # runs in its own workflow, backend-tests.yml (BE-197); on test the stand
 # runs it on every rollout.
 #
-# Toolchain pins: pnpm 12.4.2 (mirrors frontend/package.json `packageManager`);
-# python 3.12 in the drift job keeps generated.ts stable.
+# Scope (per PR type): a `scope` job classifies the PR's diff
+# (.github/scripts/ci-scope.mjs) and the jobs below size themselves:
+#   docs-only PR            -> everything skipped (green in seconds)
+#   comment-only code edits -> lint (lint + format) only
+#   backend/**              -> drift; frontend jobs skipped unless touched too
+#   anything else           -> the full gate
+#   + image only when the PR touches what the image build reads
+#     (Dockerfile, frontend/nginx*, editions.json, lockfile, workspace
+#     manifests, .dockerignore) or the gate itself
+# Pushes to test always run the full gate -- the trunk is the backstop.
+# Skipped jobs report "skipped", which satisfies a required status check.
+#
+# Runs are cancelled only for pull requests (a newer push supersedes the old
+# one). Pushes to test group by commit sha: in a shared group GitHub would
+# still drop a PENDING trunk run when the next push queues, so a commit in a
+# burst of merges would get no verdict.
+#
+# Toolchain pins: pnpm 12.4.2 (mirrors the ROOT package.json `packageManager`,
+# the workspace root since FE-116); python 3.12 in the drift job keeps
+# generated.ts stable.
 # =============================================================================
 name: CI
 
@@ -27,55 +77,530 @@ on:
     branches: [test, deploy-machine]
   pull_request:
     branches: [test, deploy-machine]
+    # labeled/unlabeled: FE-162 -- a `visual` / `no-visual-change` label put on
+    # (or taken off) an open PR re-runs the visual job. Nothing else reacts to
+    # them: `scope` is skipped on those events, and every other job needs it.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A label event gets its own group: it must not cancel the PR's gate run.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && '-label' || '' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  frontend:
-    name: frontend — lint / test / build
+  scope:
+    name: scope
+    if: github.event.action != 'labeled' && github.event.action != 'unlabeled'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ steps.scope.outputs.frontend || 'full' }}
+      drift: ${{ steps.scope.outputs.drift || 'true' }}
+      docker: ${{ steps.scope.outputs.docker || 'true' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
         with:
-          # Explicit: the action reads `packageManager` from a root package.json,
-          # and ours lives in frontend/ — see the failed first run.
+          # The PR merge commit + its first parent (the base tip): the diff
+          # between them is exactly what the PR contributes.
+          fetch-depth: 2
+
+      - name: Classify the PR diff
+        id: scope
+        if: github.event_name == 'pull_request'
+        run: node .github/scripts/ci-scope.mjs HEAD^1 HEAD
+
+  lint:
+    name: lint — eslint budget / format
+    needs: scope
+    if: needs.scope.outputs.frontend != 'skip'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          # Explicit version: the action's packageManager lookup is a
+          # convenience, not a guarantee — see the failed first run.
           version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # lint-budget.mjs writes the ESLint caches here (content strategy, so a
+      # fresh checkout's mtimes do not matter). EXACT key over every lint
+      # input, no restore-keys fallback: ESLint invalidates an entry only when
+      # that file or the config changes, while the type-aware rules (no-unsafe-*,
+      # no-floating-promises...) read types from OTHER files -- a cache carried
+      # across a code change could pass a file a cold run fails. The cache
+      # therefore only saves re-runs and runs whose lint inputs are unchanged.
+      - name: Restore ESLint cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            frontend/node_modules/.cache/eslint
+            packages/velo-ui/node_modules/.cache/eslint
+          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'frontend/eslint.config.js', 'packages/velo-ui/eslint.config.js', 'frontend/tsconfig*.json', 'packages/velo-ui/tsconfig*.json', 'frontend/src/**', 'frontend/scripts/**', 'frontend/e2e/**', 'frontend/playwright.config.ts', 'frontend/vite.config.ts', 'frontend/vitest.config.ts', 'packages/velo-ui/src/**') }}
+
+      - name: Lint (zero-warning budget; covers packages/ via lint-budget)
+        run: pnpm -C frontend lint
+
+      - name: Format check
+        run: pnpm -C frontend format:check && pnpm -C packages/velo-ui format:check
+
+  test:
+    name: test — typecheck / vitest (+ @velo/ui)
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (vue-tsc)
+        run: pnpm -C frontend typecheck
+
+      # FE-157 5A.1: the frontend suite runs with v8 coverage (one pass, not
+      # two); the ratchet (frontend/coverage-budget.json) fails below the
+      # floors and puts the table in the step summary.
+      - name: Tests + coverage (frontend)
+        run: pnpm -C frontend test:coverage
+
+      - name: Coverage ratchet
+        run: pnpm -C frontend coverage:budget
+
+      - name: Tests (@velo/ui)
+        run: pnpm -C packages/velo-ui test
+
+  build:
+    name: build — @velo/ui / app + build-log gate
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build @velo/ui (vite lib + vue-tsc dts)
+        run: pnpm -C packages/velo-ui build
+
+      # FE-153: the build log is gated too -- a cyclic cross-chunk re-export
+      # (broken chunk execution order) or an undefined VITE_ html placeholder
+      # fails the job (rules: frontend/scripts/lib/build-log-gate.mjs).
+      # pipefail is explicit: a step without `shell:` runs as `bash -e`,
+      # where `build | tee` would take tee's exit 0 and hide a failed build.
+      - name: Build (vue-tsc + vite) + build-log gate
+        run: |
+          set -o pipefail
+          pnpm -C frontend build 2>&1 | tee "$RUNNER_TEMP/frontend-build.log"
+          node frontend/scripts/build-log-gate.mjs "$RUNNER_TEMP/frontend-build.log"
+
+      # FE-157 2E: size budget (frontend/bundle-budget.json). Fails when the
+      # app chunk gzip is >2% over budget or the PWA precache is over budget;
+      # the delta table goes to the step summary.
+      - name: Bundle size budget
+        run: node frontend/scripts/bundle-report.mjs --budget
+
+  # FE-157 5A.2: smoke e2e on Playwright -- the golden production build under
+  # `vite preview`, the API mocked at the network layer (frontend/e2e/), so
+  # no backend is needed. Its own job: a browser binary and a build of its
+  # own, kept off the fast gate. The Chromium binary is cached by the
+  # Playwright version (a new version = a new revision = a fresh download);
+  # system libraries are not part of the cache and are installed every run.
+  e2e:
+    name: e2e — Playwright smoke
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve the Playwright version
+        id: playwright
+        working-directory: frontend
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Playwright browser
+        id: browser-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install Chromium (cache miss)
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Chromium system libraries (cache hit)
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        working-directory: frontend
+        run: pnpm exec playwright install-deps chromium
+
+      - name: Build the app (golden)
+        run: pnpm -C frontend build
+
+      - name: Smoke scenarios (+ crash-detector self-checks)
+        run: pnpm -C frontend e2e:smoke
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces
+          path: frontend/test-results
+          retention-days: 7
+
+  # FE-161: the sweep on a real backend. Runs for frontend changes AND for
+  # backend ones (scope `drift`): a renamed response field breaks a screen
+  # without touching frontend/. BURN-IN: advisory (a red sweep does not fail
+  # the check) until 10 green runs in a row on test / two weeks; then the
+  # owner drops `advisory` and makes `e2e-stack — sweep on a real backend`
+  # a required check.
+  e2e-stack:
+    name: e2e-stack
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full' || needs.scope.outputs.drift == 'true'
+    uses: ./.github/workflows/e2e-stack.yml
+    with:
+      projects: sweep
+      advisory: true
+
+  # FE-162: visual-scope decides whether the visual job runs.
+  #   push to test                      -> no
+  #   a label event                     -> only for `visual` / `no-visual-change`
+  #   opened / synchronize / reopened   -> the `visual` or `no-visual-change`
+  #                                        label, or a PR that touches styles,
+  #                                        tokens, velo-ui, public/, the lockfile
+  # `strict` = the PR carries `no-visual-change`: a non-empty report fails.
+  visual-scope:
+    name: visual — scope
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      strict: ${{ steps.decide.outputs.strict }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Classify the PR diff
+        id: scope
+        run: node .github/scripts/ci-scope.mjs HEAD^1 HEAD
+
+      - name: Decide
+        id: decide
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          ACTION: ${{ github.event.action }}
+          CHANGED_LABEL: ${{ github.event.label.name }}
+          PATHS: ${{ steps.scope.outputs.visual }}
+        run: |
+          has() { echo "$LABELS" | grep -q "\"$1\""; }
+          strict=false; has no-visual-change && strict=true
+          run=false
+          case "$ACTION" in
+            labeled|unlabeled)
+              case "$CHANGED_LABEL" in visual|no-visual-change) run=true ;; esac ;;
+            *)
+              if [ "$PATHS" = true ] || has visual || [ "$strict" = true ]; then run=true; fi ;;
+          esac
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "strict=$strict" >> "$GITHUB_OUTPUT"
+
+  # FE-162: what did a refactor PR change on screen? The head build and the
+  # base (origin/test) build, each shot on 19 key screens from recorded API
+  # answers (frontend/e2e/visual/har, no backend), compared pixel by pixel.
+  # Informational by default; with `no-visual-change` a non-empty report fails
+  # the job. The container is Playwright's own image so fonts render the same
+  # every run -- its tag MUST equal @playwright/test (checked below).
+  visual:
+    name: visual — base vs head
+    needs: visual-scope
+    if: needs.visual-scope.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    continue-on-error: ${{ needs.visual-scope.outputs.strict != 'true' }}
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The PR merge commit and its first parent (the base tip).
+          fetch-depth: 2
+
+      - name: Mark the workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Base checkout (the PR's base tip)
+        run: git worktree add --detach "$RUNNER_TEMP/base" HEAD^1
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install head (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # The base has its own lockfile: a dependency upgrade is exactly what
+      # this job is for.
+      - name: Install base (frozen lockfile)
+        working-directory: ${{ runner.temp }}/base
+        run: pnpm install --frozen-lockfile
+
+      - name: The image matches @playwright/test
+        working-directory: frontend
+        run: |
+          v=$(pnpm exec playwright --version | awk '{print $2}')
+          [ "$v" = "1.64.1" ] || { echo "playwright $v does not match the image tag v1.64.1 -- update container: above"; exit 1; }
+
+      - name: Build head
+        run: pnpm -C frontend build
+
+      - name: Build base
+        working-directory: ${{ runner.temp }}/base
+        run: pnpm -C frontend build
+
+      - name: Shoot both builds and compare
+        working-directory: frontend
+        env:
+          VISUAL_STRICT: ${{ needs.visual-scope.outputs.strict == 'true' && '1' || '0' }}
+        run: sh e2e/visual/run.sh "$RUNNER_TEMP/base/frontend/dist" dist
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: visual-out
+          path: |
+            frontend/visual-out
+            frontend/test-results
+          retention-days: 7
+
+  # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
+  # gate -- golden x every edition of editions.json through PRIMER_EDITION
+  # (the machine's channel): a module outside the edition must leave NO
+  # chunks in dist (core: no ai; payments is an instance option since
+  # FE-151, always built) -- plus ONE skin x full cell
+  # on a synthetic package written to the runner's temp dir (velo carries
+  # no skins since FE-131; scripts/make-test-skin.mjs: golden assets, a
+  # contrasting palette, a font) -- the build's skin path (asset spill,
+  # dist/skin prune, @font-face, brand grep) runs on every PR. One vite
+  # build per cell, one runner per cell; the cell list comes from the
+  # script itself (--list), so a new edition joins the gate without
+  # touching this file.
+  matrix-plan:
+    name: matrix — plan
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      cells: ${{ steps.plan.outputs.cells }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # --list needs no node_modules (vite is imported lazily); neither does
+      # make-test-skin. The skin must exist here too: it names its cell.
+      - name: List the cells
+        id: plan
+        run: |
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
+          echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin")" >> "$GITHUB_OUTPUT"
+
+  matrix:
+    name: matrix — ${{ matrix.cell }}
+    needs: matrix-plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.matrix-plan.outputs.cells) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # Runs on the plain checkout (no prior plain build): a red cell reads
+      # as the whitelabel gate failing. --no-restore skips the pointless
+      # final rebuild; --facts-out feeds the fan-in below.
+      - name: Build + gate the cell
+        env:
+          CELL: ${{ matrix.cell }}
+        # Every cell job regenerates the synthetic skin (deterministic, no
+        # artifact hop): the cell list and the pre-flight see the same set.
+        run: |
+          mkdir -p "$RUNNER_TEMP/facts"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
+          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: matrix-facts-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/facts/cell.json
+          retention-days: 1
+
+  # Fan-in: invariant d (equal asset count across the `full` cells) spans
+  # cells, and a cell that never reported must not read as green. Also the
+  # single status to require for the whitelabel gate.
+  # Keyed on matrix-plan, not on matrix: a FAILED plan skips matrix, and a
+  # gate that skipped along with it would read as a passed required check.
+  # The plan is skipped only when scope sized the run below `full`.
+  matrix-gate:
+    name: matrix — gate
+    needs: [matrix-plan, matrix]
+    if: ${{ !cancelled() && needs.matrix-plan.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: The plan or a cell failed
+        if: needs.matrix-plan.result != 'success' || needs.matrix.result != 'success'
+        run: |
+          echo "matrix plan: ${{ needs.matrix-plan.result }}, cells: ${{ needs.matrix.result }}" >&2
+          exit 1
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: matrix-facts-*
+          path: ${{ runner.temp }}/facts
+
+      - name: Asset-count invariant across the full cells
+        run: |
+          mkdir -p "$RUNNER_TEMP/facts-flat"
+          i=0
+          for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
+          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin"
+
+  # FE-159: the image the machine runs. The stand fell three times (05-07.11)
+  # on what no other job builds: the node digest, the Dockerfile's pnpm
+  # filter, the editions.json COPY. Build context = repo root (FE-116), the
+  # machine's two build args. --add-host app (inside the smoke): nginx
+  # resolves the /api upstream at start. Layer cache in the gha backend,
+  # mode=max so the builder stage's layers (the install) are cached too.
+  image:
+    name: image — docker build / smoke
+    needs: scope
+    if: needs.scope.outputs.docker == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build the frontend image (loaded locally, not pushed)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: frontend/Dockerfile
+          build-args: |
+            PRIMER_RELEASE=ci
+            PRIMER_COMMIT=${{ github.sha }}
+          tags: velo-frontend:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=frontend-image
+          # Written from the trunk only: a PR-ref cache is invisible to other
+          # PRs, and mode=max layers (node_modules) would fill the 10 GB repo
+          # cache and evict the pnpm/Chromium/ESLint caches of ordinary PRs.
+          # PRs still READ the trunk's cache above.
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=frontend-image' || '' }}
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install (frozen lockfile)
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint (zero-warning budget)
-        run: pnpm lint
-
-      - name: Format check
-        run: pnpm format:check
-
-      - name: Tests
-        run: pnpm test
-
-      - name: Build (vue-tsc + vite)
-        run: pnpm build
+      - name: Smoke the image (/config.json, /, /health, /ready, manifest)
+        run: node .github/scripts/docker-smoke.mjs velo-frontend:ci "${{ github.sha }}" ci
 
   drift-check:
     name: generated.ts drift
+    needs: scope
+    if: needs.scope.outputs.drift == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip

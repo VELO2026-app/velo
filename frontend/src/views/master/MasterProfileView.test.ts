@@ -3,8 +3,8 @@
 // =============================================================================
 //
 // WHY THIS FILE EXISTS (probekit-screen-test audit, rank 2 of the untested-20
-// table): a settings hub with 2 store imports (useMasterStore, useAuthStore),
-// 3 computed()s over live store state, and a logout confirm flow.
+// table): a settings hub over useAuthStore and the master-profile query
+// (useMasterProfile), 3 computed()s over that live state, and a logout confirm flow.
 //
 // CORRECTION TO THE AUDIT: the audit's "Notable" column claims this screen is
 // "behind masterStatusGuard". That is FALSE, checked two ways before writing
@@ -21,9 +21,9 @@
 // computed()"; reading the SFC finds 3 (displayName, avatarUrl, userEmail) --
 // noted so nobody re-greps looking for a 4th.
 //
-// PATTERN: real Pinia (masterStore + authStore, set directly -- both are
-// setup stores with writable refs, same idiom as guards.test.ts's
-// `store.user = {...}`), REAL RoleSwitchSection child (renders nothing for
+// PATTERN: real Pinia and Colada (authStore set directly -- a setup store
+// with writable refs, same idiom as guards.test.ts's `store.user = {...}`;
+// the master profile through its mocked API seam), REAL RoleSwitchSection child (renders nothing for
 // every fixture below: role_switch stays null, so `authStore.allowedRoles`
 // is empty and RoleSwitchSection's own `v-if="targets.length > 0"` never
 // opens -- confirmed by reading RoleSwitchSection.vue rather than assumed,
@@ -52,6 +52,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import MasterProfileView from '@/views/master/MasterProfileView.vue'
 import { useAuthStore } from '@/stores/auth'
 import * as mastersApi from '@/api/masters'
@@ -124,14 +126,14 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MasterProfileView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 // mount -> onMounted (role check, sync) -> loadMessagesCount fire-and-forget
 // (ONE getChatUnreadSummary await since T-51) -> re-render (1); in parallel
-// fetchMyProfile await (1) -> re-render (1). 6 leaves margin.
+// the profile query's getMyMasterProfile await (1) -> re-render (1). 6 leaves margin.
 async function flush(): Promise<void> {
   for (let i = 0; i < 6; i++) await nextTick()
 }

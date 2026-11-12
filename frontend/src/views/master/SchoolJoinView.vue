@@ -145,7 +145,8 @@ import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { useSafeArea } from '@/composables/useSafeArea'
 import { useAuthStore } from '@/stores/auth'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
+import { useQueryCache } from '@pinia/colada'
+import { membershipChanged } from '@/composables/queries/schools'
 import { IconLock } from '@/components/icons'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import SchoolInviteCard from '@/components/shared/SchoolInviteCard.vue'
@@ -155,7 +156,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const authStore = useAuthStore()
-const schoolsHub = useSchoolsHubStore()
+const queryCache = useQueryCache()
 
 const loading = ref(true)
 const transientError = ref(false)
@@ -272,11 +273,14 @@ async function join(): Promise<void> {
   try {
     const res = await joinSchool(String(route.params.token ?? ''))
     toast.success(t('masterScreens.schoolJoin.joinedToast', { name: preview.value.school.name }))
-    // The hub probe may have settled BEFORE this join (the account's first
+    // The hub may have answered BEFORE this join (the account's first
     // school): without a fresh read the dock tab stays hidden until a full
-    // reload (FE-88). ensureCurator swallows its own probe failures -- the
-    // navigation never waits on, nor fails with, the retry.
-    await schoolsHub.refreshCurator()
+    // reload (FE-88). This route sits outside the shells, so nothing holds
+    // the hub now -- the invalidation only marks it stale, and the read
+    // happens HERE, before the navigation lands in a shell that shows the
+    // tab at once. Neither rejects: the navigation never fails with a failed
+    // read.
+    await membershipChanged(queryCache, 'joinSchool')
     // FE-83: a first-session user meets the onboarding carousel AFTER the
     // join, not before the invitation -- the gate let them straight in. The
     // joined school is remembered locally; the overlay consumes it on done.
@@ -403,7 +407,7 @@ onMounted(loadPreview)
   position: absolute;
   inset: 0;
   z-index: var(--z-popup);
-  background: url('/bg/background.png') center / cover no-repeat;
+  background: var(--velo-app-bg-image) center / cover no-repeat;
   box-sizing: border-box;
 }
 </style>

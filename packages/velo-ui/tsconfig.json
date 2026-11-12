@@ -1,0 +1,45 @@
+{
+  "compilerOptions": {
+    /* Language & Environment -- mirrors frontend/tsconfig.json (the law source) */
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+
+    /* Module Resolution */
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+
+    /* Strictness -- like mypy strict for Python */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Emit (typecheck config; dts emission uses tsconfig.build.json) */
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+
+    /* Path aliases (relative to this file; TS 6 deprecates baseUrl) -- import from '@/components/...' instead of '../../../' */
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    ".storybook/**/*.ts",
+    "env.d.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

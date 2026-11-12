@@ -23,7 +23,6 @@ const ALL_NOTICES: LoginNotice[] = [
   'foreign',
   'expired',
   'telegram_failed',
-  'not_configured',
   'deactivated',
   'rate_limited',
   'unavailable',
@@ -83,13 +82,15 @@ describe('TelegramLoginView', () => {
   })
 
   it('a refused start says why and lets the person try again', async () => {
-    startBrowserLogin.mockRejectedValue(new ApiResponseError(404, 'x', 'login_not_configured'))
+    startBrowserLogin.mockRejectedValue(new ApiResponseError(503, 'x', 'service_unavailable'))
     const w = mount(TelegramLoginView)
 
     await button(w).trigger('click')
     await flushPromises()
 
-    expect(w.find('[role="alert"]').text()).toBe('Вход через браузер на этом сервере не настроен.')
+    expect(w.find('[role="alert"]').text()).toBe(
+      'Сервис временно недоступен. Попробуйте через минуту.',
+    )
     expect(button(w).attributes('disabled')).toBeUndefined()
     expect(button(w).text()).toBe('Войти через Telegram')
   })

@@ -1,11 +1,4 @@
 {
-  "methodPicker": {
-    "custom": "Свій варіант",
-    "directionPlaceholder": "Укажіть напрямок…"
-  },
-  "masterCard": {
-    "profileUnavailable": "Профіль майстра недоступний"
-  },
   "masterScreens": {
     "masterMessages": {
       "empty": {
@@ -227,13 +220,6 @@
       },
       "error": {
         "checkAudience": "Не вдалося перевірити аудиторію"
-      },
-      "validation": {
-        "enterTitle": "Уведіть назву",
-        "chooseDirection": "Виберіть напрямок",
-        "positiveNumber": "Уведіть додатне число або залиште порожнім",
-        "chooseGroup": "Виберіть хоча б одну групу",
-        "invalidDateTime": "Некоректні дата або час"
       },
       "plural": {
         "bookedNoun": "записаний | записаних | записаних"
@@ -697,6 +683,7 @@
       "audienceUnavailable": "Школа недоступна — практику не бачить ніхто, крім вас і вже записаних.",
       "copy": "Копіювати",
       "noReviewsYet": "Відгуків поки немає",
+      "attendanceLoadFailed": "Не вдалося завантажити відвідуваність",
       "stats": {
         "enrolled": "Записалося",
         "capacity": "Місць"
@@ -769,7 +756,8 @@
       "newAria": "Новий промокод",
       "loadFailed": "Не вдалося завантажити промокоди",
       "discount": "Знижка: {n}%",
-      "used": "Використано: {label}"
+      "used": "Використано: {label}",
+      "usedOf": "{used} з {max}"
     },
     "masterStudentProfile": {
       "addToGroup": "Додати до групи",

@@ -88,6 +88,7 @@ import type {
   SchoolStudentProfileResponse,
   UpdateSchoolRequest,
 } from '@/api/types'
+import { path, raw } from '@/api/path'
 
 const CURATOR_BASE = '/api/v1/masters/me/schools'
 const MEMBER_BASE = '/api/v1/schools'
@@ -155,7 +156,7 @@ export function updateSchool(
   const body: UpdateSchoolRequest = { name }
   if (description !== undefined) body.description = description
   if (avatarUrl !== undefined) body.avatar_url = avatarUrl
-  return api.patch<SchoolResponse>(`${CURATOR_BASE}/${id}`, body)
+  return api.patch<SchoolResponse>(path`${raw(CURATOR_BASE)}/${id}`, body)
 }
 
 /** `DELETE /masters/me/schools/{id}` -- hard-delete with cascade over
@@ -163,7 +164,7 @@ export function updateSchool(
  *  by other masters' practices: those go fail-closed instead (I-11) -- the
  *  delete-preview advisory is informational only. */
 export function deleteSchool(id: string): Promise<void> {
-  return api.delete(`${CURATOR_BASE}/${id}`)
+  return api.delete(path`${raw(CURATOR_BASE)}/${id}`)
 }
 
 /** Query params of `GET /masters/me/schools/{id}/members`. All optional:
@@ -189,7 +190,7 @@ export function getSchoolMembers(
     limit: query.limit,
     offset: query.offset,
   })
-  return api.get<PaginatedSchoolMembersResponse>(`${CURATOR_BASE}/${id}/members${qs}`)
+  return api.get<PaginatedSchoolMembersResponse>(path`${raw(CURATOR_BASE)}/${id}/members${raw(qs)}`)
 }
 
 /** `GET /masters/me/schools/{id}/roster` -- the school's roster for ITS
@@ -209,7 +210,7 @@ export function getSchoolRoster(
     limit: query.limit,
     offset: query.offset,
   })
-  return api.get<PaginatedSchoolRosterResponse>(`${CURATOR_BASE}/${id}/roster${qs}`)
+  return api.get<PaginatedSchoolRosterResponse>(path`${raw(CURATOR_BASE)}/${id}/roster${raw(qs)}`)
 }
 
 /** `GET /masters/me/schools/{id}/students/{user_id}` -- the SCHOOL-scoped
@@ -226,7 +227,7 @@ export function getSchoolStudentProfile(
   id: string,
   userId: string,
 ): Promise<SchoolStudentProfileResponse> {
-  return api.get(`${CURATOR_BASE}/${id}/students/${userId}`)
+  return api.get(path`${raw(CURATOR_BASE)}/${id}/students/${userId}`)
 }
 
 /** `DELETE /masters/me/schools/{id}/members/{user_id}` -- remove a member
@@ -235,7 +236,7 @@ export function getSchoolStudentProfile(
  *  @throws ApiResponseError -- 404 is only ever about the SCHOOL not being
  *    mine, never about the user. */
 export function removeSchoolMember(id: string, userId: string): Promise<void> {
-  return api.delete(`${CURATOR_BASE}/${id}/members/${userId}`)
+  return api.delete(path`${raw(CURATOR_BASE)}/${id}/members/${userId}`)
 }
 
 /** `POST /masters/me/schools/{id}/members/{user_id}/demote` (BE-59 B1) --
@@ -247,7 +248,7 @@ export function removeSchoolMember(id: string, userId: string): Promise<void> {
  *  @throws ApiResponseError -- 404 only for a school that is not the
  *    caller's (P-08). */
 export function demoteSchoolMaster(id: string, userId: string): Promise<void> {
-  return api.post(`${CURATOR_BASE}/${id}/members/${userId}/demote`)
+  return api.post(path`${raw(CURATOR_BASE)}/${id}/members/${userId}/demote`)
 }
 
 /** `POST /masters/me/schools/{id}/members/{user_id}/block` (BE-79) --
@@ -259,7 +260,7 @@ export function demoteSchoolMaster(id: string, userId: string): Promise<void> {
  *  @throws ApiResponseError -- 409 `cannot_block_curator`; 404 for a
  *    non-member or a school that is not the caller's (P-08). */
 export function blockSchoolMember(id: string, userId: string): Promise<void> {
-  return api.post(`${CURATOR_BASE}/${id}/members/${userId}/block`)
+  return api.post(path`${raw(CURATOR_BASE)}/${id}/members/${userId}/block`)
 }
 
 /** `DELETE /masters/me/schools/{id}/blocks/{user_id}` (BE-79) -- back to
@@ -267,7 +268,7 @@ export function blockSchoolMember(id: string, userId: string): Promise<void> {
  *
  *  @throws ApiResponseError -- 404 when not blocked. */
 export function unblockSchoolMember(id: string, userId: string): Promise<void> {
-  return api.delete(`${CURATOR_BASE}/${id}/blocks/${userId}`)
+  return api.delete(path`${raw(CURATOR_BASE)}/${id}/blocks/${userId}`)
 }
 
 /** `GET /masters/me/schools/{id}/blocks` (BE-79) -- the blocked-members tab
@@ -278,7 +279,7 @@ export function getSchoolBlocks(
   query: { limit?: number; offset?: number } = {},
 ): Promise<PaginatedSchoolBlocksResponse> {
   const qs = buildQuery({ limit: query.limit, offset: query.offset })
-  return api.get<PaginatedSchoolBlocksResponse>(`${CURATOR_BASE}/${id}/blocks${qs}`)
+  return api.get<PaginatedSchoolBlocksResponse>(path`${raw(CURATOR_BASE)}/${id}/blocks${raw(qs)}`)
 }
 
 /** `POST /masters/me/schools/{id}/master-offers` (GT-27) -- offer a
@@ -292,12 +293,12 @@ export function getSchoolBlocks(
  *    candidate is not in it -- one answer, P-08); 409 already_master. */
 export function offerSchoolMaster(id: string, toUserId: string): Promise<void> {
   const body: SchoolMasterOfferRequest = { to_user_id: toUserId }
-  return api.post<void>(`${CURATOR_BASE}/${id}/master-offers`, body)
+  return api.post<void>(path`${raw(CURATOR_BASE)}/${id}/master-offers`, body)
 }
 
 /** Withdraw a pending offer in either state. Membership remains unchanged. */
 export function cancelSchoolMasterOffer(id: string, userId: string): Promise<void> {
-  return api.delete(`${CURATOR_BASE}/${id}/master-offers/${userId}`)
+  return api.delete(path`${raw(CURATOR_BASE)}/${id}/master-offers/${userId}`)
 }
 
 /** `POST /masters/me/schools/{id}/invites` -- get-or-mint the school's
@@ -310,7 +311,7 @@ export function cancelSchoolMasterOffer(id: string, userId: string): Promise<voi
  *    is unset; the caller must show the errorMessages phrase, never a
  *    made-up link. */
 export function createSchoolInvite(id: string): Promise<SchoolInviteResponse> {
-  return api.post<SchoolInviteResponse>(`${CURATOR_BASE}/${id}/invites`, {})
+  return api.post<SchoolInviteResponse>(path`${raw(CURATOR_BASE)}/${id}/invites`, {})
 }
 
 /** `DELETE /masters/me/schools/{id}/invites` -- revoke the school's link.
@@ -323,7 +324,7 @@ export function createSchoolInvite(id: string): Promise<SchoolInviteResponse> {
  *  confirmation. Do not confuse this with the `kind` in
  *  SchoolMembersQuery above: that one filters the ROSTER and stays. */
 export function revokeSchoolInvite(id: string): Promise<void> {
-  return api.delete(`${CURATOR_BASE}/${id}/invites`)
+  return api.delete(path`${raw(CURATOR_BASE)}/${id}/invites`)
 }
 
 /** `POST /masters/me/schools/{id}/transfer` -- offer the school to one of
@@ -335,13 +336,13 @@ export function revokeSchoolInvite(id: string): Promise<void> {
  *    master or the curator themselves, indistinguishably. */
 export function offerSchoolTransfer(id: string, toUserId: string): Promise<SchoolTransferRef> {
   const body: OfferSchoolTransferRequest = { to_user_id: toUserId }
-  return api.post<SchoolTransferRef>(`${CURATOR_BASE}/${id}/transfer`, body)
+  return api.post<SchoolTransferRef>(path`${raw(CURATOR_BASE)}/${id}/transfer`, body)
 }
 
 /** `DELETE /masters/me/schools/{id}/transfer` -- withdraw the pending
  *  offer. Idempotent: no offer is still 204. */
 export function cancelSchoolTransfer(id: string): Promise<void> {
-  return api.delete(`${CURATOR_BASE}/${id}/transfer`)
+  return api.delete(path`${raw(CURATOR_BASE)}/${id}/transfer`)
 }
 
 /** `GET /masters/me/schools/{id}/delete-preview` -- what deleting costs:
@@ -349,7 +350,7 @@ export function cancelSchoolTransfer(id: string): Promise<void> {
  *  of the school, curator included) are aimed at it. Same counters the page
  *  reports, from the same helper -- the dialog and the page cannot disagree. */
 export function getSchoolDeletePreview(id: string): Promise<SchoolDeletePreviewResponse> {
-  return api.get<SchoolDeletePreviewResponse>(`${CURATOR_BASE}/${id}/delete-preview`)
+  return api.get<SchoolDeletePreviewResponse>(path`${raw(CURATOR_BASE)}/${id}/delete-preview`)
 }
 
 /** `GET /masters/me/schools/{id}/members/{user_id}/remove-preview` -- the
@@ -363,7 +364,7 @@ export function getSchoolRemovePreview(
   userId: string,
 ): Promise<SchoolRemovePreviewResponse> {
   return api.get<SchoolRemovePreviewResponse>(
-    `${CURATOR_BASE}/${id}/members/${userId}/remove-preview`,
+    path`${raw(CURATOR_BASE)}/${id}/members/${userId}/remove-preview`,
   )
 }
 
@@ -386,7 +387,7 @@ export function getSchoolJournal(
   offset = 0,
 ): Promise<PaginatedSchoolEventsResponse> {
   const qs = buildQuery({ limit, offset })
-  return api.get<PaginatedSchoolEventsResponse>(`${CURATOR_BASE}/${id}/journal${qs}`)
+  return api.get<PaginatedSchoolEventsResponse>(path`${raw(CURATOR_BASE)}/${id}/journal${raw(qs)}`)
 }
 
 /** `GET /masters/me/schools/{id}/checkins` -- PRE check-ins across EVERY
@@ -407,7 +408,9 @@ export function getSchoolCheckins(
     limit: options.limit ?? 20,
     offset: options.offset ?? 0,
   })
-  return api.get<PaginatedSchoolCheckinsResponse>(`${CURATOR_BASE}/${id}/checkins${qs}`)
+  return api.get<PaginatedSchoolCheckinsResponse>(
+    path`${raw(CURATOR_BASE)}/${id}/checkins${raw(qs)}`,
+  )
 }
 
 /** `GET /masters/me/schools/{id}/reviews` -- NAMED reviews across every
@@ -427,7 +430,7 @@ export function getSchoolReviews(
     limit: options.limit ?? 20,
     offset: options.offset ?? 0,
   })
-  return api.get<PaginatedSchoolReviewsResponse>(`${CURATOR_BASE}/${id}/reviews${qs}`)
+  return api.get<PaginatedSchoolReviewsResponse>(path`${raw(CURATOR_BASE)}/${id}/reviews${raw(qs)}`)
 }
 
 // =============================================================================
@@ -459,7 +462,7 @@ export function getSchoolAnalytics(
   period: SchoolAnalyticsPeriod = 'week',
 ): Promise<SchoolAnalyticsResponse> {
   const qs = buildQuery({ period })
-  return api.get<SchoolAnalyticsResponse>(`${CURATOR_BASE}/${id}/analytics${qs}`)
+  return api.get<SchoolAnalyticsResponse>(path`${raw(CURATOR_BASE)}/${id}/analytics${raw(qs)}`)
 }
 
 // =============================================================================
@@ -489,7 +492,7 @@ export function getMySchools(): Promise<SchoolMineResponse> {
  *    revoked token, inactive school and deleted school alike (P-08 -- a link
  *    must not reveal whether a school exists). */
 export function getSchoolInvitePreview(token: string): Promise<SchoolInvitePreviewResponse> {
-  return api.get<SchoolInvitePreviewResponse>(`${MEMBER_BASE}/invites/${token}`)
+  return api.get<SchoolInvitePreviewResponse>(path`${raw(MEMBER_BASE)}/invites/${token}`)
 }
 
 /** POST /schools/join -- join by token. The preview is a hint and this
@@ -511,7 +514,7 @@ export function joinSchool(token: string): Promise<JoinSchoolResponse> {
  *    AND it is active: a school that does not exist, one whose curator is
  *    suspended, and one I simply do not belong to all answer identically. */
 export function getSchoolPage(id: string): Promise<SchoolPageResponse> {
-  return api.get<SchoolPageResponse>(`${MEMBER_BASE}/${id}`)
+  return api.get<SchoolPageResponse>(path`${raw(MEMBER_BASE)}/${id}`)
 }
 
 /** `GET /schools/{id}/masters` -- the school's masters: the curator
@@ -525,7 +528,7 @@ export function getSchoolMasters(
   offset = 0,
 ): Promise<PaginatedSchoolMastersResponse> {
   const qs = buildQuery({ limit, offset })
-  return api.get<PaginatedSchoolMastersResponse>(`${MEMBER_BASE}/${id}/masters${qs}`)
+  return api.get<PaginatedSchoolMastersResponse>(path`${raw(MEMBER_BASE)}/${id}/masters${raw(qs)}`)
 }
 
 /** `GET /schools/{id}/practices` -- upcoming practices by the school's
@@ -540,7 +543,7 @@ export function getSchoolPractices(
   offset = 0,
 ): Promise<PaginatedPracticesResponse> {
   const qs = buildQuery({ limit, offset })
-  return api.get<PaginatedPracticesResponse>(`${MEMBER_BASE}/${id}/practices${qs}`)
+  return api.get<PaginatedPracticesResponse>(path`${raw(MEMBER_BASE)}/${id}/practices${raw(qs)}`)
 }
 
 /** `GET /schools/{id}/leave-preview` -- how many of MY OWN upcoming
@@ -550,7 +553,7 @@ export function getSchoolPractices(
  *    still works (I-5); treat that 404 as "no advisory", never as an error,
  *    and never block the button on it. */
 export function getSchoolLeavePreview(id: string): Promise<SchoolLeavePreviewResponse> {
-  return api.get<SchoolLeavePreviewResponse>(`${MEMBER_BASE}/${id}/leave-preview`)
+  return api.get<SchoolLeavePreviewResponse>(path`${raw(MEMBER_BASE)}/${id}/leave-preview`)
 }
 
 /** `DELETE /schools/{id}/membership` -- leave. Idempotent. Deliberately
@@ -560,7 +563,7 @@ export function getSchoolLeavePreview(id: string): Promise<SchoolLeavePreviewRes
  *  @throws ApiResponseError -- 409 curator_cannot_leave for the owner
  *    (their exit is a transfer or a delete). */
 export function leaveSchool(id: string): Promise<void> {
-  return api.delete(`${MEMBER_BASE}/${id}/membership`)
+  return api.delete(path`${raw(MEMBER_BASE)}/${id}/membership`)
 }
 
 /** `POST /schools/{id}/transfer/accept` -- take over the school. One
@@ -576,14 +579,14 @@ export function leaveSchool(id: string): Promise<void> {
  *    longer verified; 409 school_name_taken if the caller already curates a
  *    school by this name. */
 export function acceptSchoolTransfer(id: string): Promise<SchoolPageResponse> {
-  return api.post<SchoolPageResponse>(`${MEMBER_BASE}/${id}/transfer/accept`)
+  return api.post<SchoolPageResponse>(path`${raw(MEMBER_BASE)}/${id}/transfer/accept`)
 }
 
 /** `POST /schools/{id}/transfer/decline` -- refuse the offer. Idempotent,
  *  and 204 even when it was not yours: it changes nothing, so reporting
  *  success is honest and says nothing about whether an offer existed. */
 export function declineSchoolTransfer(id: string): Promise<void> {
-  return api.post(`${MEMBER_BASE}/${id}/transfer/decline`)
+  return api.post(path`${raw(MEMBER_BASE)}/${id}/transfer/decline`)
 }
 
 /** `POST /schools/{id}/master-offer/accept` -- consent to becoming a
@@ -597,7 +600,7 @@ export function declineSchoolTransfer(id: string): Promise<void> {
  *    by design); 403 master_required -- the caller's master verification
  *    lapsed since the offer. */
 export function acceptSchoolMasterOffer(id: string): Promise<void> {
-  return api.post(`${MEMBER_BASE}/${id}/master-offer/accept`)
+  return api.post(path`${raw(MEMBER_BASE)}/${id}/master-offer/accept`)
 }
 
 /** `POST /schools/{id}/master-offer/decline` -- refuse the appointment.
@@ -607,7 +610,7 @@ export function acceptSchoolMasterOffer(id: string): Promise<void> {
  *  active: an answer the appointee is entitled to give must not depend on
  *  somebody else's verification status. */
 export function declineSchoolMasterOffer(id: string): Promise<void> {
-  return api.post(`${MEMBER_BASE}/${id}/master-offer/decline`)
+  return api.post(path`${raw(MEMBER_BASE)}/${id}/master-offer/decline`)
 }
 
 // =============================================================================

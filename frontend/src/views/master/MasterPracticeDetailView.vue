@@ -152,6 +152,20 @@
           />
         </div>
 
+        <!-- Attendance has its own failure state: the screen stays up, the
+             stat cards keep their dash placeholders and offer a retry. -->
+        <VEmptyState
+          v-if="attendanceError"
+          icon="warning"
+          :title="t('masterScreens.masterPracticeDetail.attendanceLoadFailed')"
+        >
+          <template #action>
+            <VButton size="sm" variant="outline" @click="loadAttendance">{{
+              t('common.retry')
+            }}</VButton>
+          </template>
+        </VEmptyState>
+
         <!-- Booked roster (i18n:masterScreens.masterPracticeDetail.bookedCount;
              first 5 + expander — operator 2026-06-18) -->
         <section v-if="rosterItems.length > 0" class="practice-detail__section">
@@ -298,6 +312,20 @@
           />
         </div>
 
+        <!-- Attendance has its own failure state: the screen stays up, the
+             stat cards keep their dash placeholders and offer a retry. -->
+        <VEmptyState
+          v-if="attendanceError"
+          icon="warning"
+          :title="t('masterScreens.masterPracticeDetail.attendanceLoadFailed')"
+        >
+          <template #action>
+            <VButton size="sm" variant="outline" @click="loadAttendance">{{
+              t('common.retry')
+            }}</VButton>
+          </template>
+        </VEmptyState>
+
         <!-- Participant reviews (i18n:masterScreens.masterPracticeDetail.sections.reviews;
              E1 named reviews — getPracticeReviews) -->
         <section class="practice-detail__section">
@@ -371,8 +399,9 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useDiaryStore } from '@/stores/diary'
-import { useMasterStore } from '@/stores/master'
+import { usePracticeInsights } from '@/composables/queries/diary'
+import { cachedMyPractice, myPracticesChanged } from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import {
   getPractice,
   getAttendance,
@@ -415,14 +444,16 @@ import type {
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const diaryStore = useDiaryStore()
-const masterStore = useMasterStore()
+const queryCache = useQueryCache()
 
 const practiceId = route.params.id as string
 
 // -- Data --
 const practice = ref<PracticeResponse | null>(null)
 const attendance = ref<AttendanceResponse | null>(null)
+// Attendance fails independently of the practice: the roster/stat blocks show
+// a retry note instead of replacing the whole screen with the load error.
+const attendanceError = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -441,8 +472,9 @@ const destructiveLabel = computed((): string =>
   isDraft.value ? t('ui.delete') : t('masterScreens.masterPracticeDetail.cancelCta'),
 )
 
-// Reactive insights cache (shared with Analytics / Practices — often warm).
-const insightsCache = diaryStore.insightsCache
+// Practices' insights in the Colada cache, shared with Analytics / Practices
+// -- often warm (composables/queries/diary.ts).
+const insightsCache = usePracticeInsights(queryCache)
 const insights = computed(() => insightsCache.get(practiceId) ?? null)
 
 // -- Hero meta (shared) --
@@ -643,7 +675,7 @@ async function doCancel(scope: 'this' | 'this_and_future'): Promise<void> {
   try {
     await cancelPractice(practiceId, scope)
     toast.success(t('masterScreens.masterPracticeDetail.toast.cancelled'))
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
     router.back()
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.toast.cancelFailed')))
@@ -659,7 +691,7 @@ async function doDelete(): Promise<void> {
   try {
     await deletePractice(practiceId)
     toast.success(t('masterScreens.masterPracticeDetail.toast.draftDeleted'))
-    await masterStore.refreshMyPractices()
+    await myPracticesChanged(queryCache)
     router.back()
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterPracticeDetail.toast.deleteFailed')))
@@ -670,27 +702,49 @@ async function doDelete(): Promise<void> {
 }
 
 // -- Load --
+// Bumps on every load()/loadAttendance() call; a superseded answer is a no-op.
+let loadEpoch = 0
+let attendanceEpoch = 0
+
+/** Fetches attendance into its own state; never rejects. */
+async function loadAttendance(): Promise<void> {
+  const epoch = ++attendanceEpoch
+  attendanceError.value = false
+  try {
+    const data = await getAttendance(practiceId)
+    if (epoch === attendanceEpoch) attendance.value = data
+  } catch {
+    if (epoch === attendanceEpoch) attendanceError.value = true
+  }
+}
+
 async function load(): Promise<void> {
+  const epoch = ++loadEpoch
   loading.value = true
   error.value = null
+  // Both branches need attendance (roster / stats): it leaves in parallel with
+  // the practice read and fails on its own (attendanceError), not as a
+  // screen-level error.
+  const attendanceDone = loadAttendance()
   try {
-    const cached = masterStore.practices.find((p) => p.id === practiceId)
-    practice.value = cached ?? (await getPractice(practiceId))
+    const cached = cachedMyPractice(queryCache, practiceId)
+    const loaded = cached ?? (await getPractice(practiceId))
+    if (epoch !== loadEpoch) return
+    practice.value = loaded
 
-    // Both branches need attendance (roster / stats). Insights (anonymous rating
-    // distribution) only feed the PAST hero badges — load them lazily there.
-    const [attendanceData] = await Promise.all([
-      getAttendance(practiceId),
-      isPast.value ? diaryStore.loadInsights(practiceId) : Promise.resolve(),
-    ])
-    attendance.value = attendanceData
+    // Insights (anonymous rating distribution) only feed the PAST hero badges
+    // -- load them lazily there.
+    if (isPast.value) await insightsCache.load(practiceId)
+    await attendanceDone
+    if (epoch !== loadEpoch) return
 
     // Named reviews only exist for finished practices; non-fatal alongside the load.
     if (isPast.value) void loadReviews()
   } catch (e) {
+    if (epoch !== loadEpoch) return
     error.value = extractApiError(e, t('common.loadError'))
   } finally {
-    loading.value = false
+    if (epoch === loadEpoch) loading.value = false
   }
 }
 

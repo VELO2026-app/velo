@@ -29,7 +29,7 @@ from app.core.exceptions import (
     VeloError,
 )
 from app.core.middleware import client_ip
-from app.modules.auth import browser_login, telegram_oidc
+from app.modules.auth import browser_login, signature_stats, telegram_oidc
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import (
     AuthResponse,
@@ -70,8 +70,8 @@ async def auth_telegram(
       3. Find or create User by telegram_id
       3a. Refuse a deactivated account -- no session for it (403)
       4. Flush DB (get user.id) -- commit deferred to get_db_session
+      4a. BE-201: mark whether initData carried `signature`
       5. Create session in Redis (token, TTL 30 days)
-      5a. BE-187: log whether initData carried `signature` (temporary)
       6. Return user + session_token
     """
     # Step 0: T-47 -- the cheap limiter, BEFORE the signature check.
@@ -134,42 +134,20 @@ async def auth_telegram(
     # the entire transaction rolls back -- no orphan DB records.
     await session.flush()
 
+    # Step 4a: BE-201 -- the measurement for BE-183 (removed there with the
+    # bot-token check): did this person come with `signature`.
+    #
+    # After every refusal above, so a row means "this person signed in",
+    # not "somebody tried". In the request's session, so it commits with
+    # the sign-in or not at all: a failed commit, or create_session
+    # failing below, takes the mark away with the rest -- get_db_session
+    # rolls the transaction back when the endpoint raises (par0 §8), a
+    # dependency, not a property of this function. Before create_session,
+    # not after: a failure here then leaves no session in Redis.
+    await signature_stats.record(session, user.id, init_data.has_signature)
+
     # Step 5: Create session in Redis.
     token = await create_session(user)
-
-    # Step 5a.
-    # Temporary: measurement for BE-183, removed there with the bot-token check.
-    #
-    # After every refusal above, so the event means "this person signed in",
-    # not "somebody tried". Only the internal user id and a boolean: no
-    # telegram_id, name, username, initData or signature value (protocol
-    # v1.7 9.4 -- internal stack ids are allowed).
-    #
-    # KNOWN CEILING -- the event is written before the commit.
-    #   1. Mechanics: get_db_session commits after this handler returns
-    #      (BE-83, before the first byte of the response). A failed commit
-    #      answers 500 with this event already written; for a first-time
-    #      user the user_id in it then names a row that was rolled back.
-    #      Cost: one extra person per failed commit -- noise for a share of
-    #      old clients.
-    #   2. Status: acknowledged by design.
-    #   3. Task: BE-183 -- the event is deleted there together with the
-    #      bot-token check.
-    #   4. Trigger: BE-183 is done.
-    #   5. Agreed fix: delete the event. BackgroundTasks only if the
-    #      measurement is needed for longer, and then first verify that
-    #      the request id (REQUEST_ID, core/middleware.py) reaches the
-    #      background task.
-    #   6. Rejected: an explicit session.commit() here before the event --
-    #      it reorders the transaction on the login path, a C2 change for a
-    #      temporary statistic; BackgroundTasks now -- the first use in the
-    #      tree for an event that is about to be deleted, with contextvars
-    #      there unverified.
-    logger.info(
-        "telegram_auth_signature",
-        user_id=str(user.id),
-        signature_present=init_data.has_signature,
-    )
 
     return AuthResponse(
         user=user,  # type: ignore[arg-type]  # from_attributes handles ORM

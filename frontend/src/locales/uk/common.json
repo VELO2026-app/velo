@@ -1,6 +1,7 @@
 {
   "common": {
     "brandName": "@:brand",
+    "pwaDescription": "Платформа для ведення практик благополуччя",
     "today": "Сьогодні",
     "tomorrow": "Завтра",
     "yesterday": "Учора",
@@ -19,6 +20,7 @@
     "hide": "Приховати",
     "all": "Усі",
     "reset": "Скинути",
+    "onlineUnavailable": "Онлайн-підключення недоступне",
     "backHome": "На головну",
     "backToSchools": "До моїх шкіл",
     "submitSend": "Надіслати",

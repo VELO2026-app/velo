@@ -6,9 +6,10 @@
        undecided (stage === null), or while a Telegram logout is in progress
        (isLoggingOut) -- the latter keeps the stub from flashing between
        session clear and the Mini App closing.
-    2. The saved session could not be checked (no answer, outside Telegram:
-       restoreUnreachable) -> LoadingErrorView ("try again"); the token stays
-       saved for that attempt.
+    2. The start could not complete (restoreUnreachable) -> LoadingErrorView
+       ("try again"): the saved session got no answer outside Telegram (the
+       token stays saved for that attempt), or the bootstrap itself threw --
+       platform.init() or the first-screen gate, in Telegram too (FE-157).
     3. Not authenticated:
          in Telegram  -> TelegramStubView (initData sign-in failed or the
                          session ended -- unchanged by Standalone phase 3);
@@ -77,19 +78,15 @@ import { useRouter } from 'vue-router'
 import { firstScreenReady } from '@/router/firstScreen'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
-import {
-  applyUserLanguage,
-  availableLocales,
-  clearLocaleHint,
-  loadLocale,
-  setLocale,
-} from '@/locales'
+import { applyUserLanguage, clearLocaleHint, setLocale } from '@/locales'
 import { INSTANCE } from '@/platform/instance'
 import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
 import { useKeyboardDismiss } from '@/composables/useKeyboardDismiss'
+import { provideKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { startRoleFreshnessPoll } from '@/composables/useRoleFreshness'
+import { provideToast } from '@/composables/useToast'
 import { VToast } from '@/components/ui'
 import AppFrame from '@/components/layout/AppFrame.vue'
 import LoadingView from '@/views/auth/LoadingView.vue'
@@ -123,18 +120,10 @@ watch(
   },
 )
 
-// Prefetch the other catalog locales shortly after mount (tz-i18n phase 5):
-// warms the lazy chunk cache in the background so a switch is an instant
-// same-frame flip, not a network wait. loadLocale, NEVER setLocale -- warming
-// must not switch: a setLocale loop over availableLocales() ended every mount
-// on the last locale (en), silently reverting the UI to English two seconds
-// in. A plain timeout -- idle enough not to compete with the boot requests,
-// soon enough to warm before a tap.
-onMounted(() => {
-  setTimeout(() => {
-    for (const locale of availableLocales()) void loadLocale(locale)
-  }, 2000)
-})
+// No locale warm-up here (FE-157): warming every locale two seconds after
+// mount cost each session about 85 KB gzip in some 40 requests for a switch
+// few users make. The language switcher warms its own rows instead
+// (TimezoneSettingsView: when the screen opens and on a row's finger-down).
 
 // Pin the fixed photo-background against the iOS/Telegram keyboard viewport
 // shift (the "dancing background"). Mounted once here, on the app root.
@@ -150,6 +139,18 @@ useViewportGeometry()
 // GLOBAL tap-to-dismiss keyboard (batch L, B1): one app-level owner replacing
 // the per-view dismissKeyboardOnBlank copies. Installed once here.
 useKeyboardDismiss()
+
+// FE-143: the kit field-scroll seam -- provides the real keyboard-aware
+// focus-scroll factory once at the root. Every useKeyboardFieldScroll()
+// below (views and shared pickers today, the kit's VInput/VTextarea after
+// the P6 move) resolves to it through @velo/ui; without a provider the kit
+// seam is a silent no-op, so this line is what keeps the feature alive.
+provideKeyboardFieldScroll()
+
+// FE-141: the ONE toast provider -- VToast and every useToast() caller in
+// the tree below inject this instance instead of reaching for the module
+// singleton (the seam VToast needs before it can move to @velo/ui, P6c).
+provideToast()
 
 /**
  * Entry stage after a successful auth. Null until initAuth() resolves and
@@ -199,7 +200,13 @@ onMounted(() => {
   // dock and insets are in (capped) -- the screen paints once, finished.
   void initAuth().then(async () => {
     const next = decideInitialStage()
-    if (next === 'app' && isAuthenticated.value) await firstScreenReady(router)
+    try {
+      if (next === 'app' && isAuthenticated.value) await firstScreenReady(router)
+    } catch {
+      // A throwing first-screen gate must not strand the splash: show the
+      // "try again" screen (LoadingErrorView) instead.
+      restoreUnreachable.value = true
+    }
     stage.value = next
   })
   // T21-4/T21-5 (PROMPT №546): foreground-only poll so a role/master-

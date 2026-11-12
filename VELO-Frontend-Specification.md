@@ -4,6 +4,12 @@
 **Дата:** 6 июля 2026
 **Статус:** Active
 
+> **Freshness (2026-11-09):** упоминания `VITE_API_BASE_URL` / `.env` ниже — история
+> первоначальной сборки. Сегодня адрес API и прочие значения инстанса приходят при
+> старте контейнера в `/config.json` (FE-129), same-origin `/api` — по умолчанию;
+> сборка получает только `PRIMER_RELEASE` / `PRIMER_COMMIT` / `PRIMER_EDITION`
+> (`tz-whitelabel.md` §1). UI-примитивы — пакет `@velo/ui` (`tz-ui-package.md`).
+
 > **ИСТОЧНИК ДИЗАЙНА (канон, 2026-06):** Figma выведена из источников **навсегда**.
 > Источник дизайна каждого экрана — присланный оператором **SVG текущего состояния
 > экрана**; всякое UI-значение через DS-токен `--velo-*` / DS-компонент (DS-first).
@@ -911,6 +917,7 @@ export const api = {
   - `fetchMyPractices()` — GET /api/v1/masters/me/practices
   - `refreshMyPractices()` — принудительный рефреш кэша
   - `fetchMyProfile(force?)` — GET /api/v1/masters/me, lazy по умолчанию
+  - FE-166 шаг 5 (FE-179): профиль и оба списка практик переехали в Pinia Colada (`composables/queries/master.ts`); в сторе остался только флаг онбординга сессии
 - [x] src/views/master/MasterPracticesView.vue:
   - Список практик мастера (upcoming / past)
   - Кнопка "Создать практику"
@@ -1373,6 +1380,7 @@ TimezoneSettingsView, роуты user/master-language-timezone -> user/master-ti
 **Задачи:**
 
 - [x] Слой данных (1b-1): `api/types.ts` (+реэкспорт `DiaryFeedItem`/`DiaryFeedResponse`, UI-типы `DiaryEventKind`/`DiaryFeedCategory`/`DiaryFeedFilters`), `api/diary.ts` (`listDiaryFeed` — cursor+категории+дата+поиск), `composables/useCursorPagination.ts` (NEW), переписан `stores/diary.ts` (курсорная лента + фильтры; сохранены submit/CRUD/insights; удалены 3 offset-списка)
+  - FE-166 шаг 8 (FE-182): лента, окно прыжка из поиска, запись и инсайты практик переехали в Pinia Colada (`composables/queries/diary.ts`); `useCursorPagination` удалён; в сторе остались фильтры, позиция прокрутки, цель прыжка, очередь оптимистичных отправок и мутации
 - [x] Компоненты (1b-2): `components/shared/DiaryFeedCard.vue` (3 формы: banner/practice/standard), `DiaryComposer.vue` (нижний pill, создаёт note), `DiaryTimeline.vue` (нить с альтернированием), `views/user/DiaryFeedView.vue` (шапка + нить + infinite scroll + композер); новые иконки (IconPen/IconDreamBook/IconDots/IconMic/IconSend/IconDateLeaf)
 - [x] `router/index.ts` — `user-diary` → `DiaryFeedView`
 - [x] Удалены старый `DiaryView.vue` + 5 sub-компонентов (DiaryList/DiaryCheckinDetail/DiaryFeedbackDetail/DiaryEntryDetail/DiaryEntryForm)

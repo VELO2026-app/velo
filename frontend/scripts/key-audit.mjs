@@ -1,7 +1,9 @@
 // tz-i18n §4.4 key audit: catalog <-> code consistency gate.
 //
-// Three checks over the composed ru catalog (merged exactly like
-// src/locales/index.ts: shallow spread over the glob-sorted files):
+// Checks over the composed ru catalog: a shallow spread over the glob-sorted
+// files, the way src/locales/index.ts composes its parts (eager core, lazy
+// zone catalogs). timezones.json is in the spread as a seed, though the
+// runtime never merges it into messages (utils/timezoneCities.ts reads it):
 //   1. MISSING  -- a t('key') reference in src that no catalog path resolves.
 //                  These render the raw key path to users; tests never catch
 //                  them (test i18n silences missingWarn, hidden v-if blocks
@@ -15,12 +17,15 @@
 //   4. FLAT-DOTTED-- a key whose NAME contains '.': string-collides with the
 //                  nested path of the same name in usage audits, and vue-i18n
 //                  flat-vs-nested resolution is ambiguous. Fails the gate.
+//   5. ZONE     -- a key of a lazy zone catalog (master.json, admin.json)
+//                  read by code that also runs outside the zone (2g below).
+//                  Fails the gate.
 //
 // Dynamic keys are legal (t(`report.reasons.${code}`)); the audit collects
 // every ${...} prefix in source and treats catalog paths under them as used.
 // Interpolation params are fine -- only the KEY PATH is audited.
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
@@ -65,10 +70,11 @@ function walk(dir) {
   }
 }
 walk(srcRoot)
+// FE-116 (tz-ui-package.md §3.7): t() references from packages/velo-ui
+// resolve against the app catalogs too (the P3 i18n seam has the package
+// calling the host's keys) -- the audit must see them from day one.
+walk('../packages/velo-ui/src')
 
-const BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g
-const LINE_COMMENT = /\/\/.*/g
-const HTML_COMMENT = /<!--[\s\S]*?-->/g
 const KEY_CALL = /\bt\(\s*(['"`])([^'"`]+)\1/g
 
 // Quote-aware comment stripper: removes // and /* */ only OUTSIDE string
@@ -116,6 +122,10 @@ function stripJsComments(src) {
 
 const usedExact = new Set()
 const dynamicPrefixes = new Set()
+// Per file, for the zone check (2g): every referenced key path or dynamic
+// prefix, and the comment-free script code (its static imports).
+const refsByFile = new Map()
+const scriptByFile = new Map()
 for (const p of srcFiles) {
   const raw = readFileSync(p, 'utf8')
   // .vue: the template gets only HTML-comment stripping (a "/*" inside an
@@ -133,11 +143,21 @@ for (const p of srcFiles) {
     scriptMatch ? stripJsComments(scriptMatch[1]) : '',
     scriptMatch ? '' : stripJsComments(raw),
   ].join('\n')
+  const refs = new Set()
   for (const m of src.matchAll(KEY_CALL)) {
     const path = m[2]
     if (path.includes('${')) dynamicPrefixes.add(path.split('${')[0])
     else usedExact.add(path)
+    refs.add(path.split('${')[0])
   }
+  refsByFile.set(p, refs)
+  // Every script block (an SFC may carry <script> and <script setup>).
+  const code = p.endsWith('.vue')
+    ? [...raw.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)]
+        .map((m) => stripJsComments(m[1]))
+        .join('\n')
+    : stripJsComments(raw)
+  scriptByFile.set(p, code)
 }
 
 function resolve(path) {
@@ -162,6 +182,8 @@ for (const path of usedExact) {
 // schoolBranding). Their leaves are exempt from the unused check.
 const DATA_ROOTS = new Set(['errors', 'storeErrors', 'transcription'])
 const SEED_FILES = new Set(['timezones.json', 'dates.json', 'languages.json', 'taxonomy.json'])
+// Read at BUILD time by Node (pwa/manifest-locales.ts, FE-155), never by t().
+const BUILD_TIME_KEYS = new Set(['common.pwaDescription'])
 const unusedSkippedFiles = new Set(
   files
     .filter((f) => SEED_FILES.has(f))
@@ -183,6 +205,7 @@ function walkUnused(node, path) {
     return
   }
   if (path.endsWith('._comment') || path === '_comment') return
+  if (BUILD_TIME_KEYS.has(path)) return
   if (DATA_ROOTS.has(path.split('.')[0]) || unusedSkippedFiles.has(path.split('.')[0])) return
   if (!usedExact.has(path) && !isDynUsed(path)) unused.push(path)
 }
@@ -230,7 +253,7 @@ function walkCompile(node, path) {
   try {
     compileI18n.global.t(path)
   } catch (e) {
-    compileFails.push(`${path} :: ${String(e.message).slice(0, 100)}`)
+    compileFails.push(`${path} :: ${String(e instanceof Error ? e.message : e).slice(0, 100)}`)
   }
 }
 walkCompile(catalog, '')
@@ -266,7 +289,9 @@ for (const locale of localeDirs) {
     try {
       compileI18n.global.t(path)
     } catch (e) {
-      foreignCompileFails.push(`${locale}: ${path} :: ${String(e.message).slice(0, 90)}`)
+      foreignCompileFails.push(
+        `${locale}: ${path} :: ${String(e instanceof Error ? e.message : e).slice(0, 90)}`,
+      )
     }
   }
   walkCompileLocale(cat, '')
@@ -331,6 +356,151 @@ for (const locale of localeDirs) {
     if (key !== 'generic' && !errorCodes.includes(key)) {
       errorCodeMismatches.push(`${locale}: errors.${key} present but not in ERROR_CODES`)
     }
+  }
+}
+
+// -- 2f. @velo/ui registry: every UI_I18N_KEYS resolves in EVERY locale -------
+// FE-118 (tz-ui-package.md §4 P3): kit components render ui.* keys through
+// the injected host translator, so a registry key missing from ANY shipped
+// locale renders a raw path inside the KIT. Unlike the app parity report
+// above (fallback covers, translation may trail), the kit registry is a
+// HARD gate -- the package cannot ship against a half-translated host.
+// node cannot import the TS module, so the literals are read off the
+// UI_I18N_KEYS array like any other source scan; a shape change in the
+// module fails loudly instead of skipping the check.
+const i18nModuleSrc = readFileSync(join('..', 'packages', 'velo-ui', 'src', 'i18n.ts'), 'utf8')
+const registryMatch = i18nModuleSrc.match(/export const UI_I18N_KEYS = \[([\s\S]*?)\] as const/)
+const registryKeys = registryMatch
+  ? [...registryMatch[1].matchAll(/'(ui\.[A-Za-z0-9_.]+)'/g)].map((m) => m[1])
+  : []
+const registryViolations = []
+if (registryKeys.length === 0) {
+  registryViolations.push(
+    'cannot extract UI_I18N_KEYS from ../packages/velo-ui/src/i18n.ts -- the module moved or the array is empty',
+  )
+} else {
+  for (const locale of localeDirs) {
+    const cat = catalogOf(locale)
+    for (const key of registryKeys) {
+      if (resolveLocale(cat, key) === undefined)
+        registryViolations.push(`${locale}: ${key} (UI_I18N_KEYS) missing`)
+    }
+  }
+}
+
+// -- 2g. zone catalogs: which code may read their keys --------------------------
+// FE-157: the zone catalogs (ZONE_CATALOGS in src/locales/index.ts) load only
+// with their zone's routes (router/catalogs.ts). A zone key read by code that
+// also runs outside the zone renders its raw path there -- and no test sees
+// it: the suite preloads every catalog (test-setup.ts). A file may read a
+// zone's keys when it lives in one of the zone's folders, or when EVERY file
+// importing it statically may (a shared component only zone screens mount).
+// A route screen outside the folders has no static importer and fails.
+// ZONE_READER_EXCEPTIONS names the files the file-level graph cannot judge
+// (only some exports read zone keys): an importer outside the zone may import
+// the listed exports only.
+const ZONE_FOLDERS = {
+  master: ['src/views/master/'],
+  admin: ['src/views/admin/', 'src/components/admin/'],
+}
+const ZONE_READER_EXCEPTIONS = {
+  // The status / category labels read adminScreens.adminSupport.*; the user
+  // and master support screens import only the topic label (supportTopics.*,
+  // common.json).
+  'src/utils/supportTopics.ts': { zone: 'admin', sharedExports: ['supportTopicLabel'] },
+}
+const localesIndexSrc = readFileSync(join('src', 'locales', 'index.ts'), 'utf8')
+const zoneListMatch = localesIndexSrc.match(/export const ZONE_CATALOGS = \[([^\]]*)\] as const/)
+if (!zoneListMatch) throw new Error('key-audit: cannot parse ZONE_CATALOGS in src/locales/index.ts')
+const zoneOfRoot = new Map()
+for (const [, zone] of zoneListMatch[1].matchAll(/'([a-z]+)'/g)) {
+  if (!ZONE_FOLDERS[zone])
+    throw new Error(`key-audit: zone catalog '${zone}' has no ZONE_FOLDERS entry`)
+  const file = join('src', 'locales', DEFAULT_LOCALE, `${zone}.json`)
+  for (const root of Object.keys(JSON.parse(readFileSync(file, 'utf8')))) zoneOfRoot.set(root, zone)
+}
+
+const STATIC_IMPORT =
+  /(?:^|\n)\s*(?:import|export)\s+(?!type\b)(?:[\w*{}\s,$]+?\s+from\s+)?['"]([^'"]+)['"]/g
+function resolveImport(from, spec) {
+  let base
+  if (spec.startsWith('@/')) base = join('src', spec.slice(2))
+  else if (spec.startsWith('.')) base = join(dirname(from), spec)
+  else return null
+  for (const candidate of [base, `${base}.ts`, `${base}.vue`, join(base, 'index.ts')]) {
+    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate
+  }
+  return null
+}
+const importersOf = new Map()
+for (const [file, code] of scriptByFile) {
+  for (const [, spec] of code.matchAll(STATIC_IMPORT)) {
+    const target = resolveImport(file, spec)
+    if (target) importersOf.set(target, (importersOf.get(target) ?? new Set()).add(file))
+  }
+}
+
+const inZone = (file, zone) => ZONE_FOLDERS[zone].some((dir) => file.startsWith(dir))
+const mayReadMemo = new Map()
+function mayRead(file, zone, visiting = new Set()) {
+  if (inZone(file, zone)) return true
+  const key = `${zone}:${file}`
+  if (mayReadMemo.has(key)) return mayReadMemo.get(key)
+  if (visiting.has(file)) return true // an import cycle decides nothing on its own
+  visiting.add(file)
+  const importers = [...(importersOf.get(file) ?? [])]
+  const ok = importers.length > 0 && importers.every((imp) => mayRead(imp, zone, visiting))
+  mayReadMemo.set(key, ok)
+  return ok
+}
+/** Names `importer` takes from `target` (null: a default/namespace import). */
+function namedImports(importer, target) {
+  const names = []
+  const re = /import\s+(?!type\b)([\w*{}\s,$]+?)\s+from\s+['"]([^'"]+)['"]/g
+  for (const [, clause, spec] of scriptByFile.get(importer).matchAll(re)) {
+    if (resolveImport(importer, spec) !== target) continue
+    const braces = clause.match(/^\{([^}]*)\}$/)
+    if (!braces) return null
+    for (const part of braces[1].split(',')) {
+      const name = part
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)[0]
+      if (name) names.push(name)
+    }
+  }
+  return names
+}
+
+const zoneViolations = []
+for (const [file, refs] of refsByFile) {
+  const zones = new Map()
+  for (const ref of refs) {
+    const zone = zoneOfRoot.get(ref.split('.')[0])
+    if (zone) zones.set(zone, [...(zones.get(zone) ?? []), ref])
+  }
+  for (const [zone, keys] of zones) {
+    if (mayRead(file, zone)) continue
+    const exception = ZONE_READER_EXCEPTIONS[file]
+    if (exception?.zone === zone) {
+      for (const importer of importersOf.get(file) ?? []) {
+        if (mayRead(importer, zone)) continue
+        const names = namedImports(importer, file)
+        const extra =
+          names === null
+            ? ['(default or namespace import)']
+            : names.filter((n) => !exception.sharedExports.includes(n))
+        if (extra.length > 0) {
+          zoneViolations.push(
+            `${importer}: imports ${extra.join(', ')} from ${file} (reads ${zone}.json keys)`,
+          )
+        }
+      }
+      continue
+    }
+    zoneViolations.push(
+      `${file}: ${keys.slice(0, 3).join(', ')}${keys.length > 3 ? ', ...' : ''} (${zone}.json)`,
+    )
   }
 }
 
@@ -400,6 +570,19 @@ if (errorCodeMismatches.length > 0) {
     `\nkey-audit: ${errorCodeMismatches.length} ERROR_CODES <-> errors catalog mismatch(es):\n`,
   )
   for (const k of errorCodeMismatches) console.error(`   ${k}`)
+}
+if (registryViolations.length > 0) {
+  failed = true
+  console.error(`\nkey-audit: ${registryViolations.length} @velo/ui registry key(s) unresolved:\n`)
+  for (const k of registryViolations) console.error(`   ${k}`)
+}
+if (zoneViolations.length > 0) {
+  failed = true
+  console.error(
+    `\nkey-audit: ${zoneViolations.length} zone catalog key(s) read outside their zone -- ` +
+      'move the key to an eager catalog or the reader into the zone:\n',
+  )
+  for (const k of zoneViolations) console.error(`   ${k}`)
 }
 if (failed) process.exit(1)
 console.log(

@@ -13,6 +13,7 @@ import {
   isFull,
   localSortKey,
   dayLabelOf,
+  dayKeyOf,
 } from '@/utils/format'
 
 // -----------------------------------------------------------------------
@@ -396,5 +397,32 @@ describe('isFull', () => {
 
   it('returns true when current exceeds max', () => {
     expect(isFull(21, 20)).toBe(true)
+  })
+})
+
+describe('Intl.DateTimeFormat reuse', () => {
+  it('constructs a formatter once per (locale, timeZone, options), not per call', () => {
+    const Real = Intl.DateTimeFormat
+    const ctor = vi.fn(function (...args: ConstructorParameters<typeof Real>) {
+      return new Real(...args)
+    })
+    vi.stubGlobal('Intl', { ...Intl, DateTimeFormat: ctor })
+    try {
+      // A timezone no other test uses, so the first call is a guaranteed miss.
+      const tz = 'Pacific/Kiritimati'
+      const before = ctor.mock.calls.length
+      const k1 = dayKeyOf('2026-03-01T10:00:00Z', tz)
+      const afterFirst = ctor.mock.calls.length
+      const k2 = dayKeyOf('2026-03-02T10:00:00Z', tz)
+      dayKeyOf('2026-03-03T10:00:00Z', tz)
+      expect(afterFirst - before).toBe(1)
+      expect(ctor.mock.calls.length).toBe(afterFirst)
+      expect(k1).toBe('2026-03-02') // UTC+14 crosses midnight
+      expect(k2).toBe('2026-03-03')
+      // A different timezone must not reuse that formatter.
+      expect(dayKeyOf('2026-03-01T10:00:00Z', 'UTC')).toBe('2026-03-01')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

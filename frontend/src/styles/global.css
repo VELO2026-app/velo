@@ -4,9 +4,25 @@
  * CSS reset + base typography.
  * Imported once in main.ts, applies to the entire app.
  *
- * FIX 10.6: Google Fonts loaded via <link> in index.html instead of
- * @import here. Eliminates render-blocking CSS request (+200-500ms FCP).
+ * Marmelad is self-hosted (@font-face below, preloaded from index.html), so
+ * there is no third-party font request on the golden build.
  * =========================================================================== */
+
+/* === Font === */
+/* Cyrillic+latin subset of Marmelad Regular (OFL 1.1; text in
+   public/fonts/OFL.txt). `swap` shows the fallback stack at once. A skin that
+   sets brand.json fontUrl replaces the preload in index.html; this face then
+   simply goes unused and is never fetched. */
+@font-face {
+  /* The face NAME this rule declares (the descriptor --font-body points at),
+     not a property use -- the FE-154 token gate does not apply. */
+  /* stylelint-disable-next-line declaration-property-value-allowed-list */
+  font-family: 'Marmelad';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/marmelad-subset.woff2') format('woff2');
+}
 
 /* === Reset === */
 *,
@@ -379,6 +395,14 @@ ol {
    ============================================================================= */
 
 /* === Photo background layer (PROMPT №383) === */
+/* The photo URL is a token so a skin can swap the FORMAT: the golden ships
+   WebP, while already-released skins carry assets/bg/background.png. The build
+   (platform/skin.ts materializedSkinTokens) re-points this to whichever file
+   the skin package really holds. Also read by the two onboarding overlays. */
+:root {
+  --velo-app-bg-image: url('/bg/background.webp');
+}
+
 /* `#app-bg` is a STATIC element in index.html (first child of <body>, before
    #app) -- not Vue-rendered -- so it paints at first paint with zero
    mount-delay flash. Body-level, not `#app::before`: `#app` sits inside a
@@ -404,7 +428,7 @@ ol {
   height: 100lvh; /* pre-JS-paint fallback, overridden by the var below once JS runs */
   height: var(--velo-frozen-vh, 100lvh);
   z-index: -1;
-  background: url('/bg/background.png') center / cover no-repeat;
+  background: var(--velo-app-bg-image) center / cover no-repeat;
   pointer-events: none;
   /* [FE-44] Own compositing layer -- the standard iOS WebKit insurance for
      full-screen position:fixed layers: after keyboard interactions WebKit

@@ -25,7 +25,7 @@
   (operator design; VSegment<->track+thumb unification is a SHELL task).
 
   Data reality (decisions locked with operator 2026-06-11):
-    REAL: past completed practices (masterStore) + per-practice insights
+    REAL: past completed practices (useMyPractices('past')) + per-practice insights
           (GET /practices/{id}/insights -> anonymous rating/mood distributions).
           Insights are eager-loaded for the visible page so the inline badges and
           the aggregate are populated without a tap.
@@ -130,10 +130,7 @@
       <section class="analytics__section">
         <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.past') }}</h2>
 
-        <div
-          v-if="masterStore.practicesPastLoading && pastPractices.length === 0"
-          class="analytics__loader"
-        >
+        <div v-if="past.loading.value" class="analytics__loader">
           <VLoader />
         </div>
 
@@ -179,12 +176,8 @@
             :label="t('masterScreens.analytics.morePractices', hiddenPastCount)"
             @click="pastExpanded = true"
           />
-          <div v-else-if="pastExpanded && masterStore.practicesPastHasMore" class="analytics__more">
-            <VButton
-              variant="ghost"
-              :loading="masterStore.practicesPastLoading"
-              @click="onLoadMore"
-            >
+          <div v-else-if="pastExpanded && past.hasMore.value" class="analytics__more">
+            <VButton variant="ghost" :loading="past.fetching.value" @click="onLoadMore">
               {{ t('common.showMore') }}
             </VButton>
           </div>
@@ -265,8 +258,8 @@
 import { t, getLocale } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useMasterStore } from '@/stores/master'
-import { useDiaryStore } from '@/stores/diary'
+import { useMyPractices } from '@/composables/queries/master'
+import { usePracticeInsights } from '@/composables/queries/diary'
 import {
   VLoader,
   VButton,
@@ -295,11 +288,9 @@ import type {
 } from '@/api/types'
 
 const router = useRouter()
-const masterStore = useMasterStore()
-const diaryStore = useDiaryStore()
-
-// Reactive Map<practiceId, insights> -- computeds below track additions.
-const insightsCache = diaryStore.insightsCache
+// Practices' insights in the Colada cache (composables/queries/diary.ts):
+// get/has read it reactively -- computeds below track arrivals.
+const insightsCache = usePracticeInsights()
 
 // =========================================================================
 // Tabs (track+thumb segment) + period toggle (visual-only)
@@ -330,10 +321,12 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> 
 // Past practices (completed, newest first)
 // =========================================================================
 
-// T22-5 (PROMPT №561): the server now owns the completed-only, most-recent-
-// first ordering -- no client-side filter/sort left to hide the next
-// ordering bug.
-const pastPractices = computed(() => masterStore.practicesPast)
+// T22-5 (PROMPT №561): the server owns the completed-only, most-recent-first
+// ordering -- no client-side filter/sort left to hide the next ordering bug
+// -- and this screen only ever needs the past list: the upcoming one is never
+// asked for here.
+const past = useMyPractices('past')
+const pastPractices = computed(() => past.practices.value)
 
 // Period scoping (#1, fork V): until a period-scoped reviews API exists, filter
 // the loaded past practices client-side (week = 7 days, month = 30) so the
@@ -545,16 +538,20 @@ watch(period, () => {
 // =========================================================================
 
 // Eager-load insights for the visible page -- feeds both the aggregate stats and
-// the inline practice-card badges. loadInsights() skips already-cached ids, so
+// the inline practice-card badges. The reader's load() skips ids already held, so
 // this is idempotent across re-runs and load-more.
 function loadVisibleInsights(): Promise<void[]> {
-  return Promise.all(pastPractices.value.map((p) => diaryStore.loadInsights(p.id)))
+  return Promise.all(pastPractices.value.map((p) => insightsCache.load(p.id)))
 }
 
 async function onLoadMore(): Promise<void> {
-  await masterStore.loadMorePastPractices()
-  await loadVisibleInsights()
+  // A failed next page keeps the list and the button (a retry is the next
+  // tap), as before. The new page's badges: the pastPractices watch below.
+  await past.loadMore().catch(() => {})
 }
+
+// The rating badges follow the past list: its first page, a next page, a refetch.
+watch(pastPractices, () => void loadVisibleInsights())
 
 /** Open the per-practice reviews detail (G2: closes the card-tap from G4). */
 function openReviews(practiceId: string): void {
@@ -568,9 +565,8 @@ function openReviews(practiceId: string): void {
 onMounted(async () => {
   if (PAYMENTS_TAB_ENABLED) void loadPayments()
   void loadReviews()
-  // T22-5 (PROMPT №561): this tab only ever needs t('masterScreens.analytics.tab.past') -- fetching the
-  // combined bucket here would warm t('masterScreens.analytics.tab.upcoming') for no reason.
-  await masterStore.fetchPastPractices()
+  // The past list loads itself (useMyPractices above); a cached one is
+  // already here and needs its badges now.
   await loadVisibleInsights()
 })
 </script>

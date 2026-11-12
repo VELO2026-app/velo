@@ -1,0 +1,29 @@
+# Same shape as frontend/.gitignore, minus the app-specific entries
+# (skin package, env files -- the package owns neither).
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Storybook static build (pnpm build-storybook)
+storybook-static/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*
+
+# TypeScript cache
+*.tsbuildinfo
+# ESLint cache
+.eslintcache

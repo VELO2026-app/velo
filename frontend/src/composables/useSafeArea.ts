@@ -48,8 +48,8 @@
 // =============================================================================
 
 import { computed, type ComputedRef } from 'vue'
-import { viewport, useSignal } from '@tma.js/sdk-vue'
 import { platform } from '@/platform'
+import { tmaViewportState } from '@/platform/tma-viewport'
 
 /** Top clearance outside Telegram: the system inset (0 where there is none). */
 export const STANDALONE_SAFE_TOP = 'env(safe-area-inset-top, 0px)'
@@ -70,9 +70,11 @@ function toNum(v: unknown): number {
  *   `:style="{ paddingTop: contentSafeTopCss }"`
  */
 export function useSafeArea(): { contentSafeTopCss: ComputedRef<string> } {
-  const isMounted = useSignal(viewport.isMounted)
-  const safeTop = useSignal(viewport.safeAreaInsetTop)
-  const contentTop = useSignal(viewport.contentSafeAreaInsetTop)
+  const {
+    isMounted,
+    safeAreaInsetTop: safeTop,
+    contentSafeAreaInsetTop: contentTop,
+  } = tmaViewportState
 
   const telegramSafeTop = computed<number>(() => {
     if (!isMounted.value) return 0

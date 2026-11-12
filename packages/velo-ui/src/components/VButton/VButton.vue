@@ -1,0 +1,216 @@
+<!--
+  @velo/ui -- VButton Component (Phase F2.1; migrated FE-117 batch A)
+
+  Primary action element. VELΘ pill-shaped glass design.
+
+  Variants: primary | secondary | danger | ghost | outline (alias -> secondary)
+  Sizes:    sm | md (default) | lg (alias -> md)
+  States:   disabled, loading (shows spinner + prevents clicks)
+
+  Usage:
+    <VButton variant="primary" @click="save">Save</VButton>
+    <VButton variant="danger" size="sm" :loading="saving">Delete</VButton>
+    <VButton block>Full width</VButton>
+-->
+
+<template>
+  <button
+    :class="[
+      'v-btn',
+      `v-btn--${normalizedVariant}`,
+      `v-btn--${normalizedSize}`,
+      {
+        'v-btn--block': block,
+        'v-btn--loading': loading,
+      },
+    ]"
+    :data-velo-variant="normalizedVariant"
+    :data-velo-size="normalizedSize"
+    :data-velo-loading="loading || undefined"
+    :data-velo-disabled="disabled || undefined"
+    :disabled="disabled || loading"
+    @click="$emit('click', $event)"
+  >
+    <!-- §7.2 (FE-117): the spinner node is a slot with the canonical fallback
+         -- skins/tests may replace it without forking the component. -->
+    <slot name="spinner">
+      <span v-if="loading" class="v-btn__spinner" />
+    </slot>
+    <span :class="{ 'v-btn__content--hidden': loading }">
+      <slot />
+    </span>
+  </button>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+
+const props = withDefaults(
+  defineProps<{
+    variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline'
+    size?: 'sm' | 'md' | 'lg'
+    block?: boolean
+    disabled?: boolean
+    loading?: boolean
+  }>(),
+  {
+    variant: 'primary',
+    size: 'md',
+    block: false,
+    disabled: false,
+    loading: false,
+  },
+)
+
+defineEmits<{
+  click: [event: MouseEvent]
+}>()
+
+const normalizedVariant = computed(() =>
+  props.variant === 'outline' ? 'secondary' : props.variant,
+)
+const normalizedSize = computed(() => (props.size === 'lg' ? 'md' : props.size))
+</script>
+
+<style scoped>
+.v-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  /* Button labels a touch heavier (operator 2026-06-17). Marmelad is single-
+     weight (400), so 600 is the lightest step the browser synthesizes heavier. */
+  font-weight: 600;
+  border: 1px solid var(--velo-glass-border);
+  cursor: pointer;
+  /* Explicit list, never `all`: a state change (disabled -> enabled, a skin
+     swap) must not fade the glow shadow or the border in -- only the colours
+     and the press scale move. No backdrop-filter: a 2px blur under a
+     near-opaque fill is invisible, but every button inside the scroller paid
+     for its own compositor layer on each scrolled frame. */
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
+  text-decoration: none;
+  position: relative;
+  white-space: nowrap;
+  border-radius: var(--radius-full);
+  box-shadow: var(--velo-shadow-glow);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Press: quick down, soft release (behavior.md: scale .97). */
+.v-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: var(--velo-dur-press);
+}
+
+/* -- Sizes -- */
+.v-btn--sm {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--velo-fs-14);
+  /* 44px touch-target bar (PROMPT №679); reuses the existing --velo-size-44
+     token rather than a raw px, sitting between VInput's 40px affix height
+     and .v-btn--md's 50px, inside the app's existing size range. */
+  min-height: var(--velo-size-44);
+}
+
+.v-btn--md {
+  padding: var(--velo-inset-12) var(--space-5);
+  font-size: var(--velo-fs-16);
+  min-height: var(--velo-size-50);
+}
+
+/* -- Variants -- */
+.v-btn--primary {
+  background: var(--velo-primary);
+  color: var(--velo-white);
+}
+
+.v-btn--secondary {
+  background: var(--velo-glass-blue-60);
+  color: var(--velo-text-primary);
+}
+
+.v-btn--danger {
+  background: var(--velo-pink-300);
+  color: var(--velo-white);
+}
+
+.v-btn--ghost {
+  background: var(--velo-glass-white-01);
+  color: var(--velo-text-primary);
+}
+
+/* Hover fills only on real pointer devices: on touch (Telegram WebView) :hover
+   sticks after a tap and leaves the button looking "filled" — most visible on the
+   ghost show-more button (i18n:common.showMore; operator PROMPT №162). Desktop
+   hover unchanged. */
+@media (hover: hover) {
+  .v-btn--primary:hover:not(:disabled) {
+    background: var(--velo-primary-dark);
+  }
+
+  .v-btn--secondary:hover:not(:disabled) {
+    background: var(--velo-glass-blue-15);
+  }
+
+  .v-btn--danger:hover:not(:disabled) {
+    background: var(--velo-error);
+  }
+
+  .v-btn--ghost:hover:not(:disabled) {
+    background: var(--velo-glass-blue-15);
+  }
+}
+
+/* -- Modifiers -- */
+.v-btn--block {
+  width: 100%;
+}
+
+.v-btn:disabled {
+  cursor: not-allowed;
+}
+
+/* Disabled (non-loading): one clear neutral state for EVERY variant — muted
+   glass fill + muted text, flat (no glow / no blur). Replaces the old
+   opacity:0.5 that just washed the variant colour and read as "broken".
+   DS-wide: applies to all VButton usages. Loading keeps its variant colour +
+   spinner (excluded via :not(.v-btn--loading)). */
+.v-btn:disabled:not(.v-btn--loading) {
+  background: var(--velo-nav-inactive-bg);
+  color: var(--velo-text-muted);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* -- Loading -- */
+.v-btn--loading {
+  cursor: wait;
+}
+
+.v-btn__content--hidden {
+  visibility: hidden;
+}
+
+.v-btn__spinner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: var(--radius-full);
+  animation: v-btn-spin 0.6s linear infinite;
+}
+
+@keyframes v-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

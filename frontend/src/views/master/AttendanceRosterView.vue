@@ -129,7 +129,8 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useMasterStore } from '@/stores/master'
+import { cachedMyPractice } from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import { getPractice, getAttendance } from '@/api/practices'
 import { extractApiError } from '@/composables/useApiError'
 import { VStatCard, VButton, VLoader, VEmptyState, VBadge } from '@/components/ui'
@@ -142,7 +143,7 @@ import type { PracticeResponse, AttendanceResponse, AttendanceItemResponse } fro
 
 const route = useRoute()
 const router = useRouter()
-const masterStore = useMasterStore()
+const queryCache = useQueryCache()
 
 const practiceId = route.params.id as string
 
@@ -201,7 +202,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    const cached = masterStore.practices.find((p) => p.id === practiceId)
+    const cached = cachedMyPractice(queryCache, practiceId)
     if (cached) {
       practice.value = cached
     }

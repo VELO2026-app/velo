@@ -88,8 +88,10 @@
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
           <!-- FE-19 (GT P3): the schools I belong to. The master's student
-               groups are a master-zone concept a plain user never meets. -->
+               groups are a master-zone concept a plain user never meets.
+               FE-151: the row follows the «schools» instance option. -->
           <VMenuRow
+            v-if="schoolsEnabled"
             :label="t('user.screens.userProfile.menu.mySchools')"
             @click="router.push({ name: 'user-my-schools' })"
           >
@@ -116,9 +118,10 @@
           </VMenuRow>
           <!-- BE-138: tokens for the user's AI (MCP) clients. tz-whitelabel
                §4: the row follows the «ai» edition module -- an edition
-               without it has neither the route nor the entry point. -->
+               without it has neither the route nor the entry point -- and
+               the «mcp» instance option (FE-151). -->
           <VMenuRow
-            v-if="aiEnabled"
+            v-if="aiConnectionsEnabled"
             :label="t('user.screens.userProfile.menu.aiConnections')"
             @click="onAiConnections"
           >
@@ -184,6 +187,7 @@ import { computed, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import { useUiStore } from '@/stores/ui'
 import { VAvatar, VStatCard, VCard, VMenuRow } from '@/components/ui'
 import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
@@ -200,8 +204,8 @@ import {
   IconBrain,
 } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
-import { useQuery } from '@/composables/useQuery'
-import { myStatsQuery } from '@/composables/queries'
+import { useQuery } from '@pinia/colada'
+import { myStatsQuery } from '@/composables/queries/stats'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -222,16 +226,19 @@ const displayName = computed(() => {
 })
 
 // -- Stats (attended practices + hours) from /bookings/me/stats --
-// The dashboard's cache entry (useQuery): a visit renders the last known
+// The dashboard's cache entry (Colada): a visit renders the last known
 // numbers at once instead of 0 -> N, and refreshes them every time (the
 // unread-messages dot must be current). A failed fetch keeps what is shown
 // (NEW-7: the profile never breaks on it).
-const statsQuery = useQuery(myStatsQuery(0))
-// Kept alive as a tab root (TabRouterView): a return revalidates quietly
-// (the shown data stays). The first activation is the mount itself.
+const statsQuery = useQuery(() => myStatsQuery(0))
+// Kept alive as a tab root (TabRouterView): a return refetches quietly (the
+// shown data stays). refetch, not refresh: the entry is shared with the
+// dashboard and the idle prefetch, and whoever ensured it last set its
+// staleTime (5 min) -- a refresh would then skip the unread dot. The first
+// activation is the mount itself.
 let activations = 0
 onActivated(() => {
-  if (activations++ > 0) void statsQuery.revalidate()
+  if (activations++ > 0) void statsQuery.refetch()
 })
 const practicesAttended = computed(() => statsQuery.data.value?.practices_attended ?? 0)
 const hoursAttended = computed(() => statsQuery.data.value?.hours_attended ?? 0)
@@ -269,8 +276,11 @@ function onAiConnections(): void {
   void router.push({ name: 'user-ai-connections' })
 }
 
-// tz-whitelabel §4: the «ai» edition module owns the menu row above.
-const aiEnabled = featureEnabled('ai')
+// tz-whitelabel §4: the «ai» edition module owns the AI connections row;
+// FE-151: the «mcp» instance option turns it on for the instance.
+const aiConnectionsEnabled = featureEnabled('ai') && isOptionEnabled('mcp')
+// FE-151: the «schools» instance option owns the my-schools row.
+const schoolsEnabled = isOptionEnabled('schools')
 
 function onSupport(): void {
   // User support screen (batch I): topic picker + message + honest stub submit

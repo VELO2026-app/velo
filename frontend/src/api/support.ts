@@ -34,6 +34,7 @@
 import { api } from '@/api/client'
 import { newIdempotencyKey } from '@/api/chats'
 import type { StatusIn, TicketIn } from '@/api/generated'
+import { path, raw } from '@/api/path'
 
 /** A topic code of the support forms (backend models.TOPICS). The label is
  *  the front's, in the reader's language -- utils/supportTopics.ts. */
@@ -209,7 +210,7 @@ export function rateTicket(
   stars: number,
   comment?: string,
 ): Promise<TicketRatingResult> {
-  return api.post<TicketRatingResult>(`/api/v1/support/tickets/${ticketId}/rating`, {
+  return api.post<TicketRatingResult>(path`/api/v1/support/tickets/${ticketId}/rating`, {
     stars,
     comment: comment?.trim() || null,
   })
@@ -289,7 +290,7 @@ export function listAdminTickets(query: AdminTicketQuery = {}): Promise<AdminSup
 /** One ticket by its id -- the same row as in the list, spam included. 404 --
  *  no such ticket (a person's history thread included). */
 export function getAdminTicket(ticketId: string): Promise<AdminSupportTicket> {
-  return api.get<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}`)
+  return api.get<AdminSupportTicket>(path`/api/v1/support/tickets/${ticketId}`)
 }
 
 /** Move an OPEN ticket to a closing status. Returns the ticket without the
@@ -299,7 +300,7 @@ export function setTicketStatus(
   ticketId: string,
   status: SupportClosingStatus,
 ): Promise<SupportTicket> {
-  return api.post<SupportTicket>(`/api/v1/support/tickets/${ticketId}/status`, { status })
+  return api.post<SupportTicket>(path`/api/v1/support/tickets/${ticketId}/status`, { status })
 }
 
 // -- The handover (BE-162 delivery 2) -----------------------------------------
@@ -312,14 +313,16 @@ export function setTicketStatus(
  *  422 -- the assignee is not an admin; 409 -- the ticket changed hands
  *  meanwhile or is a history thread; 404 -- not a ticket. */
 export function assignTicket(ticketId: string, assignee: string): Promise<AdminSupportTicket> {
-  return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/assign`, { assignee })
+  return api.post<AdminSupportTicket>(path`/api/v1/support/tickets/${ticketId}/assign`, {
+    assignee,
+  })
 }
 
 /** Return the ticket to the pool (nobody holds it; every admin may reply
  *  again). 409 -- changed hands meanwhile or a history thread; 404 -- not a
  *  ticket. */
 export function releaseTicket(ticketId: string): Promise<AdminSupportTicket> {
-  return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/release`)
+  return api.post<AdminSupportTicket>(path`/api/v1/support/tickets/${ticketId}/release`)
 }
 
 /** Back to OPEN: reopen (i18n:adminScreens.adminSupportDetail.menu.reopen)
@@ -328,7 +331,7 @@ export function releaseTicket(ticketId: string): Promise<AdminSupportTicket> {
  *  retention -- one route for both. 409 -- open already, spam past the
  *  retention, or changed meanwhile; 404 -- gone (the spam bin emptied it). */
 export function reopenTicket(ticketId: string): Promise<AdminSupportTicket> {
-  return api.post<AdminSupportTicket>(`/api/v1/support/tickets/${ticketId}/reopen`)
+  return api.post<AdminSupportTicket>(path`/api/v1/support/tickets/${ticketId}/reopen`)
 }
 
 /** How long a spam verdict keeps the ticket recoverable. The backend reads
@@ -360,13 +363,15 @@ export function getAdminSupportMessages(
 ): Promise<SupportMessageList> {
   const qs = new URLSearchParams({ limit: String(limit) })
   if (cursor) qs.set('cursor', cursor)
-  return api.get<SupportMessageList>(`/api/v1/support/threads/${threadId}/messages?${qs}`)
+  return api.get<SupportMessageList>(
+    path`/api/v1/support/threads/${threadId}/messages?${raw(qs.toString())}`,
+  )
 }
 
 /** Reply as this admin, in a ticket. Throws ApiResponseError(403) -- via
  *  useApiError -- when the caller has not claimed it; comms' own refusal. */
 export function sendAdminSupportReply(threadId: string, body: string): Promise<SupportSentMessage> {
-  return api.post<SupportSentMessage>(`/api/v1/support/threads/${threadId}/messages`, { body })
+  return api.post<SupportSentMessage>(path`/api/v1/support/threads/${threadId}/messages`, { body })
 }
 
 /** Take a ticket -- the act that grants the right to reply. A repeat of your
@@ -376,7 +381,7 @@ export function sendAdminSupportReply(threadId: string, body: string): Promise<S
  *
  *  @throws ApiResponseError -- `held by another admin -> 409`. */
 export function claimSupportThread(threadId: string): Promise<unknown> {
-  return api.post<unknown>(`/api/v1/support/threads/${threadId}/claim`, {})
+  return api.post<unknown>(path`/api/v1/support/threads/${threadId}/claim`, {})
 }
 
 /** Ask again for a message whose translation job failed in transport
@@ -387,7 +392,7 @@ export function retrySupportTranslation(
   messageId: string,
 ): Promise<SupportRetryResult> {
   return api.post<SupportRetryResult>(
-    `/api/v1/support/threads/${threadId}/messages/${messageId}/translation/retry`,
+    path`/api/v1/support/threads/${threadId}/messages/${messageId}/translation/retry`,
     {},
   )
 }

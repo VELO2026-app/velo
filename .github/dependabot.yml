@@ -1,0 +1,108 @@
+# =============================================================================
+# Dependabot (FE-157 5A.4)
+# =============================================================================
+# npm: weekly, one grouped PR per area (build / lint / test / vue); anything a
+# group does not match gets its own PR. The pnpm workspace root owns the
+# lockfile, and the manifests below are its members.
+# github-actions: monthly.
+#
+# Group order matters -- a package joins the FIRST group whose patterns match
+# it. `test` precedes `vue` (@vue/test-utils belongs to the tests); `build`
+# and `lint` precede `vue` so the vue-named tooling (vue-tsc, @vitejs/plugin-vue,
+# vue-eslint-parser) rides with its peer (typescript, vite, eslint). Patterns
+# are explicit lists, never `vue-*`, which would swallow that tooling.
+#
+# Each group sets `group-by: dependency-name`: with several `directories`,
+# Dependabot otherwise opens one grouped PR per directory, and vite (pinned
+# exactly in frontend and packages/velo-ui) would be bumped in one manifest
+# only -- two vite copies in the lockfile. With it, one PR per dependency
+# spans all directories (GitHub Docs, "Dependabot options reference",
+# `groups.<name>.group-by`; version updates only, one ecosystem).
+#
+# cooldown 14 days holds every version back until it is two weeks old;
+# security updates are not delayed by it. The same rule is enforced for every
+# other install path (manual or agent bumps) by `minimumReleaseAge` in
+# pnpm-workspace.yaml (FE-164); keep the two at 14 days together.
+# =============================================================================
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /
+      - /frontend
+      - /packages/velo-ui
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    # TypeScript 7 (the native compiler) ships no JS compiler API: vue-tsc
+    # needs typescript/lib/tsc and typescript-eslint supports <6.1 only
+    # (checked 2026-11-11, PR #66). Hold at 6.0.x until both support 7.
+    ignore:
+      - dependency-name: typescript
+        versions: ['>=6.1.0']
+      # Vite 8 (Rolldown) is a migration, not a bump: the startup chunk
+      # layout and the precache budget (FE-157 s2) need redoing (PR #69).
+      # Held until a plugin we use requires it -- FE-169.
+      - dependency-name: vite
+        update-types: ['version-update:semver-major']
+      # @types/node tracks the runtime major: the image and `engines` run
+      # Node 24 (FE-157 5A.5). Bump it together with the Node image, not
+      # alone (PR #68 closed).
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+    groups:
+      build:
+        group-by: dependency-name
+        patterns:
+          - vite
+          - 'vite-*'
+          - '@vitejs/plugin-vue'
+          - typescript
+          - vue-tsc
+          - typedoc
+          - '@types/*'
+          - '@storybook/*'
+          - storybook
+      lint:
+        group-by: dependency-name
+        patterns:
+          - eslint
+          - 'eslint-*'
+          - '@eslint/*'
+          - typescript-eslint
+          - vue-eslint-parser
+          - prettier
+          - stylelint
+          - 'stylelint-*'
+          - postcss-html
+          - globals
+          - husky
+          - lint-staged
+      test:
+        group-by: dependency-name
+        patterns:
+          - vitest
+          - '@vitest/*'
+          - '@vue/test-utils'
+          - '@playwright/test'
+          - happy-dom
+      vue:
+        group-by: dependency-name
+        patterns:
+          - vue
+          - vue-i18n
+          - vue-router
+          - '@vue/*'
+          - pinia
+          - '@pinia/*'
+          - '@intlify/*'
+          - '@tma.js/*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14

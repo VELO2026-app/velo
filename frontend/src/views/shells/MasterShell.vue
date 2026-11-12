@@ -22,14 +22,14 @@
 
 <script setup lang="ts">
 import { rootComputedStyle } from '@/platform/dom'
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { warmRoute } from '@/router/prefetch'
 import { MobileLayout } from '@/components/layout'
 import { MASTER_TABS, type TabItem } from '@/router/tabs'
 import { useKeyboardOpen } from '@/composables/useKeyboardOpen'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
-import { featureEnabled } from '@/platform/features'
+import { useSchoolsHub } from '@/composables/queries/schools'
+import { isOptionEnabled } from '@/platform/instance'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,18 +41,17 @@ const router = useRouter()
 // (i18n:masterScreens.masterSchools.create) is their only path to a first
 // school). Fail-closed: the tab is
 // absent until a probe settles.
-const schoolsHub = useSchoolsHubStore()
-onMounted(() => {
-  void schoolsHub.ensureCurator()
-})
+// The hub's queries load on mount and retry a failed probe on the next one
+// (composables/queries/schools.ts, useSchoolsHub).
+const schoolsHub = useSchoolsHub()
 
 const visibleTabs = computed<TabItem[]>(() =>
   MASTER_TABS.filter((tab) => {
     if (!tab.requires) return true
-    // tz-whitelabel §4: an edition require is the feature registry's call;
-    // 'schools' stays the server-data condition (membership OR founding right).
-    if (tab.requires === 'schools') return schoolsHub.hasSchools || schoolsHub.canCreate
-    return featureEnabled(tab.requires)
+    // FE-151: the instance option first; then the server-data condition
+    // (membership OR founding right).
+    if (!isOptionEnabled('schools')) return false
+    return schoolsHub.hasSchools.value || schoolsHub.canCreate.value
   }),
 )
 

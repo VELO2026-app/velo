@@ -110,7 +110,8 @@ import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
 import { IconClose } from '@/components/icons'
 import MoodAvatar from '@/components/shared/MoodAvatar.vue'
-import { useMasterStore } from '@/stores/master'
+import { cachedMyPractice } from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import { getAttendance, getPractice } from '@/api/practices'
 import { formatDateShort, formatTime } from '@/utils/format'
 import { practiceIconFor } from '@/utils/displayHelpers'
@@ -119,7 +120,7 @@ import type { AttendanceResponse, AttendanceItemResponse, PracticeResponse } fro
 
 const route = useRoute()
 const router = useRouter()
-const masterStore = useMasterStore()
+const queryCache = useQueryCache()
 
 const practiceId = route.params.id as string
 
@@ -183,7 +184,7 @@ async function load(): Promise<void> {
 }
 
 async function loadPractice(): Promise<void> {
-  const cached = masterStore.practices.find((p) => p.id === practiceId)
+  const cached = cachedMyPractice(queryCache, practiceId)
   if (cached) {
     practice.value = cached
     return

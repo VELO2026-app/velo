@@ -2,29 +2,28 @@
 // VELO Frontend -- Diary Store (Diary redesign: unified feed)
 // =============================================================================
 //
-// Manages state for all diary-related data:
+// The diary's client state and its mutations. The server data -- the feed,
+// the search jump window, one entry, a practice's insights -- lives in Pinia
+// Colada (composables/queries/diary.ts, FE-182); every mutation here that
+// moves the timeline calls diaryFeedChanged() on success.
 //
-//   submit (unchanged -- used by CheckinView / FeedbackView):
-//     submitCheckin()  -- upsert check-in
-//     submitFeedback() -- upsert feedback
+//   submit (CheckinView / FeedbackView / ReflectionView / outside activity):
+//     submitCheckin() / submitFeedback() / submitReflection() /
+//     submitExternalActivity()
 //
-//   feed (DiaryFeedView -- the unified timeline, replaces the old tabs):
-//     fetchFeed() / loadMoreFeed() -- cursor-paginated DiaryEvent list
-//     setFeedFilters() / clearFeedFilters() / runFeedSearch()
+//   feed (DiaryFeedView): the filters it is read under, the saved scroll
+//     offset, the open search jump -- setFeedFilters() / clearFeedFilters() /
+//     runFeedSearch() / jumpToEntry() / exitJump()
 //
-//   diary entry CRUD (composer + future inline editor):
-//     createEntry() / updateEntry() / deleteEntry()
-//     selectedEntry + fetchEntry() -- single entry view/edit
-//
-//   insights (AnalyticsView, master-facing -- unchanged):
-//     loadInsights(practiceId) -- aggregated data for master
-//
-// The feed uses useCursorPagination (cursor, not offset) because the
-// DiaryEvent journal is append-only and read newest-first. Entry CRUD
-// refreshes the feed (a created/edited/deleted note is a feed event).
+//   diary entry CRUD: sendEntry() / retryEntry() (the composer's optimistic
+//     send queue), updateEntry() / deleteEntry() / restoreEntry()
 // =============================================================================
 
 import { defineStore } from 'pinia'
+import { useQueryCache } from '@pinia/colada'
+import { invalidateAfter } from '@/composables/queries/invalidation'
+import { diaryFeedChanged, type DiaryJumpTarget } from '@/composables/queries/diary'
+import { keys } from '@/composables/queries/keys'
 import { ref, reactive } from 'vue'
 import { newIdempotencyKey } from '@/api/chats'
 import { ApiResponseError } from '@/api/client'
@@ -32,20 +31,15 @@ import { extractApiError } from '@/composables/useApiError'
 import i18n from '@/locales'
 
 const { t } = i18n.global
-import { useCursorPagination } from '@/composables/useCursorPagination'
-import { mergeJumpWindow } from '@/utils/diaryJumpWindow'
 import {
   upsertCheckin,
   upsertFeedback,
   createReflection,
   createDiaryEntry,
-  getDiaryEntry,
   updateDiaryEntry,
   deleteDiaryEntry,
   restoreDiaryEntry,
   createExternalActivity,
-  listDiaryFeed,
-  getPracticeInsights,
 } from '@/api/diary'
 import type {
   CheckinRequest,
@@ -57,7 +51,6 @@ import type {
   DiaryEntryResponse,
   DiaryFeedItem,
   DiaryFeedFilters,
-  PracticeInsightsResponse,
 } from '@/api/types'
 
 /** Result of a diary submit: ok/error plus the backend error code when one reached the store. */
@@ -98,8 +91,17 @@ export interface PendingDiaryEntry {
   item: DiaryFeedItem
 }
 
-/** Diary state: check-in/feedback submit, the unified cursor feed, entry CRUD, master insights. */
+/** Diary client state: submits, the feed's filters and jump, the optimistic send queue, entry CRUD. */
 export const useDiaryStore = defineStore('diary', () => {
+  // Colada entries of the booking data go stale with each mutation below
+  // (composables/queries/invalidation.ts holds the map); the diary's own
+  // entries are refreshed through diaryFeedChanged().
+  const queryCache = useQueryCache()
+  // Bumped by $reset (the account boundary): an answer that lands after it
+  // belongs to the previous account -- it writes nothing and refreshes
+  // nothing. On a 401 the reset runs before the failing request's own catch.
+  let generation = 0
+
   // ===========================================================================
   // Check-in submit (CheckinView)
   // ===========================================================================
@@ -114,13 +116,15 @@ export const useDiaryStore = defineStore('diary', () => {
   async function submitCheckin(practiceId: string, body: CheckinRequest): Promise<SubmitResult> {
     if (checkinSubmitting.value) return { ok: false, error: '' }
     checkinSubmitting.value = true
+    const gen = generation
     try {
       await upsertCheckin(practiceId, body)
+      if (gen === generation) void invalidateAfter(queryCache, 'submitCheckin')
       // The check-in is now a feed event and flips the booking's has_checkin
       // flag -- refresh both so the diary feed and dashboard banner update.
       // Not awaited: the check-in is saved, so the «done» screen shows now;
       // the timeline catches up in the background (it never fails the submit).
-      void refreshAfterDiaryMutation()
+      if (gen === generation) void diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.sendCheckin'))
@@ -145,12 +149,14 @@ export const useDiaryStore = defineStore('diary', () => {
   async function submitFeedback(practiceId: string, body: FeedbackRequest): Promise<SubmitResult> {
     if (feedbackSubmitting.value) return { ok: false, error: '' }
     feedbackSubmitting.value = true
+    const gen = generation
     try {
       await upsertFeedback(practiceId, body)
+      if (gen === generation) void invalidateAfter(queryCache, 'submitFeedback')
       // The feedback is now a feed event and flips the booking's has_feedback
       // flag -- refresh both so the diary feed and dashboard banner update.
       // Not awaited -- see submitCheckin.
-      void refreshAfterDiaryMutation()
+      if (gen === generation) void diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.sendFeedback'))
@@ -172,9 +178,8 @@ export const useDiaryStore = defineStore('diary', () => {
    * @returns `{ ok, error }` so the view can show a toast on failure.
    *
    * The reflection projects nothing into the diary feed, so there is no feed
-   * to refresh here. The booking's has_reflection flag is refreshed by the
-   * view (bookingsStore.refreshBookings), as FeedbackView does for
-   * has_feedback.
+   * to refresh here. The booking's has_reflection flag comes back with the
+   * booking keys, which the success makes stale (INVALIDATES.submitReflection).
    */
   async function submitReflection(
     practiceId: string,
@@ -182,8 +187,10 @@ export const useDiaryStore = defineStore('diary', () => {
   ): Promise<SubmitResult> {
     if (reflectionSubmitting.value) return { ok: false, error: '' }
     reflectionSubmitting.value = true
+    const gen = generation
     try {
       await createReflection(practiceId, body)
+      if (gen === generation) void invalidateAfter(queryCache, 'submitReflection')
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.send'))
@@ -214,9 +221,10 @@ export const useDiaryStore = defineStore('diary', () => {
   ): Promise<SubmitResult & { fieldErrors?: ExternalActivityFieldErrors }> {
     if (externalActivitySubmitting.value) return { ok: false, error: '' }
     externalActivitySubmitting.value = true
+    const gen = generation
     try {
       await createExternalActivity(body)
-      await refreshAfterDiaryMutation()
+      if (gen === generation) await diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.saveEvent'))
@@ -247,11 +255,10 @@ export const useDiaryStore = defineStore('diary', () => {
   }
 
   // ===========================================================================
-  // Unified feed (DiaryFeedView)
-  //
-  // Cursor pagination over GET /api/v1/diary/feed. Filters live alongside the
-  // pagination: changing them resets and refetches from the first page so the
-  // cursor stays consistent with the active filter set.
+  // The feed's client state (DiaryFeedView): the filters it is read under, the
+  // saved scroll offset, the open search jump. The feed itself is a Colada
+  // query per filter set (composables/queries/diary.ts): changing a filter
+  // switches the screen to that set's entry, from its first page.
   // ===========================================================================
 
   const feedFilters = reactive<DiaryFeedFilters>({
@@ -261,246 +268,59 @@ export const useDiaryStore = defineStore('diary', () => {
     search: undefined,
   })
 
-  // Page size 40 (was the composable's default 20): a 20-event page is only
-  // ~2-3 screens of thread, so the first scroll up hit the seam before any
-  // prefetch could land. 40 gives ~4-5 screens per request (the backend caps
-  // at 100, diary_feed_max_page_size) and fewer seams overall -- the initial
-  // load alone covers a whole typical diary (owner: seamless scroll).
-  const feed = useCursorPagination<DiaryFeedItem>(
-    (cursor, limit) =>
-      listDiaryFeed({
-        categories: feedFilters.categories,
-        date_from: feedFilters.date_from,
-        date_to: feedFilters.date_to,
-        search: feedFilters.search,
-        cursor: cursor ?? undefined,
-        limit,
-      }),
-    40,
-  )
-
   // Saved feed scroll offset, so returning from an entry/detail restores the
   // user's place on the timeline instead of jumping back to "today" (bottom).
   const feedScrollTop = ref(0)
 
   /**
-   * Initial feed load. Skips if already loaded (navigating back).
-   */
-  async function fetchFeed(): Promise<void> {
-    if (feed.items.value.length > 0) return
-    // An answered EMPTY feed is data: revalidate it quietly (the screen keys
-    // its skeleton on feedLoaded, not on an empty list).
-    if (feed.loaded.value) {
-      await feed.refreshInPlace()
-      return
-    }
-    await feed.refresh()
-  }
-
-  /**
-   * Apply new filters (merge) and reload the feed from the first page.
+   * Apply new filters (merge): the feed reads from the first page under them.
    * Pass a fresh categories array / dates / search; omitted keys are kept.
    */
-  async function setFeedFilters(patch: Partial<DiaryFeedFilters>): Promise<void> {
+  function setFeedFilters(patch: Partial<DiaryFeedFilters>): void {
     exitJump()
     Object.assign(feedFilters, patch)
-    feed.loaded.value = false // a new query: its answer is not known yet
-    await feed.refresh()
   }
 
   /**
    * Clear all filters (back to the all-categories chip, i18n:common.all, no
-   * date range, no search) and reload.
+   * date range, no search).
    */
-  async function clearFeedFilters(): Promise<void> {
+  function clearFeedFilters(): void {
     exitJump()
     feedFilters.categories = []
     feedFilters.date_from = undefined
     feedFilters.date_to = undefined
     feedFilters.search = undefined
-    feed.loaded.value = false // a new query: its answer is not known yet
-    await feed.refresh()
   }
 
-  /**
-   * Run a text search (empty string clears it) and reload from the first page.
-   */
-  async function runFeedSearch(query: string): Promise<void> {
+  /** Run a text search (an empty string clears it). */
+  function runFeedSearch(query: string): void {
     // Typing again is a new search: any open jump window is left behind (the
     // view swaps back to the results list).
     exitJump()
     const trimmed = query.trim()
     feedFilters.search = trimmed.length > 0 ? trimmed : undefined
-    feed.loaded.value = false // a new query: its answer is not known yet
-    await feed.refresh()
   }
 
-  // ===========================================================================
-  // Search jump (Telegram-style "scroll to the found entry")
+  // -- Search jump (Telegram-style "scroll to the found entry") --------------
   //
-  // A tap on a search result loads a WINDOW around the target event, not a
-  // filtered feed: two parallel GETs bounded by the target's occurred_at (the
-  // API's date bounds are inclusive, so the target is inside BOTH responses --
-  // mergeJumpWindow dedupes). The window renders in the same DiaryTimeline;
-  // scrolling UP keeps loading older through jumpCursor. The newer side is
-  // capped at what the window fetched -- the feed cursor paginates into the
-  // past only; the search bar's outer x is the way back to the live feed.
-  // ===========================================================================
+  // The event whose window the thread shows instead of the results list
+  // (composables/queries/diary.ts, diaryJumpQuery); null when none is open.
 
-  const JUMP_CONTEXT_LIMIT = 20
+  const jumpTarget = ref<DiaryJumpTarget | null>(null)
 
-  const jumpTargetId = ref<string | null>(null)
-  const jumpItems = ref<DiaryFeedItem[]>([])
-  const jumpCursor = ref<string | null>(null)
-  /** Initial two-window fetch (full-screen loader rung). */
-  const jumpLoading = ref(false)
-  /** Older-page fetches inside an open window (inline loader). */
-  const jumpMoreLoading = ref(false)
-  const jumpError = ref<string | null>(null)
+  /** Open the jump window around one search result. */
+  function jumpToEntry(item: DiaryJumpTarget): void {
+    jumpTarget.value = { id: item.id, occurred_at: item.occurred_at }
+  }
 
   /**
    * Leave the jump window. Called by every search/filter reset (the query
-   * change owns it -- the view swaps back to whatever the new filter shows)
-   * and by $reset on logout.
+   * change owns it -- the view swaps back to whatever the new filter shows),
+   * by a failed window load, and by $reset on logout.
    */
   function exitJump(): void {
-    jumpTargetId.value = null
-    jumpItems.value = []
-    jumpCursor.value = null
-    jumpLoading.value = false
-    jumpMoreLoading.value = false
-    jumpError.value = null
-  }
-
-  /**
-   * Load the context window around one search result and make it the active
-   * timeline view.
-   *
-   * @returns False on failure (jumpTargetId stays unset, so the results list
-   *   remains on screen; jumpError carries the message).
-   */
-  async function jumpToEntry(item: DiaryFeedItem): Promise<boolean> {
-    if (jumpLoading.value) return false
-    jumpTargetId.value = item.id
-    jumpItems.value = []
-    jumpCursor.value = null
-    jumpError.value = null
-    jumpLoading.value = true
-    try {
-      const at = item.occurred_at
-      const [older, newer] = await Promise.all([
-        listDiaryFeed({ date_to: at, limit: JUMP_CONTEXT_LIMIT }),
-        listDiaryFeed({ date_from: at, limit: JUMP_CONTEXT_LIMIT }),
-      ])
-      jumpItems.value = mergeJumpWindow(older.items, newer.items)
-      jumpCursor.value = older.next_cursor
-      return true
-    } catch (e) {
-      jumpTargetId.value = null
-      jumpError.value = extractApiError(e, t('storeErrors.diary.jump'))
-      return false
-    } finally {
-      jumpLoading.value = false
-    }
-  }
-
-  /**
-   * Load one more OLDER page into an open jump window (top sentinel).
-   * The cursor is strictly older than everything loaded, so it appends.
-   */
-  async function loadMoreJump(): Promise<void> {
-    if (jumpMoreLoading.value || jumpCursor.value === null) return
-    jumpMoreLoading.value = true
-    try {
-      const result = await listDiaryFeed({
-        cursor: jumpCursor.value,
-        limit: JUMP_CONTEXT_LIMIT,
-      })
-      jumpItems.value = [...jumpItems.value, ...result.items]
-      jumpCursor.value = result.next_cursor
-    } catch (e) {
-      jumpError.value = extractApiError(e, t('storeErrors.diary.loadEntries'))
-    } finally {
-      jumpMoreLoading.value = false
-    }
-  }
-
-  /**
-   * Refresh the feed after a check-in / feedback mutation projected a new event
-   * onto the timeline. Best-effort: a refresh failure must not fail the submit
-   * (callers fire it without awaiting; it never rejects).
-   *
-   * W27 (PROMPT №438): this used to ALSO call
-   * `useBookingsStore().refreshBookings()`, which was the `diary->bookings` half of
-   * a circular store dependency (bookings.ts imports this store in return). That
-   * call was REDUNDANT, not merely circular: `refreshAfterDiaryMutation` is
-   * reached only from submitCheckin/submitFeedback, and the sole caller of each
-   * -- CheckinView.vue and FeedbackView.vue -- already fires
-   * `bookingsStore.refreshBookings()` itself the moment the submit resolves, and
-   * says so in its own comment. So every check-in and every feedback issued TWO
-   * sequential GET /bookings: this one, awaited, then the view's. Deleting it
-   * removes the duplicate request AND leaves `bookings -> diary` as a plain
-   * one-way dependency. The cycle is gone, not deferred.
-   *
-   * Keeping bookings fresh after a diary mutation is therefore the VIEW's job --
-   * which is already the convention here (CheckinView.vue, FeedbackView.vue). If
-   * a new caller of submitCheckin/submitFeedback ever needs it, it does the same.
-   */
-  async function refreshAfterDiaryMutation(): Promise<void> {
-    await Promise.allSettled([feed.refreshInPlace()])
-  }
-
-  // ===========================================================================
-  // Single diary entry (view / edit)
-  // ===========================================================================
-
-  const selectedEntry = ref<DiaryEntryResponse | null>(null)
-  const selectedEntryLoading = ref(false)
-  const selectedEntryError = ref<string | null>(null)
-
-  /**
-   * Fetch a single diary entry by ID (always from the API -- the feed stores
-   * DiaryEvent snapshots, not full DiaryEntry rows).
-   */
-  async function fetchEntry(id: string): Promise<void> {
-    selectedEntryLoading.value = true
-    selectedEntryError.value = null
-    try {
-      selectedEntry.value = await getDiaryEntry(id)
-    } catch (e) {
-      selectedEntryError.value = extractApiError(e, t('storeErrors.diary.entryNotFound'))
-      selectedEntry.value = null
-    } finally {
-      selectedEntryLoading.value = false
-    }
-  }
-
-  function clearSelectedEntry(): void {
-    selectedEntry.value = null
-    selectedEntryError.value = null
-  }
-
-  // ===========================================================================
-  // Diary entry CRUD
-  //
-  // A created / edited / deleted note is a feed event, so each mutation
-  // refreshes the feed (not a separate list).
-  // ===========================================================================
-
-  /**
-   * Create a new diary entry, then refresh the feed.
-   */
-  async function createEntry(
-    body: CreateDiaryEntryRequest,
-  ): Promise<SubmitResult & { entry: DiaryEntryResponse | null }> {
-    try {
-      const entry = await createDiaryEntry(body)
-      await feed.refreshInPlace()
-      return { ok: true, error: '', entry }
-    } catch (e) {
-      const message = extractApiError(e, t('storeErrors.diary.create'))
-      return { ok: false, error: message, entry: null }
-    }
+    jumpTarget.value = null
   }
 
   // ===========================================================================
@@ -536,12 +356,15 @@ export const useDiaryStore = defineStore('diary', () => {
 
   async function deliverEntry(p: PendingDiaryEntry): Promise<SubmitResult> {
     p.status = 'sending'
+    const gen = generation
     try {
       const entry = await createDiaryEntry(p.body, p.key)
+      // Saved, but for the previous account: its row is already gone.
+      if (gen !== generation) return { ok: true, error: '' }
       keyByEntryId.set(entry.id, p.key)
       p.item = { ...p.item, source_id: entry.id }
       p.status = 'sent'
-      await feed.refreshInPlace()
+      await diaryFeedChanged(queryCache, feedFilters)
       // The feed now carries the entry under the same row key (or does not
       // show it at all under an active filter): the stand-in has done its job.
       pendingEntries.value = pendingEntries.value.filter((x) => x.key !== p.key)
@@ -594,19 +417,27 @@ export const useDiaryStore = defineStore('diary', () => {
     return p ? deliverEntry(p) : Promise.resolve({ ok: false, error: '' })
   }
 
+  // ===========================================================================
+  // Diary entry edit / delete / restore (EntryView, the feed's undo bar)
+  //
+  // An edited / deleted / restored note is a feed event, so each one reloads
+  // the feed's first page (diaryFeedChanged) before it resolves.
+  // ===========================================================================
+
   /**
-   * Update an existing diary entry, then refresh the feed.
+   * Update an existing diary entry: its answer becomes the held entry
+   * (composables/queries/diary.ts, diaryEntryQuery), then the feed reloads.
    */
   async function updateEntry(
     id: string,
     body: UpdateDiaryEntryRequest,
   ): Promise<SubmitResult & { entry: DiaryEntryResponse | null }> {
+    const gen = generation
     try {
       const entry = await updateDiaryEntry(id, body)
-      await feed.refreshInPlace()
-      if (selectedEntry.value?.id === id) {
-        selectedEntry.value = entry
-      }
+      if (gen !== generation) return { ok: true, error: '', entry }
+      queryCache.setQueryData(keys.diary.entry(id), entry)
+      await diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '', entry }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.update'))
@@ -614,16 +445,12 @@ export const useDiaryStore = defineStore('diary', () => {
     }
   }
 
-  /**
-   * Soft-delete a diary entry, then refresh the feed.
-   */
+  /** Soft-delete a diary entry, then reload the feed. */
   async function deleteEntry(id: string): Promise<SubmitResult> {
+    const gen = generation
     try {
       await deleteDiaryEntry(id)
-      await feed.refreshInPlace()
-      if (selectedEntry.value?.id === id) {
-        selectedEntry.value = null
-      }
+      if (gen === generation) await diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.delete'))
@@ -632,13 +459,14 @@ export const useDiaryStore = defineStore('diary', () => {
   }
 
   /**
-   * Restore a soft-deleted diary entry (undo delete), then refresh the feed
-   * so the entry's event reappears in the timeline.
+   * Restore a soft-deleted diary entry (undo delete), then reload the feed so
+   * the entry's event reappears in the timeline.
    */
   async function restoreEntry(id: string): Promise<SubmitResult> {
+    const gen = generation
     try {
       await restoreDiaryEntry(id)
-      await feed.refreshInPlace()
+      if (gen === generation) await diaryFeedChanged(queryCache, feedFilters)
       return { ok: true, error: '' }
     } catch (e) {
       const message = extractApiError(e, t('storeErrors.diary.restore'))
@@ -647,65 +475,24 @@ export const useDiaryStore = defineStore('diary', () => {
   }
 
   // ===========================================================================
-  // Practice insights cache (AnalyticsView, master-facing)
-  //
-  // Using reactive Maps so Vue tracks additions and AnalyticsView computeds
-  // update automatically as new insights arrive.
-  // Cache persists for the session -- AnalyticsView does not re-fetch on
-  // re-visit unless $reset() is called (logout).
+  // Reset (the account boundary: logout, a 401, any session end --
+  // platform/session.ts calls it; the Colada caches have their own member,
+  // queries/setup.ts)
   // ===========================================================================
 
-  const insightsCache = reactive(new Map<string, PracticeInsightsResponse>())
-  const insightsLoadingSet = reactive(new Set<string>())
-  const insightsErrorMap = reactive(new Map<string, string>())
-
-  /** NEW-6: max entries in insightsCache to prevent unbounded memory growth. */
-  const MAX_INSIGHTS_CACHE = 100
-
-  /**
-   * Load insights for a single completed practice.
-   * Skips if already cached or currently loading.
-   */
-  async function loadInsights(practiceId: string): Promise<void> {
-    if (insightsLoadingSet.has(practiceId) || insightsCache.has(practiceId)) return
-    insightsErrorMap.delete(practiceId)
-    insightsLoadingSet.add(practiceId)
-    try {
-      const data = await getPracticeInsights(practiceId)
-      // NEW-6: LRU eviction -- remove oldest entry when cache is full.
-      if (insightsCache.size >= MAX_INSIGHTS_CACHE) {
-        const oldest = insightsCache.keys().next().value
-        if (oldest !== undefined) insightsCache.delete(oldest)
-      }
-      insightsCache.set(practiceId, data)
-    } catch (e) {
-      insightsErrorMap.set(practiceId, extractApiError(e, t('storeErrors.diary.insights')))
-    } finally {
-      insightsLoadingSet.delete(practiceId)
-    }
-  }
-
-  // ===========================================================================
-  // Reset (on logout)
-  // ===========================================================================
-
+  /** Back to the initial state; answers still in flight land nowhere. */
   function $reset(): void {
+    generation += 1
     checkinSubmitting.value = false
     feedbackSubmitting.value = false
     reflectionSubmitting.value = false
     externalActivitySubmitting.value = false
     exitJump()
-    feed.reset()
     feedFilters.categories = []
     feedFilters.date_from = undefined
     feedFilters.date_to = undefined
     feedFilters.search = undefined
     feedScrollTop.value = 0
-    selectedEntry.value = null
-    selectedEntryError.value = null
-    insightsCache.clear()
-    insightsLoadingSet.clear()
-    insightsErrorMap.clear()
     pendingEntries.value = []
     keyByEntryId.clear()
   }
@@ -721,44 +508,19 @@ export const useDiaryStore = defineStore('diary', () => {
     externalActivitySubmitting,
     submitExternalActivity,
 
-    // Unified feed
-    feedItems: feed.items,
-    feedLoading: feed.loading,
-    feedLoaded: feed.loaded,
-    feedError: feed.error,
-    feedLoadMoreError: feed.loadMoreError,
-    feedHasMore: feed.hasMore,
+    // The feed's client state
     feedFilters,
     feedScrollTop,
-    fetchFeed,
-    loadMoreFeed: feed.loadMore,
-    // A background reload (after a mutation elsewhere, the retry rung): keeps
-    // the shown timeline on failure -- see useCursorPagination.refreshInPlace.
-    refreshFeed: feed.refreshInPlace,
     setFeedFilters,
     clearFeedFilters,
     runFeedSearch,
 
     // Search jump
-    jumpItems,
-    jumpTargetId,
-    jumpCursor,
-    jumpLoading,
-    jumpMoreLoading,
-    jumpError,
+    jumpTarget,
     jumpToEntry,
-    loadMoreJump,
     exitJump,
 
-    // Single entry
-    selectedEntry,
-    selectedEntryLoading,
-    selectedEntryError,
-    fetchEntry,
-    clearSelectedEntry,
-
     // Entry CRUD
-    createEntry,
     pendingEntries,
     sendEntry,
     retryEntry,
@@ -767,12 +529,6 @@ export const useDiaryStore = defineStore('diary', () => {
     updateEntry,
     deleteEntry,
     restoreEntry,
-
-    // Insights cache
-    insightsCache,
-    insightsLoadingSet,
-    insightsErrorMap,
-    loadInsights,
 
     // Reset
     $reset,

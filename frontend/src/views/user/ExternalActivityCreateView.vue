@@ -234,7 +234,7 @@
           {{ t('user.screens.externalActivityCreate.section.thoughts') }}
         </h2>
         <div class="ea__thoughts" data-field="thoughts">
-          <VTextarea
+          <VoiceTextarea
             :label="t('user.screens.externalActivityCreate.thoughts.label')"
             hide-label
             :rows="5"
@@ -292,10 +292,11 @@ import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { DateTime } from 'luxon'
-import { VBackButton, VChip, VFieldError, VTextarea } from '@/components/ui'
+import { VBackButton, VChip, VFieldError } from '@/components/ui'
 import DatePickerSheet from '@/components/shared/DatePickerSheet.vue'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
+import VoiceTextarea from '@/components/shared/VoiceTextarea.vue'
 import { getExternalActivityCustomNames } from '@/api/diary'
 import { useDiaryStore, type ExternalActivityFieldErrors } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'

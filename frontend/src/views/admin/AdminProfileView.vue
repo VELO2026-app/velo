@@ -122,7 +122,7 @@ async function onLogout(): Promise<void> {
   font-weight: 400;
   color: var(--velo-text-primary);
   line-height: 1.2;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   letter-spacing: 0.02em;
 }
 

@@ -15,10 +15,11 @@
 //
 // PATTERN C (hybrid), and both halves are driven per the skill's warning that
 // mocking one layer for both guts the test:
-//   - DATA HALF: profile + practices come from a REAL useMasterStore
-//     (.vue:219,392-393); role / user / updateProfile from a REAL useAuthStore
-//     (.vue:220). Real stores, not mocked ones -- `nearestPractices` hangs off
-//     the store's reactive pagination list and `isNewMaster` off its `total`,
+//   - DATA HALF: the profile and the practice lists from the REAL Colada
+//     queries (useMasterProfile, useMyPractices); role / user / updateProfile
+//     from a REAL useAuthStore. Real holders, not mocked ones --
+//     `nearestPractices` hangs off the reactive upcoming list and
+//     `isNewMaster` off the two lists' totals,
 //     and a hand-rolled fake is exactly the kind of thing that is quietly
 //     non-reactive: the test would then prove the fixture, not the screen.
 //   - LOCAL-REF HALF: `period`, `stats` and the 60s `now` clock are the screen's
@@ -91,6 +92,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import MasterDashboardView from '@/views/master/MasterDashboardView.vue'
 import * as mastersApi from '@/api/masters'
 import * as usersApi from '@/api/users'
@@ -385,7 +388,7 @@ function page(items: PracticeResponse[], total = items.length, offset = 0) {
 // listing_service.py's bucket semantics: "upcoming" = draft/scheduled/live,
 // nearest first BY ABSOLUTE INSTANT (not local wall-clock -- that re-sort is
 // retired, see the CR-1 test below); "past" = completed only, most-recent
-// first. fetchMyPractices() fetches BOTH buckets, so every test that mocks
+// first. The dashboard reads BOTH lists (upcoming cards, the totals), so every test that mocks
 // getMyPractices needs a bucket-aware response regardless of which bucket
 // the test cares about.
 function mockBucketedPractices(items: PracticeResponse[]): void {
@@ -421,18 +424,18 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MasterDashboardView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 // COUNTED, not copied (velo-idiom §3, SC-08). The deepest chain onMounted
-// (.vue:383-397) kicks off is the SEQUENTIAL profile -> practices one:
-//   (1) await getMyMasterProfile inside fetchMyProfile
-//   (2) fetchMyProfile's promise resolves -> onMounted resumes
-//   (3) await getMyPractices inside usePagination.loadMore
-//   (4) loadMore resolves -> (5) refresh's continuation -> (6) fetchMyPractices'
-//   (7) onMounted resumes -> the final re-render.
+// (.vue:383-397) kicks off is the practices one (the profile query loads
+// alongside it, on its own):
+//   (1)-(2) the profile query's getMyMasterProfile, in parallel
+//   (3) await getMyPractices inside the Colada infinite query
+//   (4)-(6) the entry's state lands -> the computed lists
+//   (7) the final re-render.
 // The fire-and-forget loadStats() runs alongside and is 2 deep. Seven counted;
 // ten written. Over-counting is free, under-counting fails loudly, and this
 // chain grows the moment anything joins that onMounted.
@@ -538,7 +541,7 @@ function onboardingOverlay(): HTMLElement | null {
 beforeEach(() => {
   // Fake timers, not a bare setSystemTime: the screen installs a 60s setInterval
   // (.vue:384-386) that this file drives directly in the clock test below. Nothing
-  // in the mount chain awaits a timer (the API is mocked and usePagination holds
+  // in the mount chain awaits a timer (the API is mocked and the Colada lists hold
   // none), and microtasks are not faked, so flush() is unaffected.
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
@@ -738,9 +741,9 @@ describe('MasterDashboardView', () => {
 
     it('a FAILED profile load renders a normal-looking dashboard (known gap)', async () => {
       // Asserted because it is what the screen DOES, not because it is right.
-      // fetchMyProfile swallows into profileError (stores/master.ts:65-71), and
-      // this template never binds it -- there is no error rung at all. The
-      // skeleton is gated on `profileLoading && !profile` (.vue:28), which is
+      // The profile query records the error (composables/queries/master.ts),
+      // and this template never binds it -- there is no error rung at all. The
+      // skeleton is gated on `profileLoading` (no profile, request in flight), which is
       // false once the request has failed, so the master sees a complete,
       // confident dashboard built on a profile that never arrived. Reported as
       // a finding; this test is the tripwire for the day it is repaired.
@@ -757,9 +760,8 @@ describe('MasterDashboardView', () => {
     })
 
     it('a FAILED practices load reads as «you have no practices» (known gap)', async () => {
-      // Same shape, and the more costly one: usePagination catches into `error`
-      // (composables/usePagination.ts:67-70), the store re-exports it as
-      // practicesError, and this template never binds it either. A network
+      // Same shape, and the more costly one: the practice lists record the
+      // error (queries/master.ts), and this template never binds it either. A network
       // failure is therefore rendered as the factual CLAIM that the master has
       // no practices -- with the create CTA
       // (i18n:masterScreens.masterDashboard.createPractice) under it, inviting
@@ -892,6 +894,16 @@ describe('MasterDashboardView', () => {
       // ...and the empty card says no-upcoming
       // (i18n:masterScreens.masterDashboard.emptyUpcoming), not a generic
       // no-data wording.
+      expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
+    })
+
+    it('past practices alone (nothing upcoming at all) still make the master NOT new', async () => {
+      // The total is upcoming + past: the past list's total counts even when
+      // the upcoming one is empty.
+      mockBucketedPractices([P_COMPLETED])
+      mount()
+      await flush()
+
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
     })
 
@@ -1324,7 +1336,7 @@ describe('MasterDashboardView', () => {
         expect(practicesApi.retryZoomMeeting).toHaveBeenCalledWith('failed1')
         expect(toastSuccess).toHaveBeenCalledWith('Встреча Zoom создана')
         expect(toastError).not.toHaveBeenCalled()
-        // refreshMyPractices() re-fetches both buckets -- proof the list
+        // myPracticesChanged() re-fetches the lists -- proof the list
         // was actually invalidated, not just the toast fired.
         expect(vi.mocked(mastersApi.getMyPractices).mock.calls.length).toBeGreaterThan(callsBefore)
       })

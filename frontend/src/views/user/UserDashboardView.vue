@@ -44,7 +44,7 @@
   carries it in its action slot (right
   side). The header teleports into MobileLayout's island and the fog
   (user-dashboard is a FOG route) dissolves scrolling content under it.
-  The unread presence dot is store-driven (stores/notifications.ts): this
+  The unread presence dot is query-driven (composables/queries/notifications.ts): this
   screen refreshes on mount and keeps the dot fresh with a foreground-only
   60s poll (paused while the tab is hidden; still pure pull -- no
   websocket, per the owner's ruling), the inbox applies the
@@ -68,7 +68,7 @@
         >
           <span class="dashboard__bell-icon">
             <IconBellPlain :size="17" />
-            <span v-if="notifications.unread > 0" class="dashboard__bell-dot" aria-hidden="true" />
+            <span v-if="bellUnread > 0" class="dashboard__bell-dot" aria-hidden="true" />
           </span>
         </button>
       </template>
@@ -108,7 +108,7 @@
            450 ms once seen, then a crossfade) -- the sections below never
            get pushed down. -->
       <VLoadingSwap
-        :pending="bookingsStore.upcomingLoading && !bookingsStore.upcomingLoaded"
+        :pending="upcomingPending"
         memory-key="dashboard-upcoming"
         :revision="nearestRevision"
       >
@@ -162,6 +162,7 @@
                    the person to the practice screen, where Zoom runs inside
                    VELO (Meeting SDK). -->
               <VButton
+                v-if="zoomEnabled"
                 variant="secondary"
                 block
                 :disabled="zoomStateFor(b) !== 'ready'"
@@ -169,6 +170,10 @@
               >
                 Zoom
               </VButton>
+              <!-- FE-163 (PM-22 p.8): zoom option off -- no button, a plain note. -->
+              <p v-else class="dashboard__online-unavailable">
+                {{ t('common.onlineUnavailable') }}
+              </p>
               <!-- [FE-47] Check-in is NOT RENDERED (not disabled) when the
                    session is already live (the live badge,
                    i18n:user.screens.userDashboard.liveBadge) or the booking
@@ -190,7 +195,7 @@
                  from "still preparing" -- see PracticeLiveView's identical
                  badge for the full rationale. -->
             <VBadge
-              v-if="zoomStateFor(b) === 'failed'"
+              v-if="zoomEnabled && zoomStateFor(b) === 'failed'"
               variant="error"
               class="dashboard__zoom-note"
             >
@@ -203,7 +208,7 @@
                  kind:'unavailable' (PracticeLiveView), so the two surfaces
                  cannot disagree about the same registrant. -->
             <VBadge
-              v-else-if="zoomStateFor(b) === 'unavailable'"
+              v-else-if="zoomEnabled && zoomStateFor(b) === 'unavailable'"
               variant="warning"
               class="dashboard__zoom-note"
             >
@@ -271,17 +276,21 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { isOptionEnabled } from '@/platform/instance'
 import { onDocumentEvent, offDocumentEvent, isDocumentHidden } from '@/platform/dom'
-import { computed, ref, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
+import { computed, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { useRouter } from 'vue-router'
 import { useBookingsStore } from '@/stores/bookings'
-import { UPCOMING_FRESH_MS } from '@/router/dataPrefetch'
-import { useNotificationsStore } from '@/stores/notifications'
+import { upcomingBookingsQuery } from '@/composables/queries/bookings'
+import { extractApiError } from '@/composables/useApiError'
+import { useUnreadBadge } from '@/composables/queries/notifications'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
 import { VButton, VBadge, VStatCard, VSkeletonPracticeCard, VLoadingSwap } from '@/components/ui'
-import { useQuery } from '@/composables/useQuery'
-import { myStatsQuery } from '@/composables/queries'
+import { useQuery } from '@pinia/colada'
+import { myStatsQuery } from '@/composables/queries/stats'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { useLoadingHold } from '@/composables/useLoadingHold'
 import { useRememberedCount } from '@/composables/useRememberedCount'
 import { IconClock, IconCheck, IconBellPlain, IconMeditation } from '@/components/icons'
@@ -304,24 +313,24 @@ const router = useRouter()
 
 const bookingsStore = useBookingsStore()
 const toast = useToast()
-// Header bell's unread presence -- store-shared with the inbox screen,
-// which writes server-confirmed badges after its mark-read calls.
-const notifications = useNotificationsStore()
+// Header bell's unread presence -- one cache entry shared with the inbox
+// screen, which writes server-confirmed badges after its mark-read calls
+// (queries/notifications.ts).
+const { unread: bellUnread, refresh: refreshBell, refetch: refetchBell } = useUnreadBadge()
 
 // -- Reactive clock: updated every 60s so alert computeds re-evaluate --
-const now = ref(Date.now())
-let clockInterval: ReturnType<typeof setInterval> | null = null
+const now = useNow(60_000)
 
 // -- Profile stats (attended count + hours): server-side aggregate over ALL
 // attended bookings -- not derived from the paginated bookings page (W-6).
 // Cached across visits (they change only after an attended practice), so a
 // return to the dashboard shows the numbers at once. While the FIRST answer
 // is pending the cards show a placeholder, never a false «0». --
-const statsQuery = useQuery(myStatsQuery())
+const statsQuery = useQuery(() => myStatsQuery())
 const stats = statsQuery.data
 // Same loading rule as the blocks (useLoadingHold): no placeholder for a fast
 // answer, at least 450 ms once one was seen.
-const { showSkeleton: statsPending } = useLoadingHold(statsQuery.isPending)
+const { showSkeleton: statsPending } = useLoadingHold(screenQueryState(statsQuery).loading)
 
 // =========================================================================
 // Nearest bookings (shared selection -- the list AND the check-in banner)
@@ -345,14 +354,21 @@ const { showSkeleton: statsPending } = useLoadingHold(statsQuery.isPending)
  * re-ranks on the 60s clock tick.
  *
  * [FE-56] This selection shares its source and candidate rule with the
- * check-in banner below (both read bookingsStore.upcoming through
+ * check-in banner below (both read the upcoming list through
  * utils/nearestBookings), so the two can never disagree. The list caps the
  * pool at 3 cards for display; the banner searches the FULL pool -- see
  * checkinAlert. (The banner used to search the paginated bookings page
  * instead -- see checkinAlert.)
  */
+// The live-or-upcoming bookings (Colada, persisted): a reload paints the last
+// known list at once, then revalidates.
+const upcomingQuery = useQuery(() => upcomingBookingsQuery())
+const upcoming = computed(() => upcomingQuery.data.value ?? [])
+/** Nothing known yet and a request in flight (an EMPTY answer is data, not loading). */
+const upcomingPending = screenQueryState(upcomingQuery).loading
+
 const nearestBookings = computed((): BookingWithPracticeResponse[] =>
-  selectNearestBookings(bookingsStore.upcoming, now.value),
+  selectNearestBookings(upcoming.value, now.value),
 )
 /** The list's shape (VLoadingSwap revision): a row added or dropped glides. */
 const nearestRevision = computed(() => nearestBookings.value.map((b) => b.id).join(','))
@@ -363,7 +379,7 @@ const nearestRevision = computed(() => nearestBookings.value.map((b) => b.id).jo
 const upcomingSkeletons = useRememberedCount(
   'dashboard-upcoming',
   () => nearestBookings.value.length,
-  () => !bookingsStore.upcomingLoading,
+  () => !upcomingPending.value,
   { fallback: 2, max: 3 },
 )
 
@@ -374,13 +390,12 @@ const upcomingSkeletons = useRememberedCount(
 /**
  * First still-checkable booking inside the check-in window, soonest first.
  *
- * [FE-56] The candidate pool is selectActionableBookings(bookingsStore.
- * upcoming) -- the SAME upcoming source and candidate rule that drive the
+ * [FE-56] The candidate pool is selectActionableBookings(upcoming) -- the SAME upcoming source and candidate rule that drive the
  * nearest-practices list (i18n:user.screens.userDashboard.sections.upcoming),
  * but UNCAPPED: the list shows at most 3 cards,
  * and with several practices inside the 24h window at once the first
  * still-checkable one may sit past that cap (e.g. behind a live session and
- * two already checked-in cards). NOT bookingsStore.bookings: that paginated
+ * two already checked-in cards). NOT the bookings list: that paginated
  * page is created_at-ordered and capped, so its first in-window item could be
  * a LATER practice while a sooner one sat in the nearest list -- the banner
  * then offered check-in for the wrong session (the reported bug). The pool
@@ -389,7 +404,7 @@ const upcomingSkeletons = useRememberedCount(
  */
 const checkinAlert = computed((): BookingWithPracticeResponse | null => {
   return (
-    selectActionableBookings(bookingsStore.upcoming, now.value).find((b) => {
+    selectActionableBookings(upcoming.value, now.value).find((b) => {
       // Hide once the user has already checked in (no re-submit via banner).
       if (b.has_checkin) return false
       // Hide if the user persistently skipped this booking's check-in (B2).
@@ -464,6 +479,9 @@ function practiceTitle(b: BookingWithPracticeResponse): string {
  * endpoint exists for the single-practice screen, where the caller may hold
  * no booking at all -- and that screen is where «Zoom» takes him.
  */
+/** Zoom option (FE-163): when off, no «Zoom» entry anywhere on this screen. */
+const zoomEnabled = isOptionEnabled('zoom')
+
 function zoomStateFor(b: BookingWithPracticeResponse): ZoomEntryStateKind {
   return zoomEntryState(
     b.zoom_registrant_ready,
@@ -593,7 +611,7 @@ function startBellPoll(): void {
   // poll off, and the visibility handler below starts it on return.
   if (bellPollHandle !== null) return
   if (isDocumentHidden()) return
-  bellPollHandle = setInterval(() => void notifications.refreshUnread(), BELL_POLL_MS)
+  bellPollHandle = setInterval(() => void refetchBell(), BELL_POLL_MS)
 }
 
 // Foreground-only, the useRoleFreshness pattern: hidden -> interval off
@@ -604,7 +622,7 @@ function onBellVisibility(): void {
   if (isDocumentHidden()) {
     stopBellPoll()
   } else {
-    void notifications.refreshUnread()
+    void refetchBell()
     startBellPoll()
   }
 }
@@ -614,32 +632,29 @@ function onBellVisibility(): void {
 // =========================================================================
 
 function loadUpcoming(): void {
-  // W15 fix (PROMPT №409): fetchUpcoming used to swallow its error entirely
-  // (an empty result looked identical to "genuinely nothing upcoming") --
-  // surface it via toast instead of leaving the widget silently blank.
-  void bookingsStore.fetchUpcoming({ maxAgeMs: UPCOMING_FRESH_MS }).then(() => {
-    if (bookingsStore.upcomingError) toast.error(bookingsStore.upcomingError)
+  // Revalidate unless answered within UPCOMING_STALE_MS (the first-screen
+  // gate and the idle prefetch share the entry). W15 (PROMPT №409): a failure
+  // is toasted -- an empty widget must not pass for "genuinely nothing
+  // upcoming"; a list already shown stays.
+  void upcomingQuery.refresh().then(() => {
+    const error = upcomingQuery.error.value
+    if (error != null) toast.error(extractApiError(error, t('storeErrors.bookings.upcoming')))
   })
 }
 
 /** Screen on: bell (silent refresh -- a failure keeps the last known value,
- * stores/notifications.ts), its poll, and the minute clock. */
+ * queries/notifications.ts; skipped if the idle prefetch just answered), and
+ * its poll (the minute clock is useNow's, kept-alive aware). */
 function resume(): void {
-  now.value = Date.now()
-  void notifications.refreshUnread()
+  void refreshBell()
   startBellPoll()
   onDocumentEvent('visibilitychange', onBellVisibility)
-  clockInterval ??= setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
 }
 
 /** Screen off (left or kept in the background by TabRouterView). */
 function pause(): void {
   offDocumentEvent('visibilitychange', onBellVisibility)
   stopBellPoll()
-  if (clockInterval) clearInterval(clockInterval)
-  clockInterval = null
 }
 
 onMounted(() => {
@@ -655,7 +670,7 @@ onActivated(() => {
   if (activations++ === 0) return
   resume()
   loadUpcoming()
-  void statsQuery.revalidate()
+  void statsQuery.refresh()
 })
 onDeactivated(pause)
 onUnmounted(pause)
@@ -782,6 +797,13 @@ onUnmounted(pause)
    hug one column next to an empty twin. */
 .dashboard__practice-actions > :only-child {
   grid-column: 1 / -1;
+}
+
+.dashboard__online-unavailable {
+  margin: 0;
+  align-self: center;
+  text-align: center;
+  color: var(--velo-text-muted);
 }
 
 .dashboard__zoom-note {

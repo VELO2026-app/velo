@@ -256,6 +256,25 @@ describe('TopupView', () => {
     })
   })
 
+  describe('custom amount toggle a11y', () => {
+    it('"another amount" is a native button that reports its pressed state', async () => {
+      mount()
+      await flush()
+
+      const toggle = host?.querySelector<HTMLButtonElement>('.topup__custom-toggle')
+      expect(toggle?.tagName).toBe('BUTTON')
+      expect(toggle?.getAttribute('type')).toBe('button')
+      expect(toggle?.getAttribute('aria-pressed')).toBe('false')
+
+      toggle?.focus()
+      expect(document.activeElement).toBe(toggle)
+
+      toggleCustom()
+      await flush()
+      expect(toggle?.getAttribute('aria-pressed')).toBe('true')
+    })
+  })
+
   describe('custom amount validation', () => {
     it('converts the typed euro string to cents WITHOUT float math', async () => {
       // FP-03 (TopupView.vue:117-119): parseFloat('0.575') * 100 rounds to 57,

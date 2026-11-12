@@ -4,7 +4,9 @@
 //
 // FIX 10.2: registers onUnauthorized callback with API client.
 // QW-4: role returns null (not 'user') for unauthenticated users.
-// W-1: logout() resets masterStore to prevent data leak between sessions.
+// W-1 / FE-157: the end of a session (_clearSession -- logout, a 401 for the
+// current token, a refused restore) resets EVERY other store through the
+// account scope (platform/session.ts), so no account's data outlives it.
 //
 // Standalone phase 3: the session token is kept where the PLATFORM says
 // (platform/session-token.ts -- localStorage outside Telegram, sessionStorage
@@ -18,22 +20,21 @@
 // onboarding flow to persist { timezone, onboarding_completed }.
 // =============================================================================
 
-import { defineStore } from 'pinia'
+import { defineStore, getActivePinia } from 'pinia'
 import { replaceEqualDeep } from '@/utils/structuralShare'
 import { ref, computed } from 'vue'
 import { api, setAuthToken, setOnUnauthorized, ApiResponseError } from '@/api/client'
 import { getMe, updateMe, switchRole as apiSwitchRole } from '@/api/users'
 import { platform } from '@/platform'
-import { queryCache } from '@/composables/useQuery'
 import { clearPersisted, setPersistOwner } from '@/composables/persistedCache'
 import { host } from '@/platform/host'
 import { newMark, rememberLoginMark } from '@/platform/browser-login'
+import { notifySessionEnd, resetAccountScope, type SessionEndReason } from '@/platform/session'
 import type {
   AuthResponse,
   BrowserLoginResponse,
   BrowserLoginStartResponse,
   MasterApplicationInfo,
-  RoleSwitchInfo,
   UserResponse,
   UserRole,
   UserUpdate,
@@ -51,8 +52,15 @@ import type {
  */
 export type RestoreOutcome = 'restored' | 'none' | 'rejected' | 'unreachable'
 
+/** Id of the session owner store: the account-scope reset skips it, `_clearSession` clears it. */
+const AUTH_STORE_ID = 'auth'
+
 /** Session state: the signed-in user, the platform-owned token, login/restore and profile writes. */
-export const useAuthStore = defineStore('auth', () => {
+export const useAuthStore = defineStore(AUTH_STORE_ID, () => {
+  // The Pinia this store lives in: its account scope is what _clearSession
+  // resets. Set for the whole of setup (Pinia activates it before calling it).
+  const pinia = getActivePinia()
+
   const user = ref<UserResponse | null>(null)
   const token = ref<string | null>(null)
   const loading = ref(false)
@@ -66,23 +74,16 @@ export const useAuthStore = defineStore('auth', () => {
   // Self role-switch: the roles this account may switch into, surfaced by the
   // backend in UserResponse.role_switch (capability-derived since №256: null
   // for plain users, [user, master] for verified masters, all three for
-  // admins — no feature flag). Read structurally (generated.ts may not carry
-  // the field locally yet). The settings UI shows a switch button per allowed
-  // role except the current one.
-  const allowedRoles = computed<UserRole[]>(() => {
-    const rs = (user.value as { role_switch?: RoleSwitchInfo | null } | null)?.role_switch
-    return rs?.allowed_roles ?? []
-  })
+  // admins — no feature flag). The settings UI shows a switch button per
+  // allowed role except the current one.
+  const allowedRoles = computed<UserRole[]>(() => user.value?.role_switch?.allowed_roles ?? [])
 
   // T5: the user's master-application state (status + rejection reason), so a
   // rejected/pending role='user' applicant can see the verdict without the
-  // master-only /masters/me endpoint. Same structural read as allowedRoles.
-  const masterApplication = computed<MasterApplicationInfo | null>(() => {
-    return (
-      (user.value as { master_application?: MasterApplicationInfo | null } | null)
-        ?.master_application ?? null
-    )
-  })
+  // master-only /masters/me endpoint.
+  const masterApplication = computed<MasterApplicationInfo | null>(
+    () => user.value?.master_application ?? null,
+  )
 
   function _setToken(newToken: string | null): void {
     token.value = newToken
@@ -97,21 +98,28 @@ export const useAuthStore = defineStore('auth', () => {
     if (newUser) setPersistOwner(newUser.id)
   }
 
-  /** Clear all auth state (used by 401 handler and logout). */
-  function _clearSession(): void {
+  /**
+   * End the session: tell the `onSessionEnd` subscribers (composables with
+   * module state), clear the token and user, the cached screen data, and
+   * every other store (used by the 401 handler, logout and failed sign-ins).
+   *
+   * @param reason - `logout` when the person signed out, `dropped` otherwise.
+   */
+  function _clearSession(reason: SessionEndReason = 'dropped'): void {
+    // First, before anything is cleared: the Telegram logout gate (useAuth)
+    // and the role-freshness poll (useRoleFreshness) hook in here.
+    notifySessionEnd(reason)
     _setToken(null)
     _setUser(null)
-    // Cached screen data belongs to the account that fetched it -- in
-    // memory and the copy that survives reloads.
-    queryCache.clear()
+    // Cached screen data belongs to the account that fetched it: the copy
+    // that survives reloads goes here, the Colada caches with the account
+    // scope below (composables/queries/setup.ts, useQueryScopeStore).
     clearPersisted()
     setPersistOwner(null)
-    // W-1, same reasoning as logout()'s master/schoolsHub resets: the
-    // bookings store keeps account-scoped lists OUTSIDE the query cache,
-    // and its freshness marker would otherwise skip the next account's
-    // first fetch (up to UPCOMING_FRESH_MS of the previous account's data).
-    // Dynamic import breaks the potential circular dep, as in logout().
-    void import('@/stores/bookings').then(({ useBookingsStore }) => useBookingsStore().$reset())
+    // W-1 / FE-157: every other store goes back to its initial state, and
+    // answers still in flight for this account land nowhere. Synchronous:
+    // on a 401 it runs before the failing request's own catch.
+    if (pinia) resetAccountScope(pinia, AUTH_STORE_ID)
   }
 
   // FIX 10.2: register callback so API client delegates 401 handling here.
@@ -283,7 +291,9 @@ export const useAuthStore = defineStore('auth', () => {
       return true
     } catch (error) {
       if (error instanceof ApiResponseError && error.status === 401) {
-        _clearSession()
+        // A 401 for a token that is no longer current says nothing about the
+        // session the page holds now (the client skips it the same way).
+        if (token.value === requestToken) _clearSession()
         return true
       }
       // Transport failure (network/5xx/unrecognised) -- no definitive answer
@@ -320,24 +330,12 @@ export const useAuthStore = defineStore('auth', () => {
     return updated
   }
 
+  /**
+   * Sign out: revoke the session on the server (best-effort), then end it
+   * here -- `_clearSession` resets every store (W-1). In Telegram this also
+   * closes the Mini App.
+   */
   async function logout(): Promise<void> {
-    // W-1: reset master store before clearing session to prevent stale
-    // profile/practices data leaking to the next user session.
-    // Dynamic import breaks the potential circular dep auth -> master -> auth.
-    const { useMasterStore } = await import('@/stores/master')
-    useMasterStore().$reset()
-
-    // Same W-1 reasoning for the schools hub (tz-curator.md §1.2): the
-    // tab decision and curated list must not outlive the account.
-    const { useSchoolsHubStore } = await import('@/stores/schoolsHub')
-    useSchoolsHubStore().$reset()
-
-    // T21-4/T21-5 (PROMPT №546): stop the foreground role-freshness poll so it
-    // doesn't keep ticking a fetchMe() against a session that's about to be
-    // cleared. Dynamic import, same circular-dep reasoning as above.
-    const { stopRoleFreshnessPoll } = await import('@/composables/useRoleFreshness')
-    stopRoleFreshnessPoll()
-
     // In Telegram, "logout" closes the Mini App (product decision): on the
     // next open it starts fresh -> LoadingView -> auto re-login via initData.
     // Arm the logging-out gate FIRST so the App.vue gate shows LoadingView
@@ -345,20 +343,17 @@ export const useAuthStore = defineStore('auth', () => {
     // and the Mini App actually closing -- otherwise it would flash the
     // TelegramStubView ("Open via Telegram"). Outside Telegram there is
     // nothing to close: the cleared session puts the login screen up, and
-    // the token is gone from storage (_setToken). Dynamic import breaks the
-    // circular dep auth -> useAuth -> auth (same pattern as the master store).
+    // the token is gone from storage (_setToken). useAuth arms the gate and
+    // useRoleFreshness stops its poll (T21-4/T21-5) through onSessionEnd when
+    // _clearSession('logout') announces the end -- before anything is cleared.
     const inTelegram = platform.name === 'telegram'
-    if (inTelegram) {
-      const { beginLogout } = await import('@/composables/useAuth')
-      beginLogout()
-    }
 
     try {
       await api.post('/api/v1/auth/logout')
     } catch {
       // Ignore -- logging out anyway.
     } finally {
-      _clearSession()
+      _clearSession('logout')
       if (inTelegram) {
         // close() returns the user to the chat. Wrapped in try/catch so a
         // missing SDK (getWebApp throws) degrades to the previous behaviour

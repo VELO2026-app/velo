@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- i18n singleton (tz-i18n §4, phase 0)
+// VELO Frontend -- i18n singleton (tz-i18n §4, phase 0; lazy zones FE-157)
 // =============================================================================
 //
 // The ONE vue-i18n instance. Rules that keep the migration mechanical and
@@ -9,36 +9,64 @@
 //     silently renders keys.
 //   - The ru catalog carries the strings that were hardcoded verbatim, so
 //     the ~3400 existing tests keep asserting the same rendered text.
-//   - Locale chunks beyond ru load lazily (§4.1); until a catalog is merged,
-//     setLocale keeps the current locale and fallbackLocale covers.
 //   - Brand text renders through the linked message @:brand -- the value
 //     comes from INSTANCE.brand (passport), never hardcoded in messages.
+//
+// What loads when (FE-157):
+//   - ru CORE is eager (in the main bundle): every domain file of the folder
+//     except the zone catalogs below.
+//   - ZONE catalogs (ZONE_CATALOGS: master.json, admin.json) load before a
+//     route of their zone resolves -- the route declares them in
+//     meta.catalogs, router/catalogs.ts awaits ensureCatalogs. A student
+//     never downloads them.
+//   - Other locales load on a switch (setLocale) or a warm-up (warmLocale,
+//     the language switcher); until then fallbackLocale covers.
+//   - timezones.json is DATA, not messages: utils/timezoneCities.ts reads it
+//     with ?raw on the timezone screen; no t() key points into it.
+//
+// The bundle has no message compiler (vite.config.ts, dropMessageCompiler):
+// the catalogs arrive precompiled, and every message created at runtime
+// (the brand, instance overlays) is a message FUNCTION -- a plain string
+// would render as raw text, placeholders included.
 //
 // utils/ may import this module for getLocale()/the composer: it is a plain
 // module, no Vue component context required (tz-i18n 0.3).
 // =============================================================================
 
-import { createI18n } from 'vue-i18n'
+import { toRaw } from 'vue'
+import { createI18n, type MessageFunction } from 'vue-i18n'
 
+import { toMessageFunctions } from '@/locales/messageFunction'
+import { conformOverlay } from '@/locales/overlayShape'
 import { setRootLang } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES, type Locale } from '@/platform/instance'
-import { SKIN_BRAND } from '@/platform/skin-brand.generated'
+import { SKIN_BRAND } from 'virtual:skin-brand'
+
+/** Catalog files that load with their zone's routes, not with the locale. */
+export const ZONE_CATALOGS = ['master', 'admin'] as const
+export type ZoneCatalog = (typeof ZONE_CATALOGS)[number]
+
+type CatalogPart = 'core' | ZoneCatalog
+type Messages = Record<string, unknown>
+type CatalogModule = { default: Messages }
+
 // Per-domain catalogs (tz-i18n §4.1): one FOLDER per locale, one FILE per
 // domain. Adding a language = adding a folder; adding a domain = adding a
-// file. No per-language import chains.
-// The DEFAULT locale is eager (it must be in the main bundle); every other
-// locale is a set of lazy loaders over the same glob, merged into the
-// instance on first setLocale (phase 4 lazy chunks -- the bundle carries
-// only ru, non-default locales pay one chunk per locale on switch).
-const eagerDefault = import.meta.glob('./ru/*.json', { eager: true })
-const lazyLoaders = import.meta.glob('./*/*.json')
-
-const ruCatalog: Record<string, unknown> = {}
-for (const mod of Object.values(eagerDefault)) {
-  Object.assign(ruCatalog, (mod as { default: Record<string, unknown> }).default)
+// file. The glob patterns are literals (Vite resolves them at build time),
+// so their exclusions repeat ZONE_CATALOGS by hand -- catalogs.test.ts pins
+// the two together. Keeping the ru zone files out of the eager glob is what
+// puts them in chunks of their own.
+const eagerDefault = import.meta.glob<CatalogModule>(
+  ['./ru/*.json', '!./ru/master.json', '!./ru/admin.json', '!./ru/timezones.json'],
+  { eager: true },
+)
+const lazyLoaders: Record<string, () => Promise<CatalogModule>> = {
+  ...import.meta.glob<CatalogModule>(['./*/*.json', '!./ru/*.json', '!./*/timezones.json']),
+  ...import.meta.glob<CatalogModule>(['./ru/master.json', './ru/admin.json']),
 }
 
-export const ru = ruCatalog
+const ruCore: Messages = {}
+for (const mod of Object.values(eagerDefault)) Object.assign(ruCore, mod.default)
 
 /**
  * vue-i18n's built-in plural choice is English-shaped (`1 -> first form`,
@@ -82,22 +110,50 @@ const i18n = createI18n({
   missingWarn: import.meta.env.DEV,
   fallbackWarn: false,
 })
-i18n.global.setLocaleMessage('ru', ru)
-// A non-ru default locale starts aliased onto the ru catalog so the first
-// paint is never message-less; loadLocale replaces the alias with the real
-// chunks on first switch. For the golden build (default ru) this is a no-op.
-i18n.global.setLocaleMessage(INSTANCE.defaultLocale, ru)
 
-// The brand word never lives in the catalogs (tz-i18n §7.2.3, and this
-// file's own header rule): messages reference it as the linked key @:brand. Linked keys do NOT fall back across
-// locales, so the merge must reach EVERY locale, not just the default -- an
-// en message linking @:brand with brand merged only into ru renders an empty
-// word. Every locale that gets messages gets the brand with them.
-// The brand word of THIS build: a skin's displayName wins (tz-whitelabel §1
-// priority, skin > env); no skin -> the VITE_BRAND passport value.
-const BRAND_MESSAGE = { brand: SKIN_BRAND ?? INSTANCE.brand } as const
-i18n.global.mergeLocaleMessage('ru', BRAND_MESSAGE)
-i18n.global.mergeLocaleMessage(INSTANCE.defaultLocale, BRAND_MESSAGE)
+// The brand word never lives in the catalogs (tz-i18n §7.2 item 3): messages
+// reference it as the linked key @:brand, so every locale that gets messages
+// gets the brand with them (mergeRuntimeMessages). The brand word of THIS
+// build: a skin's displayName wins (tz-whitelabel §1 priority, skin > env);
+// no skin -> the VITE_BRAND passport value. A message function, not a
+// string: there is no compiler at runtime, and the brand is raw text that
+// must never be read as message syntax ('@', '|' or braces in a name).
+const BRAND_TEXT = SKIN_BRAND ?? INSTANCE.brand
+const BRAND_MESSAGE = { brand: (() => BRAND_TEXT) as MessageFunction }
+
+// Instance overlays (applyInstanceOverrides), per locale, in the order they
+// came. Kept so they can be merged again on top of every catalog load: a
+// later core or zone load replaces whole root objects and would drop an
+// overlay merged before it.
+const instanceOverlays = new Map<string, Messages[]>()
+
+/** Which parts of a locale's catalogs the composer holds. */
+const appliedParts = new Map<string, Set<CatalogPart>>()
+/** In-flight or finished fetches, keyed `${locale}/${part}`. */
+const pendingParts = new Map<string, Promise<Messages>>()
+/** Zones a route asked for so far; every later locale load brings them too. */
+const requestedZones = new Set<ZoneCatalog>()
+
+/** Brand, then the instance overlays, on top of a locale's catalogs. */
+function mergeRuntimeMessages(locale: string): void {
+  i18n.global.mergeLocaleMessage(locale, BRAND_MESSAGE)
+  for (const overlay of instanceOverlays.get(locale) ?? []) mergeOverlay(locale, overlay)
+}
+
+/** One overlay on the locale's catalogs, cut to the shape of what it lands on. */
+function mergeOverlay(locale: string, overlay: Messages): void {
+  const base = toRaw(i18n.global.getLocaleMessage(locale))
+  i18n.global.mergeLocaleMessage(locale, conformOverlay(overlay, base))
+}
+
+i18n.global.setLocaleMessage('ru', ruCore)
+appliedParts.set('ru', new Set<CatalogPart>(['core']))
+mergeRuntimeMessages('ru')
+// A non-ru default locale starts aliased onto the ru catalog (brand
+// included) so the first paint is never message-less; its own core catalog
+// replaces the alias on the first load (appliedParts has no entry for it
+// until then). For the golden build (default ru) this is a no-op.
+if (INSTANCE.defaultLocale !== 'ru') i18n.global.setLocaleMessage(INSTANCE.defaultLocale, ruCore)
 
 export default i18n
 
@@ -119,25 +175,29 @@ export function getLocale(): string {
 }
 
 /**
- * Passport message overlays (tz-whitelabel §7.1): an instance may re-word
- * terminology without forking the base catalogs. Deploy-side wiring lands
- * with the passport; the seam exists from day one so overlay keys are a
- * runtime merge, never a catalog fork.
+ * Passport message overlays (tz-whitelabel §5): an instance may re-word
+ * terminology without forking the base catalogs.
+ *
+ * @remarks
+ * Overlay strings use the catalog syntax and become message functions
+ * (locales/messageFunction.ts) -- the bundle has no compiler to turn them
+ * into messages. Each overlay is cut to the shape of the catalogs it lands
+ * on (locales/overlayShape.ts): a node of another kind, a forbidden key and
+ * the root `brand` (a skin property) never reach the composer. An overlay
+ * wins over the base catalogs for good: it is
+ * merged again after every later catalog load of its locale (a locale
+ * switch, a zone entry). A locale whose catalogs are not loaded yet gets
+ * its overlay with them.
  */
-export function applyInstanceOverrides(
-  overrides: Partial<Record<string, Record<string, unknown>>>,
-): void {
+export function applyInstanceOverrides(overrides: Partial<Record<string, Messages>>): void {
   for (const [locale, messages] of Object.entries(overrides)) {
-    i18n.global.mergeLocaleMessage(locale, messages)
+    if (!messages) continue
+    // Pruned BEFORE conversion (depth, forbidden keys, brand): the conversion recurses.
+    const overlay = toMessageFunctions(conformOverlay(messages, {}))
+    instanceOverlays.set(locale, [...(instanceOverlays.get(locale) ?? []), overlay])
+    if (appliedParts.get(locale)?.has('core')) mergeOverlay(locale, overlay)
   }
 }
-
-// Seeded with 'ru' -- the only catalog the main bundle actually carries
-// (eager). INSTANCE.defaultLocale is NOT implicitly loaded: for a non-ru
-// default, line 84 above is just a fallback alias onto ru, and seeding it
-// here would make loadLocale(defaultLocale) early-return forever -- that
-// locale would render Russian text with no way to load its real catalog.
-const loadedLocales = new Set<string>(['ru'])
 
 // Boot hint (tz-i18n phase 5): the last locale the user CHOSE, persisted so
 // a reopen renders in it immediately instead of flashing the default while
@@ -159,37 +219,118 @@ export function clearLocaleHint(): void {
   }
 }
 
-/**
- * Load and merge a locale's catalog chunks WITHOUT switching to it -- the
- * idle prefetch (App.vue) warms the chunk cache this way so a later switch
- * is a same-frame flip. loadLocale must never assign locale.value or touch
- * the boot hint: a prefetch built on setLocale switched through every
- * available locale and left the app on the LAST one (en) two seconds after
- * every mount -- the "UI reverts to English by itself" report. Chunks load
- * PARALLEL (a sequential await waterfall here was the 1-2s dead switch and
- * the 5-10s late flip on reopen: ~20 tiny JSON chunks, one round-trip each,
- * serialized). A locale with no folder is a no-op.
- */
-export async function loadLocale(locale: string): Promise<void> {
-  if (!isSupportedLocale(locale) || loadedLocales.has(locale)) return
-  const prefix = `./${locale}/`
-  const loaders = Object.entries(lazyLoaders)
-    .filter(([p]) => p.startsWith(prefix))
-    .map(([, loader]) => loader)
-  if (loaders.length === 0) return
-  const modules = (await Promise.all(loaders.map((load) => load()))) as unknown as {
-    default: Record<string, unknown>
-  }[]
-  const messages: Record<string, unknown> = {}
-  for (const mod of modules) Object.assign(messages, mod.default)
+function partOf(path: string): CatalogPart {
+  const domain = path.slice(path.lastIndexOf('/') + 1, -'.json'.length)
+  return (ZONE_CATALOGS as readonly string[]).includes(domain) ? (domain as ZoneCatalog) : 'core'
+}
 
-  i18n.global.setLocaleMessage(locale, messages)
-  i18n.global.mergeLocaleMessage(locale, BRAND_MESSAGE)
-  loadedLocales.add(locale)
+/** True when the locale has a core catalog to load (ru is always held). */
+function hasCatalogs(locale: string): boolean {
+  if (locale === 'ru') return true
+  return Object.keys(lazyLoaders).some(
+    (path) => path.startsWith(`./${locale}/`) && partOf(path) === 'core',
+  )
 }
 
 /**
- * Switch the UI language: warm the catalog via loadLocale, then flip the
+ * Fetch one part of a locale's catalogs, once: every file of the part loads
+ * in PARALLEL (a sequential await waterfall here was the 1-2s dead switch
+ * and the 5-10s late flip on reopen: tiny JSON chunks, one round-trip each,
+ * serialized). A failed fetch is forgotten, so the next call retries.
+ */
+function fetchPart(locale: string, part: CatalogPart): Promise<Messages> {
+  const id = `${locale}/${part}`
+  const known = pendingParts.get(id)
+  if (known) return known
+  const loads = Object.entries(lazyLoaders)
+    .filter(([path]) => path.startsWith(`./${locale}/`) && partOf(path) === part)
+    .map(([, load]) => load())
+  const pending = Promise.all(loads).then((modules) => {
+    const messages: Messages = {}
+    for (const mod of modules) Object.assign(messages, mod.default)
+    return messages
+  })
+  pendingParts.set(id, pending)
+  pending.catch(() => pendingParts.delete(id))
+  return pending
+}
+
+/**
+ * Put fetched parts into the composer: the core first -- it REPLACES the
+ * locale's messages (and with them the ru alias a non-ru default starts
+ * on) -- then each zone ROOT-wise, the same shallow spread over files the
+ * eager catalog is composed with (no deep copy of the precompiled message
+ * trees; key-audit guarantees the roots never collide). Brand and overlays
+ * go on top again.
+ */
+function applyParts(locale: string, fetched: ReadonlyMap<CatalogPart, Messages>): void {
+  const applied = appliedParts.get(locale) ?? new Set<CatalogPart>()
+  const order = [...fetched.keys()].sort((a, b) => Number(b === 'core') - Number(a === 'core'))
+  let changed = false
+  for (const part of order) {
+    // A concurrent load of the same locale may have applied it meanwhile.
+    if (applied.has(part)) continue
+    const base = part === 'core' ? {} : toRaw(i18n.global.getLocaleMessage(locale))
+    i18n.global.setLocaleMessage(locale, { ...base, ...fetched.get(part) })
+    applied.add(part)
+    changed = true
+  }
+  appliedParts.set(locale, applied)
+  if (changed) mergeRuntimeMessages(locale)
+}
+
+/**
+ * Load and merge a locale's catalogs WITHOUT switching to it: its core plus
+ * every zone a route has asked for so far.
+ *
+ * @remarks
+ * Never assigns locale.value or touches the boot hint: a warm-up built on
+ * setLocale switched through every available locale and left the app on
+ * the LAST one (en) -- the "UI reverts to English by itself" report. A
+ * locale with no folder is a no-op.
+ */
+export async function loadLocale(locale: string): Promise<void> {
+  if (!isSupportedLocale(locale) || !hasCatalogs(locale)) return
+  // Looped: a zone asked for while this fetch was in flight (a route entered
+  // mid-switch) is loaded before returning, so setLocale never flips into a
+  // locale that lacks it.
+  for (;;) {
+    const applied = appliedParts.get(locale)
+    const missing = (['core', ...requestedZones] as CatalogPart[]).filter((p) => !applied?.has(p))
+    if (missing.length === 0) return
+    const messages = await Promise.all(missing.map((part) => fetchPart(locale, part)))
+    applyParts(locale, new Map(missing.map((part, i) => [part, messages[i] as Messages])))
+  }
+}
+
+/**
+ * Merge the zone catalogs a route reads before it resolves
+ * (router/catalogs.ts), for the active locale and the fallback locale.
+ *
+ * @remarks
+ * The fallback locale loads the zone too: a translation may trail ru (the
+ * key-audit parity report), and a fallback without the zone would show the
+ * raw key path instead. Once asked for, a zone rides along with every later
+ * locale load, so a switch inside the zone brings the zone's catalog of
+ * the new locale with it.
+ */
+export async function ensureCatalogs(zones: readonly ZoneCatalog[]): Promise<void> {
+  for (const zone of zones) requestedZones.add(zone)
+  const locales = new Set([getLocale(), INSTANCE.defaultLocale])
+  await Promise.all([...locales].map((locale) => loadLocale(locale)))
+}
+
+/**
+ * Start loading a locale's catalogs in the background, without switching
+ * (the language switcher: on its screen and on a row's finger-down). A
+ * failure is dropped -- the real switch retries the fetch.
+ */
+export function warmLocale(locale: string): void {
+  loadLocale(locale).catch(() => undefined)
+}
+
+/**
+ * Switch the UI language: load the catalogs via loadLocale, then flip the
  * composer, the root lang, and the boot hint. A locale with no folder is a
  * no-op (fallback keeps rendering). The language switcher UI (tz-i18n
  * phase 5) only ever offers locales that have catalogs.
@@ -197,13 +338,13 @@ export async function loadLocale(locale: string): Promise<void> {
 export async function setLocale(locale: string): Promise<void> {
   if (!isSupportedLocale(locale)) return
   // Load BEFORE the same-locale exit: the current locale is not necessarily
-  // a loaded one (a non-ru default starts aliased onto ru -- see the
-  // loadedLocales seeding), so even a no-flip call may still have chunks to
-  // fetch before it can render its own text.
+  // a loaded one (a non-ru default starts aliased onto ru), so even a
+  // no-flip call may still have chunks to fetch before it can render its
+  // own text.
   await loadLocale(locale)
-  // No catalog folder -> loadedLocales never gained the locale: keep the
-  // current locale rendering on fallback rather than switching into void.
-  if (!loadedLocales.has(locale)) return
+  // No catalog folder -> the core never applied: keep the current locale
+  // rendering on fallback rather than switching into void.
+  if (!appliedParts.get(locale)?.has('core')) return
   if (i18n.global.locale.value === locale) return
   i18n.global.locale.value = locale
   setRootLang(locale)
@@ -221,13 +362,7 @@ export async function setLocale(locale: string): Promise<void> {
  * no-ops on it. Today every product locale has a catalog (BE-188).
  */
 export function availableLocales(): string[] {
-  const withCatalogs = new Set(
-    Object.keys(lazyLoaders)
-      .map((p) => p.split('/')[1])
-      .filter((l): l is string => Boolean(l)),
-  )
-  withCatalogs.add(INSTANCE.defaultLocale)
-  return SUPPORTED_LOCALES.filter((l) => withCatalogs.has(l))
+  return SUPPORTED_LOCALES.filter((l) => l === INSTANCE.defaultLocale || hasCatalogs(l))
 }
 
 /**

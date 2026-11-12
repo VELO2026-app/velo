@@ -1,0 +1,73 @@
+# =============================================================================
+# VELO monorepo -- pnpm workspace root (FE-116, tz-ui-package.md §3.1)
+# =============================================================================
+# Members:
+#   frontend     -- the application (Vue 3 + Vite, the golden build)
+#   packages/*   -- private code packages (@velo/ui today)
+# The root owns the lockfile and the shared toolchain versions; this file
+# moved here verbatim from frontend/ when the workspace root moved to the
+# repository root -- pnpm >= 10 reads the settings below from the WORKSPACE
+# ROOT file only, a member-local pnpm-workspace.yaml would be ignored.
+packages:
+  - frontend
+  - packages/*
+
+# Dependency maturity rule (FE-164): only versions published at least 14 days
+# ago may be resolved. 14 days = 20160 minutes. pnpm rejects a younger version
+# at install/add/update time, so a hand- or agent-made bump is held to the same
+# rule as Dependabot (`cooldown: 14` in .github/dependabot.yml). The check also
+# covers the whole committed lockfile: `pnpm install --frozen-lockfile` (CI)
+# fails if a lockfile entry is younger than the cutoff, so a lockfile merged
+# in from elsewhere (rebase conflict, Dependabot) must pass it too. After a
+# conflict take your side of the lockfile and run `pnpm install --lockfile-only`;
+# do not `pnpm clean --lockfile` (it re-resolves the whole graph). Security fixes
+# that must land sooner: add the exact `name@version` to the exclude list below,
+# with a comment saying why and when it can go.
+minimumReleaseAge: 20160
+minimumReleaseAgeExclude:
+  # FE-174: owner decision of 2026-11-12 -- take Colada 1.4.9 one day before it
+  # turns 14 days old (published 2026-10-30; matures 2026-11-13). Exact version,
+  # not the package name. Remove this entry after 2026-11-13 (FE-171).
+  - '@pinia/colada@1.4.9'
+
+# pnpm settings (pnpm >= 10 reads config from this file, not package.json).
+# Dependency build-script allowlist; packages not listed stay unexecuted.
+allowBuilds:
+  # Its postinstall only prints a notice (read 2026-10-15) -- nothing to run.
+  '@zoom/meetingsdk': false
+  esbuild: true
+  vue-demi: true
+# Pinned past the Dependabot alerts (FE-105). The newer serialize-javascript
+# 7.1.4 (2026-10-23) is still to revisit.
+# The vite 6.4.5 override (GHSA-8g5g-mxqh-grgj, server.fs.deny bypassed with
+# queries -- a regression of the 6.4.4 backport only) was dropped with the
+# move to vite 7 (FE-157 5A.5): both members pin vite 7.3.7, which already
+# carries the underlying fixes (GHSA-v2wj-q39q-566r fixed in 7.3.2,
+# GHSA-rq7h-c2jc-7f22 fixed in 7.3.7) and is the only vite in the lockfile
+# (vitest resolves the same copy). The scoped postcss-selector-parser 7.1.6 pin
+# (GHSA-rj75-hqrm-r3gf) was dropped with eslint-plugin-vue 10 (FE-157 5A.5):
+# the plugin itself now declares ^7.1.4 and resolves 7.1.7 (2026-10-20),
+# the same version the stylelint chain uses.
+#
+# Temporary holds (FE-164): transitive versions younger than minimumReleaseAge
+# when the rule was enabled (2026-11-11). Each one is the newest version that
+# was already 14 days old. Drop an entry once its newer version has matured
+# (the date is when it can go) and `pnpm install` is clean without it.
+# Note: an override silently replaces an explicit request too -- `pnpm add
+# tslib@2.9.1` installs 2.8.1 -- so the maturity check does not guard these.
+#   @napi-rs/wasm-runtime 1.2.7 (2026-11-03)  -> 1.2.6, drop after 2026-11-17
+#   tslib 2.9.1 (2026-10-30)                  -> 2.8.1, drop after 2026-11-13
+#   (@vue/language-core, vue-component-meta 3.3.14 matured 2026-11-12: dropped, FE-171.)
+#
+# A single postcss copy (FE-157 follow-up, Vue 3.5.44 PR #81). The vue
+# compiler (@vue/compiler-sfc) pulls the newest postcss while stylelint's own
+# ^8.5.26 stays on the older locked one; postcss-html then follows the newer
+# copy. The AST built by one copy and walked by the other breaks
+# no-invalid-position-declaration: every inline style="..." in a template is
+# reported as a root-level declaration (23 false errors). Forcing one copy
+# fixes it; the floor is the version that was current when this was found.
+overrides:
+  serialize-javascript: 7.1.3
+  '@napi-rs/wasm-runtime': 1.2.6
+  tslib: 2.8.1
+  postcss: ^8.5.32

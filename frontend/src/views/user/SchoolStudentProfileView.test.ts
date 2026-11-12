@@ -13,7 +13,10 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
+import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import SchoolStudentProfileView from '@/views/user/SchoolStudentProfileView.vue'
 import * as cgApi from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
@@ -23,17 +26,25 @@ vi.mock('@/api/schools')
 
 const push = vi.fn()
 const replace = vi.fn()
-const routeState = {
+// Reactive, behind getters: a test can move the route under a mounted screen
+// (Vue Router reuses the instance when only the params change).
+const routeState = reactive({
   name: 'master-school-student',
   schoolId: 'g1',
   userId: 'u9',
   nameQuery: 'Пётр Сидоров',
-}
+})
 vi.mock('vue-router', () => ({
   useRoute: () => ({
-    params: { schoolId: routeState.schoolId, userId: routeState.userId },
-    name: routeState.name,
-    query: { name: routeState.nameQuery, avatar: '' },
+    get params() {
+      return { schoolId: routeState.schoolId, userId: routeState.userId }
+    },
+    get name() {
+      return routeState.name
+    },
+    get query() {
+      return { name: routeState.nameQuery, avatar: '' }
+    },
   }),
   useRouter: () => ({ push, replace }),
 }))
@@ -51,7 +62,10 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolStudentProfileView).use(createTestI18n())
+  app = createApp(SchoolStudentProfileView)
+    .use(createTestI18n())
+    .use(createPinia())
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
@@ -449,6 +463,35 @@ describe('SchoolStudentProfileView', () => {
     expect(text()).toContain('Ученик недоступен')
     expect(text()).not.toContain('Пётр Сидоров')
     expect(buttonWith('К списку учеников')).toBeTruthy()
+  })
+
+  it('a 404 from the school page is the same masked rung (the school is gone)', async () => {
+    vi.mocked(cgApi.getSchoolPage).mockRejectedValue(
+      new ApiResponseError(404, 'not found', 'not_found'),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('Ученик недоступен')
+    expect(text()).not.toContain('Не удалось загрузить профиль')
+  })
+
+  it('router reuse: a slow answer for the previous student never repaints the next one', async () => {
+    let answerFirst: (v: SchoolStudentProfileResponse) => void = () => {}
+    vi.mocked(cgApi.getSchoolStudentProfile)
+      .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
+      .mockResolvedValueOnce(profileFixture({ display_name: 'Мария Новая' }))
+    mount()
+    await flush()
+
+    routeState.userId = 'u10'
+    await flush()
+    answerFirst(profileFixture({ display_name: 'Старый Ученик' }))
+    await flush()
+
+    expect(cgApi.getSchoolStudentProfile).toHaveBeenLastCalledWith('g1', 'u10')
+    expect(text()).toContain('Мария Новая')
+    expect(text()).not.toContain('Старый Ученик')
   })
 
   it('a non-404 failure is retryable: «Не удалось загрузить профиль» + «Повторить»', async () => {

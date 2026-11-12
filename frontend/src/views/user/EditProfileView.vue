@@ -196,7 +196,7 @@
             {{ t('user.screens.editProfile.balanceLine', { amount: formattedBalance }) }}
           </div>
           <!-- FE-112 (tz-whitelabel §4): the withdraw step leads to the
-               payments module's finance screen; without the module there is
+               payments option's finance screen; with the option off there is
                nothing to withdraw through -- the balance line and the
                forfeit consent below still tell the truth. -->
           <VButton v-if="paymentsEnabled" variant="primary" block @click="onWithdrawFirst">
@@ -251,11 +251,11 @@ import {
 import { IconWarning } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { useMasterStore } from '@/stores/master'
+import { useMasterProfile } from '@/composables/queries/master'
 import { extractApiError } from '@/composables/useApiError'
 import { submitMethodChangeRequest, updateMasterLanguages } from '@/api/masters'
 import { formatMoney } from '@/utils/format'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import { LANGUAGES } from '@/utils/languages'
 import MethodTaxonomyPicker from '@/components/shared/MethodTaxonomyPicker.vue'
 import { flattenMethods, parseMethods, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
@@ -263,9 +263,9 @@ import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import type { UserUpdate } from '@/api/types'
 
 // FE-112 (tz-whitelabel §4): hides the withdraw-first step
-// (i18n:user.screens.editProfile.withdrawFirst) in editions
-// without the payments module (see the template comment at the button).
-const paymentsEnabled = featureEnabled('payments')
+// (i18n:user.screens.editProfile.withdrawFirst) on instances
+// with the payments option off (FE-151) (see the template comment at the button).
+const paymentsEnabled = isOptionEnabled('payments')
 
 const router = useRouter()
 
@@ -273,10 +273,13 @@ const router = useRouter()
 const { onFieldFocus } = useKeyboardFieldScroll()
 const toast = useToast()
 const authStore = useAuthStore()
-const masterStore = useMasterStore()
 
 const user = computed(() => authStore.user)
 const isMaster = computed(() => authStore.role === 'master')
+// The master profile: the delete modal's balance to forfeit, the methods and
+// languages blocks with any pending request. Only a master has one
+// (GET /masters/me answers 403 to anyone else).
+const { profile: masterProfile, reload: reloadMasterProfile } = useMasterProfile(isMaster)
 
 // -- Master methods: two-level direction→kind picker gated by admin approval
 // (batch L). Selection is held as the flat "Direction — Kind" methods[] the
@@ -288,7 +291,7 @@ const METHOD_CHANGE_NOTE =
   t('user.screens.editProfile.methods.autoNote2')
 
 // The master's current live methods (from the profile).
-const currentMethods = computed((): string[] => masterStore.profile?.methods ?? [])
+const currentMethods = computed((): string[] => masterProfile.value?.methods ?? [])
 
 // Normalised current = the live methods run through the two-level taxonomy
 // (drop-unmatched, Q3). This is the baseline the picker seeds to and that
@@ -299,7 +302,7 @@ const normalizedCurrent = computed((): string[] =>
 )
 
 // The outstanding / recently-decided change-request (null when none).
-const methodRequest = computed(() => masterStore.profile?.method_change_request ?? null)
+const methodRequest = computed(() => masterProfile.value?.method_change_request ?? null)
 const methodRequestPending = computed((): boolean => methodRequest.value?.status === 'pending')
 const pendingProposedMethods = computed((): string[] => methodRequest.value?.proposed_methods ?? [])
 const methodRejectReason = computed((): string =>
@@ -335,7 +338,7 @@ async function onSubmitMethods(): Promise<void> {
   try {
     await submitMethodChangeRequest([...selectedMethods.value])
     // Refetch so the pending badge appears (method_change_request now set).
-    await masterStore.fetchMyProfile(true)
+    await reloadMasterProfile()
     toast.info(t('user.screens.editProfile.toast.methodsSent'))
   } catch (error) {
     toast.error(extractApiError(error, t('user.screens.editProfile.toast.methodsFailed')))
@@ -345,7 +348,7 @@ async function onSubmitMethods(): Promise<void> {
 }
 
 // -- Master languages (E16): freely editable, no moderation -----------------
-const currentLanguages = computed((): string[] => masterStore.profile?.languages ?? [])
+const currentLanguages = computed((): string[] => masterProfile.value?.languages ?? [])
 const selectedLanguages = ref<string[]>([])
 watch(
   currentLanguages,
@@ -376,7 +379,7 @@ async function onSaveLanguages(): Promise<void> {
   savingLanguages.value = true
   try {
     await updateMasterLanguages([...selectedLanguages.value])
-    await masterStore.fetchMyProfile(true)
+    await reloadMasterProfile()
     toast.info(t('user.screens.editProfile.toast.languagesSaved'))
   } catch (error) {
     toast.error(extractApiError(error, t('user.screens.editProfile.toast.languagesFailed')))
@@ -385,15 +388,11 @@ async function onSaveLanguages(): Promise<void> {
   }
 }
 
-// Load the master profile so the delete modal can show the balance to forfeit
-// and the methods/languages blocks reflect the current set + any pending request.
-// Bug 2 fix (PROMPT №405): prime the taxonomy catalog cache in parallel so a
-// promoted custom method already resolves to a plain chip on first render
-// instead of flashing "custom".
+// The master profile loads itself (above). Bug 2 fix (PROMPT №405): prime
+// the taxonomy catalog cache in parallel so a promoted custom method already
+// resolves to a plain chip on first render instead of flashing "custom".
 onMounted(() => {
-  if (isMaster.value) {
-    void Promise.all([masterStore.fetchMyProfile(), primeMethodTaxonomyCatalog()])
-  }
+  if (isMaster.value) void primeMethodTaxonomyCatalog()
 })
 
 const displayName = computed(() => {
@@ -491,7 +490,7 @@ const delConsent = ref(false)
 const delConfirmText = ref('')
 
 // Balance to forfeit -- master earnings (0 / section hidden for plain users).
-const balanceCents = computed(() => masterStore.profile?.available_cents ?? 0)
+const balanceCents = computed(() => masterProfile.value?.available_cents ?? 0)
 const hasBalance = computed(() => balanceCents.value > 0)
 const formattedBalance = computed(() => formatMoney(balanceCents.value, 'EUR', getLocale(), true))
 

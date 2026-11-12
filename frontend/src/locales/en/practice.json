@@ -36,11 +36,6 @@
   "timePicker": {
     "title": "Practice time"
   },
-  "bookingCancel": {
-    "title": "Cancel the booking?",
-    "keep": "No, keep it",
-    "confirm": "Yes, cancel"
-  },
   "booking": {
     "title": "Booking",
     "labels": {

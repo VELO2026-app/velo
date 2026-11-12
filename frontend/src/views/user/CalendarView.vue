@@ -14,7 +14,8 @@
     - CalendarPracticeCard per practice
     - loading / error / empty states
 
-  Data comes from useCalendarStore (separate from the Dashboard feed).
+  The week comes from useCalendarWeek (a Colada query keyed by the
+  calendar store's window, filters and scope; separate from the Dashboard feed).
   The whole visible week is loaded in one request; the selected-day list
   and dot-markers are derived client-side.
 -->
@@ -68,7 +69,7 @@
         <WeekStrip
           :days="store.days"
           :selected-date="store.selectedDate"
-          :days-with-practices="store.daysWithPractices"
+          :days-with-practices="daysWithPractices"
           :local-date-key="store.localDateKey"
           :max-back-days="store.maxBackDays"
           @select-day="store.selectDay"
@@ -83,10 +84,17 @@
          facet modal has nothing to filter, so the control sits out. -->
     <div v-if="!masterMode && !schoolMode" class="calendar__selector">
       <!-- Collapsed: pill + funnel -->
-      <button v-if="!expanded" type="button" class="calendar__select-pill" @click="expanded = true">
-        <span class="calendar__select-label">{{ t('user.screens.calendar.pickPractices') }}</span>
-        <span class="calendar__funnel" @click.stop="showFilter = true">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <div v-if="!expanded" class="calendar__select-pill">
+        <button type="button" class="calendar__select-expand" @click="expanded = true">
+          <span class="calendar__select-label">{{ t('user.screens.calendar.pickPractices') }}</span>
+        </button>
+        <button
+          type="button"
+          class="calendar__funnel"
+          :aria-label="t('user.screens.calendar.filter')"
+          @click="showFilter = true"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
               d="M3 5h18l-7 8v6l-4 2v-8L3 5z"
               stroke="currentColor"
@@ -94,8 +102,8 @@
               stroke-linejoin="round"
             />
           </svg>
-        </span>
-      </button>
+        </button>
+      </div>
 
       <!-- Expanded: active-filter chips + collapse -->
       <VCard v-else class="calendar__expanded" padding="sm">
@@ -149,7 +157,10 @@
 
     <!-- Loading (initial): VLoadingSwap holds the day's skeleton cards for
          a visible minimum and crossfades them into whichever state lands. -->
-    <VLoadingSwap :pending="store.loading && dayPractices.length === 0" memory-key="calendar-day">
+    <VLoadingSwap
+      :pending="week.loading.value && dayPractices.length === 0"
+      memory-key="calendar-day"
+    >
       <template #skeleton>
         <div class="calendar__loader">
           <VSkeletonPracticeCard v-for="i in daySkeletons" :key="i" />
@@ -159,12 +170,12 @@
       <!-- Error (only when there is nothing to show: a failed background
            refresh keeps the day's practices on screen) -->
       <VEmptyState
-        v-if="store.error && dayPractices.length === 0"
+        v-if="weekError && dayPractices.length === 0"
         icon="warning"
         :title="t('common.loadFailed')"
-        :description="store.error"
+        :description="weekError"
       >
-        <VButton size="sm" @click="store.loadWeek()">{{ t('common.retry') }}</VButton>
+        <VButton size="sm" @click="week.refetch()">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <!-- Empty: no practices on the selected day -->
@@ -210,9 +221,12 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue'
+import { ref, computed, onUnmounted, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCalendarStore } from '@/stores/calendar'
+import { useCalendarWeek } from '@/composables/queries/calendar'
+import { extractApiError } from '@/composables/useApiError'
+import { useNow } from '@/composables/useNow'
 import { VSkeletonPracticeCard, VLoadingSwap, VEmptyState, VButton, VCard } from '@/components/ui'
 import WeekStrip from '@/components/shared/WeekStrip.vue'
 import { useFloatingHeader } from '@/components/layout/useFloatingHeader'
@@ -244,31 +258,55 @@ const viewerTz = useViewerTimezone()
 //    2026-10-01) --------------------------------------------------------------
 // Stacked routes user-calendar-master/:masterId and user-calendar-school/
 // :schoolId: the week feed switches to one master's scheduled practices
-// (store.setMasterScope folds master_id + status=scheduled into loadWeek) or
-// to one school's upcoming ones (store.setSchoolScope -- loadWeek feeds from
-// the school endpoint's full upcoming list, see the store), and the viewer's
-// facet UI sits out. The scopes MUST reset on unmount -- the store is a
-// singleton the tab calendar shares; a leaked scope would poison the
-// viewer's own week.
+// (store.setMasterScope -- master_id + status=scheduled in the week query) or
+// to one school's upcoming ones (store.setSchoolScope -- the school endpoint's
+// full upcoming list, sliced per week; composables/queries/calendar.ts), and
+// the viewer's facet UI sits out. The scopes MUST reset on unmount -- the
+// store is a singleton the tab calendar shares; a leaked scope would poison
+// the viewer's own week. They are set in SETUP, before the week query below
+// is created: a scope set on mount would let the query load the tab's week
+// first.
 // Owner 2026-10-03: the master route may carry ?schoolId (the curator's school
 // context off the profile) -- the feed then keeps only the master's practices
 // in THAT school (the store's client-side filter, see setMasterScope).
 const masterMode = computed(() => String(route.params.masterId ?? '') !== '')
 const schoolMode = computed(() => String(route.params.schoolId ?? '') !== '')
 
-onMounted(() => {
-  if (masterMode.value) {
-    store.setMasterScope(String(route.params.masterId), String(route.query.schoolId ?? '') || null)
-  } else if (schoolMode.value) {
-    store.setSchoolScope(String(route.params.schoolId))
-  }
+// The scope THIS screen set, remembered: on unmount the route is already the
+// next one (masterMode / schoolMode read it), so they cannot tell which
+// scope to clear.
+const ownMasterScope = masterMode.value ? String(route.params.masterId) : null
+const ownSchoolScope = schoolMode.value ? String(route.params.schoolId) : null
+if (ownMasterScope !== null) {
+  store.setMasterScope(ownMasterScope, String(route.query.schoolId ?? '') || null)
+} else if (ownSchoolScope !== null) {
+  store.setSchoolScope(ownSchoolScope)
+}
+// First entry of the session snaps the window to today; a re-entry keeps it.
+store.init()
+
+// The week on screen (Colada): practices, day markers, loading / error state.
+const week = useCalendarWeek()
+/** The error rung's text (ADR: the screen words the raw error). */
+const weekError = computed(() => {
+  const error = week.error.value
+  // A retry running: the loader, not the old error.
+  if (error == null || !week.failed.value) return ''
+  return extractApiError(
+    error,
+    schoolMode.value
+      ? t('storeErrors.calendar.schoolPractices')
+      : t('storeErrors.calendar.calendar'),
+  )
 })
 
 onUnmounted(() => {
-  if (masterMode.value) {
+  // Only the scope this screen set, and only while it is still the store's
+  // (a newer stacked calendar may already have set its own).
+  if (ownMasterScope !== null && store.masterScope === ownMasterScope) {
     store.setMasterScope(null)
   }
-  if (schoolMode.value) {
+  if (ownSchoolScope !== null && store.schoolScope === ownSchoolScope) {
     store.setSchoolScope(null)
   }
 })
@@ -309,20 +347,26 @@ function openFilter(): void {
   showFilter.value = true
 }
 
-// Practices on the selected day (already sorted by the store).
-const dayPractices = computed<PracticeResponse[]>(() => store.selectedDayPractices)
+// The screen's own minute clock: the selected-day list and the strip's dots
+// drop a practice the moment it starts (it can no longer be booked). Owned
+// here, not by the store, so it pauses while the screen is kept alive
+// off-stage.
+const now = useNow(60_000)
+// Practices on the selected day (already sorted by useCalendarWeek).
+const dayPractices = computed<PracticeResponse[]>(() => week.selectedDayPractices(now.value))
+const daysWithPractices = computed<Set<string>>(() => week.daysWithPractices(now.value))
 // Skeleton in the size of the last settled day (see useRememberedCount).
 const daySkeletons = useRememberedCount(
   'calendar-day',
   () => dayPractices.value.length,
-  () => !store.loading,
+  () => !week.loading.value,
   { fallback: 3, max: 3 },
 )
 
 // Section header for the selected day (the today label i18n:common.today, the
 // tomorrow label i18n:common.tomorrow, or a formatted day-month date),
 // derived from the VIEWER's profile timezone (SW2) -- matching the store's
-// own viewer-tz bucketing (store.ts selectedDayPractices) and the cards'
+// own viewer-tz bucketing (useCalendarWeek's selectedDayPractices) and the cards'
 // rendered time, never the first practice's own timezone. dayLabel is only
 // read from the template's content branch (v-else, gated on
 // dayPractices.length > 0), so a first practice is always present here.
@@ -435,17 +479,14 @@ function goToDetail(id: string): void {
   void router.push({ name: 'practice-detail', params: { id } })
 }
 
-onMounted(() => {
-  void store.init()
-})
-
 // The tab calendar is kept alive (TabRouterView): back on the tab, the week
-// on screen revalidates quietly (same range -> no skeleton, see loadWeek).
-// The first call is the mount itself; stacked calendars are never kept.
+// on screen revalidates quietly if stale (same key -> no skeleton). The first
+// call is the mount itself; stacked calendars are never kept.
 let activations = 0
 onActivated(() => {
   if (activations++ === 0 || masterMode.value || schoolMode.value) return
-  void store.init()
+  store.init()
+  void week.refresh()
 })
 </script>
 
@@ -522,18 +563,29 @@ onActivated(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
   height: var(--velo-size-50);
-  padding: 0 var(--space-5);
   background: var(--velo-primary);
   border: 1px solid var(--velo-glass-border);
   border-radius: var(--radius-full);
-  cursor: pointer;
   transition: opacity var(--transition-fast);
 }
 
 .calendar__select-pill:hover {
   opacity: 0.92;
+}
+
+/* Two sibling buttons share the pill: the label expands, the funnel filters. */
+.calendar__select-expand {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3) 0 var(--space-5);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  text-align: left;
 }
 
 .calendar__select-label {
@@ -543,10 +595,16 @@ onActivated(() => {
 }
 
 .calendar__funnel {
+  align-self: stretch;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 0 var(--space-5) 0 var(--space-3);
   color: var(--velo-white);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
 }
 
 .calendar__expanded {

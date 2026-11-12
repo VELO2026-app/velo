@@ -1,9 +1,7 @@
-cd frontend || exit 1
-npx lint-staged
-
-# Total gate at commit: every commit touching frontend/ runs the full stack
-# (lint budget, typecheck, all tests). Commits outside frontend/ skip --
-# there is nothing frontend to verify. Bypass via --no-verify closes at CI.
-if git diff --cached --name-only --diff-filter=ACMR | grep -q '^frontend/'; then
-  pnpm verify
-fi
+# Pre-commit stays fast: lint-staged only (FE-157). It formats the staged
+# files with prettier and lints the staged ts/vue with eslint (cached,
+# zero warnings); the masks live in the root package.json "lint-staged"
+# block. The full gate (`pnpm -r verify`) is not run here any more -- it
+# stays in CI and in the AGENTS.md "before handing over" rule. Hooks run
+# from the workspace root, hence no cd.
+pnpm exec lint-staged

@@ -26,6 +26,7 @@
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
 
 import App from './App.vue'
 import router from './router'
@@ -37,15 +38,19 @@ import './styles/global.css'
 import './styles/motion.css'
 import './styles/diary-entry-scale.css'
 // tz-whitelabel §3 cascade: the skin overrides ride LAST, mechanically --
-// this file is GENERATED at build time (public/skin/tokens.css when a skin
-// ships, an empty stub otherwise; see platform/skin.ts). The TZ sketch said
+// this file is GENERATED at build time (public/skin/tokens/*.tokens.json
+// converted to CSS when a skin ships, an empty stub otherwise; see platform/skin.ts). The TZ sketch said
 // main.ts, but the app-wide stylesheet order lives HERE, so the generated
 // import sits in the same chain -- hopeful import order is not a mechanism.
-import './styles/skin-tokens.css'
+import 'virtual:skin-tokens.css'
 
 import { initTelegramSdk } from './platform/telegram-sdk'
 import { installRenderDebug } from './platform/render-debug'
+import { installGlobalErrorHandlers } from './platform/error-reporter'
+import { accountScopePlugin } from './platform/session'
+import { coladaOptions } from './composables/queries/setup'
 import { readLocaleHint, setLocale } from './locales'
+import { loadInstanceTexts } from './platform/texts'
 import { isSupportedLocale } from './platform/instance'
 
 // Initialize the Telegram SDK (best-effort) before mounting. Safe outside
@@ -55,7 +60,12 @@ initTelegramSdk()
 const app = createApp(App)
 
 // Pinia = state manager (like a global dict of reactive objects).
-app.use(createPinia())
+// Account scope (platform/session.ts): every store resets when the session ends.
+app.use(createPinia().use(accountScopePlugin))
+
+// Pinia Colada (FE-157 4F) = the server-data cache, kept in the Pinia above;
+// its caches join the same account scope (composables/queries/setup.ts).
+app.use(PiniaColada, coladaOptions)
 
 // i18n (tz-i18n phase 0): the ru catalog is verbatim the previously
 // hardcoded strings, so this changes no rendered text. The UI language
@@ -65,9 +75,18 @@ app.use(i18n)
 // Router = URL -> component mapping (like FastAPI include_router).
 app.use(router)
 
+// Uncaught errors (Vue, window, unhandledrejection, router) funnel into
+// reportError(): console in dev, no-op in production until BE-203 (R2).
+installGlobalErrorHandlers(app, router)
+
 // Dev-only render log (platform/render-debug.ts): off unless the
 // 'velo:debug-renders' storage flag is set; a no-op in production builds.
 installRenderDebug(app, router)
+
+// Instance text overlays (FE-133, `texts` slot): fetched before the first
+// render so a partner's wording never flashes the built-in strings. Absent
+// package = silent no-op (platform/texts.ts).
+const instanceTexts = loadInstanceTexts()
 
 // Boot locale hint (tz-i18n phase 5): apply the last CHOSEN locale BEFORE the
 // first render -- without this, a reopen shows the default locale for the
@@ -77,6 +96,8 @@ installRenderDebug(app, router)
 // App.vue watcher (same-locale no-op when they agree).
 const localeHint = readLocaleHint()
 if (localeHint && isSupportedLocale(localeHint)) await setLocale(localeHint)
+// Both loads ran side by side; the first render waits for the overlays too.
+await instanceTexts
 
 // Mount into <div id="app"> in index.html.
 app.mount('#app')

@@ -42,7 +42,7 @@
 
       <!-- Cards of this day, centered, joined by the small decor link
            (Decor 2 / small) — shown between cards, not before the first one. -->
-      <template v-for="(item, i) in group.items" :key="itemKey ? itemKey(item) : item.id">
+      <template v-for="({ item, state }, i) in group.rows" :key="itemKey ? itemKey(item) : item.id">
         <div v-if="i > 0" class="timeline__link">
           <IconDecor2 part="small" :size="18" />
         </div>
@@ -53,12 +53,12 @@
              pure opacity change on the same node (itemKey keeps it). -->
         <div
           class="timeline__row diary-entry-scale"
-          :class="pendingClass(item)"
+          :class="pendingClass(state)"
           :data-entry-id="item.id"
-          :data-state="pendingState?.(item)"
+          :data-state="state"
         >
           <DiaryThreadCard :item="item" :timezone="timezone" @tap="(p) => emit('tap', p)" />
-          <p v-if="pendingState?.(item) === 'failed'" class="timeline__not-sent">
+          <p v-if="state === 'failed'" class="timeline__not-sent">
             {{ t('user.screens.diaryFeed.notSent') }}
           </p>
         </div>
@@ -75,17 +75,18 @@ import { IconDecor, IconDecor2 } from '@/components/icons'
 import { dayKeyOf, dayLabelOf } from '@/utils/format'
 import type { DiaryFeedItem } from '@/api/types'
 
+type PendingState = 'sending' | 'failed' | 'sent' | undefined
+
 const props = defineProps<{
   items: DiaryFeedItem[]
   timezone?: string
   /** Stable v-for key (an optimistic entry keeps its key once delivered). */
   itemKey?: (item: DiaryFeedItem) => string
   /** Optimistic state of a row, undefined for an ordinary feed item. */
-  pendingState?: (item: DiaryFeedItem) => 'sending' | 'failed' | 'sent' | undefined
+  pendingState?: (item: DiaryFeedItem) => PendingState
 }>()
 
-function pendingClass(item: DiaryFeedItem): Record<string, boolean> {
-  const state = props.pendingState?.(item)
+function pendingClass(state: PendingState): Record<string, boolean> {
   return {
     'timeline__row--sending': state === 'sending',
     'timeline__row--failed': state === 'failed',
@@ -103,7 +104,8 @@ const tz = computed(() => props.timezone ?? 'UTC')
 interface DayGroup {
   dayKey: string
   label: string
-  items: DiaryFeedItem[]
+  /** Rows of the day; the optimistic state is resolved once per row. */
+  rows: Array<{ item: DiaryFeedItem; state: PendingState }>
 }
 
 const dayGroups = computed<DayGroup[]>(() => {
@@ -118,10 +120,10 @@ const dayGroups = computed<DayGroup[]>(() => {
   for (const item of chronological) {
     const key = dayKeyOf(item.occurred_at, tz.value)
     if (!current || current.dayKey !== key) {
-      current = { dayKey: key, label: dayLabelOf(item.occurred_at, tz.value), items: [] }
+      current = { dayKey: key, label: dayLabelOf(item.occurred_at, tz.value), rows: [] }
       groups.push(current)
     }
-    current.items.push(item)
+    current.rows.push({ item, state: props.pendingState?.(item) })
   }
 
   return groups

@@ -1,0 +1,5 @@
+{
+  "_comment": "Size budget for scripts/bundle-report.mjs --budget. Golden build after FE-157 stage 4 (precache raised 616471 -> 617500 for Vue 3.5.44, +0.2%; -> 618200 for FE-163, +0.1%; -> 625000 for FE-167 locale chunks (+512 B of loader wrappers in the app chunk) with ~1% headroom so small changes do not need a budget edit; entryGzip 134269 -> 138800 and precache 625000 -> 630000 after FE-177 Colada bookings grew the app chunk to 137.41 kB gz, ~1% headroom) (lazy @tma.js -13.4 kB gz, Pinia Colada +3.75 kB gz). entryGzip = gzip bytes of assets/app-*.js (gate: +2% tolerance); precacheBytes = PWA precache bytes (gate: no tolerance). Raise only deliberately, in the PR that grows the bundle.",
+  "entryGzip": 138800,
+  "precacheBytes": 630000
+}

@@ -1,0 +1,130 @@
+<!--
+  @velo/ui -- VToast Component (Phase F2.1; P8 batch 6 -- the toast seam)
+
+  Renders active toasts. Mount once in App.vue.
+  Matches mockup .toast styles: fixed bottom, slide up, auto-dismiss.
+
+  Usage (in App.vue):
+    <VToast />
+-->
+
+<template>
+  <Teleport to="body">
+    <TransitionGroup name="v-toast" tag="div" class="v-toast-container">
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
+        class="v-toast"
+        :class="`v-toast--${toast.variant}`"
+        @click="dismiss(toast.id)"
+      >
+        <span class="v-toast__message">{{ toast.message }}</span>
+      </div>
+    </TransitionGroup>
+  </Teleport>
+</template>
+
+<script setup lang="ts">
+import { inject, readonly, ref } from 'vue'
+import { TOAST_INJECTION_KEY, type Toast, type ToastApi } from '../../toast'
+
+// The P5 seam: the host provides the toast state once (provideToast() in
+// its root); this component only renders it. No provider -> an empty
+// overlay surface, with a loud dev warning so a host that forgot the
+// wiring does not silently swallow every toast (the FE-118 discipline).
+const EMPTY_API: ToastApi = {
+  toasts: readonly(ref<Toast[]>([])),
+  success: () => undefined,
+  error: () => undefined,
+  info: () => undefined,
+  dismiss: () => undefined,
+}
+
+const api =
+  inject(TOAST_INJECTION_KEY, null) ??
+  (() => {
+    if (import.meta.env.DEV) {
+      console.warn(
+        '[VToast] no toast provider above this mount -- rendering nothing. ' +
+          'Call provideToast() once in the host root (the FE-141 seam).',
+      )
+    }
+    return EMPTY_API
+  })()
+
+const { toasts, dismiss } = api
+</script>
+
+<style scoped>
+.v-toast-container {
+  position: fixed;
+  bottom: 80px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  z-index: var(--z-toast);
+  pointer-events: none;
+}
+
+.v-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--velo-inset-12) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--velo-fs-16);
+  max-width: 90%;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: var(--velo-shadow-toast);
+}
+
+.v-toast--success {
+  background: var(--velo-success);
+  color: var(--velo-white);
+}
+
+.v-toast--error {
+  background: var(--velo-error);
+  color: var(--velo-white);
+}
+
+.v-toast--info {
+  background: var(--velo-text-primary);
+  color: var(--velo-white);
+}
+
+/* -- Transition --
+   transform + opacity only; arrive slower than leave. The leaving toast is
+   taken out of flow so its neighbour glides (-move) instead of jumping. */
+.v-toast-enter-active {
+  transition:
+    transform var(--velo-dur-sheet) var(--velo-ease-out),
+    opacity var(--velo-dur-sheet) var(--velo-ease-out);
+}
+
+.v-toast-leave-active {
+  position: absolute;
+  transition:
+    transform var(--velo-dur-sheet-exit) var(--velo-ease-in),
+    opacity var(--velo-dur-sheet-exit) var(--velo-ease-in);
+}
+
+.v-toast-move {
+  transition: transform var(--transition-base);
+}
+
+.v-toast-enter-from {
+  transform: translateY(16px);
+  opacity: 0;
+}
+
+.v-toast-leave-to {
+  transform: translateY(-8px);
+  opacity: 0;
+}
+</style>

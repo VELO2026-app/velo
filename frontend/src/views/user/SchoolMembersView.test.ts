@@ -16,7 +16,11 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { schoolPageQuery } from '@/composables/queries/schools'
+import { coladaOptions } from '@/composables/queries/setup'
 import SchoolMembersView from '@/views/user/SchoolMembersView.vue'
 import * as cgApi from '@/api/schools'
 import * as chatsApi from '@/api/chats'
@@ -32,16 +36,24 @@ vi.mock('@/api/chats')
 
 const push = vi.fn()
 const replace = vi.fn()
-const routeState = {
+// Reactive, behind getters: a test can move the route under a mounted screen
+// (router reuse to another school, a history step between ?kind= tabs).
+const routeState = reactive({
   name: 'master-school-members',
   id: 'g1',
   query: {} as Record<string, string>,
-}
+})
 vi.mock('vue-router', () => ({
   useRoute: () => ({
-    params: { id: routeState.id },
-    name: routeState.name,
-    query: routeState.query,
+    get params() {
+      return { id: routeState.id }
+    },
+    get name() {
+      return routeState.name
+    },
+    get query() {
+      return routeState.query
+    },
   }),
   useRouter: () => ({ push, replace }),
 }))
@@ -53,6 +65,9 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ success: toastSuccess, error: toastError, info: toastInfo }),
 }))
 
+// One Pinia + Colada per test (beforeEach): a test can seed the cache first,
+// as an earlier screen of the session does.
+let pinia: Pinia
 let app: App | null = null
 let host: HTMLElement | null = null
 
@@ -60,7 +75,7 @@ function mountWith(query: Record<string, string> = {}): HTMLElement {
   routeState.query = query
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(SchoolMembersView).use(createTestI18n())
+  app = createApp(SchoolMembersView).use(createTestI18n()).use(pinia)
   app.mount(host)
   return host
 }
@@ -129,6 +144,9 @@ function showMore(): HTMLElement | null {
 }
 
 beforeEach(() => {
+  pinia = createPinia()
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
+  setActivePinia(pinia)
   routeState.name = 'master-school-members'
   routeState.id = 'g1'
   routeState.query = {}
@@ -298,6 +316,24 @@ describe('SchoolMembersView', () => {
     expect(rosterTab('Мастера')).toBeNull()
     expect(rosterTab('Ученики')).toBeNull()
 
+    // A revalidation of the 404'd school (a return to the app, an
+    // invalidation) shows the loader, not "unavailable", while it runs.
+    vi.mocked(cgApi.getSchoolMembers).mockReturnValueOnce(new Promise(() => {}))
+    void useQueryCache()
+      .invalidateQueries({ key: ['schools'] })
+      .catch(() => {})
+    await flush()
+    expect(text()).not.toContain('Школа недоступна')
+    expect(host?.querySelector('.school-members__state')).not.toBeNull()
+    vi.mocked(cgApi.getSchoolMembers).mockRejectedValue(
+      new ApiResponseError(404, 'not found', 'not_found'),
+    )
+    void useQueryCache()
+      .invalidateQueries({ key: ['schools'] })
+      .catch(() => {})
+    await flush()
+    expect(text()).toContain('Школа недоступна')
+
     // The honest exit is going back to the school page -- there is nothing
     // to retry: the school itself is gone for this viewer (P-08).
     const back = (Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
@@ -306,6 +342,50 @@ describe('SchoolMembersView', () => {
     back?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
+  })
+
+  it("router reuse: another school's roster is asked, the previous school's rows never stay", async () => {
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['a1'])))
+    mountWith()
+    await flush()
+    expect(text()).toContain('Участник a1')
+
+    vi.mocked(cgApi.getSchoolMembers).mockReturnValue(new Promise(() => {}))
+    routeState.id = 'g2'
+    await flush()
+
+    expect(cgApi.getSchoolMembers).toHaveBeenLastCalledWith(
+      'g2',
+      expect.objectContaining({ kind: 'master' }),
+    )
+    expect(text()).not.toContain('Участник a1')
+  })
+
+  it('a history step to another ?kind= syncs the tab, clears the search, asks once', async () => {
+    vi.useFakeTimers()
+    try {
+      mountWith({ kind: 'master' })
+      await vi.advanceTimersByTimeAsync(0)
+      const input = inputEl()
+      input!.value = 'анна'
+      input!.dispatchEvent(new Event('input'))
+      await vi.advanceTimersByTimeAsync(300)
+      vi.mocked(cgApi.getSchoolMembers).mockClear()
+
+      routeState.query = { kind: 'student' }
+      await vi.advanceTimersByTimeAsync(400)
+
+      expect(cgApi.getSchoolMembers).toHaveBeenCalledTimes(1)
+      expect(cgApi.getSchoolMembers).toHaveBeenCalledWith('g1', {
+        kind: 'student',
+        search: undefined,
+        limit: 20,
+        offset: 0,
+      })
+      expect(inputEl()?.value).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('student rows push the school-context profile with the row data in query', async () => {
@@ -357,7 +437,7 @@ describe('SchoolMembersView', () => {
 
     showMore()?.click()
     await flush()
-    // usePagination accumulates offset as the number of LOADED rows (1 after
+    // The next page's offset is the number of LOADED rows (1 after
     // a first page of one fixture row), not the server-echoed offset.
     expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenLastCalledWith(
       'g1',
@@ -452,6 +532,25 @@ describe('SchoolMembersView', () => {
     expect(toastSuccess).toHaveBeenCalledWith('Участник разблокирован')
     expect(text()).not.toContain('Заблокированный 1')
     expect(text()).toContain('Заблокированный 2')
+  })
+
+  it('after an unblock another tab opens from the loader, not from a cached roster without the person', async () => {
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['a1'])))
+    vi.mocked(cgApi.getSchoolBlocks).mockResolvedValue(blocksPage([blocked(1)]))
+    mountWith()
+    await flush()
+    expect(text()).toContain('Участник a1')
+    rosterTab('Удалённые')?.click()
+    await flush()
+
+    unblockButtons()[0]!.click()
+    await flush()
+    vi.mocked(cgApi.getSchoolMembers).mockReturnValue(new Promise(() => {}))
+    rosterTab('Мастера')?.click()
+    await flush()
+
+    expect(text()).not.toContain('Участник a1')
+    expect(host?.querySelector('.school-members__state')).not.toBeNull()
   })
 
   it('«Разблокировать» 404 (already unblocked): the list is re-read, no error toast', async () => {
@@ -556,6 +655,25 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
       'g1',
       expect.objectContaining({ kind: 'master' }),
     )
+    expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'master' } }))
+    // The removed tab is the curator's: never asked for a school master.
+    expect(cgApi.getSchoolBlocks).not.toHaveBeenCalled()
+  })
+
+  it('?kind=blocked with the relation ALREADY cached (the school page just read it) still lands on the masters tab', async () => {
+    const queryCache = useQueryCache()
+    queryCache.setQueryData(queryCache.ensure(schoolPageQuery('g1')).key, {
+      viewer: { relation: 'master' },
+    } as unknown as SchoolPageResponse)
+    mountWith({ kind: 'blocked' })
+    await flush()
+
+    expect(cgApi.getSchoolRoster).toHaveBeenCalledWith(
+      'g1',
+      expect.objectContaining({ kind: 'master' }),
+    )
+    expect(host?.querySelector('.school-members__state')).toBeNull()
+    expect(cgApi.getSchoolBlocks).not.toHaveBeenCalled()
     expect(replace).toHaveBeenCalledWith(expect.objectContaining({ query: { kind: 'master' } }))
   })
 

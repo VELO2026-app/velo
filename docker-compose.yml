@@ -84,15 +84,19 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      # FE-116: the pnpm workspace (lockfile, manifests) lives at the repo
+      # root, so the frontend image builds from the ROOT context; the root
+      # .dockerignore keeps the backend tree and the working docs out of it.
+      # The Dockerfile itself stays in frontend/.
+      context: .
+      dockerfile: frontend/Dockerfile
       target: runtime
     # Instance values at the start of the container, not at the build
-    # (contract 3 rule 19): one image for every instance of a commit. The
-    # readers live on the branch `test` and come here with its merge:
+    # (contract 3 rule 19): one image for every instance of a commit.
     # API_BASE_URL, TELEGRAM_BOT_URL, LANGUAGES, DEFAULT_LANGUAGE ->
-    # /config.json (FE-129); DEFAULT_LANGUAGE also -> the manifest (FE-155).
-    # The option flags OPTION_<O> have no reader yet: FE-151 adds them to
-    # /config.json. Every option of primer.yaml reaches this service
+    # /config.json (FE-129); DEFAULT_LANGUAGE also -> the manifest (FE-155);
+    # the option flags OPTION_<O> -> /config.json `options` (FE-151). Every
+    # option of primer.yaml reaches this service
     # (backend/tests/test_primer_env.py).
     environment:
       API_BASE_URL: ${API_BASE_URL:?}

@@ -25,18 +25,19 @@
 // PATTERN: B (local-ref) with a store-DEPENDENCY layer. Called out because it
 // reads like Pattern A and is not: practice / attendance / loading / error are
 // this screen's OWN refs (.vue:356-359), filled by direct @/api/practices calls
-// in load() (.vue:571-593). That module is the seam, auto-mocked. The two Pinia
-// stores are not where the state lives -- masterStore contributes a warm CACHE
-// to read through (.vue:575) plus refreshMyPractices() as a post-mutation
-// side-effect, and diaryStore contributes the insights CACHE the PAST hero
+// in load() (.vue:571-593). That module is the seam, auto-mocked. The master's
+// practice lists (Colada) and the diary store are not where the state lives --
+// the lists contribute a warm CACHE to read through (cachedMyPractice) plus
+// myPracticesChanged() as a post-mutation side-effect, and the insights reader
+// (usePracticeInsights, composables/queries/diary.ts) contributes the CACHE the PAST hero
 // badges read. Both are dependencies, so both are mocked wholesale behind
 // getters over mutable objects (velo-idiom §5). Mocking the API seam alone
 // would leave the cache-hit branch unreachable; mocking the stores alone would
 // leave every ladder rung unreachable.
 //
 // insightsCache is mocked as a REAL reactive(new Map()) and the loadInsights
-// mock WRITES to it, mirroring the store (stores/diary.ts:363-380). The screen
-// grabs the map once at setup and derives `insights` from it (.vue:371-372), so
+// mock WRITES to it, mirroring the Colada cache the real reader reads. The
+// screen derives `insights` from the reader's get() (.vue:371-372), so
 // a plain Map would render the badges only if pre-seeded and would never prove
 // the reactive read. The write path is the thing under test.
 //
@@ -102,29 +103,28 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: toastSuccess, info: vi.fn() }),
 }))
 
-// -- master store (dependency): the warm cache + the post-mutation refresh --
+// -- the master's practice lists (dependency, composables/queries/master.ts):
+// the warm cache + the post-mutation refresh --
 const masterState: { practices: PracticeResponse[] } = { practices: [] }
-const refreshMyPractices = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get practices() {
-      return masterState.practices
-    },
-    refreshMyPractices,
-  }),
+const myPracticesChangedSpy = vi.fn()
+vi.mock('@/composables/queries/master', () => ({
+  cachedMyPractice: (_queryCache: unknown, id: string) =>
+    masterState.practices.find((p) => p.id === id),
+  myPracticesChanged: (...args: unknown[]) => myPracticesChangedSpy(...args),
 }))
 
-// -- diary store (dependency): the insights cache the PAST hero badges read --
-// A real reactive Map, exactly as the store holds it (stores/diary.ts:352). The
-// screen captures it by reference at setup, so the mock must return the SAME
-// object every call -- a fresh Map per useDiaryStore() would hand the screen a
+// -- insights reader (dependency): the cache the PAST hero badges read --
+// A real reactive Map standing in for the Colada cache (get() reads it
+// reactively, like the real reader). The reader must close over the SAME map
+// every call -- a fresh Map per usePracticeInsights() would hand the screen a
 // map nobody writes to.
 const insightsCache = reactive(new Map<string, PracticeInsightsResponse>())
 const loadInsights = vi.fn()
-vi.mock('@/stores/diary', () => ({
-  useDiaryStore: () => ({
-    insightsCache,
-    loadInsights,
+vi.mock('@/composables/queries/diary', () => ({
+  usePracticeInsights: () => ({
+    get: (id: string) => insightsCache.get(id),
+    has: (id: string) => insightsCache.has(id),
+    load: loadInsights,
   }),
 }))
 
@@ -349,12 +349,12 @@ beforeEach(() => {
     .mockResolvedValue(practice({ status: 'cancelled' }))
   vi.mocked(practicesApi.deletePractice).mockReset().mockResolvedValue(undefined)
 
-  // Mirrors the real store (stores/diary.ts:363-380): fills the reactive cache
+  // Mirrors the real reader's load(): fills the reactive cache
   // the screen reads. Tests that want badges seed `insightsFixture` first.
   loadInsights.mockReset().mockImplementation(async (id: string) => {
     if (insightsFixture) insightsCache.set(id, insightsFixture)
   })
-  refreshMyPractices.mockReset().mockResolvedValue(undefined)
+  myPracticesChangedSpy.mockReset().mockResolvedValue(undefined)
 
   push.mockReset()
   back.mockReset()
@@ -435,20 +435,44 @@ describe('MasterPracticeDetailView', () => {
       expect(text()).toContain('Ошибка загрузки')
     })
 
-    it('a failing ATTENDANCE call errors the whole screen -- it is inside the try', async () => {
-      // getAttendance sits in load()'s try (.vue:580-584), unlike loadReviews
-      // which is deliberately non-fatal. Roster and stats are the point of this
-      // screen, so a half-rendered hero would be worse than the error state.
-      // B8 (PROMPT №747): 'server_error' is not a real backend code --
-      // unmapped, lands on load()'s own fallback (.vue:626).
-      vi.mocked(practicesApi.getAttendance).mockRejectedValue(
-        new ApiResponseError(500, 'Список участников недоступен', 'server_error'),
+    it('FE-157: a failing ATTENDANCE call does not error the screen -- it gets its own retry note', async () => {
+      vi.mocked(practicesApi.getAttendance)
+        .mockRejectedValueOnce(
+          new ApiResponseError(500, 'Список участников недоступен', 'server_error'),
+        )
+        .mockResolvedValue(attendance({ total: 7 }))
+      mount()
+      await flush()
+
+      // The hero stays up; only the attendance block reports the failure.
+      expect(host?.querySelector('.hero-card')).not.toBeNull()
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(text()).toContain('Не удалось загрузить посещаемость')
+
+      const retry = Array.from(host?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Повторить',
+      )
+      retry?.click()
+      await flush()
+
+      expect(practicesApi.getAttendance).toHaveBeenCalledTimes(2)
+      expect(text()).not.toContain('Не удалось загрузить посещаемость')
+    })
+
+    it('FE-157: attendance leaves in parallel with the practice read', async () => {
+      let resolvePractice: (v: ReturnType<typeof practice>) => void = () => {}
+      vi.mocked(practicesApi.getPractice).mockReturnValue(
+        new Promise((r) => {
+          resolvePractice = r
+        }),
       )
       mount()
       await flush()
 
-      expect(text()).toContain('Ошибка загрузки')
-      expect(host?.querySelector('.hero-card')).toBeNull()
+      expect(practicesApi.getAttendance).toHaveBeenCalledTimes(1)
+      resolvePractice(practice())
+      await flush()
+      expect(host?.querySelector('.hero-card')).not.toBeNull()
     })
 
     it('«Повторить» re-runs the load and recovers', async () => {
@@ -1238,7 +1262,7 @@ describe('MasterPracticeDetailView', () => {
     })
 
     it('on success: toasts, refreshes the master cache, and leaves the screen', async () => {
-      // refreshMyPractices matters: the cache this very screen reads through
+      // myPracticesChangedSpy matters: the cache this very screen reads through
       // (.vue:575) would otherwise keep serving the practice as `scheduled`
       // after it was cancelled.
       vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ status: 'scheduled' }))
@@ -1250,7 +1274,7 @@ describe('MasterPracticeDetailView', () => {
       await flush()
 
       expect(toastSuccess).toHaveBeenCalledWith('Практика отменена')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChangedSpy).toHaveBeenCalled()
       expect(back).toHaveBeenCalled()
     })
 
@@ -1292,7 +1316,7 @@ describe('MasterPracticeDetailView', () => {
       expect(toastError).toHaveBeenCalledWith('Не удалось отменить практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(back).not.toHaveBeenCalled()
-      expect(refreshMyPractices).not.toHaveBeenCalled()
+      expect(myPracticesChangedSpy).not.toHaveBeenCalled()
     })
 
     it('falls back to a generic message on a non-API error', async () => {
@@ -1375,7 +1399,7 @@ describe('MasterPracticeDetailView', () => {
       await flush()
 
       expect(toastSuccess).toHaveBeenCalledWith('Черновик удалён')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChangedSpy).toHaveBeenCalled()
       expect(back).toHaveBeenCalled()
     })
 

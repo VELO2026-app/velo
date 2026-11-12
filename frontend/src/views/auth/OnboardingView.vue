@@ -220,7 +220,7 @@ function isValidIana(zone: string): boolean {
 }
 
 function detectDeviceTimezone(): string {
-  let detected = ''
+  let detected: string
   try {
     detected = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
   } catch {

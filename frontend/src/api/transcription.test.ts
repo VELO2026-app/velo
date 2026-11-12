@@ -11,10 +11,15 @@
 //
 // What is left here is what the browser still owns: one request, and turning
 // a machine code into a sentence a person can read.
+//
+// FE-157: the request rides the shared client (api.request with a 30s
+// timeout) instead of a raw fetch, so global fetch is stubbed under the REAL
+// client here -- the bearer, the 401 handling and the timeout are the
+// client's, exercised for real.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { transcribeAudio } from './transcription'
-import { setAuthToken, resetClientState } from './client'
+import { setAuthToken, setOnUnauthorized, resetClientState } from './client'
 
 // The real blobToBase64 routes through happy-dom's FileReader, whose internal
 // task scheduling does not cooperate with vi.useFakeTimers (the timeout test
@@ -78,15 +83,28 @@ describe('transcribeAudio', () => {
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).not.toContain('openrouter')
-    const headers = init.headers as Record<string, string>
-    expect(Object.keys(headers)).toEqual(['Content-Type', 'Authorization'])
-    expect(headers.Authorization).toBe('Bearer session-token')
+    expect(init.headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer session-token',
+    })
+  })
+
+  it('a 401 ends the session like any other request of the client', async () => {
+    // The raw fetch this module used to send never told the auth store: a
+    // dead session stayed "signed in" after the composer's 401.
+    const onUnauthorized = vi.fn()
+    setOnUnauthorized(onUnauthorized)
+    fetchMock.mockResolvedValue(jsonResponse({ error: 'unauthorized', message: 'x' }, 401))
+
+    const result = await transcribeAudio(AUDIO_BLOB)
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({ ok: false, error: 'Сессия истекла, войдите заново' })
   })
 })
 
 describe('error mapping', () => {
   const CASES: ReadonlyArray<{ code: string; status: number; message: string }> = [
-    { code: 'transcription_not_configured', status: 400, message: 'Голосовой ввод недоступен' },
     { code: 'transcription_unavailable', status: 502, message: 'Сервис транскрибации недоступен' },
     { code: 'transcription_failed', status: 502, message: 'Сервис транскрибации недоступен' },
     { code: 'speech_not_recognized', status: 400, message: 'Не удалось распознать речь' },
@@ -180,7 +198,13 @@ describe('error mapping', () => {
     )
 
     const pending = transcribeAudio(AUDIO_BLOB)
-    await vi.advanceTimersByTimeAsync(30000)
+    // The shared client's default 15 seconds pass without an abort...
+    await vi.advanceTimersByTimeAsync(15000)
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(init.signal?.aborted).toBe(false)
+    // ...and the module's own 30 end the request.
+    await vi.advanceTimersByTimeAsync(15000)
+    expect(init.signal?.aborted).toBe(true)
 
     await expect(pending).resolves.toEqual({
       ok: false,

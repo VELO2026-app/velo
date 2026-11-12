@@ -103,7 +103,7 @@
         :description="t('user.screens.schoolStudentProfile.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="load">{{ t('common.retry') }}</VButton>
+          <VButton variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -262,12 +262,13 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useQuery } from '@pinia/colada'
+import { schoolPageQuery, schoolStudentQuery } from '@/composables/queries/schools'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getSchoolMembers,
-  getSchoolPage,
-  getSchoolStudentProfile,
   offerSchoolMaster,
   blockSchoolMember,
   cancelSchoolMasterOffer,
@@ -333,55 +334,55 @@ function goBack(): void {
   void router.push(rosterRoute.value)
 }
 
-const loading = ref(true)
-const loaded = ref(false)
-const isCurator = ref(false)
-const profileNotFound = ref(false)
-const profileError = ref(false)
-const profile = ref<SchoolStudentProfileResponse | null>(null)
-const masterOffer = computed(() => profile.value?.master_offer ?? null)
-let loadVersion = 0
+// -- Page state (Pinia Colada, FE-166 step 6) --
+//
+// Two queries leave together: the student's school-scoped profile and the
+// school page (the viewer's relation -- the curator's actions -- shared with
+// the school page screen's entry). Each (school, student) pair has its own
+// entries, so after a router reuse a slow answer for the previous student
+// lands in that student's entry, never on this screen (the hand-kept
+// loadVersion before).
+const studentQuery = useQuery(() =>
+  schoolStudentQuery({ schoolId: schoolId.value, userId: userId.value }),
+)
+const pageQuery = useQuery(() => schoolPageQuery(schoolId.value))
+const studentState = screenQueryState(studentQuery)
+const pageState = screenQueryState(pageQuery)
 
-async function load(): Promise<void> {
-  const version = ++loadVersion
-  loading.value = true
-  loaded.value = false
-  isCurator.value = false
-  profileNotFound.value = false
-  profileError.value = false
-  try {
-    const [student, school] = await Promise.all([
-      getSchoolStudentProfile(schoolId.value, userId.value),
-      getSchoolPage(schoolId.value),
-    ])
-    if (version !== loadVersion) return
-    profile.value = student
-    isCurator.value = school.viewer.relation === 'curator'
-    loaded.value = true
-  } catch (e) {
-    if (version !== loadVersion) return
-    // The 404 is MASKED by design (P-08): not-curator, not-a-student and a
-    // dead school are one answer -- §1.13.1's student-unavailable state
-    // (i18n:user.screens.schoolStudentProfile.unavailable).
-    if (e instanceof ApiResponseError && e.status === 404) {
-      profileNotFound.value = true
-    } else {
-      profileError.value = true
-    }
-  } finally {
-    if (version === loadVersion) loading.value = false
-  }
+function is404(e: unknown): boolean {
+  return e instanceof ApiResponseError && e.status === 404
 }
 
-onMounted(() => {
-  void load()
-})
+// The 404 is MASKED by design (P-08): not-curator, not-a-student and a dead
+// school are one answer -- §1.13.1's student-unavailable state
+// (i18n:user.screens.schoolStudentProfile.unavailable). It wins over a
+// cached copy: the student is gone from this school.
+const profileNotFound = computed(
+  () => is404(studentQuery.error.value) || is404(pageQuery.error.value),
+)
+/** Nothing to show from either request, and the last one failed (not a 404). */
+const profileError = computed(
+  () => !profileNotFound.value && (studentState.failed.value || pageState.failed.value),
+)
+const profile = computed<SchoolStudentProfileResponse | null>(() =>
+  profileNotFound.value ? null : (studentQuery.data.value ?? null),
+)
+const loaded = computed(() => profile.value !== null && pageQuery.data.value !== undefined)
+const loading = computed(() => !loaded.value)
+const isCurator = computed(
+  () => loaded.value && pageQuery.data.value?.viewer.relation === 'curator',
+)
+const masterOffer = computed(() => profile.value?.master_offer ?? null)
 
-// Router reuse under the same record: reload for the new student.
+function retry(): void {
+  void studentQuery.refetch()
+  void pageQuery.refetch()
+}
+
+// Router reuse under the same record: the modals of the previous student close.
 watch([schoolId, userId], () => {
   roleOpen.value = false
   cancelOfferOpen.value = false
-  if (schoolId.value && userId.value) void load()
 })
 
 // -- Write message (i18n:common.writeMessage) ----------------------------------
@@ -489,7 +490,7 @@ async function onRoleConfirm(): Promise<void> {
     await offerSchoolMaster(schoolId.value, userId.value)
     toast.success(t('user.screens.schoolStudentProfile.toast.offerSent'))
     roleOpen.value = false
-    await load()
+    await studentQuery.refetch()
   } catch (e) {
     toast.error(extractApiError(e, t('user.screens.schoolStudentProfile.toast.offerFailed')))
   } finally {
@@ -507,7 +508,7 @@ async function onCancelOffer(): Promise<void> {
     await cancelSchoolMasterOffer(schoolId.value, userId.value)
     toast.success(t('user.screens.schoolStudentProfile.toast.offerCancelled'))
     cancelOfferOpen.value = false
-    await load()
+    await studentQuery.refetch()
   } catch (e) {
     toast.error(extractApiError(e, t('user.screens.schoolStudentProfile.toast.offerCancelFailed')))
   } finally {

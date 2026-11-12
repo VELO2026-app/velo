@@ -10,6 +10,7 @@
 import { api } from '@/api/client'
 import { buildQuery } from '@/api/utils'
 import type { PaginatedWaitlistResponse, WaitlistConfirmResponse } from '@/api/types'
+import { path } from '@/api/path'
 
 /** GET /waitlist/me -- my entries with their practice (newest first). */
 export function getMyWaitlist(
@@ -26,5 +27,5 @@ export function getMyWaitlist(
  *    or the spot was taken meanwhile (`entry -> waiting again`), or the entry
  *    is not a notified one; 404 for an entry that is not mine. */
 export function confirmWaitlist(id: string): Promise<WaitlistConfirmResponse> {
-  return api.post<WaitlistConfirmResponse>(`/api/v1/waitlist/${id}/confirm`)
+  return api.post<WaitlistConfirmResponse>(path`/api/v1/waitlist/${id}/confirm`)
 }

@@ -17,10 +17,10 @@
 // to /auth-error instead of reading a null role).
 //
 // TD-F01: Deep link handling.
-// After auth, read platform.getStartParam() and parse open_practice__{uuid}.
-// Store the RAW start parameter in pendingStartParam; roleRedirect parses it
-// once auth knows the role (Links: a notification button carries no viewer)
-// and clears it after first use to prevent stale redirects.
+// After auth, read platform.getStartParam() and store the RAW start parameter
+// in pendingStartParam; roleRedirect parses it (router/deepLinks.ts) once auth
+// knows the role (Links: a notification button carries no viewer) and clears
+// it after first use to prevent stale redirects.
 //
 // Standalone phase 3 -- outside Telegram the person signs in with "Log In
 // With Telegram". The sign-in always ENDS on a fresh page load: Telegram
@@ -33,10 +33,10 @@
 import { ref, computed, watch } from 'vue'
 import { platform } from '@/platform'
 import { takeLoginMark, takeLoginReturn } from '@/platform/browser-login'
+import { onSessionEnd } from '@/platform/session'
 import { useAuthStore } from '@/stores/auth'
 import { ApiNetworkError, ApiResponseError, ApiTimeoutError } from '@/api/client'
-import { featureEnabled } from '@/platform/features'
-import type { UserRole } from '@/api/types'
+import { isSchoolInviteParam } from '@/router/deepLinks'
 
 /** Whether auth initialization has completed. */
 const isReady = ref(false)
@@ -48,7 +48,6 @@ const isReady = ref(false)
  *                      sign-in (no mark, or a mark for another state);
  *   expired         -- the backend no longer holds the state (taken, late);
  *   telegram_failed -- Telegram did not prove a user;
- *   not_configured  -- browser sign-in is not set up on this server;
  *   deactivated     -- the account is switched off;
  *   rate_limited    -- too many attempts;
  *   unavailable     -- the server answered that it cannot right now;
@@ -59,7 +58,6 @@ export type LoginNotice =
   | 'foreign'
   | 'expired'
   | 'telegram_failed'
-  | 'not_configured'
   | 'deactivated'
   | 'rate_limited'
   | 'unavailable'
@@ -76,9 +74,10 @@ export const loginNotice = ref<LoginNotice | null>(null)
 export const botAccessHint = ref(false)
 
 /**
- * The saved session could not be checked (no answer from the server). The
- * token is still saved; App.vue shows the "try again" screen instead of the
- * login screen.
+ * The start could not complete: the saved session got no answer from the
+ * server (the token is still saved), or the bootstrap threw (platform.init()
+ * or the first-screen gate, FE-157). App.vue shows the "try again" screen
+ * instead of the login screen or an endless splash.
  */
 export const restoreUnreachable = ref(false)
 
@@ -87,8 +86,6 @@ export function loginNoticeFor(error: unknown): LoginNotice {
   if (error instanceof ApiNetworkError || error instanceof ApiTimeoutError) return 'network'
   if (!(error instanceof ApiResponseError)) return 'telegram_failed'
   switch (error.status) {
-    case 404:
-      return 'not_configured'
     case 403:
       return 'deactivated'
     case 429:
@@ -120,236 +117,23 @@ export function beginLogout(): void {
   isLoggingOut.value = true
 }
 
+// In Telegram, signing out closes the Mini App, so the gate is armed the
+// moment stores/auth.ts announces a LOGOUT (not a dropped session: a 401
+// goes back to sign-in). Subscribing here, instead of auth.ts importing this
+// module on demand, is what keeps auth -> useAuth -> auth out of the graph.
+onSessionEnd((reason) => {
+  if (reason === 'logout' && platform.name === 'telegram') beginLogout()
+})
+
 /**
- * Pending deep link route from startapp parameter (TD-F01).
- * Consumed once by roleRedirect, then cleared.
- * Format: `{ name: string, params?: Record<string, string> }`
+ * The raw startapp parameter of this launch, pending its deep link (TD-F01).
+ * roleRedirect parses it with the session role (parseStartParam,
+ * router/deepLinks.ts) once, then clears it.
  */
 export const pendingStartParam = ref<string | null>(null)
 
 /** Timeout for waitUntilReady() in milliseconds (P-3). */
 const READY_TIMEOUT_MS = 10_000
-
-/** T-35: the 22-character public practice code, back into a UUID.
- *
- * SECOND COPY, BY DESIGN. The authoritative implementation is
- * decode_practice_code in backend/app/modules/zoom/service.py. Two copies
- * exist because the deep-link route takes a UUID path parameter, so the code
- * must be decoded HERE, before a route can be built -- the split follows the
- * language boundary, not forgetfulness. Sending the code to an endpoint just
- * to have it decoded would not remove the copy; it would add a network round
- * trip to a pure function.
- *
- * BOTH SIDES MUST AGREE ON GARBAGE, not merely on valid input: wrong length,
- * wrong charset and empty all mean "not a route" on both. What this side
- * CANNOT know is whether a well-formed code names a practice that still
- * exists -- there is no database here. Such a link routes normally and the
- * resolve call on the target screen answers 404, which PracticeLiveView
- * renders as an honest error.
- *
- * T-44: that agreement is no longer held by discipline alone. A shared
- * vector -- the same JSON table of inputs and expected outcomes -- is
- * duplicated VERBATIM in both test files:
- *   frontend/src/composables/useAuth.test.ts
- *   backend/tests/test_zoom_public_link.py
- * Each side runs its own decoder against its own copy (catching "I changed
- * the codec and not the table"), and `velo test` / `velo update` additionally
- * diff the two copies against each other in a container that can see both
- * trees (catching "I changed one side's codec AND its table, leaving the
- * other side behind" -- which no single-sided test can see).
- * CHANGE THIS DECODER ONLY IN PAIRS: this function, decode_practice_code in
- * backend/app/modules/zoom/service.py, and BOTH copies of the vector. T-44
- * was opened because the comments were the only thing holding them together,
- * and the two had already drifted: Python accepted "+" and "/" (its decoder
- * translates - and _ into them and then accepts either spelling) where the
- * regex below rejects them. The backend now gates the alphabet explicitly.
- *
- * Exported for the vector test, which must exercise the CODEC rather than
- * the codec wrapped in parseStartParam's own route-shaped regex.
- */
-export function decodePracticeCode(code: string): string | null {
-  if (code.length !== 22) return null
-  if (!/^[A-Za-z0-9_-]{22}$/.test(code)) return null
-  try {
-    const binary = atob(code.replace(/-/g, '+').replace(/_/g, '/') + '==')
-    if (binary.length !== 16) return null
-    const hex = Array.from(binary, (ch) => ch.charCodeAt(0).toString(16).padStart(2, '0')).join('')
-    return (
-      `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-` +
-      `${hex.slice(16, 20)}-${hex.slice(20)}`
-    )
-  } catch {
-    return null
-  }
-}
-
-/**
- * The school invite token pattern (FE-18): ONE copy shared by parseStartParam
- * (route resolution) and isSchoolInviteStartParam (FE-81 entry-gate deferral),
- * so a startapp that counts as an invite for one counts for the other -- a
- * malformed token degrades to the plain new-user flow, never opens the app
- * around the gate.
- */
-const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
-
-/**
- * Parse the Telegram startapp parameter into a router location.
- *
- * @returns Null if the parameter is absent or unrecognized.
- *
- * Supported formats:
- *   `open_practice__{uuid}       -> practice-detail (master: master-practice-detail)`
- *   `zoom__{code}                -> { name: 'practice-live', params: { practiceId } }` (T-35)
- *   `master_onboarding__{token}  -> { name: 'master-invite', params: { token } }`
- *   `group_invite__{token}       -> { name: 'group-join', params: { token } }` (P4, PROMPT №593)
- *   `school__{token}             -> { name: 'school-join', params: { token } }` (FE-18, Links)
- *   `open_thread__{uuid}         -> { name: 'user-chat' | 'master-chat', params: { id } }`
- *                                  (FE-103: Telegram twin of the bell's msg.* buttons)
- *   `open_support_rating__{uuid} -> the same chat route + ?rate=1`: the rating
- *                                  sheet on THAT resolved ticket (FE-107 /
- *                                  BE-162 delivery 3; the chat resolves the
- *                                  ticket id to the person's one support row)
- *   `open_admin_support__{uuid}  -> { name: 'admin-support-detail', params: { id } }, admin only`
- *                                  (FE-103/BE-172: the comms THREAD id -- owner
- *                                  ruling in the BE-172 fix)
- *   `<action>[__{uuid}]          -> the bell's screen for that notification verb (Links)`;
- *                                  the session `role` picks the zone where bells differ
- *
- * T-35: zoom__ is ADDED, open_practice__ is NOT replaced. They are two
- * different actions, not two formats for one: open_practice__ means "show me
- * the practice card" and is the live contract of seven notification emitters
- * (core/events/reminders.py, bookings/service.py, cancel_service.py,
- * practices/service.py, waitlist/service.py), while zoom__ means "let me into
- * the Zoom meeting" and lands on the screen that can do that. Removing
- * open_practice__ would break the button in every notification already sent.
- */
-export function parseStartParam(
-  startParam: string | null,
-  role: UserRole | null = null,
-): { name: string; params?: Record<string, string>; query?: Record<string, string> } | null {
-  if (!startParam) return null
-  // Links (3 October): a notification button carries no notification TYPE
-  // and no viewer -- so roleRedirect parses it AFTER auth, with the session's
-  // role, and the same verb lands where the matching bell would send it.
-  const asMaster = role === 'master'
-  const asAdmin = role === 'admin'
-
-  const practiceMatch = startParam.match(/^open_practice__([0-9a-f-]{36})$/)
-  if (practiceMatch?.[1]) {
-    return asMaster
-      ? { name: 'master-practice-detail', params: { id: practiceMatch[1] } }
-      : { name: 'practice-detail', params: { id: practiceMatch[1] } }
-  }
-
-  // T-35: the public practice code, the same 22 characters that appear in
-  // {PUBLIC_LINK_BASE}/z/{code}. One code, two places -- the landing page's
-  // open-app button carries it straight through as startapp=zoom__<22>
-  // (28 characters against Telegram's 64 limit), so a person who clicked a
-  // channel link arrives here already pointed at the right practice.
-  const zoomMatch = startParam.match(/^zoom__([A-Za-z0-9_-]{22})$/)
-  if (zoomMatch?.[1]) {
-    const practiceId = decodePracticeCode(zoomMatch[1])
-    // A code of the right shape that does not decode is not a route.
-    if (practiceId) {
-      return { name: 'practice-live', params: { practiceId } }
-    }
-    return null
-  }
-
-  // Batch-INVITE (№258): one-time master invite link issued by an admin.
-  // Token charset = secrets.token_urlsafe (url-safe base64); length-bounded
-  // to match the backend's ClaimMasterInviteRequest (16..128).
-  const inviteMatch = startParam.match(/^master_onboarding__([A-Za-z0-9_-]{16,128})$/)
-  if (inviteMatch?.[1]) {
-    return { name: 'master-invite', params: { token: inviteMatch[1] } }
-  }
-
-  // Group invite (P4, №593): a master's reusable group link. Same token
-  // charset/length bound as above -- both are secrets.token_urlsafe(32)
-  // outputs, matching JoinGroupRequest.token (groups_schemas.py: 16..128).
-  const groupInviteMatch = startParam.match(/^group_invite__([A-Za-z0-9_-]{16,128})$/)
-  if (groupInviteMatch?.[1]) {
-    return { name: 'group-join', params: { token: groupInviteMatch[1] } }
-  }
-
-  // School invite (FE-18): a school's reusable link. ONE kind
-  // for BOTH flavours -- master and student links differ only in the token's
-  // row, and which one this is comes from the SERVER's preview
-  // (GET /schools/invites/{token}), never from anything parseable
-  // here. Links (3 October): the kind is `school__` (owner) -- 8 + 43 = 51
-  // characters; the former, longer kind made 65 against
-  // Telegram's 64 and the link did not open.
-  const schoolInviteMatch = startParam.match(SCHOOL_INVITE_PARAM)
-  if (schoolInviteMatch?.[1]) {
-    return { name: 'school-join', params: { token: schoolInviteMatch[1] } }
-  }
-
-  // Notification buttons (Links, 3 October): comms builds startapp as
-  // `<action>` or `<action>__<one param>`. Each verb lands where the bell
-  // sends it; where the bells differ by zone, the session role decides.
-  const verb = startParam.match(/^([a-z_]+?)(?:__([0-9a-f-]{36}))?$/)
-  const action = verb?.[1]
-  const id = verb?.[2]
-  switch (action) {
-    case 'open_feedback':
-      return id ? { name: 'user-feedback', params: { practiceId: id } } : null
-    case 'open_wallet': // bare (payouts, top-ups) or __<practice_id> (refunds)
-      // tz-whitelabel §4: an edition without the payments module has no
-      // wallet route in ANY zone -- the master's finance screen and the
-      // user's top-up are the same module (FE-112) -- the tap degrades
-      // to no navigation, not the 404.
-      if (!featureEnabled('payments')) return null
-      return asMaster ? { name: 'master-finance' } : { name: 'user-topup' }
-    case 'confirm_waitlist':
-      return id ? { name: 'waitlist-confirm', params: { id } } : null
-    case 'open_school':
-      return id ? { name: asMaster ? 'master-school' : 'user-school', params: { id } } : null
-    case 'open_master_offer':
-      return id ? { name: 'school-master-offer', params: { id } } : null
-    case 'open_master_application': // bare (BE-104) or __<school_id> (BE-59)
-      // The Telegram button does not know the type, so a rejection lands on
-      // the apply wizard (its guard decides) -- the reason is in the text.
-      return { name: 'master-apply' }
-    case 'open_master_zone':
-      // Its role guard sends a role='user' account to /user/dashboard; the
-      // switch-offer screen is the bell's route (master-pending).
-      return id ? null : { name: 'master-dashboard' }
-    case 'open_support':
-      return id ? null : { name: asMaster ? 'master-support' : 'user-support' }
-    case 'open_master_practices':
-      return id ? null : { name: 'master-practices' }
-    case 'open_thread':
-      // FE-103: the Telegram twin of the bell's msg.* buttons -- the support
-      // notification and the "translation unavailable" notice carry
-      // `open_thread__<thread_id>`, and the SAME routes open it (the thread
-      // screen learns it is support from the row's `channel`).
-      return id ? { name: asMaster ? 'master-chat' : 'user-chat', params: { id } } : null
-    case 'open_support_rating':
-      // FE-107 / BE-162 delivery 3: the rating notification's title
-      // (i18n:chat.rating.title) -- its button opens the rating sheet on
-      // THAT ticket. The same chat route open_thread uses resolves the
-      // ticket id to the person's one support row; ?rate=1 is what asks the
-      // sheet to open on the ticket the link named (the route's own id).
-      return id
-        ? {
-            name: asMaster ? 'master-chat' : 'user-chat',
-            params: { id },
-            query: { rate: '1' },
-          }
-        : null
-    case 'open_admin_support':
-      // FE-103 / BE-172: the per-admin Telegram signal about a support
-      // message deep-links the admin detail screen by the comms THREAD id
-      // (owner ruling in the BE-172 fix -- the opener's user_id would leave
-      // the front to find the thread through the list). Bare (no id) has no
-      // destination of its own.
-      return id && asAdmin ? { name: 'admin-support-detail', params: { id } } : null
-    default:
-      // open_notifications / open_admin_masters: there is no admin bell --
-      // the app opens as usual. Anything else is not a route.
-      return null
-  }
-}
 
 /**
  * FE-81: did the app open via a school invite deep link (`school__<token>`)?
@@ -364,7 +148,7 @@ export function parseStartParam(
  * decides its initial stage -- both run right after initAuth() resolves.
  */
 export function isSchoolInviteStartParam(): boolean {
-  return SCHOOL_INVITE_PARAM.test(platform.getStartParam() ?? '')
+  return isSchoolInviteParam(platform.getStartParam())
 }
 
 /**
@@ -436,8 +220,22 @@ export function waitUntilReady(): Promise<ReadyResult> {
 /**
  * Run the full auth initialization flow.
  * Should be called once from App.vue on mount.
+ *
+ * Never rejects: an exception from the bootstrap (platform.init() or a
+ * failure the flow does not handle itself) marks the run as unreachable and
+ * ready, so App.vue shows the "try again" screen (LoadingErrorView) instead
+ * of the splash forever.
  */
 async function initAuth(): Promise<void> {
+  try {
+    await runInitAuth()
+  } catch {
+    restoreUnreachable.value = true
+    isReady.value = true
+  }
+}
+
+async function runInitAuth(): Promise<void> {
   const authStore = useAuthStore()
 
   // Reset in case of re-initialization.

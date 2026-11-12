@@ -117,9 +117,10 @@ import NotificationRow from '@/components/shared/NotificationRow.vue'
 import { useToast } from '@/composables/useToast'
 import { useRememberedCount } from '@/composables/useRememberedCount'
 import { extractApiError } from '@/composables/useApiError'
-import { useNotificationsStore } from '@/stores/notifications'
+import { useQueryCache } from '@pinia/colada'
+import { applyUnread } from '@/composables/queries/notifications'
 import { useAuthStore } from '@/stores/auth'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -129,10 +130,10 @@ import {
 
 const router = useRouter()
 const toast = useToast()
-// The dashboard bell's presence dot (UserDashboardView) reads this store;
-// every server-confirmed badge below keeps it in step with this screen's
+// The dashboard bell's presence dot (UserDashboardView) reads the badge
+// entry (queries/notifications.ts); every server-confirmed badge below keeps it in step with this screen's
 // actions.
-const notifications = useNotificationsStore()
+const queryCache = useQueryCache()
 const auth = useAuthStore()
 
 const loading = ref(true)
@@ -191,7 +192,7 @@ async function load(): Promise<void> {
     const page = await listNotifications()
     items.value = page.items
     unread.value = page.unread
-    notifications.applyUnread(page.unread)
+    applyUnread(queryCache, page.unread)
   } catch (e) {
     error.value = extractApiError(e, t('common.tryAgain'))
   } finally {
@@ -211,7 +212,7 @@ async function markOne(item: NotificationItem): Promise<void> {
   try {
     const result = await markNotificationRead(item.id)
     unread.value = result.unread
-    notifications.applyUnread(result.unread)
+    applyUnread(queryCache, result.unread)
   } catch (e) {
     item.read_at = previousReadAt
     unread.value = previousUnread
@@ -230,7 +231,7 @@ async function markAll(): Promise<void> {
   try {
     const result = await markAllNotificationsRead()
     unread.value = result.unread
-    notifications.applyUnread(result.unread)
+    applyUnread(queryCache, result.unread)
   } catch (e) {
     items.value.forEach((i, idx) => {
       i.read_at = previous[idx] ?? null
@@ -270,6 +271,8 @@ function routeFor(
 
   switch (action) {
     case 'open_school':
+      // FE-151: with the schools option off the row is mark-read only.
+      if (!isOptionEnabled('schools')) return null
       return typeof params.school_id === 'string' && params.school_id
         ? { name: 'user-school', params: { id: params.school_id } }
         : null
@@ -277,6 +280,7 @@ function routeFor(
       // Links: school.master_offered has its own verb now -- the
       // consent screen, by school_id (it used to be a type check on the
       // school-page verb).
+      if (!isOptionEnabled('schools')) return null
       return typeof params.school_id === 'string' && params.school_id
         ? { name: 'school-master-offer', params: { id: params.school_id } }
         : null
@@ -291,9 +295,9 @@ function routeFor(
     case 'open_feedback':
       return practiceId ? { name: 'user-feedback', params: { practiceId } } : null
     case 'open_wallet':
-      // tz-whitelabel §4: an edition without the payments module has no
+      // tz-whitelabel §4: an instance with the payments option off (FE-151) has no
       // wallet route -- the tap degrades to no navigation, not the 404.
-      return featureEnabled('payments') ? { name: 'user-topup' } : null
+      return isOptionEnabled('payments') ? { name: 'user-topup' } : null
     case 'open_master_application':
       // BE-59: the «get verified» half of the master-appointment story --
       // the verb was named by the backend for exactly this mapping; the

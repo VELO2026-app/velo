@@ -1,0 +1,28 @@
+{
+  // Build scripts outside src/: the .mjs files (plain JS, checked via checkJs).
+  // The TypeScript Vite/Vitest configs live in tsconfig.configs.json, where
+  // noImplicitAny stays on. Separate from tsconfig.json because the app config
+  // targets the browser and has no Node types.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": true,
+    "strict": true,
+    /* checkJs on untyped scripts: params stay implicit any; the rest of strict applies */
+    "noImplicitAny": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@velo/ui": ["../packages/velo-ui/src/index.ts"]
+    }
+  },
+  "include": ["scripts/**/*.mjs", "env.d.ts"]
+}

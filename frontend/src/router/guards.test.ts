@@ -12,13 +12,20 @@
 //
 // @/stores/auth is the REAL Pinia store (setActivePinia per test) so
 // role/allowedRoles/masterApplication computeds are exercised for real, not
-// re-implemented in a mock. @/stores/master is mocked wholesale -- its
-// fetchMyProfile() would otherwise hit the network.
+// re-implemented in a mock. The master-profile queries are mocked wholesale --
+// they would otherwise hit the network.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { defineComponent, h } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import {
+  ADMIN_PROFILE_TTL_MS,
+  __resetAdminProfileTtlForTest,
+  installAccessGuard,
+  requirementsGuard,
+  zoneHomeGuard,
   roleRedirect,
   roleGuard,
   masterNoProfileGuard,
@@ -26,8 +33,11 @@ import {
   masterPendingGuard,
   masterApplyGuard,
   roleFreshnessGuard,
+  optionGuard,
 } from '@/router/guards'
+import { applyInstanceConfig } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import { resetAuthState, __setReadyForTest, pendingStartParam } from '@/composables/useAuth'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import type { UserResponse } from '@/api/types'
@@ -54,21 +64,20 @@ function call(guard: unknown): Promise<BareGuardResult> {
   return (guard as () => Promise<BareGuardResult>)()
 }
 
-const masterStoreState: { profileMissing: boolean; profile: { status: string } | null } = {
-  profileMissing: false,
+// The master profile (composables/queries/master.ts): its Colada behaviour
+// is master.test.ts's business; here only what the guards ask for and read.
+// `profileRequest(force)` records each load and whether it was forced.
+const masterProfileState: { missing: boolean; profile: { status: string } | null } = {
+  missing: false,
   profile: null,
 }
-const fetchMyProfile = vi.fn().mockResolvedValue(undefined)
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get profileMissing() {
-      return masterStoreState.profileMissing
-    },
-    get profile() {
-      return masterStoreState.profile
-    },
-    fetchMyProfile,
-  }),
+const profileRequest = vi.fn()
+vi.mock('@/composables/queries/master', () => ({
+  loadMasterProfile: async (_queryCache?: unknown, options?: { force?: boolean }) => {
+    profileRequest(options?.force ?? false)
+    return { ...masterProfileState }
+  },
+  cachedMasterProfile: () => ({ ...masterProfileState }),
 }))
 
 function setAuthUser(overrides: Partial<UserResponse> & Record<string, unknown> = {}): void {
@@ -90,10 +99,11 @@ describe('router/guards', () => {
     resetAuthState()
     sessionStorage.clear()
     localStorage.clear()
-    masterStoreState.profileMissing = false
-    masterStoreState.profile = null
-    fetchMyProfile.mockClear()
+    masterProfileState.missing = false
+    masterProfileState.profile = null
+    profileRequest.mockClear()
     refreshRoleIfStale.mockClear()
+    __resetAdminProfileTtlForTest()
   })
 
   afterEach(() => {
@@ -249,6 +259,31 @@ describe('router/guards', () => {
     })
   })
 
+  // FE-157: roleRedirect and roleFreshnessGuard share ONE rejection check
+  // (hasUnseenRejection) -- they must never disagree on who sees the verdict.
+  describe('the unseen-rejection rule is the same for both guards', () => {
+    const toVerdict = (result: unknown) =>
+      JSON.stringify(result) === JSON.stringify({ path: '/master/pending' })
+
+    it.each([
+      ['rejected, unseen', 'user', 'rejected', false, true],
+      ['rejected, seen', 'user', 'rejected', true, false],
+      ['pending', 'user', 'pending', false, false],
+      ['rejected, master role', 'master', 'rejected', false, false],
+      ['never applied', 'user', null, false, false],
+    ] as const)('%s', async (_label, role, status, seen, routed) => {
+      __setReadyForTest(true)
+      setAuthUser({
+        id: 'user_1',
+        role,
+        ...(status ? { master_application: { status } } : {}),
+      })
+      if (seen) localStorage.setItem(masterRejectionSeenKey('user_1'), '1')
+      expect(toVerdict(await call(roleRedirect))).toBe(routed)
+      expect(toVerdict(roleFreshnessGuard({ name: 'user-calendar' }))).toBe(routed)
+    })
+  })
+
   describe('roleGuard', () => {
     it("roleGuard('admin'): admin passes", () => {
       setAuthUser({ role: 'admin' })
@@ -282,21 +317,21 @@ describe('router/guards', () => {
   })
 
   describe('masterNoProfileGuard', () => {
-    it('non-master role: passes without touching the master store', async () => {
+    it('non-master role: passes without asking for the master profile', async () => {
       setAuthUser({ role: 'user' })
       expect(await call(masterNoProfileGuard)).toBe(true)
-      expect(fetchMyProfile).not.toHaveBeenCalled()
+      expect(profileRequest).not.toHaveBeenCalled()
     })
 
     it('master with no profile at all: redirects to /master/apply', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profileMissing = true
+      masterProfileState.missing = true
       expect(await call(masterNoProfileGuard)).toEqual({ path: '/master/apply' })
     })
 
     it('master with a profile: passes', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profileMissing = false
+      masterProfileState.missing = false
       expect(await call(masterNoProfileGuard)).toBe(true)
     })
   })
@@ -304,19 +339,19 @@ describe('router/guards', () => {
   describe('masterStatusGuard', () => {
     it('no profile at all: redirects to /master/apply (delegates to the no-profile check)', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profileMissing = true
+      masterProfileState.missing = true
       expect(await call(masterStatusGuard)).toEqual({ path: '/master/apply' })
     })
 
     it('profile exists but not verified: redirects to /master/pending', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'pending' }
+      masterProfileState.profile = { status: 'pending' }
       expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
     })
 
     it('profile verified: passes', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       expect(await call(masterStatusGuard)).toBe(true)
     })
 
@@ -326,21 +361,134 @@ describe('router/guards', () => {
     // master profile is revoked mid-session (role stays 'admin', only the
     // profile flips to 'suspended') keeps passing on the stale cached
     // 'verified' value for the rest of the session. These two prove the FIX
-    // by asserting the actual force argument fetchMyProfile is called with --
+    // by asserting the actual force argument profileRequest is called with --
     // confirmed red against the pre-fix code (which always calls it with no
     // argument at all) before this test file was left in its fixed state.
     it('B1: admin role forces a real refetch, even with an already-cached verified profile', async () => {
       setAuthUser({ role: 'admin' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       await call(masterStatusGuard)
-      expect(fetchMyProfile).toHaveBeenCalledWith(true)
+      expect(profileRequest).toHaveBeenCalledWith(true)
     })
 
     it('B1: a real master keeps the lazy skip-if-loaded behaviour -- no forced refetch', async () => {
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       await call(masterStatusGuard)
-      expect(fetchMyProfile).toHaveBeenCalledWith(false)
+      expect(profileRequest).toHaveBeenCalledWith(false)
+    })
+  })
+
+  // FE-157: B1's refetch for an admin used to leave on EVERY check. It now
+  // leaves at most once per ADMIN_PROFILE_TTL_MS per account; in between, the
+  // cached answer decides.
+  describe('masterStatusGuard: the admin profile TTL', () => {
+    it('a second check inside the window sends no request', async () => {
+      setAuthUser({ role: 'admin' })
+      masterProfileState.profile = { status: 'verified' }
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(profileRequest).toHaveBeenCalledTimes(1)
+      expect(profileRequest).toHaveBeenCalledWith(true)
+    })
+
+    it('inside the window the cached answer still decides', async () => {
+      setAuthUser({ role: 'admin' })
+      masterProfileState.profile = { status: 'verified' }
+      expect(await call(masterStatusGuard)).toBe(true)
+      // The cache learned of a suspension some other way (a screen's own
+      // forced fetch): no request from the guard, and it reads the news.
+      masterProfileState.profile = { status: 'suspended' }
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+      expect(profileRequest).toHaveBeenCalledTimes(1)
+    })
+
+    it('once the window has passed, the next check refetches', async () => {
+      vi.useFakeTimers()
+      setAuthUser({ role: 'admin' })
+      masterProfileState.profile = { status: 'verified' }
+      await call(masterStatusGuard)
+      vi.advanceTimersByTime(ADMIN_PROFILE_TTL_MS - 1)
+      await call(masterStatusGuard)
+      expect(profileRequest).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(1)
+      await call(masterStatusGuard)
+      expect(profileRequest).toHaveBeenCalledTimes(2)
+    })
+
+    it("another account is not served by the previous account's window", async () => {
+      setAuthUser({ id: 'admin_a', role: 'admin' })
+      await call(masterStatusGuard)
+      setAuthUser({ id: 'admin_b', role: 'admin' })
+      await call(masterStatusGuard)
+      expect(profileRequest).toHaveBeenCalledTimes(2)
+    })
+
+    it('a real master never forces: the lazy fetch on every check, as before', async () => {
+      setAuthUser({ role: 'master' })
+      masterProfileState.profile = { status: 'verified' }
+      await call(masterStatusGuard)
+      await call(masterStatusGuard)
+      expect(profileRequest).not.toHaveBeenCalledWith(true)
+    })
+  })
+
+  // FE-157: only "no application at all" is told apart -- a 403 for an
+  // unverified application and a dropped connection both leave no profile
+  // (profile null, missing false). GET /users/me's
+  // master_application tells them apart; no answer at all is not a verdict.
+  describe('masterStatusGuard: a request without an answer is not a verdict', () => {
+    function stubFetchMe(result: { succeeds: boolean; application?: { status: string } }) {
+      return vi.spyOn(useAuthStore(), 'fetchMe').mockImplementation(async () => {
+        if (result.succeeds && result.application) {
+          setAuthUser({ role: 'master', master_application: result.application })
+        }
+        return result.succeeds
+      })
+    }
+
+    it('no profile, /users/me already says verified: the screen opens, not the verdict screen', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      const fetchMe = stubFetchMe({ succeeds: false })
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(fetchMe).not.toHaveBeenCalled()
+    })
+
+    it('no profile and nothing known, /users/me unreachable too: the screen opens', async () => {
+      setAuthUser({ role: 'master' })
+      const fetchMe = stubFetchMe({ succeeds: false })
+      expect(await call(masterStatusGuard)).toBe(true)
+      expect(fetchMe).toHaveBeenCalledTimes(1)
+    })
+
+    it('no profile, /users/me says pending (the 403 was a verdict): /master/pending', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'pending' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+    })
+
+    it('fresh sign-in (no master_application yet): /users/me is asked once and decides', async () => {
+      setAuthUser({ role: 'master' })
+      const fetchMe = stubFetchMe({ succeeds: true, application: { status: 'rejected' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+      expect(fetchMe).toHaveBeenCalledTimes(1)
+    })
+
+    it('the master profile request is not repeated within one check', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      await call(masterStatusGuard)
+      expect(profileRequest).toHaveBeenCalledTimes(1)
+      expect(profileRequest).toHaveBeenCalledWith(false)
+    })
+
+    it('a loaded profile still wins over /users/me', async () => {
+      setAuthUser({ role: 'master', master_application: { status: 'verified' } })
+      masterProfileState.profile = { status: 'suspended' }
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
+    })
+
+    it('an admin without a profile keeps the verdict-screen path (the endpoint refuses admins)', async () => {
+      setAuthUser({ role: 'admin', master_application: { status: 'verified' } })
+      expect(await call(masterStatusGuard)).toEqual({ path: '/master/pending' })
     })
   })
 
@@ -372,7 +520,7 @@ describe('router/guards', () => {
     it('verified master stays in their cabinet', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'master' })
-      masterStoreState.profile = { status: 'verified' }
+      masterProfileState.profile = { status: 'verified' }
       expect(await call(masterApplyGuard)).toEqual({ path: '/master/dashboard' })
     })
   })
@@ -511,6 +659,229 @@ describe('router/guards', () => {
 
       expect(result).toBe(true)
       expect(refreshSettled).toBe(false)
+    })
+  })
+
+  // =============================================================================
+  // FE-157: the access guard (installAccessGuard) -- meta.requires replaces the
+  // per-record beforeEnter role/status guards. Driven through a REAL router
+  // (memory history) over a stub table shaped like the master zone, so the
+  // "entering" rule is vue-router's own matching, not a re-implementation.
+  // =============================================================================
+  describe('installAccessGuard + requirementsGuard', () => {
+    const Stub = defineComponent({ render: () => h('div') })
+
+    function accessRouter() {
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', component: Stub },
+          { path: '/user/dashboard', name: 'user-dashboard', component: Stub },
+          { path: '/user/calendar', name: 'user-calendar', component: Stub },
+          { path: '/master/pending', name: 'master-pending', component: Stub },
+          { path: '/master/apply', component: Stub },
+          { path: '/admin/dashboard', component: Stub },
+          {
+            path: '/master',
+            component: Stub,
+            meta: { requires: 'master-role' },
+            children: [
+              { path: 'dashboard', component: Stub, meta: { requires: 'master-application' } },
+              { path: 'inbox', component: Stub },
+              { path: 'practices/:id', component: Stub, meta: { requires: 'verified-master' } },
+              { path: 'groups', component: Stub, meta: { requires: 'verified-master' } },
+            ],
+          },
+        ],
+      })
+      installAccessGuard(router)
+      return router
+    }
+
+    async function go(router: ReturnType<typeof accessRouter>, path: string): Promise<string> {
+      await router.push(path)
+      return router.currentRoute.value.fullPath
+    }
+
+    beforeEach(() => {
+      __setReadyForTest(true)
+    })
+
+    it('the parent role requirement runs first: a user never reaches the status check', async () => {
+      setAuthUser({ role: 'user' })
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/user/dashboard')
+      expect(profileRequest).not.toHaveBeenCalled()
+    })
+
+    it('verified master: the shell and the screen pass', async () => {
+      setAuthUser({ role: 'master' })
+      masterProfileState.profile = { status: 'verified' }
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/master/practices/p1')
+    })
+
+    it('pending master: a verified-master screen redirects, an open one does not', async () => {
+      setAuthUser({ role: 'master' })
+      masterProfileState.profile = { status: 'pending' }
+      const router = accessRouter()
+      expect(await go(router, '/master/groups')).toBe('/master/pending')
+      expect(await go(router, '/master/inbox')).toBe('/master/inbox')
+    })
+
+    it('a deep link into a verified-master screen survives a dropped profile request', async () => {
+      setAuthUser({ role: 'master' })
+      vi.spyOn(useAuthStore(), 'fetchMe').mockResolvedValue(false)
+      const router = accessRouter()
+      expect(await go(router, '/master/practices/p1')).toBe('/master/practices/p1')
+    })
+
+    it('no-application master on the dashboard goes to the apply wizard', async () => {
+      setAuthUser({ role: 'master' })
+      masterProfileState.missing = true
+      const router = accessRouter()
+      expect(await go(router, '/master/dashboard')).toBe('/master/apply')
+    })
+
+    // The beforeEnter rule the 21 per-record guards had: a record the
+    // navigation does not ENTER is not checked again.
+    it('a param change inside one screen does not re-run its check', async () => {
+      setAuthUser({ role: 'master' })
+      masterProfileState.profile = { status: 'verified' }
+      const router = accessRouter()
+      await go(router, '/master/practices/p1')
+      const calls = profileRequest.mock.calls.length
+
+      masterProfileState.profile = { status: 'pending' }
+      expect(await go(router, '/master/practices/p2')).toBe('/master/practices/p2')
+      expect(profileRequest.mock.calls.length).toBe(calls)
+
+      // Entering a sibling record checks it.
+      expect(await go(router, '/master/groups')).toBe('/master/pending')
+    })
+
+    it('a move between two screens of the shell does not re-run the shell role check', async () => {
+      setAuthUser({ role: 'master' })
+      const router = accessRouter()
+      await go(router, '/master/inbox')
+
+      setAuthUser({ role: 'user' })
+      expect(await go(router, '/master/inbox?tab=all')).toBe('/master/inbox?tab=all')
+      expect(await go(router, '/master/dashboard')).toBe('/master/dashboard')
+
+      // Re-entering the shell from outside checks the role again.
+      await go(router, '/user/calendar')
+      expect(await go(router, '/master/inbox')).toBe('/user/dashboard')
+    })
+
+    it('requirementsGuard reads each record, not the merged meta', async () => {
+      setAuthUser({ role: 'user' })
+      const router = accessRouter()
+      const to = router.resolve('/master/practices/p1')
+      // The merged meta carries only the child's requirement ...
+      expect(to.meta.requires).toBe('verified-master')
+      // ... yet the parent's role requirement still decides first.
+      expect(await requirementsGuard(to, router.resolve('/'))).toEqual({ path: '/user/dashboard' })
+    })
+
+    it('P-1 runs in the same guard: a master on the user dashboard goes to the master zone', async () => {
+      setAuthUser({ role: 'master' })
+      const router = accessRouter()
+      expect(await go(router, '/user/dashboard')).toBe('/master/dashboard')
+    })
+  })
+
+  describe('zoneHomeGuard (P-1)', () => {
+    it.each([
+      ['admin', { path: '/admin/dashboard' }],
+      ['master', { path: '/master/dashboard' }],
+      ['user', true],
+    ] as const)('%s opening the user dashboard', (role, expected) => {
+      setAuthUser({ role })
+      expect(zoneHomeGuard({ name: 'user-dashboard', path: '/user/dashboard' })).toEqual(expected)
+    })
+
+    it('the user mode keeps a master on the user dashboard', () => {
+      setAuthUser({ role: 'master' })
+      useUiStore().setUiMode('user')
+      expect(zoneHomeGuard({ name: 'user-dashboard', path: '/user/dashboard' })).toBe(true)
+    })
+
+    it('any other user-zone screen is left alone', () => {
+      setAuthUser({ role: 'admin' })
+      expect(zoneHomeGuard({ name: 'user-calendar', path: '/user/calendar' })).toBe(true)
+    })
+  })
+
+  describe('optionGuard (FE-151: instance options)', () => {
+    const Stub = defineComponent({ render: () => h('div') })
+
+    function optionRouter() {
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: '/', component: Stub },
+          { path: '/unavailable', name: 'section-unavailable', component: Stub },
+          {
+            path: '/user',
+            component: Stub,
+            children: [
+              { path: 'dashboard', component: Stub },
+              { path: 'topup', component: Stub, meta: { option: 'payments' } },
+              { path: 'schools', component: Stub, meta: { option: 'schools' } },
+            ],
+          },
+          {
+            path: '/schools',
+            component: Stub,
+            meta: { option: 'schools' },
+            children: [{ path: 'join/:token', component: Stub }],
+          },
+        ],
+      })
+      installAccessGuard(router)
+      return router
+    }
+
+    beforeEach(() => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'user' })
+    })
+    afterEach(() => {
+      applyInstanceConfig(null)
+    })
+
+    it('no options block (golden build): every option record is open', async () => {
+      const router = optionRouter()
+      await router.push('/user/topup')
+      expect(router.currentRoute.value.fullPath).toBe('/user/topup')
+    })
+
+    it('an option off: its record lands on /unavailable; another option stays open', async () => {
+      applyInstanceConfig({ options: { payments: 'false', schools: 'true' } })
+      const router = optionRouter()
+      await router.push('/user/dashboard')
+      await router.push('/user/topup')
+      expect(router.currentRoute.value.fullPath).toBe('/unavailable')
+      await router.push('/user/schools')
+      expect(router.currentRoute.value.fullPath).toBe('/user/schools')
+    })
+
+    it('an unset flag (placeholder) is off', async () => {
+      applyInstanceConfig({ options: { payments: 'true', schools: '${OPTION_SCHOOLS}' } })
+      const router = optionRouter()
+      await router.push('/user/schools')
+      expect(router.currentRoute.value.fullPath).toBe('/unavailable')
+    })
+
+    it('a parent record carrying the option closes every child', () => {
+      applyInstanceConfig({ options: { schools: 'false' } })
+      const router = optionRouter()
+      expect(optionGuard(router.resolve('/schools/join/t1'))).toEqual({
+        path: '/unavailable',
+        replace: true,
+      })
+      expect(optionGuard(router.resolve('/user/dashboard'))).toBe(true)
     })
   })
 })

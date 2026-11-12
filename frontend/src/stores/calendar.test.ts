@@ -2,24 +2,17 @@
 // VELO Frontend -- stores/calendar.ts Unit Tests (probekit sweep #17)
 // =============================================================================
 //
-// Covers loadWeek (the +-1 day widened UTC query window, per the W-2 comment
-// in the store itself), selectDay/shiftWindow via next/prevWeek, canGoPrev,
-// applyFilters (including the "explicit undefined clears a facet" subtlety),
-// init()'s first-entry-only snap-to-today guard, and the two client-side
-// derived views (daysWithPractices / selectedDayPractices) -- specifically
-// their F5 viewer-timezone bucketing and their "already started" exclusion.
+// Since FE-166 step 4 the store holds only the client state that decides
+// WHICH week the calendar shows; the week itself is a Colada query
+// (composables/queries/calendar.test.ts covers loading, the day markers and
+// the selected-day list). Covered here: weekParams (the +-1 day widened UTC
+// range, per the W-2 note in the store, and its widening to the selected
+// day), selectDay / next / prevWeek, canGoPrev, the ribbon's shiftDays (quiet,
+// selection never moves), applyFilters (including the "explicit undefined
+// clears a facet" subtlety), init()'s first-entry-only snap-to-today guard,
+// and the school scope's snap to the nearest practice.
 //
-// Mocked at the @/api/practices wrapper boundary (the store's only network
-// dependency). @/stores/auth is NOT mocked: useViewerTimezone reads a real
-// authStore.user.timezone, and since Pinia here is real (not @pinia/testing),
-// setting that field directly on a real useAuthStore() instance is simpler
-// and more honest than mocking a store the calendar store doesn't call any
-// action on.
-//
-// Time is pinned everywhere below: `now.value` inside the store is set once,
-// at store-creation time, from Date.now() (a setInterval nudges it every 60s,
-// which these tests never advance, so it stays pinned for the test's
-// duration). TZ is stubbed to 'UTC' so the store's LOCAL-timezone date math
+// Time is pinned everywhere below. TZ is stubbed to 'UTC' so the store's LOCAL-timezone date math
 // (weekAnchor, weekDays, localDateKey) lines up 1:1 with the UTC instants
 // used in fixtures and assertions below -- this is the same technique
 // format.test.ts uses (vi.stubEnv('TZ', ...)) to make local-time-dependent
@@ -29,12 +22,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useCalendarStore } from '@/stores/calendar'
-import { useAuthStore } from '@/stores/auth'
-import { flushPersisted, setPersistOwner } from '@/composables/persistedCache'
-import * as practicesApi from '@/api/practices'
-import type { PracticeResponse, UserResponse } from '@/api/types'
-
-vi.mock('@/api/practices')
+import type { PracticeResponse } from '@/api/types'
 
 const NOW_ISO = '2026-06-15T12:00:00.000Z' // mid-day UTC -- today's local midnight is 06-15T00:00Z under the TZ=UTC stub below
 
@@ -46,27 +34,11 @@ function fakePractice(overrides: Partial<PracticeResponse> = {}): PracticeRespon
   } as PracticeResponse
 }
 
-function emptyPage() {
-  return { items: [], total: 0, limit: 100, offset: 0 }
-}
-
-function fakeUser(overrides: Partial<UserResponse> = {}): UserResponse {
-  return {
-    id: 'user_1',
-    role: 'user',
-    first_name: 'Test',
-    last_name: null,
-    onboarding_completed: true,
-    ...overrides,
-  } as UserResponse
-}
-
 beforeEach(() => {
   vi.stubEnv('TZ', 'UTC')
   vi.useFakeTimers()
   vi.setSystemTime(new Date(NOW_ISO))
   setActivePinia(createPinia())
-  vi.mocked(practicesApi.getPractices).mockReset().mockResolvedValue(emptyPage())
 })
 
 afterEach(() => {
@@ -75,152 +47,38 @@ afterEach(() => {
 })
 
 describe('useCalendarStore', () => {
-  describe('loadWeek', () => {
-    it('requests the week +-1 day (UTC boundaries), sorted ascending', async () => {
+  describe('weekParams (the week query key)', () => {
+    it('the range is the window +-1 day (UTC boundaries), no scope, no filters', () => {
       const store = useCalendarStore()
 
-      await store.loadWeek()
-
-      expect(practicesApi.getPractices).toHaveBeenCalledWith(
-        expect.objectContaining({
-          date_from: '2026-06-14T00:00:00.000Z',
-          date_to: '2026-06-22T23:59:59.999Z',
-          sort_by: 'scheduled_at',
-          sort_order: 'asc',
-        }),
-        100,
-        0,
-      )
-    })
-
-    it('the window already on screen is refreshed quietly: no loading flag, data kept', async () => {
-      const items = [fakePractice({ id: 'a' })]
-      vi.mocked(practicesApi.getPractices).mockResolvedValue({
-        items,
-        total: 1,
-        limit: 100,
-        offset: 0,
+      expect(store.weekParams).toEqual({
+        from: '2026-06-14T00:00:00.000Z',
+        to: '2026-06-22T23:59:59.999Z',
+        filters: {},
+        master: null,
+        schoolFilter: null,
+        school: null,
       })
-      const store = useCalendarStore()
-      await store.loadWeek()
-
-      const again = store.loadWeek()
-      expect(store.loading).toBe(false) // a tab return: no skeleton
-      expect(store.weekPractices).toEqual(items)
-      await again
-      expect(practicesApi.getPractices).toHaveBeenCalledTimes(2) // still revalidated
     })
 
-    it("a restart draws the last session's default week at once, then revalidates", async () => {
-      const items = [fakePractice({ id: 'kept' })]
-      vi.mocked(practicesApi.getPractices).mockResolvedValue({
-        items,
-        total: 1,
-        limit: 100,
-        offset: 0,
-      })
-      setPersistOwner('u1')
-      await useCalendarStore().loadWeek()
-      flushPersisted()
-
-      setActivePinia(createPinia()) // a fresh app
+    it('selecting a day inside the window leaves the key alone (no reload)', () => {
       const store = useCalendarStore()
-      const pending = store.loadWeek()
-      expect(store.weekPractices).toEqual(items)
-      expect(store.loading).toBe(false)
-      await pending
-    })
-
-    it('on success: stores the returned practices', async () => {
-      const items = [fakePractice({ id: 'a' }), fakePractice({ id: 'b' })]
-      vi.mocked(practicesApi.getPractices).mockResolvedValue({
-        items,
-        total: 2,
-        limit: 100,
-        offset: 0,
-      })
-      const store = useCalendarStore()
-
-      await store.loadWeek()
-
-      expect(store.weekPractices).toEqual(items)
-      expect(store.loading).toBe(false)
-      expect(store.error).toBeNull()
-    })
-
-    it('master scope with a school filter keeps only THAT school practices of the master (owner 2026-10-03)', async () => {
-      const items = [
-        fakePractice({ id: 'school', school_id: 'g1' }),
-        fakePractice({ id: 'personal', school_id: null }),
-        fakePractice({ id: 'foreign', school_id: 'g2' }),
-      ]
-      vi.mocked(practicesApi.getPractices).mockResolvedValue({
-        items,
-        total: 3,
-        limit: 100,
-        offset: 0,
-      })
-      const store = useCalendarStore()
-      store.setMasterScope('master_1', 'g1')
-
-      await store.loadWeek()
-
-      expect(store.weekPractices.map((p) => p.id)).toEqual(['school'])
-    })
-
-    it('master scope WITHOUT a school filter keeps the whole master feed (owner 2026-10-03)', async () => {
-      const items = [
-        fakePractice({ id: 'school', school_id: 'g1' }),
-        fakePractice({ id: 'personal', school_id: null }),
-      ]
-      vi.mocked(practicesApi.getPractices).mockResolvedValue({
-        items,
-        total: 2,
-        limit: 100,
-        offset: 0,
-      })
-      const store = useCalendarStore()
-      store.setMasterScope('master_1')
-
-      await store.loadWeek()
-
-      expect(store.weekPractices.map((p) => p.id)).toEqual(['school', 'personal'])
-    })
-
-    it('on failure: records the error and clears any previously loaded practices', async () => {
-      vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('network down'))
-      const store = useCalendarStore()
-      store.weekPractices = [fakePractice()]
-
-      await store.loadWeek()
-
-      expect(store.error).toBe('Не удалось загрузить календарь')
-      expect(store.weekPractices).toEqual([])
-      expect(store.loading).toBe(false)
-    })
-
-    it('a failed SILENT refresh (ribbon scroll) keeps the practices on screen', async () => {
-      vi.mocked(practicesApi.getPractices).mockRejectedValue(new Error('network down'))
-      const store = useCalendarStore()
-      store.weekPractices = [fakePractice()]
-
-      await store.loadWeek(true)
-
-      expect(store.error).toBe('Не удалось загрузить календарь')
-      expect(store.weekPractices).toHaveLength(1)
-    })
-  })
-
-  describe('selectDay', () => {
-    it('updates selectedDate without reloading the week', async () => {
-      const store = useCalendarStore()
-      await store.loadWeek()
-      vi.mocked(practicesApi.getPractices).mockClear()
+      const before = JSON.stringify(store.weekParams)
 
       store.selectDay('2026-06-17')
 
       expect(store.selectedDate).toBe('2026-06-17')
-      expect(practicesApi.getPractices).not.toHaveBeenCalled()
+      expect(JSON.stringify(store.weekParams)).toBe(before)
+    })
+
+    it('the scopes reach the key', () => {
+      const store = useCalendarStore()
+      store.setMasterScope('master_1', 'g1')
+      expect(store.weekParams).toMatchObject({ master: 'master_1', schoolFilter: 'g1' })
+
+      store.setMasterScope(null)
+      store.setSchoolScope('g7')
+      expect(store.weekParams).toMatchObject({ master: null, schoolFilter: null, school: 'g7' })
     })
   })
 
@@ -230,167 +88,185 @@ describe('useCalendarStore', () => {
       expect(store.canGoPrev).toBe(false)
     })
 
-    it('prevWeek is a no-op at today: no state change, no reload', async () => {
+    it('prevWeek is a no-op at today: no state change', () => {
       const store = useCalendarStore()
       const anchorBefore = store.weekAnchor.getTime()
 
-      await store.prevWeek()
+      store.prevWeek()
 
       expect(store.weekAnchor.getTime()).toBe(anchorBefore)
-      expect(practicesApi.getPractices).not.toHaveBeenCalled()
     })
 
-    it('nextWeek shifts the anchor AND the selected day by +7, then reloads', async () => {
+    it('nextWeek shifts the anchor AND the selected day by +7 -- a real (not quiet) reload', () => {
       const store = useCalendarStore()
+      store.shiftDays(1) // a ribbon scroll first: quiet
+      expect(store.quietWindow).toBe(true)
 
-      await store.nextWeek()
+      store.nextWeek()
 
-      expect(store.weekAnchor.toISOString()).toBe('2026-06-22T00:00:00.000Z')
+      expect(store.weekAnchor.toISOString()).toBe('2026-06-23T00:00:00.000Z')
       expect(store.selectedDate).toBe('2026-06-22')
-      expect(practicesApi.getPractices).toHaveBeenCalledTimes(1)
+      expect(store.quietWindow).toBe(false)
     })
 
-    it('after nextWeek, canGoPrev flips true and prevWeek returns to today', async () => {
+    it('after nextWeek, canGoPrev flips true and prevWeek returns to today', () => {
       const store = useCalendarStore()
 
-      await store.nextWeek()
+      store.nextWeek()
       expect(store.canGoPrev).toBe(true)
 
-      await store.prevWeek()
+      store.prevWeek()
 
       expect(store.canGoPrev).toBe(false)
       expect(store.weekAnchor.toISOString()).toBe('2026-06-15T00:00:00.000Z')
       expect(store.selectedDate).toBe('2026-06-15')
-      // nextWeek's reload + prevWeek's reload.
-      expect(practicesApi.getPractices).toHaveBeenCalledTimes(2)
     })
   })
 
   describe('shiftDays (ribbon scroll)', () => {
-    it('scroll is ONLY scroll: the window moves, the SELECTED day never does', async () => {
+    it('scroll is ONLY scroll: the window moves, the SELECTED day never does -- and quietly', () => {
       const store = useCalendarStore()
-      await store.init()
+      store.init()
       const before = store.selectedDate // today, = window start (the default state)
 
-      await store.shiftDays(3)
+      store.shiftDays(3)
       expect(store.selectedDate).toBe(before) // <-- the invariant
+      expect(store.quietWindow).toBe(true)
       // The window itself moved.
       const expectedAnchor = new Date(NOW_ISO)
       expectedAnchor.setUTCDate(expectedAnchor.getUTCDate() + 3)
       expect(store.localDateKey(store.days[0]!)).toBe(expectedAnchor.toISOString().slice(0, 10))
 
       // Back to today: still no selection change, clamped at the today limit.
-      await store.shiftDays(-10)
+      store.shiftDays(-10)
       expect(store.selectedDate).toBe(before)
       expect(store.localDateKey(store.days[0]!)).toBe(NOW_ISO.slice(0, 10))
     })
 
-    it('the fetch range is widened to cover the out-of-window selected day', async () => {
+    it('the range is widened to cover the out-of-window selected day', () => {
       const store = useCalendarStore()
-      await store.init()
-      await store.shiftDays(9) // selection (today) is now 9 days behind the window
+      store.init()
+      store.shiftDays(9) // selection (today) is now 9 days behind the window
 
-      const query = vi.mocked(practicesApi.getPractices).mock.calls.at(-1)![0]!
-      const from = new Date(query.date_from!).toISOString().slice(0, 10)
-      // date_from must reach BACK to the selected day (today) - 1 day buffer.
+      const from = store.weekParams.from.slice(0, 10)
+      // The range must reach BACK to the selected day (today) - 1 day buffer.
       const selMinus1 = new Date(NOW_ISO)
       selMinus1.setUTCDate(selMinus1.getUTCDate() - 1)
       expect(from).toBe(selMinus1.toISOString().slice(0, 10))
     })
 
-    it('a zero (clamped) shift is a no-op: no reload', async () => {
+    it('a zero (clamped) shift is a no-op: the key does not move', () => {
       const store = useCalendarStore()
-      await store.init()
-      const calls = vi.mocked(practicesApi.getPractices).mock.calls.length
-      await store.shiftDays(-5) // at today: clamps to 0
-      expect(vi.mocked(practicesApi.getPractices).mock.calls.length).toBe(calls)
+      store.init()
+      const before = JSON.stringify(store.weekParams)
+      store.shiftDays(-5) // at today: clamps to 0
+      expect(JSON.stringify(store.weekParams)).toBe(before)
+      expect(store.quietWindow).toBe(false)
     })
   })
 
   describe('applyFilters', () => {
-    it('applies a facet filter and reloads with it in the query', async () => {
+    it('applies a facet filter: it reaches the key, as a real reload', () => {
       const store = useCalendarStore()
+      store.shiftDays(1)
 
-      await store.applyFilters({ direction: ['meditation'], difficulty: ['beginner'] })
+      store.applyFilters({ direction: ['meditation'], difficulty: ['beginner'] })
 
       expect(store.filters.direction).toEqual(['meditation'])
-      const lastCall = vi.mocked(practicesApi.getPractices).mock.calls.at(-1)!
-      expect(lastCall[0]).toMatchObject({ direction: ['meditation'], difficulty: ['beginner'] })
+      expect(store.weekParams.filters).toMatchObject({
+        direction: ['meditation'],
+        difficulty: ['beginner'],
+      })
+      expect(store.quietWindow).toBe(false)
     })
 
-    it('explicitly clears a previously-set facet instead of merging over it', async () => {
+    it('explicitly clears a previously-set facet instead of merging over it', () => {
       const store = useCalendarStore()
-      await store.applyFilters({ direction: ['meditation'] })
+      store.applyFilters({ direction: ['meditation'] })
       expect(store.filters.direction).toEqual(['meditation'])
 
-      await store.applyFilters({})
+      store.applyFilters({})
 
       expect(store.filters.direction).toBeUndefined()
     })
   })
 
   describe('init', () => {
-    it("re-entry (initialized already true) preserves the user's shifted window instead of snapping back to today", async () => {
+    it("re-entry (initialized already true) preserves the user's shifted window instead of snapping back to today", () => {
       const store = useCalendarStore()
 
-      await store.init() // first entry: snaps to today (no visible change) + loads
-      await store.nextWeek() // user navigates forward
+      store.init() // first entry: snaps to today (no visible change)
+      store.nextWeek() // user navigates forward
       const shiftedAnchor = store.weekAnchor.toISOString()
 
-      await store.init() // re-entry: must NOT reset to today
+      store.init() // re-entry: must NOT reset to today
 
       expect(store.weekAnchor.toISOString()).toBe(shiftedAnchor)
       expect(store.weekAnchor.toISOString()).not.toBe('2026-06-15T00:00:00.000Z')
-      // init() -> nextWeek()'s loadWeek -> init()'s own loadWeek = 3 calls.
-      expect(practicesApi.getPractices).toHaveBeenCalledTimes(3)
     })
   })
 
-  describe('daysWithPractices (F5 viewer-timezone bucketing + started-practice exclusion)', () => {
-    it('falls back to UTC when the viewer has no profile timezone', () => {
+  describe('tabWeekParams (the idle prefetch, FE-178 review)', () => {
+    it("before the first entry: today's home week, without touching the store", () => {
       const store = useCalendarStore()
-      // 21:30 UTC on the 15th stays the 15th under a UTC bucket.
-      store.weekPractices = [fakePractice({ id: 'p1', scheduled_at: '2026-06-15T21:30:00Z' })]
+      store.setMasterScope('m1')
 
-      expect(store.daysWithPractices).toEqual(new Set(['2026-06-15']))
+      expect(store.tabWeekParams()).toMatchObject({
+        from: '2026-06-14T00:00:00.000Z',
+        master: null,
+        school: null,
+      })
+      expect(store.masterScope).toBe('m1')
     })
 
-    it("buckets by the VIEWER'S profile timezone, not UTC, and drops already-started practices", () => {
-      const auth = useAuthStore()
-      auth.user = fakeUser({ timezone: 'Europe/Moscow' } as Partial<UserResponse>)
+    it('after it: the window the user left the tab on, with its filters, without the scope', () => {
       const store = useCalendarStore()
-      store.weekPractices = [
-        // 21:30 UTC (future: now is 12:00 UTC) = 00:30 the NEXT day in Moscow (UTC+3).
-        fakePractice({ id: 'future', scheduled_at: '2026-06-15T21:30:00Z' }),
-        // 10:00 UTC is BEFORE "now" (12:00 UTC) -- already started, must be excluded
-        // even though it would otherwise bucket onto the 15th.
-        fakePractice({ id: 'started', scheduled_at: '2026-06-15T10:00:00Z' }),
-      ]
+      store.init()
+      store.nextWeek()
+      store.applyFilters({ direction: ['meditation'] })
+      store.setMasterScope('m1', 'g1')
 
-      expect(store.daysWithPractices).toEqual(new Set(['2026-06-16']))
+      expect(store.tabWeekParams()).toEqual({
+        ...store.weekParams,
+        master: null,
+        schoolFilter: null,
+        school: null,
+      })
+      expect(store.tabWeekParams().filters).toMatchObject({ direction: ['meditation'] })
+      expect(store.quietWindow).toBe(false)
     })
   })
 
-  describe('selectedDayPractices', () => {
-    it('filters to the selected day, excludes already-started practices, and sorts ascending', () => {
+  describe('snapToSchoolFeed (school scope opens ON the practices)', () => {
+    it('moves the window and the selection to the nearest upcoming practice, once per mode entry', () => {
       const store = useCalendarStore()
-      store.selectedDate = '2026-06-15'
-      store.weekPractices = [
-        fakePractice({ id: 'late', scheduled_at: '2026-06-15T18:00:00Z' }),
-        fakePractice({ id: 'early', scheduled_at: '2026-06-15T14:00:00Z' }),
-        fakePractice({ id: 'started', scheduled_at: '2026-06-15T09:00:00Z' }), // before "now" (12:00)
-        fakePractice({ id: 'other-day', scheduled_at: '2026-06-16T14:00:00Z' }),
+      store.setSchoolScope('g7')
+      const feed = [
+        fakePractice({ id: 'far', scheduled_at: '2026-07-20T10:00:00Z' }),
+        fakePractice({ id: 'near', scheduled_at: '2026-07-02T10:00:00Z' }),
+        fakePractice({ id: 'past', scheduled_at: '2026-06-01T10:00:00Z' }),
       ]
 
-      expect(store.selectedDayPractices.map((p) => p.id)).toEqual(['early', 'late'])
+      store.snapToSchoolFeed(feed, 'UTC')
+      expect(store.selectedDate).toBe('2026-07-02')
+      expect(store.localDateKey(store.weekAnchor)).toBe('2026-07-02')
+
+      // In-mode navigation never re-snaps.
+      store.nextWeek()
+      store.snapToSchoolFeed(feed, 'UTC')
+      expect(store.selectedDate).toBe('2026-07-09')
+
+      // A new mode entry snaps again.
+      store.setSchoolScope(null)
+      store.setSchoolScope('g7')
+      store.snapToSchoolFeed(feed, 'UTC')
+      expect(store.selectedDate).toBe('2026-07-02')
     })
 
-    it('returns an empty list when nothing matches the selected day', () => {
+    it('outside the school scope it does nothing', () => {
       const store = useCalendarStore()
-      store.selectedDate = '2026-06-19'
-      store.weekPractices = [fakePractice({ scheduled_at: '2026-06-15T14:00:00Z' })]
-
-      expect(store.selectedDayPractices).toEqual([])
+      store.snapToSchoolFeed([fakePractice({ scheduled_at: '2026-07-02T10:00:00Z' })], 'UTC')
+      expect(store.selectedDate).toBe('2026-06-15')
     })
   })
 })

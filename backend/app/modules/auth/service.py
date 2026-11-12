@@ -94,9 +94,10 @@ class TelegramInitData:
     """What validated initData hands back to the login handler.
 
     user: the parsed `user` object from initData.
-    has_signature: whether the client sent a non-empty `signature` field
-        (BE-187: the measurement for BE-183, which moves the Mini App login
-        onto Telegram's public-key check).
+    has_signature: whether the client sent a non-empty `signature` field.
+        The login handler records it per person (BE-201, signature_stats.py):
+        the measurement for BE-183, which moves the Mini App login onto
+        Telegram's public-key check.
     """
 
     user: dict
@@ -235,8 +236,8 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> TelegramInitD
     if not isinstance(user_id, int) or isinstance(user_id, bool):
         raise TelegramValidationError("Invalid user data in initData")
 
-    # BE-187: read from the same `parsed` the hash check used, first value
-    # of a repeated key -- exactly the value that went into the
+    # `signature` is read from the same `parsed` the hash check used, first
+    # value of a repeated key -- exactly the value that went into the
     # data-check-string above, so the flag is covered by the HMAC. An empty
     # `signature=` counts as absent: a real signature is never empty.
     has_signature = bool(parsed.get("signature", [""])[0])

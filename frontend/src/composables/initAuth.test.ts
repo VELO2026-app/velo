@@ -30,6 +30,7 @@ vi.mock('@/api/users')
 
 let platformName: 'telegram' | 'standalone' = 'standalone'
 let initData: string | null = null
+let platformInitError: Error | null = null
 vi.mock('@/platform', async () => {
   const { sessionTokenStore } = await import('@/platform/session-token')
   const carriers = {
@@ -40,7 +41,9 @@ vi.mock('@/platform', async () => {
     get platform() {
       return {
         name: platformName,
-        init: async () => {},
+        init: async () => {
+          if (platformInitError) throw platformInitError
+        },
         getStartParam: () => null,
         getInitData: () => initData,
         close: () => {},
@@ -80,6 +83,7 @@ async function run(): Promise<ReturnType<typeof useAuth>> {
 }
 
 beforeEach(() => {
+  platformInitError = null
   setActivePinia(createPinia())
   localStorage.clear()
   sessionStorage.clear()
@@ -119,6 +123,16 @@ describe('initAuth outside Telegram', () => {
     expect(auth.isAuthenticated.value).toBe(false)
     expect(auth.restoreUnreachable.value).toBe(true)
     expect(localStorage.getItem(SESSION_TOKEN_KEY)).toBe('kept_tok')
+  })
+
+  it('platform.init() throws: initAuth resolves ready with the "try again" screen, not a stuck splash', async () => {
+    platformInitError = new Error('sdk boot failed')
+
+    const auth = await run()
+
+    expect(auth.isReady.value).toBe(true)
+    expect(auth.restoreUnreachable.value).toBe(true)
+    expect(auth.isAuthenticated.value).toBe(false)
   })
 
   it('the return with a matching mark: signed in, address wiped, mark spent', async () => {
@@ -495,9 +509,7 @@ describe('startBrowserLogin', () => {
   })
 
   it('a refused start keeps no mark and goes nowhere', async () => {
-    vi.mocked(api.post).mockRejectedValue(
-      new ApiResponseError(404, 'not configured', 'login_not_configured'),
-    )
+    vi.mocked(api.post).mockRejectedValue(new ApiResponseError(404, 'not found', 'not_found'))
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
 
     await expect(useAuthStore().startBrowserLogin()).rejects.toBeInstanceOf(ApiResponseError)
@@ -510,7 +522,7 @@ describe('startBrowserLogin', () => {
 
 describe('loginNoticeFor', () => {
   it.each<[string, unknown, LoginNotice]>([
-    ['404', new ApiResponseError(404, 'x', 'login_not_configured'), 'not_configured'],
+    ['404', new ApiResponseError(404, 'x', 'not_found'), 'unavailable'],
     ['400 expired', new ApiResponseError(400, 'x', 'login_expired'), 'expired'],
     ['400 foreign', new ApiResponseError(400, 'x', 'login_foreign'), 'foreign'],
     ['400 telegram', new ApiResponseError(400, 'x', 'telegram_failed'), 'telegram_failed'],

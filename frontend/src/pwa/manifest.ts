@@ -14,7 +14,7 @@
 // suite runs BEFORE the build in the Docker image, so the only manifest a test
 // can see is this object -- src/pwa/manifest.test.ts pins its fields.
 //
-// Identity (tz-whitelabel F1, §2.3). The GOLDEN object below carries the
+// Identity (tz-whitelabel §2). The GOLDEN object below carries the
 // golden build's values. For a rebranded build vite.config.ts resolves the
 // instance env (loadEnv: .env files + process.env) and hands it to
 // pwaManifestWithPassport() -- two .env files produce two builds (§2.4)
@@ -24,14 +24,14 @@
 // module; and a dynamic env read here would inline the whole env into the
 // client bundle). description is Russian, matching lang: 'ru' (it used to be
 // English under a Russian lang); F2 lets a skin override identity via
-// brand.json materialization (§1).
+// its brand record (§1; FE-131: $extensions["velo-skin"] of the package).
 //
 // Colours: theme_color mirrors <meta name="theme-color"> in index.html;
 // background_color is the body background (--velo-bg-start in variables.css),
 // which is what the Android splash screen should match. tz-whitelabel §1:
-// the SINGLE source of the header colour will be skin/brand.json -- until F2
-// materializes it at build time, both consumers keep the golden default and
-// this file deliberately does not invent its own.
+// the SINGLE source of the header colour is the skin's brand record,
+// materialized at build time; without a skin both consumers keep the golden
+// default and this file deliberately does not invent its own.
 //
 // Icons: `any` and `maskable` are SEPARATE entries on purpose. A single
 // "any maskable" entry makes the launcher crop the transparent-cornered circle
@@ -70,23 +70,44 @@ export const pwaManifest: Partial<ManifestOptions> = {
   ],
 }
 
-/** Identity + colour overrides, in tz-whitelabel §1 priority order:
- *  the SKIN package (build-time, brand.json) wins over the instance ENV,
+/** Identity + colour overrides, in tz-whitelabel §1 priority order (FE-155:
+ *  `lang`/`description` are NOT here -- they are the instance part, chosen at
+ *  container start from the per-locale files below):
+ *  the SKIN package (build-time, its brand record) wins over the instance ENV,
  *  absent keys keep the golden values; an empty everything returns the
  *  golden object unchanged. theme_color/background_color come ONLY from the
- *  skin here (§1: brand.json is the single source; the env passport carries
+ *  skin here (§1: the brand record is the single source; the env passport carries
  *  no colours). */
 export function pwaManifestWithPassport(
   env: Record<string, string | undefined>,
   skin?: SkinPackage | null,
 ): Partial<ManifestOptions> {
   const brand = skin?.displayName ?? env.VITE_BRAND
-  const lang = env.VITE_DEFAULT_LOCALE
-  if (!brand && !lang && !skin) return pwaManifest
+  if (!brand && !skin) return pwaManifest
   return {
     ...pwaManifest,
     ...(brand ? { name: brand, short_name: skin?.shortName ?? brand } : {}),
-    ...(lang ? { lang } : {}),
     ...(skin ? { theme_color: skin.themeColor, background_color: skin.backgroundColor } : {}),
   }
+}
+
+// -- Instance part of the manifest (FE-155) -----------------------------------
+//
+// `lang` and `description` belong to the INSTANCE (defaultLocale of
+// /config.json), not to the build: with the primer machine one image serves
+// instances of different languages. The build therefore emits one manifest per
+// shipped locale (manifest.<locale>.webmanifest, same skin part: colours,
+// icons, name); the container entrypoint (nginx/40-manifest-locale.sh) copies
+// the one matching DEFAULT_LANGUAGE over manifest.webmanifest at start. No
+// DEFAULT_LANGUAGE (or an unknown one) leaves the golden manifest untouched.
+
+export const MANIFEST_LOCALES = ['ru', 'en', 'uk'] as const
+
+/** The manifest of `locale`: base with `lang` and the localized description. */
+export function manifestForLocale(
+  base: Record<string, unknown>,
+  locale: string,
+  description: string,
+): Record<string, unknown> {
+  return { ...base, lang: locale, description }
 }

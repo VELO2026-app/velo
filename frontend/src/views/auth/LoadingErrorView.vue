@@ -13,7 +13,7 @@
 -->
 
 <template>
-  <div class="auth-error velo-kbd-scroll">
+  <div class="auth-error velo-kbd-scroll" data-testid="screen-error">
     <div class="auth-error__card">
       <div class="auth-error__icon">⏱️</div>
 

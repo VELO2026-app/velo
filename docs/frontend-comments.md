@@ -52,7 +52,7 @@
 - `@param` / `@returns` — только когда семантика неочевидна из имени и типа.
   **Никогда не пересказывать имя** (`@param name - The name.` — шум).
 - `@deprecated` — всегда с заменой: `@deprecated Use loadSchools() instead; removed in FE-200`.
-- Кросс-ссылки — тегами: `{@link useCursorPagination}`, `@see tz-i18n §4.6`,
+- Кросс-ссылки — тегами: `{@link usePagination}`, `@see tz-i18n §4.6`,
   `@see FE-123`. Агент может грепнуть связанный символ и пойти по графу.
 - Ссылки на tz-доки, тикеты (`FE-123`/`BE-123`), пути и имена символов —
   сохранять дословно, это grep-якоря.
@@ -120,7 +120,7 @@
 ## 8. Примеры (правильно / неправильно)
 
 ```ts
-// ✅ Doc-комментарий (реальный стиль, src/stores/master.ts):
+// ✅ Doc-комментарий (реальный стиль, бывший src/stores/master.ts):
 /**
  * Fetch master profile from API.
  *

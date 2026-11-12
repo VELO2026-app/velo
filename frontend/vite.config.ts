@@ -18,21 +18,25 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
-import { cpSync, existsSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
-// tz-whitelabel F1 (§2.2): resolves the %VITE_*% passport placeholders in
+import { shellOnlyTransform } from './src/pwa/precache-shell'
+import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest-locales'
+// tz-whitelabel F1 (§2.2): resolves the %VELO_*% passport placeholders in
 // index.html (lang, brand title) to the golden defaults when the env var is
 // undefined -- CI builds without a .env. Lives in src/platform/passport-html
 // so the unit suite can pin it (import.meta.url here is not file:// under
 // vitest, so the test cannot import this config file).
 import { passportHtmlDefaults } from './src/platform/passport-html'
 // tz-whitelabel F2 (§3): the skin package (public/skin/, deploy-supplied).
-// No package = the golden build; the derivatives (skin-tokens.css cascade,
+// No package = the golden build; the derivatives (the skin-tokens cascade,
 // index.html theme-color/font, manifest identity/colours) materialize HERE,
 // at config time.
-import { materializedSkinTokens, readSkin } from './src/platform/skin'
-import { featureDefines } from './src/platform/features'
+import { readSkin } from './src/platform/skin'
+import { skinVirtualModules } from './src/platform/skin-virtual'
+import { ASSET_DIRS, IGNORED_FILES, MANDATORY_ASSETS } from './scripts/lib/skin-package.mjs'
+import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
 import type { Plugin } from 'vite'
 
 /** Modules of the Zoom Meeting SDK chunk: the SDK and its peer stack (its
@@ -40,43 +44,56 @@ import type { Plugin } from 'vite'
 const ZOOM_SDK_MODULE =
   /[\\/]node_modules[\\/](@zoom[\\/]meetingsdk|react|react-dom|react-redux|redux|redux-thunk|lodash|scheduler|use-sync-external-store|hoist-non-react-statics|react-is)[\\/]/
 
+/** FE-167: a core catalog file of en/uk (not master/admin/timezones). Plain
+ * `.json` ids only: a `?raw`-style import must not drag its importer into the
+ * locale chunk. The zone names repeat ZONE_CATALOGS (src/locales/index.ts);
+ * catalogs.test.ts pins the two together. */
+const LOCALE_CORE_CATALOG =
+  /[\\/]src[\\/]locales[\\/](en|uk)[\\/](?!master\.json|admin\.json|timezones\.json)[^\\/?]+\.json$/
+
 /** tz-whitelabel §3: apply the skin's ASSETS on the build -- the deploy puts
- * the package into public/skin/, and its files must WIN on the canonical
- * public paths (VeloLogo renders /icons/..., the mandala lives on /bg/...).
- * Runs at closeBundle: the golden files are already in dist/, this copies
- * the skin's over them. The package itself also ships inside dist/skin/
- * (publicDir copy) -- that copy is inert, the spilled paths are canonical.
+ * the package into public/skin/ (FE-131: the machine's format, assets under
+ * assets/), and its files must WIN on the canonical public paths (VeloLogo
+ * renders /icons/..., the mandala lives on /bg/...). Runs at closeBundle: the
+ * golden files are already in dist/, this copies the skin's over them. The
+ * publicDir copy also drops the whole package into dist/skin/; only its
+ * assets/fonts/ is meant to be served (virtual:skin-tokens.css @font-face points
+ * there), so everything else -- the manifest, the token sources, a checkout's
+ * .git -- is removed from dist/skin/ here (FE-131). The PWA precache ignores
+ * skin/** (workbox globIgnores below), so the removal cannot race it.
  * Dev servers see the golden assets (a dev stand with a skin is not a
  * supported flow; build with the skin instead). */
+/** OS litter of a local working copy never reaches dist. */
+function shippable(from: string): boolean {
+  return !IGNORED_FILES.has(basename(from))
+}
+
 function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
   return {
     name: 'velo-skin-asset-spill',
     apply: 'build',
     closeBundle() {
+      // dist/skin/ is pruned on EVERY build: a public/skin/ that is not a
+      // package (no manifest -- a bare `vite build` past the gate) must not
+      // ship its files, a checkout's .git included.
+      const shipped = join(distDir, 'skin')
+      rmSync(shipped, { recursive: true, force: true })
       if (!skinDir) return
-      const spills: Array<[string, string]> = [
-        // package root -> /icons/ (logos + PWA icons + favicon)
-        [join(skinDir, 'mandala-white.png'), 'icons/mandala-white.png'],
-        [join(skinDir, 'mandala-blue.png'), 'icons/mandala-blue.png'],
-        [join(skinDir, 'velo-word-filled.svg'), 'icons/velo-word-filled.svg'],
-        [join(skinDir, 'velo-word-blue.svg'), 'icons/velo-word-blue.svg'],
-        [join(skinDir, 'logo-white.svg'), 'icons/logo-white.svg'],
-        [join(skinDir, 'favicon.svg'), 'icons/favicon.svg'],
-        [join(skinDir, 'icon-192.png'), 'icons/icon-192.png'],
-        [join(skinDir, 'icon-512.png'), 'icons/icon-512.png'],
-        [join(skinDir, 'icon-maskable-512.png'), 'icons/icon-maskable-512.png'],
-        [join(skinDir, 'apple-touch-icon-180.png'), 'icons/apple-touch-icon-180.png'],
-      ]
-      for (const [from, to] of spills) {
-        if (existsSync(from)) {
-          cpSync(from, join(distDir, to), { force: true })
+      const assets = join(skinDir, 'assets')
+      // package assets/ -> /icons/ (logos + PWA icons + favicon)
+      for (const name of MANDATORY_ASSETS) {
+        const from = join(assets, name)
+        if (existsSync(from)) cpSync(from, join(distDir, 'icons', name), { force: true })
+      }
+      for (const dir of ASSET_DIRS) {
+        const src = join(assets, dir)
+        if (existsSync(src)) {
+          cpSync(src, join(distDir, dir), { force: true, recursive: true, filter: shippable })
         }
       }
-      for (const dir of ['bg', 'onboarding']) {
-        const src = join(skinDir, dir)
-        if (existsSync(src)) {
-          cpSync(src, join(distDir, dir), { force: true, recursive: true })
-        }
+      const fonts = join(assets, 'fonts')
+      if (existsSync(fonts)) {
+        cpSync(fonts, join(shipped, 'assets', 'fonts'), { recursive: true, filter: shippable })
       }
     },
   }
@@ -145,50 +162,74 @@ function preloadAppChunk(): Plugin {
 // to pwaManifestWithPassport(), so two .env files produce two builds (§2.4).
 // tz-whitelabel F2 (§3): the skin package (when the deploy ships one in
 // public/skin/) rides on top and materializes its derivatives.
+// FE-157 s2: the precache cut to the app shell (see workbox.globPatterns).
+// It reads the built files from the RESOLVED outDir (set by the plugin
+// below): a build into another outDir (bundle-report --modules) must not
+// read an earlier frontend/dist build.
+let builtDir = fileURLToPath(new URL('./dist/', import.meta.url))
+const shellOnly = shellOnlyTransform((url) => {
+  try {
+    return readFileSync(join(builtDir, url), 'utf8')
+  } catch {
+    return ''
+  }
+})
+/** Points the precache transform at this build's outDir. */
+const precacheReadsOutDir: Plugin = {
+  name: 'velo-precache-outdir',
+  apply: 'build',
+  configResolved(config) {
+    builtDir = resolve(config.root, config.build.outDir)
+  },
+}
+
 export default defineConfig(({ mode }) => {
   const frontendDir = fileURLToPath(new URL('.', import.meta.url))
   const instanceEnv = loadEnv(mode, frontendDir, 'VITE_')
-  // tz-whitelabel §4 (F3, variant "a"): VITE_FEATURES materializes into one
-  // boolean literal per module (featureDefines() in platform/features -- the
-  // same builder vitest.config pins to the golden all-on set). Route gates in
-  // router/index.ts read these __VELO_FEATURE_*__ defines DIRECTLY -- a
-  // literal `false` folds the gate, Rollup tree-shakes the module's dynamic
-  // imports, and its chunks are physically absent from dist/. An undefined
-  // VITE_FEATURES is the golden build.
-  const defines = featureDefines(instanceEnv.VITE_FEATURES)
+  // tz-whitelabel §4 (F3, variant "a") + FE-130: the module flags resolve from
+  // the MACHINE's channel first -- PRIMER_EDITION through editions.json at
+  // the repo root (the ONE "edition -> modules" table, shared with the
+  // backend, BE-182); an unknown edition fails the build (repo/passport
+  // desync must be red). VITE_FEATURES stays the local-dev channel; neither
+  // input -- the golden all-on set. The map carries BOTH consumption shapes:
+  // per-module literals (route gates read them directly -- a literal `false`
+  // folds the gate, Rollup tree-shakes the module's dynamic imports, and its
+  // chunks are physically absent from dist/) and the resolved flags as JSON
+  // for the runtime accessor, so featureEnabled() can never disagree with
+  // the cut chunks.
+  const editionEnv = loadEnv(mode, frontendDir, 'PRIMER_')
+  const editions = JSON.parse(
+    readFileSync(join(frontendDir, '..', 'editions.json'), 'utf8'),
+  ) as EditionTable
+  const defines = featureDefineMap(
+    resolveFeatureFlags(editionEnv.PRIMER_EDITION, instanceEnv.VITE_FEATURES, editions),
+  )
   const publicDir = join(frontendDir, 'public')
   const skin = readSkin(publicDir)
 
-  // §3 cascade, mechanically: the generated skin-tokens.css (the skin's
-  // token overrides, or the empty stub) is written BEFORE the bundle reads
-  // it -- app.ts imports it strictly after global.css.
-  writeFileSync(
-    join(frontendDir, 'src', 'styles', 'skin-tokens.css'),
-    materializedSkinTokens(publicDir, skin),
-  )
-  // The brand TEXT (tz-whitelabel §1, skin > env): locales/index.ts renders
-  // it through the @:brand link from every catalog string.
-  writeFileSync(
-    join(frontendDir, 'src', 'platform', 'skin-brand.generated.ts'),
-    `/* GENERATED -- the brand text of this build (tz-whitelabel §1/§3). */
-export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? null)}
-`,
-  )
-
   return {
     plugins: [
+      // §3 cascade + the brand text (tz-whitelabel §1): virtual modules, served
+      // from memory -- a build writes nothing into tracked files.
+      skinVirtualModules(publicDir, skin),
       passportHtmlDefaults(skin),
       skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist')),
       preloadAppChunk(),
+      perLocaleManifest(frontendDir),
+      precacheReadsOutDir,
       // tz-i18n §4.1: locale catalogs (src/locales/*.json) compile ahead of
-      // runtime -- the message compiler stays out of the bundle and the PWA
-      // precache. Include is scoped to the catalogs; other .json imports
-      // (package.json etc.) must not be treated as messages.
+      // runtime into message ASTs. Precompiling alone did NOT keep the
+      // message compiler out of the bundle: vue-i18n still shipped it for
+      // runtime strings (about 41 KB raw). dropMessageCompiler removes it
+      // (FE-157), so a plain string message now renders as raw text -- every
+      // message created at runtime is a message function instead
+      // (locales/index.ts: the brand, applyInstanceOverrides).
       VueI18nPlugin({
         // Only the catalogs themselves: the plugin requires `export default`
         // message objects, and locales/*.ts (the singleton, test helper) are
         // regular modules.
         include: [fileURLToPath(new URL('./src/locales/**/*.json', import.meta.url))],
+        dropMessageCompiler: true,
       }),
       vue(),
       VitePWA({
@@ -212,53 +253,140 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
         registerType: 'autoUpdate',
         // Include these file types in precache.
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-          // Don't precache source maps -- nor the Zoom Meeting SDK chunk
-          // (Standalone F4, manualChunks below): about 5 MB that only the
-              // practice screen loads, on the practice-live join/start buttons
-              // (i18n:user.screens.practiceLive.join, i18n:user.screens.practiceLive.start). Precached, every
-          // install and every update would download it for everyone.
-          globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
-          // Runtime caching gives the service worker a valid strategy even when
-          // the precache manifest is empty. Without this, workbox-build aborts
-          // with "Couldn't find configuration for either precaching or runtime
-          // caching" (reproduced on workbox 7.3.0 AND 7.4.0 -- not a version
-          // issue). network-first: try network, fall back to cache offline.
+          // FE-157 s2 (owner decision R1): the precache is the SHELL only --
+          // the entry, its CSS and static imports, the font, the PWA icons,
+          // the background photo and the splash logo. The app has no offline
+          // mode (every screen needs the API), so precaching all routes bought
+          // nothing and cost every install the whole build, and every deploy a
+          // background re-download of each changed chunk. Everything else is
+          // cached on first use by the /assets/ rule in runtimeCaching below.
+          //
+          // The globs are the candidates; shellOnly() below cuts assets/ down
+          // to the startup closure. Not listed on purpose: onboarding art,
+          // the blue logo variant, logo-white.svg (welcome screen
+          // only) -- lazy screens fetch them on demand. Zoom SDK, admin and
+          // master chunks are not in the startup closure, so they stay out
+          // too; the Zoom Meeting SDK (about 5 MB, practice screen only,
+          // Standalone F4) is also named in globIgnores as a belt.
+          //
+          // index.html is NOT precached, and navigations are not answered
+          // from the precache (navigateFallback: null): with the route chunks
+          // gone from the precache, a reload served the OLD index.html by the
+          // still-active worker would point at chunks the server no longer
+          // has, and platform/chunk-reload.ts (FE-106) would spend its reload
+          // on the old build. Navigations go network-first instead (the
+          // runtime rule below); there is no offline mode to lose.
+          globPatterns: [
+            'registerSW.js',
+            'fonts/*.woff2',
+            // The background photo paints the first frame of every screen;
+            // already-released skins ship it as PNG (platform/skin.ts).
+            'bg/background.{webp,png}',
+            // PWA icons, favicon, and the splash logo (LoadingView: spinning
+            // mandala ring under the filled wordmark).
+            'icons/{icon-192,icon-512,icon-maskable-512,apple-touch-icon-180,favicon,mandala-white,velo-word-filled}.*',
+            'assets/*.{js,css}',
+          ],
+          // Don't precache source maps -- nor the Zoom Meeting SDK chunk.
+          // skin/** (FE-131): the package copy in dist/skin/ is pruned to
+          // its fonts at closeBundle -- precaching it would race the prune;
+          // the fonts ride the runtime cache below.
+          globIgnores: ['**/*.map', '**/zoom-sdk-*.js', 'skin/**'],
+          manifestTransforms: [shellOnly],
+          navigateFallback: null,
+          // Runtime caching also gives the service worker a valid strategy
+          // when the precache manifest is empty (workbox-build otherwise
+          // aborts, reproduced on workbox 7.3.0 and 7.4.0).
           //
           // SAME ORIGIN ONLY (Standalone F4): the Zoom Meeting SDK pulls its
-          // scripts, styles and images from Zoom's CDN (source.zoom.us). Without
-          // this check they matched by destination and were cached here --
-          // opaque cross-origin responses, which the browser books against the
-          // storage quota far above their size, and a stale copy of Zoom's own
-          // files served back to Zoom's SDK. Zoom's files are Zoom's to cache.
+          // scripts, styles and images from Zoom's CDN (source.zoom.us).
+          // Cross-origin responses would be opaque -- booked against the
+          // storage quota far above their size -- and a stale copy of Zoom's
+          // own files would be served back to Zoom's SDK.
           runtimeCaching: [
             {
-              urlPattern: ({ request, sameOrigin }) =>
-                sameOrigin &&
-                (request.destination === 'document' ||
-                  request.destination === 'script' ||
-                  request.destination === 'style' ||
-                  request.destination === 'image' ||
-                  request.destination === 'font'),
+              // Navigations: always the CURRENT deploy's index.html when the
+              // network answers; the cached copy only when it does not.
+              urlPattern: ({ request, sameOrigin }) => sameOrigin && request.mode === 'navigate',
               handler: 'NetworkFirst',
               options: {
-                cacheName: 'velo-runtime',
-                expiration: { maxEntries: 200 },
+                cacheName: 'velo-pages',
+                expiration: { maxEntries: 10 },
+                cacheableResponse: { statuses: [200] },
+              },
+            },
+            {
+              // Hashed build output: a URL never changes its bytes, so
+              // CacheFirst is safe. The limits keep chunks of old builds from
+              // piling up: least-recently-used entries go first, and nothing
+              // lives past 30 days.
+              //
+              // After a deploy the server no longer has the old chunk names.
+              // A miss falls through to the network, which fails or answers
+              // 404; either way the import rejects and platform/chunk-reload.ts
+              // (FE-106) reloads -- the navigation goes network-first, so the
+              // reload lands on the new build. Only 200 responses that
+              // are not HTML are stored: an SPA fallback answers a missing
+              // chunk with index.html, and caching that under a .js URL would
+              // pin the failure.
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && url.pathname.startsWith('/assets/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'velo-assets',
+                expiration: { maxEntries: 150, maxAgeSeconds: 30 * 24 * 60 * 60 },
+                cacheableResponse: { statuses: [200] },
+                plugins: [
+                  {
+                    // Workbox expects a promise; the function is serialised into the SW as-is.
+                    // eslint-disable-next-line @typescript-eslint/require-await
+                    cacheWillUpdate: async ({ response }: { response: Response }) =>
+                      (response.headers.get('content-type') ?? '').includes('text/html')
+                        ? null
+                        : response,
+                  },
+                ],
+              },
+            },
+            {
+              // Skin fonts (FE-131): dist/skin/assets/fonts/, named by the
+              // skin package, not hashed -- a redeploy may change the bytes
+              // behind the same URL, so serve the cached copy and refresh it.
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && url.pathname.startsWith('/skin/assets/fonts/'),
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'velo-skin-fonts',
+                expiration: { maxEntries: 20 },
+                cacheableResponse: { statuses: [200] },
               },
             },
           ],
         },
       }),
+      // After VitePWA: its options are resolved in its own configResolved.
+      keepManifestOutOfPrecache(),
     ],
 
     // tz-whitelabel §4: the per-module literals from `defines` above.
     define: defines,
 
     resolve: {
-      alias: {
+      alias: [
+        // FE-117 batch A: @velo/ui resolves to the kit's SOURCES so the app
+        // bundles the SFCs exactly as it did before the move (chunk graph,
+        // cascade and CSS extraction unchanged -- package README §CSS).
+        // Exact-match regex, listed FIRST: the '@' prefix entry below would
+        // otherwise swallow '@velo/ui' into src/, and any deep subpath
+        // ('@velo/ui/...') stays unresolved on purpose -- the P8 boundary
+        // allows the barrel only.
+        {
+          find: /^@velo\/ui$/,
+          replacement: fileURLToPath(new URL('../packages/velo-ui/src/index.ts', import.meta.url)),
+        },
         // Makes `@/stores/auth` resolve to `src/stores/auth`.
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-      },
+        { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      ],
     },
 
     server: {
@@ -296,8 +424,17 @@ export const SKIN_BRAND: string | null = ${JSON.stringify(skin?.displayName ?? n
           // practice screen's dynamic import (platform/zoom-sdk.ts). The fixed
           // name is what lets the service worker keep it out of the precache
           // (workbox globIgnores above). Nothing else in this app uses React.
+          //
+          // FE-167: the CORE catalog files of en and uk (every domain file
+          // except the zone catalogs and timezones.json) go into ONE chunk
+          // per locale, 'locale-en' / 'locale-uk': a non-ru start made ~16
+          // requests, one per file. ru stays out (its core is eager in the
+          // app chunk); master/admin keep their own chunks, they load with
+          // their zone (locales/index.ts ZONE_CATALOGS).
           manualChunks(id: string): string | undefined {
-            return ZOOM_SDK_MODULE.test(id) ? 'zoom-sdk' : undefined
+            if (ZOOM_SDK_MODULE.test(id)) return 'zoom-sdk'
+            const core = LOCALE_CORE_CATALOG.exec(id)
+            return core ? `locale-${core[1]}` : undefined
           },
         },
       },

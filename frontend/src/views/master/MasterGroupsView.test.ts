@@ -284,6 +284,56 @@ describe('MasterGroupsView', () => {
       expect(chips).toEqual(['VIP', 'Утро'])
     })
 
+    it('FE-157: a slow answer for an older query never overwrites the newer one', async () => {
+      vi.useFakeTimers()
+      let resolveOld: (
+        v: Awaited<ReturnType<typeof groupsApi.searchGroupMemberships>>,
+      ) => void = () => {}
+      vi.mocked(groupsApi.searchGroupMemberships).mockReturnValueOnce(
+        new Promise((r) => {
+          resolveOld = r
+        }),
+      )
+      mount()
+      await flush()
+      await searchFor('Ст')
+
+      vi.mocked(groupsApi.searchGroupMemberships).mockResolvedValueOnce({
+        items: [searchItem({ name: 'Новый' })],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      })
+      await searchFor('Стар')
+
+      resolveOld({
+        items: [searchItem({ name: 'Старый' })],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      })
+      await flush()
+
+      expect(host?.textContent).toContain('Новый')
+      expect(host?.textContent).not.toContain('Старый')
+    })
+
+    it('FE-157: unmounting with a pending debounce timer never fires the search', async () => {
+      vi.useFakeTimers()
+      mount()
+      await flush()
+      const input = host?.querySelector<HTMLInputElement>('input')
+      input!.value = 'Ст'
+      input!.dispatchEvent(new Event('input'))
+      await nextTick()
+
+      app?.unmount()
+      app = null
+      vi.advanceTimersByTime(1000)
+
+      expect(groupsApi.searchGroupMemberships).not.toHaveBeenCalled()
+    })
+
     it('a single-membership person renders exactly one row', async () => {
       vi.useFakeTimers()
       vi.mocked(groupsApi.searchGroupMemberships).mockResolvedValue({

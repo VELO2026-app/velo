@@ -10,7 +10,7 @@
 // day removing, so the change gets a guard rather than a promise.
 //
 // Scope is deliberately W27's blast radius, not the whole store: the two actions
-// that reach refreshAfterDiaryMutation (submitCheckin, submitFeedback), what they
+// that reload the feed (submitCheckin, submitFeedback -- diaryFeedChanged), what they
 // refresh, and -- the point of the change -- what they must NOT touch.
 //
 // THE KEY TEST is «does not touch the bookings store». It is negative space, the
@@ -25,20 +25,28 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { setInfiniteQueryData, useQueryCache } from '@pinia/colada'
 import { useDiaryStore } from '@/stores/diary'
+import { keys } from '@/composables/queries/keys'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
 import type { CheckinRequest, FeedbackRequest, CreateExternalActivityRequest } from '@/api/types'
 
 vi.mock('@/api/diary')
 
-// The bookings store must stay UNREACHED. If someone re-adds the import and the
-// call, refreshBookings starts getting hit and the negative-space test below
-// fails -- which is the whole point of mocking a store the diary does not use.
-const refreshBookings = vi.fn()
-vi.mock('@/stores/bookings', () => ({
-  useBookingsStore: () => ({ refreshBookings }),
-}))
+// The Colada side of each submit (FE-166 step 1): which keys a row covers is
+// composables/queries/invalidation.test.ts's business; here, that the submit
+// names its row on success and only then.
+const invalidateAfter = vi.hoisted(() => vi.fn())
+vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter }))
+
+// The bookings store must stay UNREACHED. If someone re-adds the import and a
+// call, useBookingsStore starts getting hit and the negative-space tests below
+// fail -- which is the whole point of mocking a store the diary does not use.
+// (Since FE-166 the bookings store holds no server data at all: the booking
+// flags a submit flips come back through invalidateAfter.)
+const useBookingsStore = vi.hoisted(() => vi.fn())
+vi.mock('@/stores/bookings', () => ({ useBookingsStore }))
 
 const CHECKIN: CheckinRequest = { mood: 4, energy: 3, comment: null } as CheckinRequest
 const FEEDBACK: FeedbackRequest = { rating: 5, comment: null } as FeedbackRequest
@@ -59,7 +67,17 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({} as never)
   vi.mocked(diaryApi.listDiaryFeed).mockReset().mockResolvedValue(feedPage())
-  refreshBookings.mockReset()
+  vi.mocked(diaryApi.createReflection)
+    .mockReset()
+    .mockResolvedValue({} as never)
+  useBookingsStore.mockReset()
+  invalidateAfter.mockReset().mockResolvedValue(undefined)
+  // The diary feed as a visit left it (composables/queries/diary.ts): a
+  // submit that moves the timeline reloads its first page.
+  setInfiniteQueryData(useQueryCache(), keys.diary.feed({}), {
+    pages: [feedPage()],
+    pageParams: [null],
+  })
 })
 
 describe('diary store', () => {
@@ -71,6 +89,7 @@ describe('diary store', () => {
 
       expect(diaryApi.upsertCheckin).toHaveBeenCalledWith('p1', CHECKIN)
       expect(result).toEqual({ ok: true, error: '' })
+      expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'submitCheckin')
       // The check-in is projected onto the timeline, so the feed must re-read.
       expect(diaryApi.listDiaryFeed).toHaveBeenCalled()
     })
@@ -88,6 +107,7 @@ describe('diary store', () => {
       expect(result.ok).toBe(false)
       expect(result.error).toBe('Не удалось отправить check-in')
       expect(diaryApi.listDiaryFeed).not.toHaveBeenCalled()
+      expect(invalidateAfter).not.toHaveBeenCalled()
     })
 
     it('a feed-refresh failure does NOT fail the submit', async () => {
@@ -129,6 +149,7 @@ describe('diary store', () => {
 
       expect(diaryApi.upsertFeedback).toHaveBeenCalledWith('p1', FEEDBACK)
       expect(result).toEqual({ ok: true, error: '' })
+      expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'submitFeedback')
       expect(diaryApi.listDiaryFeed).toHaveBeenCalled()
     })
 
@@ -144,6 +165,48 @@ describe('diary store', () => {
 
       expect(result.ok).toBe(false)
       expect(result.error).toBe('Не удалось отправить feedback')
+    })
+  })
+
+  describe('submitReflection (FE-166 step 1)', () => {
+    it('on success: posts the reflection and marks the bookings stale', async () => {
+      const store = useDiaryStore()
+      const body = { comment: null } as Parameters<typeof store.submitReflection>[1]
+
+      const result = await store.submitReflection('p1', body)
+
+      expect(diaryApi.createReflection).toHaveBeenCalledWith('p1', body)
+      expect(result).toEqual({ ok: true, error: '' })
+      expect(invalidateAfter).toHaveBeenCalledWith(expect.anything(), 'submitReflection')
+    })
+
+    it('on failure: marks nothing stale', async () => {
+      vi.mocked(diaryApi.createReflection).mockRejectedValue(
+        new ApiResponseError(409, 'already', 'reflection_already_submitted'),
+      )
+      const store = useDiaryStore()
+
+      const result = await store.submitReflection('p1', { comment: null } as never)
+
+      expect(result.ok).toBe(false)
+      expect(invalidateAfter).not.toHaveBeenCalled()
+    })
+
+    it('an answer landing after the account changed marks nothing stale', async () => {
+      let resolve!: (v: unknown) => void
+      vi.mocked(diaryApi.createReflection).mockReturnValue(
+        new Promise((r) => {
+          resolve = r
+        }) as never,
+      )
+      const store = useDiaryStore()
+
+      const pending = store.submitReflection('p1', { comment: null } as never)
+      store.$reset()
+      resolve({})
+      await pending
+
+      expect(invalidateAfter).not.toHaveBeenCalled()
     })
   })
 
@@ -245,7 +308,30 @@ describe('diary store', () => {
 
       await store.submitExternalActivity(ACTIVITY)
 
-      expect(refreshBookings).not.toHaveBeenCalled()
+      expect(useBookingsStore).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('updateEntry (FE-182)', () => {
+    it('reloads the feed under the active filter, held off screen while the entry is open', async () => {
+      vi.mocked(diaryApi.updateDiaryEntry)
+        .mockReset()
+        .mockResolvedValue({ id: 'e1', content: 'edited' } as never)
+      const store = useDiaryStore()
+      store.setFeedFilters({ categories: ['dreams'] })
+      setInfiniteQueryData(useQueryCache(), keys.diary.feed({ categories: ['dreams'] }), {
+        pages: [feedPage()],
+        pageParams: [null],
+      })
+
+      await store.updateEntry('e1', { content: 'edited' })
+
+      expect(diaryApi.listDiaryFeed).toHaveBeenCalledWith({ categories: ['dreams'], limit: 40 })
+      expect(useQueryCache().get(keys.diary.feed({ categories: ['dreams'] }))).toBeDefined()
+      // ...and the entry screen reads the server's answer.
+      expect(useQueryCache().getQueryData(keys.diary.entry('e1'))).toMatchObject({
+        content: 'edited',
+      })
     })
   })
 
@@ -257,8 +343,9 @@ describe('diary store', () => {
     // themselves the moment the submit resolves, so every check-in and every
     // feedback issued TWO sequential GET /bookings.
     //
-    // Keeping bookings fresh is the view's job, which is the convention this
-    // codebase already follows. If either of these goes red, someone has put the
+    // Since FE-166 neither the store nor the view refreshes bookings by hand:
+    // the submit's invalidateAfter() makes the booking keys stale (asserted in
+    // the submit tests above). If either of these goes red, someone has put the
     // cycle back.
 
     it('submitCheckin does not refresh bookings', async () => {
@@ -266,7 +353,7 @@ describe('diary store', () => {
 
       await store.submitCheckin('p1', CHECKIN)
 
-      expect(refreshBookings).not.toHaveBeenCalled()
+      expect(useBookingsStore).not.toHaveBeenCalled()
     })
 
     it('submitFeedback does not refresh bookings', async () => {
@@ -274,7 +361,7 @@ describe('diary store', () => {
 
       await store.submitFeedback('p1', FEEDBACK)
 
-      expect(refreshBookings).not.toHaveBeenCalled()
+      expect(useBookingsStore).not.toHaveBeenCalled()
     })
 
     it('exactly ONE feed read per submit -- no duplicate refresh', async () => {

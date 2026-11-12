@@ -1,11 +1,4 @@
 {
-  "methodPicker": {
-    "custom": "Custom variant",
-    "directionPlaceholder": "Specify a direction…"
-  },
-  "masterCard": {
-    "profileUnavailable": "The master's profile is unavailable"
-  },
   "masterScreens": {
     "masterMessages": {
       "empty": {
@@ -227,13 +220,6 @@
       },
       "error": {
         "checkAudience": "Failed to check the audience"
-      },
-      "validation": {
-        "enterTitle": "Enter a title",
-        "chooseDirection": "Choose a direction",
-        "positiveNumber": "Enter a positive number or leave it empty",
-        "chooseGroup": "Choose at least one group",
-        "invalidDateTime": "Invalid date or time"
       },
       "plural": {
         "bookedNoun": "person booked | people booked"
@@ -697,6 +683,7 @@
       "audienceUnavailable": "The school is unavailable — nobody but you and those already booked can see the practice.",
       "copy": "Copy",
       "noReviewsYet": "No reviews yet",
+      "attendanceLoadFailed": "Could not load attendance",
       "stats": {
         "enrolled": "Booked",
         "capacity": "Spots"
@@ -769,7 +756,8 @@
       "newAria": "New promo code",
       "loadFailed": "Failed to load the promo codes",
       "discount": "Discount: {n}%",
-      "used": "Used: {label}"
+      "used": "Used: {label}",
+      "usedOf": "{used} of {max}"
     },
     "masterStudentProfile": {
       "addToGroup": "Add to a group",

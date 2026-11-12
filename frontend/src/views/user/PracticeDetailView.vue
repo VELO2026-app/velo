@@ -16,7 +16,7 @@
 
   F4.1: BookingPopup (purchase flow with promo).
   F5 review fix:
-    W-21: booked state derived from bookingsStore instead of local ref.
+    W-21: booked state derived from the bookings list instead of local ref.
   F9.1: Sticky footer action is now context-aware:
     - Not booked + available  -> book (i18n:user.screens.practiceDetail.cta.book)
                                  / book free
@@ -164,7 +164,11 @@
       <section v-if="showZoom" class="detail__section">
         <h3 class="detail__section-title">ZOOM</h3>
         <VCard class="detail__zoom-card">
-          {{ t('user.screens.practiceDetail.zoomAfterBooking') }}
+          {{
+            isOptionEnabled('zoom')
+              ? t('user.screens.practiceDetail.zoomAfterBooking')
+              : t('common.onlineUnavailable')
+          }}
         </VCard>
       </section>
 
@@ -186,7 +190,7 @@
            view (i18n:user.screens.practiceDetail.titleBooked, Figma 15) the
            practice is already paid for,
            so the price row is hidden. -->
-      <VCard v-if="!booked" class="detail__price-row" padding="none">
+      <VCard v-if="!booked && !bookingClosedByPayments" class="detail__price-row" padding="none">
         <span class="detail__price-label">{{ t('user.screens.practiceDetail.fields.price') }}</span>
         <span
           class="detail__price-value"
@@ -266,6 +270,12 @@
            longer be booked (backend enforces the same). A cancelled booking
            on a not-yet-started practice still may re-book. When hidden for a
            started practice we simply show no CTA. -->
+      <p
+        v-else-if="bookingClosedByPayments && !isMaster && !isPastBooking && !practiceStarted"
+        class="detail__booking-closed"
+      >
+        {{ t('user.screens.practiceDetail.state.bookingUnavailable') }}
+      </p>
       <VButton
         v-else-if="!booked && !isMaster && !isPastBooking && !practiceStarted"
         variant="primary"
@@ -309,10 +319,11 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
-import { useBookingsStore } from '@/stores/bookings'
+import { useMyBookings } from '@/composables/queries/bookings'
 import {
   VSkeleton,
   VEmptyState,
@@ -325,8 +336,10 @@ import {
 } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { useAuthStore } from '@/stores/auth'
-import { useSchoolsHubStore } from '@/stores/schoolsHub'
+import { useMySchools } from '@/composables/queries/schools'
 import { useToast } from '@/composables/useToast'
+import { useCancelBooking } from '@/composables/queries/bookings'
+import { extractApiError } from '@/composables/useApiError'
 import { useLoadingHold } from '@/composables/useLoadingHold'
 import BookingPopup from '@/components/shared/BookingPopup.vue'
 import PracticeSoldOut from '@/components/shared/PracticeSoldOut.vue'
@@ -339,6 +352,7 @@ import { DIFFICULTY_DOTS, DIFFICULTY_LABEL } from '@/utils/displayHelpers'
 import { hasEnded } from '@/utils/bookingStatus'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { platform } from '@/platform'
+import { isOptionEnabled } from '@/platform/instance'
 import { getBookingRecording } from '@/api/bookings'
 import type { BookingStatus, BookingWithPracticeResponse, PracticeDifficulty } from '@/api/types'
 
@@ -348,7 +362,8 @@ const store = usePracticesStore()
 const { showSkeleton: detailSkeleton, reveal: detailReveal } = useLoadingHold(
   () => store.selectedLoading,
 )
-const bookingsStore = useBookingsStore()
+const myBookings = useMyBookings()
+const bookings = myBookings.bookings
 
 const practice = computed(() => store.selected)
 
@@ -386,16 +401,16 @@ const isMaster = computed(() => !!practice.value && practice.value.master_id ===
 // Visibility mirrors the master hub: editable statuses only. The session must
 // already be in the master role -- roleGuard('master') on the /master shell
 // silently bounces any other role to /user/dashboard, and auth.switchRole is
-// a tester-only tool, never a navigation step. `schoolsHub.mine` (relation
-// per school) is warmed by both shells' ensureCurator(); a probe still in
+// a tester-only tool, never a navigation step. My schools (relation per
+// school) are the shells' own hub entry (useMySchools); a probe still in
 // flight keeps the kebab hidden and lets it appear once the data lands --
 // fail-closed, the same contract the schools tab (i18n:tabs.schools) follows.
 // =========================================================================
-const schoolsHub = useSchoolsHubStore()
+const mySchools = useMySchools()
 const isCuratorOfSchool = computed((): boolean => {
   const schoolId = practice.value?.school_id
   if (!schoolId) return false
-  return schoolsHub.mine.some((g) => g.relation === 'curator' && g.id === schoolId)
+  return mySchools.value.some((g) => g.relation === 'curator' && g.id === schoolId)
 })
 const isEditableStatus = computed((): boolean => {
   const status = practice.value?.status
@@ -413,14 +428,14 @@ function goEdit(): void {
   void router.push({ name: 'master-practice-edit', params: { id } })
 }
 
-// W-21: Derive booked state from bookingsStore (survives navigation).
+// W-21: Derive booked state from the bookings list (survives navigation).
 // Falls back to local flag for immediate feedback after purchase.
 const justPurchased = ref(false)
 
 const booked = computed(() => {
   if (justPurchased.value) return true
   if (!practice.value) return false
-  return bookingsStore.bookings.some(
+  return bookings.value.some(
     (b) =>
       b.practice_id === practice.value!.id &&
       (b.status === 'confirmed' || b.status === 'pending' || b.status === 'attended'),
@@ -436,7 +451,7 @@ import { isInCheckinWindow, isInFeedbackWindow } from '@/composables/usePractice
 
 // Reactive clock -- updated every 60s so window computeds re-evaluate
 // without requiring a page reload (C-1 fix).
-const now = ref(Date.now())
+const now = useNow(60_000)
 
 /**
  * Returns the booking matching this practice (any active-ish status).
@@ -444,7 +459,7 @@ const now = ref(Date.now())
  */
 const myBooking = computed(() => {
   if (!practice.value) return null
-  return bookingsStore.bookings.find((b) => b.practice_id === practice.value!.id) ?? null
+  return bookings.value.find((b) => b.practice_id === practice.value!.id) ?? null
 })
 
 // =========================================================================
@@ -466,7 +481,7 @@ const _ACTIVE_BOOKING_STATUSES = ['confirmed', 'pending', 'attended'] as const
 const myAnyBooking = computed((): BookingWithPracticeResponse | null => {
   if (!practice.value) return null
   const pid = practice.value.id
-  const mine = bookingsStore.bookings.filter((b) => b.practice_id === pid)
+  const mine = bookings.value.filter((b) => b.practice_id === pid)
   if (mine.length === 0) return null
   const active = mine.find((b) =>
     (_ACTIVE_BOOKING_STATUSES as readonly string[]).includes(b.status),
@@ -629,6 +644,9 @@ const _RECORDING_ELIGIBLE_STATUSES = ['confirmed', 'attended', 'no_show'] as con
 // worse than an absent one and the state is transient).
 const recordingUrl = ref<string | null>(null)
 
+// Bumps on every refreshRecording() call; a superseded answer is dropped.
+let recordingEpoch = 0
+
 /** Fetch the recording link once per (booking, "has it ended") change --
  * NOT a poll, NOT a retry loop. hasEnded() only gates WHETHER to call: a
  * premature call is free (the backend just 404s and nothing renders), so
@@ -638,6 +656,9 @@ const recordingUrl = ref<string | null>(null)
  * flag: the other half -- never re-derive "ended" for a correctness
  * decision -- still holds, and this design honours it by never trying). */
 async function refreshRecording(): Promise<void> {
+  // Every call (including one that bails out below) supersedes the previous
+  // one: a slow answer for an OLD booking must not surface its link.
+  const epoch = ++recordingEpoch
   recordingUrl.value = null
   const b = myAnyBooking.value
   if (!b) return
@@ -645,6 +666,7 @@ async function refreshRecording(): Promise<void> {
   if (!hasEnded(b, now.value)) return
   try {
     const res = await getBookingRecording(b.id)
+    if (epoch !== recordingEpoch) return
     // B27 (PROMPT №724): the generated type has url as optional
     // (string | null | undefined), the old hand-typed one required it
     // (string | null) -- ?? null keeps recordingUrl's own ref<string | null>
@@ -655,12 +677,12 @@ async function refreshRecording(): Promise<void> {
     // Network/auth/unexpected failure -- same rendering as 'error' above:
     // no button. Never a toast; this is a silent "don't show", not a
     // user-facing action that failed.
-    recordingUrl.value = null
+    if (epoch === recordingEpoch) recordingUrl.value = null
   }
 }
 
 // immediate: true matters beyond mount-time convenience -- it also covers
-// the case where bookingsStore already held this booking BEFORE this
+// the case where the bookings list already held this booking BEFORE this
 // component was created (e.g. arriving from a list that fetched it first).
 // Without it, the watch would never see a CHANGE to diff against and would
 // never fire at all for an already-cached booking.
@@ -703,6 +725,13 @@ const formattedPrice = computed(() => {
   if (!practice.value) return ''
   return formatMoney(practice.value.price_cents, practice.value.currency)
 })
+
+/** PM-22 p.2: payments are off and the practice is paid: a viewer who has
+ *  no booking cannot book it and sees no price. A viewer who already booked
+ *  (and paid) sees no change: `booked` keeps the view, check-in and cancel. */
+const bookingClosedByPayments = computed(
+  () => !isOptionEnabled('payments') && practice.value?.is_free === false && !booked.value,
+)
 
 const full = computed(() => {
   if (!practice.value) return false
@@ -751,9 +780,9 @@ function onPurchased(): void {
   const id = route.params.id as string
   // No fetchPractice here: BookingConfirmedView loads the practice itself,
   // and this detail view reloads via its own onMounted when the user returns
-  // (routes are not kept alive). Refreshing bookings keeps the global store
-  // in sync so the booked state is correct on return.
-  void bookingsStore.refreshBookings()
+  // (routes are not kept alive). The bookings list is refetched by the
+  // purchase itself (INVALIDATES.purchaseBooking), so the booked state is
+  // correct on return.
   // Frame 5: go to the dedicated booking-confirmed screen.
   void router.push({ name: 'user-booking-confirmed', params: { practiceId: id } })
 }
@@ -768,7 +797,7 @@ function onPurchased(): void {
 function onSoldOut(): void {
   soldOut.value = true
   void store.fetchPractice(route.params.id as string)
-  void bookingsStore.refreshBookings()
+  void myBookings.refetch()
 }
 
 /** The find-another-practice action (i18n:shared.soldOut.findOther) `->`
@@ -793,15 +822,26 @@ function onReflect(): void {
   void router.push({ name: 'user-reflection', params: { practiceId: practice.value.id } })
 }
 
+// FE-157 4F: a Pinia Colada mutation -- it refreshes every screen that showed
+// the booking (composables/queries/invalidation.ts), and resolves once the
+// bookings list above holds the cancelled status.
+const cancelBooking = useCancelBooking()
+
 async function onCancelBooking(): Promise<void> {
   if (!myBooking.value || cancelling.value) return
   cancelling.value = true
-  const result = await bookingsStore.cancelBooking(myBooking.value.id)
-  cancelling.value = false
-  if (!result.ok) {
-    // The store returns { ok, error } but does not raise a toast itself.
-    toast.error(result.error)
+  try {
+    await cancelBooking.mutateAsync({
+      bookingId: myBooking.value.id,
+      practiceId: myBooking.value.practice_id,
+    })
+  } catch (e) {
+    // The mutation rejects with the API error; the text is made here, where
+    // it is shown.
+    toast.error(extractApiError(e, t('storeErrors.bookings.cancel')))
     return
+  } finally {
+    cancelling.value = false
   }
   toast.success(t('user.screens.practiceDetail.cancelledToast'))
   justPurchased.value = false
@@ -811,23 +851,15 @@ async function onCancelBooking(): Promise<void> {
 // Lifecycle
 // =========================================================================
 
-// Reactive clock: re-evaluate window computeds every minute so the button
-// switches without requiring a page reload.
-let clockInterval: ReturnType<typeof setInterval> | null = null
-
 onMounted(() => {
   const id = route.params.id as string
   void store.openPractice(id)
-  // B30: refreshMyBookings() (not fetchMyBookings()) -- the list may already
+  // B30: always refetch on open, not only when stale -- the list may already
   // be cached from a screen visited earlier in the session, taken BEFORE this
-  // practice ended; fetchMyBookings() would then no-op and the attendance
-  // badge below (attendancePending) would never clear. refreshMyBookings()
-  // always re-fetches, without flashing the status row/Zoom card empty.
-  void bookingsStore.refreshMyBookings()
-  // Refresh window checks every 60s.
-  clockInterval = setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
+  // practice ended, and the attendance badge below (attendancePending) would
+  // never clear. The refetch keeps the status row / Zoom card on screen. A
+  // request already running (the first load) is that refetch.
+  if (!myBookings.fetching.value) void myBookings.refetch()
 })
 
 // F-01: Vue Router may reuse this component instance when navigating between
@@ -847,10 +879,6 @@ watch(
     }
   },
 )
-
-onUnmounted(() => {
-  if (clockInterval) clearInterval(clockInterval)
-})
 </script>
 
 <style scoped>
@@ -980,6 +1008,12 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.detail__booking-closed {
+  margin: 0;
+  text-align: center;
+  color: var(--velo-text-secondary, inherit);
 }
 
 .detail__price-row {

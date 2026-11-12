@@ -308,8 +308,8 @@ export const EXTERNAL_ACTIVITY_ICON: Component = IconCalendarStar
 
 /**
  * Outcome badge label for a practice_outcome card.
- * `attended -> "Done"` (teal), `no_show -> the missed-you label`
- * (i18n:display.outcome.no_show).
+ * `attended -> the attended label` (i18n:display.outcome.attended, teal),
+ * `no_show -> the missed-you label` (i18n:display.outcome.no_show).
  *
  * B30 (PROMPT №747): the no_show label was previously the "did not take
  * place" wording -- false, the practice DID happen, the person missed it.

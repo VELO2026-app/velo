@@ -8,7 +8,7 @@
 // state of its own beyond a 60s clock ref.
 //
 // PATTERN: hybrid, but NOT the skill's canonical Pattern C (store + local
-// FORM) -- this is store-backed DATA (bookings, via a REAL useBookingsStore)
+// FORM) -- this is query-backed DATA (bookings, via the REAL Colada cache, FE-166)
 // alongside a SECOND, independently-fetched local-ref DATA half (`stats`, a
 // direct getMyStats() call in the screen's own onMounted, .vue:230,422-428).
 // Both halves route through the SAME module, @/api/bookings, which is why one
@@ -22,11 +22,10 @@
 // genuine zero are indistinguishable on screen. Every test below that reads a
 // non-zero stat value is therefore proof the seam is read, not just defaulted.
 //
-// A THIRD trap, found only by reading stores/bookings.ts: this screen reads
-// TWO booking lists. `bookingsStore.upcoming` (getUpcomingBookings: confirmed
-// + not-ended, scheduled_at ASC) feeds the nearest-practice section, while
-// `bookingsStore.bookings` (getMyBookings: a created_at-ordered PAGINATED
-// page) used to feed the check-in banner as well -- which is exactly the
+// A THIRD trap: there are TWO booking lists. The upcoming query
+// (getUpcomingBookings: confirmed + not-ended, scheduled_at ASC) feeds the
+// nearest-practice section, while the bookings list (getMyBookings: a
+// created_at-ordered PAGINATED page) used to feed the check-in banner as well -- which is exactly the
 // FE-56 bug: the page's first in-window item could be a LATER practice, so
 // the banner offered check-in for the wrong session while a sooner one sat
 // in the nearest list. [FE-56] the banner now picks from the SAME upcoming
@@ -35,8 +34,8 @@
 // cannot lose a check-in to the list's top-3 cap), and the dashboard no
 // longer warms the page itself (every bookings-page screen fetches on its
 // own mount). The banner fixtures below ride the up_* seam, and the bk_*
-// DECOY is loaded INTO the store (fetchMyBookings over the mocked API -- the
-// state the pre-fix banner read from, as another screen would have left it)
+// DECOY is written INTO the bookings-list cache entry (the state the pre-fix
+// banner read from, as another screen would have left it)
 // so a wire-back to the page is a visibly wrong title/id, not an accidental
 // pass.
 //
@@ -113,6 +112,11 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
+import { persistSlot } from '@/composables/queries/persist'
+import { upcomingBookingsQuery } from '@/composables/queries/bookings'
 import UserDashboardView from '@/views/user/UserDashboardView.vue'
 import * as bookingsApi from '@/api/bookings'
 import * as notificationsApi from '@/api/notifications'
@@ -133,7 +137,7 @@ import type {
 // lives in @/api/client, untouched -- imported directly below, real class).
 vi.mock('@/api/bookings')
 
-// The floating-header bell reads the notifications store, which calls
+// The floating-header bell reads the unread badge query, which calls
 // listNotifications on this screen's mount -- seam it like every API boundary.
 vi.mock('@/api/notifications')
 
@@ -256,7 +260,7 @@ function stats(overrides: Partial<UserStatsResponse> = {}): UserStatsResponse {
   return { practices_attended: 7, hours_attended: 5.5, has_unread_messages: false, ...overrides }
 }
 
-// -- Nearest-practice fixtures (bookingsStore.upcoming, getUpcomingBookings) --
+// -- Nearest-practice fixtures (the upcoming query, getUpcomingBookings) --
 // UP_LIVE: started 10 min ago, still running (ends 12:50Z) -> isLiveNow TRUE
 // client-time, but backend practice.status stays 'scheduled' -- proves the
 // badge (client-time) and the click-routing (backend status) are genuinely
@@ -286,7 +290,7 @@ const UP_SOON = booking(
   },
 )
 
-// -- Check-in banner fixtures (bookingsStore.upcoming, getUpcomingBookings) --
+// -- Check-in banner fixtures (the upcoming query, getUpcomingBookings) --
 // [FE-56] the banner's candidates are the SAME live-aware nearest selection as
 // the list, so these ride the up_* seam too.
 // UP_CHECKIN: 2h out -- inside the 24h check-in window, the SOONEST of the pair.
@@ -329,30 +333,33 @@ let host: HTMLElement | null = null
 let pinia: Pinia
 
 // SAME pinia instance to setActivePinia AND app.use (SC-03) -- two instances
-// means the test drives one store while the screen renders another.
+// means the test drives one cache while the screen renders another.
+
+/** The Colada query cache of this test's pinia. */
+function cache() {
+  return useQueryCache(pinia)
+}
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(UserDashboardView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
-// COUNTED, not copied (velo-idiom §3, SC-08). Three INDEPENDENT chains fire in
-// onMounted (.vue:450-461), none awaited by the caller:
-//   fetchMyBookings()  -> pagination.refresh() -> reset() (sync) + await
-//                          loadMore() -> await fetchFn (1) -> re-render (1)
-//   fetchUpcoming()...
-//     .then(cb)         -> await getUpcomingBookings (1) -> fetchUpcoming's
-//                          own promise settles (1) -> the .then() continuation
-//                          runs, calling toast.error when it applies (1) ->
-//                          re-render (1)
-//   loadStats()          -> await getMyStats (1) -> re-render (1)
-// Deepest is the fetchUpcoming+.then() chain at ~4. Rounded well up (over-
-// counting is harmless, under-counting fails loudly -- velo-idiom §3).
+// COUNTED, not copied (velo-idiom §3, SC-08). INDEPENDENT chains fire at mount,
+// none awaited by the caller:
+//   the upcoming query + loadUpcoming's refresh().then(cb) -> await
+//     getUpcomingBookings -> Colada's fetch settles the entry (then/catch/
+//     finally) -> refresh's catch -> the .then() continuation, calling
+//     toast.error when it applies -> re-render. A rejection walks the longest
+//     path: ~12 microtasks, measured.
+//   the stats query -> await getMyStats -> entry -> re-render.
+// Rounded well up to 20 (over-counting is harmless, under-counting fails
+// loudly -- velo-idiom §3).
 async function flush(): Promise<void> {
-  for (let i = 0; i < 8; i++) await nextTick()
+  for (let i = 0; i < 20; i++) await nextTick()
 }
 
 // Intl can emit U+00A0/U+202F/U+2009 depending on ICU build (velo-idiom §11) --
@@ -427,6 +434,9 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
 
   pinia = createPinia()
+  // Colada on this pinia before any test touches the cache (as app.ts installs
+  // it before the first screen): the first-screen gate fills it pre-mount.
+  createApp({}).use(pinia).use(PiniaColada, coladaOptions)
   setActivePinia(pinia)
 
   vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(page([]))
@@ -870,18 +880,20 @@ describe('UserDashboardView', () => {
     })
 
     it('[FE-56] shows the FIRST nearest practice, not the first item of the paginated bookings page', async () => {
-      // The reported bug: the banner searched bookingsStore.bookings (a
+      // The reported bug: the banner searched the bookings list (a
       // created_at-ordered page, unsorted by scheduled_at), so with a LATER
       // in-window booking first on that page it offered check-in for the
       // wrong session while a sooner one sat in the nearest list. The decoy
-      // page is loaded INTO the store via the real fetchMyBookings over the
-      // mocked API (the dashboard itself no longer fetches it -- the state
-      // another screen would have left behind); the upcoming source
+      // page is written INTO the bookings-list cache entry (the dashboard
+      // itself never fetches it -- the state another screen would have left
+      // behind); the upcoming source
       // (deliberately unsorted input -- the selection sorts itself) holds
       // both a 16:00 and a sooner 14:00 booking. Only reading the same
       // upcoming pool as the list picks the 14:00 one.
-      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(page([BK_PAGE_FIRST]))
-      await useBookingsStore().fetchMyBookings()
+      cache().setQueryData(keys.bookings.list(), {
+        pages: [page([BK_PAGE_FIRST])],
+        pageParams: [0],
+      })
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_CHECKIN_LATER, UP_CHECKIN])
       mount()
       await flush()
@@ -1311,7 +1323,8 @@ describe('UserDashboardView -- no skeleton once the answer is known', () => {
 
   it('an empty list from the last session: zero skeletons on mount and while revalidating', async () => {
     setPersistOwner('user_1') // the signed-in account (auth._setUser in the app)
-    writePersisted('bookings.upcoming', [])
+    // The Colada slot of the upcoming query (composables/queries/persist.ts).
+    writePersisted(persistSlot(JSON.stringify(keys.bookings.upcoming())), [])
     flushPersisted()
     vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(new Promise(() => {}))
     mount()
@@ -1322,7 +1335,7 @@ describe('UserDashboardView -- no skeleton once the answer is known', () => {
     expect(emptyState()).not.toBeNull()
   })
 
-  it('a return to the tab (store already answered, empty): the refetch shows no skeleton', async () => {
+  it('a return to the tab (cache already answered, empty): the refetch shows no skeleton', async () => {
     mount()
     await flush()
     app?.unmount()
@@ -1333,7 +1346,7 @@ describe('UserDashboardView -- no skeleton once the answer is known', () => {
     mount()
     await flush()
     await vi.advanceTimersByTimeAsync(2000)
-    expect(useBookingsStore().upcomingLoading).toBe(true)
+    expect(cache().get(keys.bookings.upcoming())?.asyncStatus.value).toBe('loading')
     expect(skeletonCards()).toBe(0)
     expect(emptyState()).not.toBeNull()
   })
@@ -1360,16 +1373,17 @@ describe('UserDashboardView -- paints once', () => {
     }
   }
 
-  it('data already in the store (first-screen gate): no enter animation, no height glide', async () => {
+  it('data already in the cache (first-screen gate): no enter animation, no height glide', async () => {
     vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_SOON])
-    await useBookingsStore().fetchUpcoming()
+    // What the gate's warmer does (router/dataPrefetch.ts).
+    await cache().refresh(cache().ensure(upcomingBookingsQuery()))
     mount()
     await nextTick()
     expect(nearestBlocks().length).toBe(1)
     expect(host?.querySelector('[class*="-enter-"]')).toBeNull()
     expect(host?.querySelector('.v-loading-swap--sizing')).toBeNull()
     expect(host?.querySelector('.v-skeleton-practice')).toBeNull()
-    // and the mount does not ask again (fresh within UPCOMING_FRESH_MS)
+    // and the mount does not ask again (fresh within UPCOMING_STALE_MS)
     expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
   })
 
@@ -1380,16 +1394,16 @@ describe('UserDashboardView -- paints once', () => {
     await vi.advanceTimersByTimeAsync(1000)
     const card = nearestBlocks()[0]
     expect(card).toBeDefined()
-    const shown = useBookingsStore().upcoming
+    const shown = cache().getQueryData(keys.bookings.upcoming())
     const mutations = watchMutations()
     // A fresh copy of the same payload (new object refs, as from the network).
     vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue(
       JSON.parse(JSON.stringify([UP_SOON])) as BookingWithPracticeResponse[],
     )
-    await useBookingsStore().fetchUpcoming()
+    await cache().invalidateQueries({ key: keys.bookings.upcoming() })
     await flush()
     await vi.advanceTimersByTimeAsync(1000)
-    expect(useBookingsStore().upcoming).toBe(shown) // same reference kept
+    expect(cache().getQueryData(keys.bookings.upcoming())).toBe(shown) // same reference kept
     expect(nearestBlocks()[0]).toBe(card)
     expect(mutations.count()).toBe(0)
     mutations.stop()
@@ -1402,7 +1416,7 @@ describe('UserDashboardView -- paints once', () => {
     vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([
       booking('up_soon', { has_checkin: true }, { ...UP_SOON.practice, title: 'Новое название' }),
     ])
-    await useBookingsStore().fetchUpcoming()
+    await cache().invalidateQueries({ key: keys.bookings.upcoming() })
     await flush()
     expect(titleOf(nearestBlocks()[0]!)).toBe('Новое название')
   })

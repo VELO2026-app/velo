@@ -2,11 +2,14 @@
 // VELO Frontend -- Instance Passport Seams (tz-whitelabel §1; tz-i18n 0.5)
 // =============================================================================
 //
-// The ONE place that reads instance-level VITE_* values off the build.
-// Every seam carries today's behavior as its default, so a build without a
-// passport is indistinguishable from the app as it ships now (the golden
-// build). tz-whitelabel F1: all seven former import.meta.env read sites
-// (5x VITE_API_BASE_URL, 2x VITE_TELEGRAM_BOT_URL) go through INSTANCE now.
+// The ONE place that reads instance-level values. Under the deploy machine
+// (FE-129) the container's nginx renders /config.json from its environment
+// at start, and launch.ts applies it here BEFORE the app module graph is
+// imported; every seam reads the runtime value first, then the build-time
+// VITE_* variables (local dev builds), then the golden defaults. A build
+// with neither input is indistinguishable from the app as it ships now (the
+// golden build). tz-whitelabel F1: all former direct import.meta.env read
+// sites go through INSTANCE now.
 //
 // The locale set is the product's languages -- the same set as the backend's
 // (backend core/i18n.py SUPPORTED_LANGUAGES: en, ru, uk; BE-188), and exactly
@@ -35,9 +38,120 @@ function parseLocales(value: string | undefined): Locale[] {
   return known.length > 0 ? known : ['ru']
 }
 
+// =============================================================================
+// Runtime instance config (FE-129). The deploy machine renders /config.json
+// from the container environment at start (nginx/config.json.template); the
+// env names are primer.yaml's -- API_BASE_URL, TELEGRAM_BOT_URL,
+// DEFAULT_LANGUAGE, LANGUAGES. The brand is NOT a start value: it is a skin
+// property (the skin brand record's displayName, materialized at build --
+// owner 09.11).
+// launch.ts applies it before `import('./app')`,
+// because i18n and the manifest read the snapshot fields below at module
+// evaluation. An empty/absent value falls through to the build-time VITE_*
+// variable and then to the golden default.
+// =============================================================================
+
+/** The /config.json the container's nginx renders at start (FE-129). */
+export interface InstanceConfig {
+  apiBaseUrl?: string
+  telegramBotUrl?: string
+  defaultLocale?: string
+  /** Comma-separated locale codes, as the machine ships them (guide §2.5). */
+  locales?: string
+  /** Instance options (FE-151): the value of each option is 'true' or
+   *  'false', from the variable OPTION_NAME of primer.yaml. */
+  options?: Partial<Record<string, string>>
+}
+
+/**
+ * The API base as the app uses it. Two domains (owner 09.11, primer.yaml
+ * `domains: [frontend, api]`): the passport ships `domains.api` as a bare
+ * HOST, so a value without a scheme gets `https://`; a trailing slash is
+ * dropped (paths are joined as `${base}/api/...`). Empty stays empty -- the
+ * same-origin path that local dev and the interim stand still use.
+ *
+ * @param value - the raw API_BASE_URL / VITE_API_BASE_URL value
+ * @returns the absolute origin, or '' for same-origin
+ */
+export function normalizeApiBase(value: string | undefined): string {
+  const raw = (value ?? '').trim()
+  if (raw === '') return ''
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+  return withScheme.replace(/\/+$/, '')
+}
+
+let runtimeConfig: InstanceConfig = {}
+
+/** envsubst substitutes only variables that EXIST in the environment: an
+ * unset one leaves its `${NAME}` placeholder in /config.json verbatim. A
+ * placeholder is not a value -- treat it as empty (golden fallback). */
+const UNRENDERED = /^\$\{[A-Z0-9_]+\}$/
+
+/** Apply the runtime /config.json. Called from launch.ts, pre-app-import. */
+export function applyInstanceConfig(config: InstanceConfig | null | undefined): void {
+  const clean: InstanceConfig = {}
+  for (const [key, value] of Object.entries(config ?? {})) {
+    if (key === 'options') continue
+    if (typeof value === 'string' && !UNRENDERED.test(value.trim())) {
+      ;(clean as Record<string, string>)[key] = value
+    }
+  }
+  // The options block (FE-151) is kept as a block even when every value in
+  // it is a placeholder: its PRESENCE says "the instance decides", and an
+  // option it does not turn on is off (isOptionEnabled).
+  const options: unknown = config?.options
+  if (options !== null && typeof options === 'object' && !Array.isArray(options)) {
+    clean.options = {}
+    for (const [name, value] of Object.entries(options as Record<string, unknown>)) {
+      if (typeof value === 'string' && !UNRENDERED.test(value.trim())) clean.options[name] = value
+    }
+  }
+  runtimeConfig = clean
+}
+
+// =============================================================================
+// Instance options (FE-151; protocol 5.2.3, contract 3 rules 36-43). An
+// option is a capability the INSTANCE turns on across editions; the flag
+// arrives at container start (OPTION_<NAME> -> /config.json `options`), never
+// at build: one image serves instances with and without it, so the code of
+// every option is always in the bundle (variant A, owner 09.11) and only its
+// VISIBILITY follows the flag.
+//
+//   - The value is exactly 'true' or 'false'. Anything else -- empty, an
+//     unrendered ${OPTION_X} (the variable is unset), a typo -- is OFF.
+//   - The machine hands the variables of a switched-off option the literal
+//     `primer-switched-off`. The code never reads that literal (the brand
+//     grep gate pins its absence from src/); an option is known ONLY by its
+//     flag.
+//   - No `options` block at all (local dev: the vite server has no
+//     /config.json; the unit suite) is the golden build: every option on,
+//     the app as it shipped before options existed.
+// =============================================================================
+
+/** The instance options of primer.yaml (`options:`), in its order. */
+export const OPTION_NAMES = ['payments', 'schools', 'mcp', 'zoom', 'telegram', 'llm'] as const
+
+/** One instance option. */
+export type OptionName = (typeof OPTION_NAMES)[number]
+
+/**
+ * Whether the instance turns the option on.
+ *
+ * @param name - the option, as primer.yaml names it
+ * @returns true only for the literal 'true' from /config.json; an unknown
+ *   option is off; without an `options` block (no runtime config) -- on
+ */
+export function isOptionEnabled(name: OptionName): boolean {
+  if (!(OPTION_NAMES as readonly string[]).includes(name)) return false
+  const options = runtimeConfig.options
+  if (options === undefined) return true
+  return options[name]?.trim() === 'true'
+}
+
 /**
  * Enabled modules of this instance: absent/empty/'full' means everything;
- * otherwise a comma list of module namespaces ('payments', 'ai', ...).
+ * otherwise a comma list of module namespaces ('ai'; payments is an
+ * instance option since FE-151, see isOptionEnabled).
  * Unknown names simply never match a module id (F3 consumes this,
  * tz-whitelabel §4).
  */
@@ -55,21 +169,44 @@ export function hasFeature(features: FeatureSet, name: string): boolean {
   return features.all || features.enabled.has(name)
 }
 
-/** Instance passport as seen by this build. Defaults = the golden build. */
+/** Instance values as seen by this build. Defaults = the golden build. */
 export const INSTANCE = {
-  // tz-whitelabel §1 URL seams. Getters, not a snapshot: production replaces
-  // import.meta.env statically either way, and the live read keeps the exact
-  // per-mount semantics the former inline reads had (views read them in
-  // setup; vi.stubEnv in tests keeps working unchanged).
-  /** tz-whitelabel §1: empty = same-origin (Nginx proxies /api/* in prod). */
+  // tz-whitelabel §1 URL seams. Getters, not a snapshot: the live read keeps
+  // the exact per-mount semantics the former inline reads had (views read
+  // them in setup; vi.stubEnv in tests keeps working unchanged) -- and the
+  // runtime config wins at access time for free.
+  /** The API origin. Under the machine the API lives on its own domain
+   * (`domains.api`, a bare host that gets `https://`); empty = same-origin, the
+   * local-dev / interim path through this container's /api proxy. */
   get apiBaseUrl(): string {
-    return import.meta.env.VITE_API_BASE_URL || ''
+    return normalizeApiBase(runtimeConfig.apiBaseUrl || import.meta.env.VITE_API_BASE_URL)
   },
   get telegramBotUrl(): string {
-    return import.meta.env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot'
+    return (
+      runtimeConfig.telegramBotUrl ||
+      import.meta.env.VITE_TELEGRAM_BOT_URL ||
+      'https://telegram.me/veloappbot'
+    )
   },
-  brand: import.meta.env.VITE_BRAND ?? 'VELO',
-  defaultLocale: parseLocale(import.meta.env.VITE_DEFAULT_LOCALE, 'ru'),
-  locales: parseLocales(import.meta.env.VITE_LOCALES),
+  // Identity fields are getters TOO -- not snapshots. launch.ts statically
+  // imports this module, so a snapshot taken at evaluation would be computed
+  // BEFORE prepareHost() applies the runtime config and would never see it.
+  // Live reads are correct: the consumers (i18n's catalog setup, the manifest
+  // is build-time) evaluate later, inside the dynamically imported app
+  // graph -- after the config is in.
+  // The brand is a skin property (owner 09.11): never read from the runtime
+  // config -- only the build env the skin materializes, then the golden name.
+  get brand(): string {
+    return import.meta.env.VITE_BRAND || 'VELO'
+  },
+  get defaultLocale(): Locale {
+    return parseLocale(runtimeConfig.defaultLocale || import.meta.env.VITE_DEFAULT_LOCALE, 'ru')
+  },
+  get locales(): Locale[] {
+    return parseLocales(runtimeConfig.locales || import.meta.env.VITE_LOCALES)
+  },
+  // Feature composition is a PROJECT property (the edition), not an instance
+  // value: it stays build-time -- PRIMER_EDITION is the machine's channel,
+  // VITE_FEATURES the local-dev one (FE-130, FE-149 §3).
   features: parseFeatures(import.meta.env.VITE_FEATURES),
 } as const

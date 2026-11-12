@@ -8,10 +8,10 @@
 //
 // PATTERN C (hybrid + local FORM), and genuinely three layers this time, not
 // two -- classified by reading every import, not guessing:
-//   - STORE HALF: authStore.user (.vue:234, real useAuthStore) and
-//     masterStore.profile (.vue:232,247,256, real useMasterStore, master
-//     role only). Both real stores; their API seams (@/api/users' updateMe,
-//     @/api/masters' getMyMasterProfile) are mocked.
+//   - STORE HALF: authStore.user (real useAuthStore) and the master profile
+//     (real Colada query, composables/queries/master.ts, master role only).
+//     Their API seams (@/api/users' updateMe, @/api/masters'
+//     getMyMasterProfile) are mocked.
 //   - DIRECT-CALL HALF: submitMethodChangeRequest / updateMasterLanguages
 //     (.vue:218,290,336) called straight from the screen, bypassing any
 //     store action -- a THIRD seam, @/api/masters again (same module as
@@ -93,6 +93,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import EditProfileView from '@/views/user/EditProfileView.vue'
 import * as mastersApi from '@/api/masters'
 import * as usersApi from '@/api/users'
@@ -197,19 +199,20 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(EditProfileView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
-// COUNTED, not copied (velo-idiom §3). For a master, onMounted fires
-// Promise.all([fetchMyProfile(), primeMethodTaxonomyCatalog()]) (2 parallel
-// chains, ~2 deep each) AND the child MethodTaxonomyPicker mounts its OWN
-// getActiveTaxonomy() fetch independently (another ~2). None awaited by the
-// caller. Generous, matching MasterDashboardView's precedent for a similarly
-// multi-seam screen (10) -- over-counting is harmless, under fails loudly.
+// COUNTED, not copied (velo-idiom §3). For a master, the profile query loads
+// on mount (Colada) and onMounted primes the taxonomy catalog in parallel,
+// AND the child MethodTaxonomyPicker mounts its OWN getActiveTaxonomy() fetch
+// independently. None awaited by the caller. A refetch through the Colada
+// cache after a submit takes a few more microtasks than a bare call, so the
+// flush ends on a macrotask -- over-counting is harmless, under fails loudly.
 async function flush(): Promise<void> {
   for (let i = 0; i < 10; i++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function norm(s: string | null | undefined): string {
@@ -360,7 +363,7 @@ describe('EditProfileView', () => {
       expect(mastersApi.getMyMasterProfile).not.toHaveBeenCalled()
     })
 
-    it('the delete modal has no balance section (masterStore.profile is null)', async () => {
+    it('the delete modal has no balance section (no master profile)', async () => {
       mount()
       await flush()
 

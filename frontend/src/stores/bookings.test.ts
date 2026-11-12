@@ -1,233 +1,38 @@
 // =============================================================================
-// VELO Frontend -- stores/bookings.ts Unit Tests (T1 stage 2 -- harness + stores)
+// VELO Frontend -- Bookings store: client state only (FE-166 step 3)
 // =============================================================================
 //
-// Covers the money-adjacent actions: cancelBooking (backend refund by
-// deadline, plus its diary.refreshFeed() side effect), joinBooking,
-// skipCheckin. Mocked at the wrapper layer (@/api/bookings) --
-// the store imports named functions directly, so this is the correct seam
-// (no MSW needed). @/stores/diary is mocked wholesale since cancelBooking
-// pulls in useDiaryStore() lazily as a side effect, not a dependency under
-// test here.
+// The bookings themselves (list, upcoming, join, skip check-in) are Colada
+// queries and mutations since FE-166 step 3 -- composables/queries/
+// bookings.test.ts covers them. What is left here is the session-only skip of
+// a check-in banner.
 // =============================================================================
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { setActivePinia, createPinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 import { useBookingsStore } from '@/stores/bookings'
-import { ApiResponseError } from '@/api/client'
-import * as bookingsApi from '@/api/bookings'
-import type { BookingResponse } from '@/api/types'
 
-vi.mock('@/api/bookings')
-
-const refreshFeed = vi.fn()
-vi.mock('@/stores/diary', () => ({
-  useDiaryStore: () => ({ refreshFeed }),
-}))
-
-function emptyPage() {
-  return { items: [], total: 0, limit: 20, offset: 0 }
-}
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 describe('useBookingsStore', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.mocked(bookingsApi.getMyBookings).mockReset().mockResolvedValue(emptyPage())
-    vi.mocked(bookingsApi.cancelBooking).mockReset()
-    vi.mocked(bookingsApi.joinBooking).mockReset()
-    vi.mocked(bookingsApi.skipCheckin).mockReset()
-    refreshFeed.mockReset()
+  it('remembers each skipped check-in once', () => {
+    const store = useBookingsStore()
+
+    store.dismissCheckin('p1')
+    store.dismissCheckin('p1')
+    store.dismissCheckin('p2')
+
+    expect(store.dismissedCheckins).toEqual(['p1', 'p2'])
   })
 
-  describe('fetchUpcoming', () => {
-    it('a failed refresh keeps the list already on screen and records the error', async () => {
-      const store = useBookingsStore()
-      const shown = [{ id: 'b1' }] as unknown as Awaited<
-        ReturnType<typeof bookingsApi.getUpcomingBookings>
-      >
-      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce(shown)
-      await store.fetchUpcoming()
-      expect(store.upcoming).toEqual(shown)
+  it('$reset forgets them (a different account starts fresh)', () => {
+    const store = useBookingsStore()
+    store.dismissCheckin('p1')
 
-      vi.mocked(bookingsApi.getUpcomingBookings).mockRejectedValueOnce(new Error('offline'))
-      await store.fetchUpcoming()
+    store.$reset()
 
-      expect(store.upcoming).toEqual(shown)
-      expect(store.upcomingError).not.toBe('')
-      expect(store.upcomingLoading).toBe(false)
-    })
-  })
-
-  describe('fetchUpcoming -- an answer is known', () => {
-    it('an EMPTY answer counts as loaded (the screen shows no skeleton for it)', async () => {
-      const store = useBookingsStore()
-      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce([])
-      expect(store.upcomingLoaded).toBe(false)
-      await store.fetchUpcoming()
-      expect(store.upcoming).toEqual([])
-      expect(store.upcomingLoaded).toBe(true)
-    })
-
-    it('concurrent callers (prefetch, finger-down, mount) share one request', async () => {
-      const store = useBookingsStore()
-      vi.mocked(bookingsApi.getUpcomingBookings).mockClear().mockResolvedValue([])
-      await Promise.all([store.fetchUpcoming(), store.fetchUpcoming(), store.fetchUpcoming()])
-      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
-      await store.fetchUpcoming()
-      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(2)
-    })
-  })
-
-  describe('$reset (account boundary, W-1)', () => {
-    const shown = [{ id: 'b1' }] as unknown as Awaited<
-      ReturnType<typeof bookingsApi.getUpcomingBookings>
-    >
-
-    it('takes the freshness marker with it: the next ask fetches again', async () => {
-      const store = useBookingsStore()
-      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce(shown)
-      await store.fetchUpcoming()
-      expect(store.upcoming).toEqual(shown)
-
-      // Within the freshness window a re-ask is skipped (the first-screen
-      // gate already loaded it)...
-      vi.mocked(bookingsApi.getUpcomingBookings).mockClear()
-      await store.fetchUpcoming({ maxAgeMs: 10_000 })
-      expect(bookingsApi.getUpcomingBookings).not.toHaveBeenCalled()
-
-      // ...and the reset must take that skip with it, or the NEXT account's
-      // first dashboard mount would be served THIS account's list.
-      store.$reset()
-      expect(store.upcoming).toEqual([])
-      expect(store.upcomingLoaded).toBe(false)
-
-      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValueOnce([])
-      await store.fetchUpcoming({ maxAgeMs: 10_000 })
-      expect(bookingsApi.getUpcomingBookings).toHaveBeenCalledTimes(1)
-    })
-
-    it('an in-flight answer landing after $reset does not repopulate the list', async () => {
-      let resolveFetch!: (
-        value: Awaited<ReturnType<typeof bookingsApi.getUpcomingBookings>>,
-      ) => void
-      vi.mocked(bookingsApi.getUpcomingBookings).mockReturnValue(
-        new Promise<Awaited<ReturnType<typeof bookingsApi.getUpcomingBookings>>>((resolve) => {
-          resolveFetch = resolve
-        }),
-      )
-      const store = useBookingsStore()
-      const pending = store.fetchUpcoming()
-      store.$reset()
-      resolveFetch(shown)
-      await pending
-      expect(store.upcoming).toEqual([])
-      expect(store.upcomingLoaded).toBe(false)
-    })
-  })
-
-  describe('cancelBooking', () => {
-    it('on success: calls the API, refreshes the list, and fires diary.refreshFeed', async () => {
-      vi.mocked(bookingsApi.cancelBooking).mockResolvedValue(undefined)
-      const store = useBookingsStore()
-
-      const result = await store.cancelBooking('booking_1')
-
-      expect(result).toEqual({ ok: true, error: '' })
-      expect(bookingsApi.cancelBooking).toHaveBeenCalledWith('booking_1')
-      expect(bookingsApi.getMyBookings).toHaveBeenCalled()
-      expect(refreshFeed).toHaveBeenCalledTimes(1)
-    })
-
-    it('on failure: falls back to the generic message (unmapped code) and does NOT fire diary.refreshFeed', async () => {
-      // B8 (PROMPT №747): 'cancel_window_closed' is not a real backend code
-      // and extractApiError no longer reads e.detail -- an unmapped code
-      // lands on the call site's own fallback (bookings.ts:185).
-      vi.mocked(bookingsApi.cancelBooking).mockRejectedValue(
-        new ApiResponseError(400, 'Too close to start time', 'cancel_window_closed'),
-      )
-      const store = useBookingsStore()
-
-      const result = await store.cancelBooking('booking_1')
-
-      expect(result).toEqual({ ok: false, error: 'Не удалось отменить бронирование' })
-      expect(refreshFeed).not.toHaveBeenCalled()
-    })
-
-    it('on failure with a non-ApiResponseError: falls back to the generic message', async () => {
-      vi.mocked(bookingsApi.cancelBooking).mockRejectedValue(new Error('boom'))
-      const store = useBookingsStore()
-
-      const result = await store.cancelBooking('booking_1')
-
-      expect(result).toEqual({ ok: false, error: 'Не удалось отменить бронирование' })
-    })
-  })
-
-  describe('joinBooking', () => {
-    it('on success: calls the API and refreshes the list', async () => {
-      vi.mocked(bookingsApi.joinBooking).mockResolvedValue({
-        id: 'booking_1',
-      } as BookingResponse)
-      const store = useBookingsStore()
-
-      const result = await store.joinBooking('booking_1')
-
-      expect(result).toEqual({ ok: true, error: '' })
-      expect(bookingsApi.joinBooking).toHaveBeenCalledWith('booking_1')
-      expect(bookingsApi.getMyBookings).toHaveBeenCalled()
-    })
-
-    it('on failure (e.g. 409 already joined): falls back to the generic message and carries the machine status (FE-78.2)', async () => {
-      // B8 (PROMPT №747): 'already_joined' is not a real backend code --
-      // unmapped, lands on the call site's own fallback (bookings.ts:202).
-      // FE-78.2: the result also carries the HTTP status, so a caller can
-      // branch on it (the join endpoint's only 409 IS "already joined")
-      // instead of matching the human-readable text.
-      vi.mocked(bookingsApi.joinBooking).mockRejectedValue(
-        new ApiResponseError(409, 'Already joined', 'already_joined'),
-      )
-      const store = useBookingsStore()
-
-      const result = await store.joinBooking('booking_1')
-
-      expect(result).toEqual({
-        ok: false,
-        error: 'Не удалось войти в практику',
-        status: 409,
-      })
-    })
-  })
-
-  // FE-49 (product decision 2026-11-02): the leave button is removed from
-  // the UI wholesale, the store action leaveBooking is deleted;
-  // api/bookings.ts::leaveBooking stays with a comment (the backend
-  // endpoint is alive, the UI no longer calls it).
-
-  describe('skipCheckin', () => {
-    it('on success: calls the API and refreshes the list', async () => {
-      vi.mocked(bookingsApi.skipCheckin).mockResolvedValue({
-        id: 'booking_1',
-      } as BookingResponse)
-      const store = useBookingsStore()
-
-      const result = await store.skipCheckin('booking_1')
-
-      expect(result).toEqual({ ok: true, error: '' })
-      expect(bookingsApi.skipCheckin).toHaveBeenCalledWith('booking_1')
-    })
-
-    it('on failure: returns the mapped table phrase for a real backend code', async () => {
-      // B8 (PROMPT №747): 'not_found' IS a real backend code (VeloError base
-      // default, errorMessages.ts) -- extractApiError now returns its table
-      // phrase regardless of the mocked detail text.
-      vi.mocked(bookingsApi.skipCheckin).mockRejectedValue(
-        new ApiResponseError(404, 'Booking not found', 'not_found'),
-      )
-      const store = useBookingsStore()
-
-      const result = await store.skipCheckin('booking_1')
-
-      expect(result).toEqual({ ok: false, error: 'Запрошенный ресурс не найден' })
-    })
+    expect(store.dismissedCheckins).toEqual([])
   })
 })

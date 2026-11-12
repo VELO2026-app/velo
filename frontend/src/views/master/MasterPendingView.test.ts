@@ -36,8 +36,8 @@
 // removed it anyway, the applicant would be bounced off their own still-live
 // pending screen.
 //
-// PATTERN A-ish, degenerate: all state is read from two stores and there is no
-// local form. Both stores are DEPENDENCIES, not the thing under test, so both
+// PATTERN A-ish, degenerate: all state is read from the auth store and the
+// master-profile query, and there is no local form. Both are DEPENDENCIES, not the thing under test, so both
 // are module-mocked behind getters over a mutable object (velo-idiom §5, the
 // guards.test.ts trick). @/api/masters is the seam for the one direct API call.
 //
@@ -46,7 +46,7 @@
 // lands an approval, a profileLoading that flips) and a plain object behind a
 // getter would never re-render.
 //
-// NO PINIA, verified rather than assumed. Both stores are module-mocked, and no
+// NO PINIA, verified rather than assumed. Both are module-mocked, and no
 // child in this tree resolves a store of its own: the screen renders only
 // VLoader / VCard / VButton / VConfirmDialog -> VModal -> IconClose, while a grep
 // for use*Store across src/components hits ONLY RoleSwitchSection, WeekStrip,
@@ -79,7 +79,7 @@
 //   - NO window.history.state, no navigator.clipboard, no window.location.href.
 //   - NO bottom sheet (.v-sheet__overlay); the only overlay is .v-modal__overlay.
 //
-// THE FETCH IS A SEAM THAT DOES NOT MUTATE STATE. fetchMe/fetchMyProfile are
+// THE FETCH IS A SEAM THAT DOES NOT MUTATE STATE. fetchMe/reloadProfile are
 // spies, so a fixture set before mount represents the POST-fetch account. The
 // one test that cares about the refresh itself ("an approval that lands on this
 // mount") makes its fetchMe spy mutate authState, which is the real property:
@@ -91,7 +91,7 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, reactive, type App } from 'vue'
+import { computed, createApp, nextTick, reactive, type App } from 'vue'
 import MasterPendingView from '@/views/master/MasterPendingView.vue'
 import * as mastersApi from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
@@ -121,7 +121,7 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: toastSuccess, info: vi.fn() }),
 }))
 
-// -- The two dependency stores (velo-idiom §5): getters over a mutable reactive
+// -- The two dependencies (velo-idiom §5): getters over a mutable reactive
 //    object, so a test mutates state instead of re-mocking. The spies live
 //    inside the returned object literal of a nested arrow -- never dereferenced
 //    at factory top level -- so the hoisted factory cannot TDZ-crash.
@@ -165,17 +165,21 @@ const masterState = reactive<{
   profileLoading: false,
   profile: null,
 })
-const fetchMyProfile = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get profileLoading() {
-      return masterState.profileLoading
-    },
-    get profile() {
-      return masterState.profile
-    },
-    fetchMyProfile,
-  }),
+// The master profile (composables/queries/master.ts): `reloadProfile` is the
+// screen's forced re-check, resolving with the entry's state; the enabled
+// flag the screen passes is recorded (it must never let the query fetch on
+// its own -- GET /masters/me answers 403 to a role=user applicant).
+const reloadProfile = vi.fn()
+const profileQueryEnabled: unknown[] = []
+vi.mock('@/composables/queries/master', () => ({
+  useMasterProfile: (enabled: unknown) => {
+    profileQueryEnabled.push(enabled)
+    return {
+      profile: computed(() => masterState.profile),
+      loading: computed(() => masterState.profileLoading),
+      reload: reloadProfile,
+    }
+  },
 }))
 
 function profile(overrides: Partial<MasterProfileResponse> = {}): MasterProfileResponse {
@@ -211,7 +215,7 @@ function mount(): HTMLElement {
 }
 
 // COUNTED, not copied (velo-idiom §3). The chains this screen kicks off:
-//   mount -> onMounted awaits fetchMe|fetchMyProfile (1) -> its continuation
+//   mount -> onMounted awaits fetchMe|reloadProfile (1) -> its continuation
 //   writes localStorage / calls router.replace (1) -> re-render (1).
 //   onWithdraw -> await withdrawMasterApplication (1) -> continuation toasts +
 //   replaces (1) -> `finally` lowers withdrawing/confirmWithdrawOpen -> the
@@ -274,7 +278,8 @@ beforeEach(() => {
 
   vi.mocked(mastersApi.withdrawMasterApplication).mockReset().mockResolvedValue(undefined)
   fetchMe.mockReset().mockResolvedValue(undefined)
-  fetchMyProfile.mockReset().mockResolvedValue(undefined)
+  reloadProfile.mockReset().mockResolvedValue({ status: 'success' })
+  profileQueryEnabled.length = 0
   switchRole.mockReset().mockResolvedValue({} as UserResponse)
   push.mockReset()
   replace.mockReset()
@@ -323,7 +328,7 @@ describe('MasterPendingView', () => {
     })
 
     it('replaces the loader with the verdict once the profile lands', async () => {
-      // The reactive half: the store, not a remount, drives the transition.
+      // The reactive half: the query state, not a remount, drives the transition.
       masterState.profileLoading = true
       authState.role = 'master'
       mount()
@@ -392,7 +397,7 @@ describe('MasterPendingView', () => {
     })
 
     it('a role=master whose profile has not landed falls back to pending', async () => {
-      // `masterStore.profile?.status ?? 'pending'` (:149). Falling back to a
+      // `masterProfile.value?.status ?? 'pending'` (:149). Falling back to a
       // verdict instead would announce one that was never issued.
       authState.role = 'master'
       masterState.profile = null
@@ -556,13 +561,14 @@ describe('MasterPendingView', () => {
 
   describe('what the mount refreshes', () => {
     it('a role=master FORCE-reloads the profile and never re-fetches /users/me', async () => {
-      // force=true (:180): the store short-circuits on profileLoaded (master.ts:58),
-      // so a polling applicant would see a cached «pending» forever without it.
+      // A forced reload: the profile is held for the whole session
+      // (queries/master.ts), so a polling applicant would see a cached
+      // «pending» forever without it.
       authState.role = 'master'
       mount()
       await flush()
 
-      expect(fetchMyProfile).toHaveBeenCalledWith(true)
+      expect(reloadProfile).toHaveBeenCalledTimes(1)
       expect(fetchMe).not.toHaveBeenCalled()
     })
 
@@ -572,7 +578,9 @@ describe('MasterPendingView', () => {
       await flush()
 
       expect(fetchMe).toHaveBeenCalledTimes(1)
-      expect(fetchMyProfile).not.toHaveBeenCalled()
+      expect(reloadProfile).not.toHaveBeenCalled()
+      // ...nor lets the profile query fetch on its own.
+      expect(profileQueryEnabled).toEqual([false])
     })
 
     it('an approval that lands ON THIS MOUNT re-keys the screen to approved', async () => {
@@ -884,6 +892,23 @@ describe('status refresh failures', () => {
     fetchMe.mockResolvedValueOnce(true)
     button('Повторить')?.click()
     await flush()
+    expect(text()).toContain('Заявка отправлена!')
+  })
+})
+
+describe('status refresh failures: a master', () => {
+  it('a failed profile re-check shows retry instead of the cached verdict', async () => {
+    authState.role = 'master'
+    masterState.profile = profile({ status: 'pending' })
+    reloadProfile.mockResolvedValueOnce({ status: 'error' })
+    mount()
+    await flush()
+    expect(text()).toContain('Не удалось обновить статус заявки')
+    expect(text()).not.toContain('Заявка отправлена!')
+
+    button('Повторить')?.click()
+    await flush()
+    expect(reloadProfile).toHaveBeenCalledTimes(2)
     expect(text()).toContain('Заявка отправлена!')
   })
 })

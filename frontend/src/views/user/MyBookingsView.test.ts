@@ -8,15 +8,15 @@
 // Pinia + mocked API wrapper (per stores/bookings.test.ts:21-32), vue-router
 // mocked rather than built (guards.test.ts never builds one either).
 //
-// PATTERN A (store-backed): state lives in useBookingsStore, so the seam is
-// @/api/bookings -- the wrapper the store imports. The store is REAL; only the
-// network boundary is faked.
+// PATTERN A (query-backed, FE-166): the list lives in the Pinia Colada cache
+// (useMyBookings, an infinite query), so the seam is @/api/bookings -- the
+// wrapper the query calls. The cache is REAL; only the network boundary is
+// faked.
 //
-// The ONE new thing vs the existing suite: the mount needs Pinia inside it
-// (app.use(pinia)), which no prior test needed -- leaf components took no
-// stores. The same pinia instance goes to setActivePinia AND app.use; two
-// instances would mean the test mutates one store while the screen renders
-// another, and every assertion would pass while proving nothing.
+// The mount needs Pinia AND Colada inside it (coladaOptions, as app.ts). The
+// same pinia instance goes to setActivePinia AND app.use; two instances would
+// mean two caches -- a re-visit would not see the first visit's list, and the
+// B30 test below would pass while proving nothing.
 //
 // TIME IS PINNED (vi.setSystemTime). The screen reads Date.now()/new Date() in
 // upcomingRank/isToday/isTomorrow/badgeFor, so the today/tomorrow badges
@@ -31,11 +31,11 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import MyBookingsView from '@/views/user/MyBookingsView.vue'
 import * as bookingsApi from '@/api/bookings'
-// The REAL store, read where the assertion is about which error ref a failure
-// landed in -- the distinction the №442 root fix introduced.
-import { useBookingsStore } from '@/stores/bookings'
+import { ApiResponseError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import type { BookingWithPracticeResponse, UserResponse } from '@/api/types'
 
@@ -45,12 +45,6 @@ const push = vi.fn()
 const back = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back }),
-}))
-
-// The store pulls in useDiaryStore() lazily inside cancelBooking; mocked
-// wholesale so nothing from that store's own network path evaluates here.
-vi.mock('@/stores/diary', () => ({
-  useDiaryStore: () => ({ refreshFeed: vi.fn() }),
 }))
 
 // A failed show-more tap (i18n:common.showMore) toasts (.vue:onLoadMore) --
@@ -148,17 +142,19 @@ function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MyBookingsView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
-// onMounted -> store.refreshMyBookings() (B30) -> pagination.refreshInPlace()
-// -> awaited fetch + its continuation + the re-render. One tick is not enough
-// (CalendarFilterModal.test.ts:71-74 flushes three for the same reason).
+// useMyBookings (Colada) -> fetch -> awaited getMyBookings + the entry's
+// state update + the re-render; a load-more adds the page merge. Ticks plus
+// one macrotask, as composables/queries/*.test.ts flush.
 async function flush(): Promise<void> {
-  await nextTick()
-  await nextTick()
+  for (let i = 0; i < 6; i++) await nextTick()
+  // Under fake timers a real setTimeout never fires: advance the clock by 0.
+  if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0)
+  else await new Promise((resolve) => setTimeout(resolve, 0))
   await nextTick()
 }
 
@@ -188,8 +184,8 @@ afterEach(() => {
 describe('MyBookingsView', () => {
   describe('state ladder', () => {
     it('initial load: shows the loader while the first page is in flight', async () => {
-      // Never resolves -> store.loading stays true with an empty list, which is
-      // exactly the v-if guard at MyBookingsView.vue:22.
+      // Never resolves -> the list stays loading with nothing to show, which is
+      // exactly the :pending guard of the VLoadingSwap.
       vi.mocked(bookingsApi.getMyBookings).mockReturnValue(new Promise(() => {}))
       mount()
       await flush()
@@ -225,19 +221,33 @@ describe('MyBookingsView', () => {
       }
     })
 
-    it('error: shows the error state and surfaces the REAL backend message', async () => {
-      // usePagination.ts:68 assigns e.message verbatim, and the screen binds
-      // :description="store.error" (MyBookingsView.vue:31) -- so the actual
-      // message must reach the DOM, not a hardcoded fallback.
-      vi.mocked(bookingsApi.getMyBookings).mockRejectedValue(new Error('Сервис недоступен'))
+    it('error: shows the error state with the catalog phrase of the backend code (ADR)', async () => {
+      // FE-166 (ADR, one error convention): the query rejects with the raw
+      // error and the screen words it -- extractApiError looks e.code up in
+      // the errors catalog. The backend's raw detail never reaches the DOM.
+      vi.mocked(bookingsApi.getMyBookings).mockRejectedValue(
+        new ApiResponseError(404, 'Bookings not found', 'not_found'),
+      )
       mount()
       await flush()
 
       expect(text()).toContain('Ошибка загрузки')
-      expect(text()).toContain('Сервис недоступен')
+      expect(text()).toContain('Запрошенный ресурс не найден')
+      expect(text()).not.toContain('Bookings not found')
     })
 
-    it('error retry: the button re-fetches through the store', async () => {
+    it('error: a failure with no backend code reads as the list fallback, never e.message', async () => {
+      // Before FE-166 the rung showed e.message verbatim -- an English or
+      // technical string for a network failure.
+      vi.mocked(bookingsApi.getMyBookings).mockRejectedValue(new Error('Failed to fetch'))
+      mount()
+      await flush()
+
+      expect(text()).toContain('Не удалось загрузить бронирования')
+      expect(text()).not.toContain('Failed to fetch')
+    })
+
+    it('error retry: the button re-fetches the list', async () => {
       vi.mocked(bookingsApi.getMyBookings).mockRejectedValue(new Error('Сервис недоступен'))
       mount()
       await flush()
@@ -261,7 +271,7 @@ describe('MyBookingsView', () => {
       expect(host?.querySelector('.bookings__loader')).toBeNull()
     })
 
-    it('content: renders what the store actually returned', async () => {
+    it('content: renders what the server actually returned', async () => {
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
         page([booking('b1', {}, { title: 'Утренняя практика' })]),
       )
@@ -274,9 +284,9 @@ describe('MyBookingsView', () => {
 
     it('a load-more failure keeps content visible AND tells the user (№442)', async () => {
       // Half of this was already true and half of it was the bug. The list
-      // surviving is the guard at .vue:22,28 doing its job. But until №442 the
-      // failure was NEVER surfaced: `store.error` appears nowhere outside that
-      // guarded rung, so the tap did nothing and nothing said why -- the silent
+      // surviving is the guard (`failed` only with nothing to show) doing its
+      // job. But until №442 the failure was NEVER surfaced -- the error was read
+      // nowhere outside that guarded rung, so the tap did nothing and nothing said why -- the silent
       // variant the whole session has been chasing. The toast is the other half;
       // drop it and this test fails.
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
@@ -295,13 +305,15 @@ describe('MyBookingsView', () => {
 
       expect(text()).toContain('Утренняя практика')
       expect(text()).not.toContain('Ошибка загрузки')
-      expect(toastError).toHaveBeenCalledWith('Сеть отвалилась')
+      // ADR: worded by the screen (no backend code -> the list fallback).
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить бронирования')
     })
 
-    it('routes the load-more failure to loadMoreError, leaving the rung error null', async () => {
-      // The root fix (usePagination): `error` = first page, `loadMoreError` =
-      // later page. `error` staying null is what makes the surviving list
-      // structural rather than a guard each screen has to remember.
+    it('a load-more failure never raises the full error rung, and the list stays usable', async () => {
+      // The root fix (№442), now structural in Colada: a failed later page keeps
+      // the loaded pages, so `failed` (nothing to show) stays false -- the rung
+      // cannot appear over a list, whichever screen reads it. And the next tap
+      // loads the page that failed.
       vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
         page([booking('b1', {}, { title: 'Утренняя практика' })], 40),
       )
@@ -314,23 +326,32 @@ describe('MyBookingsView', () => {
         ?.click()
       await flush()
 
-      const store = useBookingsStore()
-      expect(store.error).toBeNull()
-      expect(store.loadMoreError).toBe('Сеть отвалилась')
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(text()).toContain('Утренняя практика')
+
+      vi.mocked(bookingsApi.getMyBookings).mockResolvedValue(
+        page([booking('b2', {}, { title: 'Вечерняя практика' })], 40),
+      )
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find((b) => b.textContent?.includes('Показать ещё'))
+        ?.click()
+      await flush()
+
+      expect(text()).toContain('Утренняя практика')
+      expect(text()).toContain('Вечерняя практика')
+      expect(vi.mocked(bookingsApi.getMyBookings).mock.calls.at(-1)).toEqual([undefined, 20, 1])
     })
 
-    it('an INITIAL-load failure still fills `error`, not loadMoreError', async () => {
-      // The other side of the split: it must not become a blanket redirect that
-      // silences the first page too. Without this, routing everything to
-      // loadMoreError would pass every other test in this file.
+    it('an INITIAL-load failure raises the rung, not a toast', async () => {
+      // The other side of the split: it must not become a blanket toast that
+      // silences the first page too. Without this, toasting everything would
+      // pass every other test in this file.
       vi.mocked(bookingsApi.getMyBookings).mockRejectedValue(new Error('Сервис недоступен'))
       mount()
       await flush()
 
-      const store = useBookingsStore()
-      expect(store.error).toBe('Сервис недоступен')
-      expect(store.loadMoreError).toBeNull()
-      expect(text()).toContain('Сервис недоступен')
+      expect(text()).toContain('Ошибка загрузки')
+      expect(text()).toContain('Не удалось загрузить бронирования')
       expect(toastError).not.toHaveBeenCalled()
     })
   })
@@ -388,6 +409,13 @@ describe('MyBookingsView', () => {
       expect(text()).not.toContain('Сегодня')
       expect(text()).not.toContain('В эфире')
       expect(text()).toContain('Подсчет')
+    })
+
+    it('the first visit sends ONE request: the B30 refetch joins the first load', async () => {
+      mount()
+      await flush()
+
+      expect(bookingsApi.getMyBookings).toHaveBeenCalledTimes(1)
     })
 
     it('B30: a re-visit refetches instead of reusing a stale list -- the badge advances past «Подсчет»', async () => {

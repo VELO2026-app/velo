@@ -1,0 +1,345 @@
+# `@velo/ui` — UI-кит VELO (приватный пакет монорепы)
+
+> P1-каркас (FE-116) + P2 батч A (FE-117) + P2 хвост A/батч B (FE-140) +
+> P4 иконки (FE-119) + P5-швы FE-143 (dom mini-seam, перенос
+> useBodyScrollLock, инверсия useKeyboardFieldScroll) + **P6b FE-145 —
+> семейство модалок** (VModal, VBottomSheet, VConfirmDialog со сторями,
+> тестами FE-142 и конвенциями §7.2: attrs-корень с явным merge на
+> телепортированном overlay, чистый `closeLabel`-проп вместо t() в
+> компоненте): каркас, контракт токенов и Storybook подняты до переноса;
+> **батч A (FE-117) перенёс первые 7 компонентов** (VAvatar,
+> VBadge, VButton, VCard, VChip, VListRow, VTag); **FE-140 доложил хвост A
+>
+> - батч B — 9 компонентов** (VLoader, VSegment c типом `SegmentOption`,
+>   VSegmentTrack, VSwitch, VPaginationDots, VRatingBar, VStatCard,
+>   VMetricHero, VWheel) со сторями и конвенциями §7.2; **FE-119 (P4) перенёс
+>   12 сквозных иконок** в `src/icons/` (стрелка, галка, крест, точки,
+>   required-маркеры, предупреждение + семья `ICON_MAP` для VEmptyState) —
+>   домен-иконки остаются в приложении. Остальные компоненты переезжают
+>   батчами в P3–P6.
+> P3 i18n-шов (FE-118): каркас, контракт токенов и Storybook подняты до
+> переноса; **батч A (FE-117) перенёс первые 7 компонентов** (VAvatar,
+> VBadge, VButton, VCard, VChip, VListRow, VTag); **FE-140 доложил хвост A +
+> батч B — 9 компонентов** (VLoader, VSegment c типом `SegmentOption`,
+> VSegmentTrack, VSwitch, VPaginationDots, VRatingBar, VStatCard,
+> VMetricHero, VWheel) со сторями и конвенциями §7.2; **FE-118 (P3) открыл
+> i18n-шов `configureUi({ t })` и перенёс 3 компонента со словарём**
+> (VAccordion, VBarChart, VDayPicker). Остальные переезжают батчами в P4–P6.
+
+## Что здесь чему подчиняется
+
+- **Пакет приватный** (`private: true`), публикация во внешний npm не
+  планируется; потребитель один — `frontend` (`workspace:*` с батча A —
+  баррел приложения ре-экспортирует пакет по компоненту).
+- **`vue` — peer** (`^3.5`): никогда не бандлится.
+- **Стили едут как есть** в SFC `<style>`; значения — только `var(--velo-*)`
+  и голые масштабные токены. **Токены не уезжают в пакет** (принцип 2):
+  `variables.css` остаётся в приложении и является контрактом хоста.
+
+## Контракт токенов (§3.6) — машинно-читаемый
+
+Каждый `var(--…)`, который использует пакет, обязан:
+
+1. входить в список ниже (добавление — в PR, который вводит использование);
+2. быть объявленным в золотом `frontend/src/styles/variables.css`;
+3. **tier-правило (§7.3)**: только семантические и компонентные уровни.
+   Примитивный цветовой рамп (`--velo-teal|peach|pink|blue|sand-NNN`,
+   `--velo-white`) и сырые значения (hex — stylelint `color-no-hex` уже
+   первый слой) запрещены. Список ниже — allowlist, поэтому примитив в него
+   не попадает в принципе. **Единственное исключение (батч A + батч B +
+   иконки P4 + модалки P6b + P3, FE-117/FE-140/FE-119/FE-145):** компоненты едут
+   «как есть» (§3.3), и часть вариантных цветов до сих пор не имеет
+   семантических ролей — эти ровно 10 токенов внесены в закрытый
+   `LEGACY_MIGRATED_RAMP` в тесте (ниже с пометкой `*legacy-ramp`) и уходят
+   оттуда только PR-ом, который выводит использование. FE-119 (P4) новых
+   вхождений не добавило: `--velo-white` у иконки IconRequiredDone — тот же
+   «как есть» инлайн-штрих (SVG presentation-атрибут не читает `var()`);
+   FE-145 (P6b) добавило `--velo-peach-500` — текст/иконка персиковой
+   панели предупреждения VConfirmDialog, «как есть» без семантической роли.
+   Новый примитив по-прежнему роняет гейт.
+
+Проверяется тестом `src/styles/token-contract.test.ts` в каждом `pnpm test`.
+
+```velo-ui-token-contract
+# --- bare scale family (frozen names, PROMPT №437) ---
+--font-body
+--font-heading
+--radius-full
+--radius-md
+--radius-xl
+--size-select-chevron-clearance # VSelect chevron/clear-button offset (P8 batch 1)
+--space-1
+--space-2
+--space-3
+--space-4
+--space-5
+--space-8                 # VEmptyState note-variant spacing (P8 batch 1)
+--space-hairline
+--transition-base
+--transition-fast
+# --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P3 FE-118) ---
+--z-modal
+--z-sticky                  # VMenu trigger stacking (P8 batch 4)
+--z-toast                   # VToast layer (P8 batch 6)
+# --- semantic / component tokens (batch A FE-117 + batch B FE-140 + P6b FE-145) ---
+--velo-bg-card-solid
+--velo-bg-subtle
+--velo-blue-100            # *legacy-ramp (VBadge/VTag blue variant)
+--velo-blue-300            # *legacy-ramp (VBarChart light bars)
+--velo-border
+--velo-border-card
+--velo-border-light
+--velo-border-width
+--velo-dur-base
+--velo-dur-fast            # VLoadingSwap content fade (P8 batch 5)
+--velo-dur-press
+--velo-dur-pulse
+--velo-dur-resize           # VLoadingSwap height glide (P8 batch 5)
+--velo-dur-sheet
+--velo-dur-sheet-exit
+--velo-ease-breath
+--velo-ease-in
+--velo-ease-out
+--velo-error
+--velo-fog-color
+--velo-fs-12
+--velo-fs-14
+--velo-fs-16
+--velo-fs-18
+--velo-fs-20
+--velo-fs-22
+--velo-fs-24
+--velo-fs-28
+--velo-fs-32
+--velo-gap-11
+--velo-gap-2
+--velo-gap-21
+--velo-gap-3
+--velo-gap-6
+--velo-glass-blue-15
+--velo-glass-white-20       # VBackButton pill fill (P8 batch 3)
+--velo-glass-white-35       # VBackButton pill fill, pressed (P8 batch 3)
+--velo-glass-blue-200-15
+--velo-glass-blue-30
+--velo-glass-blue-60
+--velo-glass-blue-700-60
+--velo-glass-border
+--velo-glass-peach-40
+--velo-glass-teal-30
+--velo-glass-white-01
+--velo-glass-white-30
+--velo-inset-12
+--velo-inset-row
+--velo-nav-active-bg        # VMenu/VMenuItem active row (P8 batch 4)
+--velo-nav-inactive-bg
+--velo-peach-500           # *legacy-ramp (VConfirmDialog warning panel text/icon, FE-145)
+--velo-peach-700           # *legacy-ramp (VBadge/VTag warning text)
+--velo-pink-100            # *legacy-ramp (VBadge/VTag error bg)
+--velo-pink-300            # *legacy-ramp (VBadge error text, VButton danger)
+--velo-pink-500            # *legacy-ramp (VStatCard rose value/delta)
+--velo-primary
+--velo-primary-dark
+--velo-radius-badge
+--velo-radius-bar-top
+--velo-radius-pill
+--velo-radius-sheet-top
+--velo-rail-pad-x
+--velo-sand-100            # *legacy-ramp (VTag sand bg)
+--velo-screen-width
+--velo-scrim
+--velo-shadow-glow
+--velo-shadow-switch
+--velo-skeleton-delay
+--velo-skeleton-fill
+--velo-size-40
+--velo-size-44
+--velo-size-50
+--velo-teal-400            # *legacy-ramp (VMetricHero icon glyph)
+--velo-teal-600            # *legacy-ramp (VBadge success text, VStatCard teal)
+--velo-text-muted
+--velo-text-primary
+--velo-text-secondary
+--velo-text-stroke-strong
+--velo-warning-bg
+--velo-white               # *legacy-ramp (active/danger text on fills, FE-119: IconRequiredDone check stroke)
+# --- P8 batch 1 (tz-ui-package §4 P8): skeleton family, VEmptyState, VMenuRow, field family ---
+--velo-border-input-focus  # VSelect focus ring
+--velo-card-height-list    # VSkeletonPracticeCard list-card skeleton height
+--velo-card-iconcol-w      # VSkeletonPracticeCard icon column
+--velo-card-letter-spacing-meta # VMoreLink meta label tracking (P8 batch 3)
+--velo-card-padding-x      # VSkeletonPracticeCard paddings
+--velo-card-padding-y
+--velo-danger-text         # VMenuRow destructive label
+--velo-de-k                # OPTIONAL host layout token: the diary-entry-scale
+                           # subtree multiplier (frontend styles/diary-entry-scale.css,
+                           # NOT variables.css); VSkeletonBubbles reads it with a
+                           # literal fallback 1, so a consumer without the scale
+                           # layer renders unscaled
+--velo-fs-48               # VEmptyState full-variant icon size
+--velo-radius-9            # VSkeleton bubbles/row radii
+--velo-required-done       # VSelect required-done glyph color
+--velo-size-46             # VSkeletonRow/VSkeletonPracticeCard row height
+--velo-size-56             # VInput affix-icon size (P8 batch 2)
+--velo-shadow-toast         # VToast elevation (P8 batch 6)
+--velo-success              # VToast success fill (P8 batch 6)
+--velo-text-placeholder    # VInput placeholder tint (P8 batch 2)
+--velo-textarea-autogrow-max # VTextarea autogrow cap (FE-153)
+```
+
+## Стратегия CSS (§3.3)
+
+Стили компонентов едут в пакете как есть (`*.vue` SFC). **Разрешение
+потребления (решение батча A, FE-117):** приложение собирает **исходники**
+пакета — `frontend` резолвит `@velo/ui` в `packages/velo-ui/src` (точный
+алиас в `vite.config`/`vitest.config` + `paths` в tsconfig). Компонентные
+стили продолжают ехать в чанках приложения ровно там же, где ехали до
+переноса, поэтому каскад `variables.css → компоненты → skin-tokens.css`
+не меняется ни для золотой сборки, ни для скина, и битовое сравнение
+чанков батча A сводится к ожидаемым механическим диффам (пути модулей и
+scope-id). Побочный выигрыш: ни один гейт (CI, Docker, pre-commit) не
+зависит от порядка «сначала собрать пакет». Css-бандл `dist/velo-ui.css`
+(`@velo/ui/style.css`) остаётся артефактом пакета для ВТОРОГО хоста и
+проверяется сборкой в CI; если владелец вернёт потребление через дист
+(буква §3.3), переключение — это замена алиаса на экспорты `exports`.
+
+## Структура (§3.5): папка на компонент
+
+```
+src/components/VButton/
+  VButton.vue        # SFC как есть (стили внутри)
+  VButton.test.ts    # тест колокализован, не в плоском каталоге
+  VButton.stories.ts # сторя пишется в переносном PR, не в конце
+  index.ts           # ре-экспорт для баррела
+```
+
+Баррел `src/index.ts` собирается из папочных `index.ts`. Батч A (FE-117)
+посадил в эту структуру 7 живых компонентов (VAvatar, VBadge, VButton,
+VCard, VChip, VListRow, VTag); FE-140 доложил хвост A + батч B — 9
+компонентов (VLoader, VSegment, VSegmentTrack, VSwitch, VPaginationDots,
+VRatingBar, VStatCard, VMetricHero, VWheel), каждый со сторей и
+колокализованным тестом, написанным до переноса; FE-118 (P3) доложил
+первый словарный батч — VAccordion, VBarChart, VDayPicker — по той же
+механике. Конвенции §7.2 применены
+в переносных PR: `data-velo-*` состояния/варианты (additive), attrs-корень
+и слоты как швы — VLoader режет i18n-зависимость через attrs (локализованную
+подпись баррел приложения подставляет обёрткой и после P3: `common.loading`
+вне реестра кита), VStatCard — через
+слот `pending` с каноническим фолбэком вместо импорта VSkeleton (скелетоны
+вне карты батча остаются в приложении). FE-145 (P6b) перенёс семейство
+модалок — VModal, VBottomSheet, VConfirmDialog: тесты VModal/VBottomSheet
+написаны приложением до переноса (FE-142) и уехали вместе с компонентами,
+VConfirmDialog получил свой колокализованный тест в самом переносе (его
+i18n-шов менялся — пин поехал вместе с изменением); модалки режут i18n
+через чистые пропы (`closeLabel` у VModal, пустые `cancelLabel`/
+`confirmLabel` у VConfirmDialog — локализованные дефолты баррел приложения
+подставляет обёрткой до P3) и впервые применяют attrs-корень на
+телепортированном overlay: `inheritAttrs: false` + явный `v-bind`-мердж —
+ровно тот случай, ради которого конвенция писалась (fallthrough на
+Teleport-корень молча пропадал, что VBottomSheet выяснил «the hard way»).
+Заглушка VStub, доказавшая конвейер
+в P1, удалена её же первым реальным батчем.
+
+**VTextarea (FE-153)** — последний из полей: в P8 он остался в приложении,
+потому что FE-94 вживил в него голосовой ввод. Шов разрезан слотами по
+конвенции §7.2: `#trailing` — правый конец ряда после печати required (там
+приложение ставит кнопку микрофона), `#takeover` + проп `takeover` —
+содержимое на месте поля (панель записи; само поле остаётся смонтированным
+через `v-show`, autogrow на это время не меряет), плюс `defineExpose({ blur })`,
+чтобы обёртка опускала клавиатуру перед захватом. Голос собирает
+`frontend/src/components/shared/VoiceTextarea.vue`; кит про голос не знает.
+
+**Иконки (FE-119, §4 P4)** — плоская семья, НЕ папка на компонент: глиф —
+один template-only SFC на общем контракте `size` (по умолчанию 24,
+currentColor), папка на глиф была бы шумом.
+
+```
+src/icons/
+  IconCheck.vue       # 12 сквозных глифов: хром UI + семья ICON_MAP (VEmptyState)
+  icons.test.ts       # один семейный тест (написан в приложении до git mv)
+  icons.stories.ts    # одна витрина на всю семью
+  index.ts            # баррел семьи; src/index.ts ре-экспортирует его звёздочно
+```
+
+Домен-иконки (IconBrain, IconBreathwork, IconMoodScale*, …) остаются в
+`frontend/src/components/icons`; баррел приложения ре-экспортирует 12
+сквозных из пакета — потребители не меняют импортов до P6/P8.
+
+## Швы (FE-143, §4 P5 — предпосылки P6; потреблены P6b FE-145)
+
+Три шва под перенос оверлеев и полей (VModal/VBottomSheet/VInput/VTextarea):
+
+- **dom mini-seam — `src/platform/dom.ts`**: единственная дверь пакета к
+  `document`, зеркало закона фронтенда (`no-restricted-globals`, включён в
+  eslint пакета тем же FE-143). Мини-набор ровно под резидентов: пара
+  `onDocumentEvent`/`offDocumentEvent` (Escape-keydown оверлеев — с FE-145
+  его слушают сами китовые VModal/VBottomSheet) и пара
+  `setBodyOverflow`/`toggleRootClass` (записи скролл-лока). Пакет-внутренний:
+  из баррела не экспортируется, приложение продолжает ходить через свой
+  `@/platform/dom`.
+- **`useBodyScrollLock` переехал** (`src/useBodyScrollLock.ts`, тесты вместе
+  с кодом, контракт байт-в-байт): реф-счётчик и класс `velo-scroll-locked` —
+  собственность кита, записи идут через dom-seam пакета. С FE-145 сами
+  китовые VModal/VBottomSheet берут его прямым импортом (баррел приложения
+  держит ре-экспорт `SCROLL_LOCK_CLASS` для хостового layout-CSS).
+- **Инверсия `useKeyboardFieldScroll`** (`src/keyboardFieldScroll.ts`):
+  provide-ключ `KEYBOARD_FIELD_SCROLL_INJECTION_KEY` + `useKeyboardFieldScroll()`
+  с **дефолтом no-op**. Реализация остаётся в хосте (читает его
+  platform/host); приложение даёт фабрику один раз в корне
+  (`provideKeyboardFieldScroll()` в App.vue). Хост даёт именно ФАБРИКУ:
+  каждый потребитель запускает её в своём setup, чтобы пер-компонентный
+  unmount-cleanup (выселение visualViewport-листенера) сохранился.
+## i18n-шов (P3, FE-118, tz-ui-package.md §4)
+
+Решение ред. 2 — **инъекция транслятора, без vue-i18n в peer**: словарь
+`ui.*` остаётся в приложении (98 использований вне `components/ui`),
+пакет не тащит i18n-рантайм.
+
+- Пакет экспортирует `configureUi({ t })` — вызов один раз при старте
+  хоста (приложение: проводка — init-эффект самого баррела
+  `@/components/ui`, единственной двери к пакету, поэтому рантайм и любой
+  тест получают транслятор до первого рендера без внешней координации;
+  витрина Storybook: свой демо-словарь в `.storybook/preview.ts` с
+  золотыми ru-значениями реестра).
+- `UI_I18N_KEYS` (`src/i18n.ts`) — закрытый реестр: 8 статических ключей +
+  семьи `ui.dayFull.*`/`ui.dayShort.*`. `cancel/confirm/close` внесены
+  авансом под потребителей батча F (P6: VConfirmDialog/VModal), `menuAria`/
+  `noData` — выравнивание P3 (VMenu/VBarChart жили на
+  `shared.components.menuAria`/`common.noData`). Тип `UiMessageKey` сужает
+  аргументы `t` внутри кита — опечатка в ключе это ошибка компиляции.
+- Вызовы `t('ui.…')` внутри компонентов не изменились при переезде;
+  до `configureUi` `t` возвращает сырой ключ и предупреждает в dev один
+  раз на ключ.
+- Гейт: `frontend/scripts/key-audit.mjs` резолвит ВСЕ `UI_I18N_KEYS` во
+  ВСЕХ локалях (ru/en/uk) и роняет сборку, если ключ пропал — паритет
+  локалей для кита жёсткий, в отличие от отчёта по словарю приложения.
+
+## Storybook (§3.4)
+
+```bash
+pnpm storybook          # из корня репозитория (или pnpm storybook в пакете)
+```
+
+Скелет витрины живёт здесь с P1; каждая следующая сторя пишется в своём
+батче и сверяется с Figma-фреймом. Витрина — «хост» для токенов: preview
+подключает **золотой** `frontend/src/styles/variables.css` (пакет сам
+никаких значений темы не несёт).
+
+## Сборка и гейты
+
+```bash
+pnpm build      # vite lib-mode → dist/index.js + dist/velo-ui.css; vue-tsc → dist/types/*.d.ts
+pnpm verify     # stylelint (тот же токен-замок, extends конфига приложения) + typecheck + vitest
+```
+
+Eslint-гейт пакета исполняется из `frontend/scripts/lint-budget.mjs`
+(тот же нулевой бюджет FE-73): flat-config ESLint не линтит файлы вне
+базового пути конфига, поэтому у пакета свой `eslint.config.js` (зеркало
+закона фронтенда), который budget-скрипт запускает из каталога пакета.
+
+## Инструментальные версии
+
+- Storybook и `@storybook/vue3-vite` запинены точной версией `10.6.2`
+  (2026-10-12): правило двух недель зрелости — свежейшие `10.6.4/5`
+  моложе его. Обновление — отдельным PR с прогоном витрины.
+- Остальные devDeps — те же диапазоны, что у `frontend` (единый lock-файл
+  воркспейса разрешает их в те же версии).

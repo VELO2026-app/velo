@@ -14,9 +14,9 @@
   Data: GET /masters/me/schools/{id}/members?kind&search&limit&offset
   (the curator handle). The server order is kept verbatim -- recently joined
   first; the client never re-sorts. Search re-queries the same endpoint after
-  a 300ms debounce with the input trimmed; refresh()'s requestId bump is the
-  stale-response guard, so a superseded fetch discards its result instead of
-  painting over the newer list. SWITCHING tabs resets the search and
+  a 300ms debounce with the input trimmed; every (tab, search) is its own
+  Colada entry (FE-166 step 6), so a superseded answer lands in its own
+  entry instead of painting over the newer list. SWITCHING tabs resets the search and
   reloads -- a new roster is a fresh screen, not a filtered version of the
   previous one, and every load still carries the kind filter: the
   no-unfiltered-load invariant of §1.11.3 survives, only its home moved from
@@ -35,7 +35,7 @@
   rows / two different empties (no members vs no search hits), the
   show-more control (i18n:common.showMore) for the next page; a later-page
   failure keeps the list and reports
-  through a toast (the admin-lists pattern usePagination documents).
+  through a toast (the admin-lists pattern).
 -->
 
 <template>
@@ -150,8 +150,12 @@
           </template>
         </VEmptyState>
 
-        <VLoader v-if="loading && items.length > 0" size="sm" />
-        <VShowMore v-if="hasMore && !loading" :label="t('common.showMore')" @click="loadMore" />
+        <VLoader v-if="fetchingMore" size="sm" />
+        <VShowMore
+          v-if="hasMore && !fetchingMore"
+          :label="t('common.showMore')"
+          @click="loadMore"
+        />
       </template>
     </div>
 
@@ -169,16 +173,17 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, onMounted, ref, watch, type Component } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, watch, type Component } from 'vue'
+import { useInfiniteQuery, useQuery, useQueryCache } from '@pinia/colada'
 import {
-  getSchoolBlocks,
-  getSchoolMembers,
-  getSchoolPage,
-  getSchoolRoster,
-  unblockSchoolMember,
-  type SchoolMemberKind,
-} from '@/api/schools'
+  forgetSchoolRosters,
+  schoolMembersQuery,
+  schoolPageQuery,
+  type SchoolMembersSource,
+} from '@/composables/queries/schools'
+import { screenQueryState } from '@/composables/queries/screenState'
+import { useRoute, useRouter } from 'vue-router'
+import { unblockSchoolMember, type SchoolMemberKind } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolBlockedItem, SchoolRosterItem, SchoolViewer } from '@/api/types'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
@@ -187,8 +192,8 @@ import SchoolMemberRow from '@/components/shared/SchoolMemberRow.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import { VAvatar, VButton, VEmptyState, VInput, VLoader, VSegmentTrack } from '@/components/ui'
 import VHeader from '@/components/layout/VHeader.vue'
-import { usePagination } from '@/composables/usePagination'
 import { useToast } from '@/composables/useToast'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { extractApiError } from '@/composables/useApiError'
 import { formatShortDate } from '@/utils/format'
 
@@ -229,28 +234,14 @@ const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'
 // what a tap does. The curator reads /members (with his working fields) and
 // opens the school-context profiles; a school MASTER, in the master zone only
 // (owner decision; the user zone is FE-93's), reads /roster and messages a
-// student directly. Fetched once per school, before the first roster page --
-// the roster fetcher awaits it, so a 404 here is the same masked rung.
-const relation = ref<SchoolViewer['relation'] | null>(null)
-let relationFor: { id: string; promise: Promise<SchoolViewer['relation']> } | null = null
-
-function loadRelation(): Promise<SchoolViewer['relation']> {
-  if (relationFor?.id !== schoolId.value) {
-    const id = schoolId.value
-    relationFor = {
-      id,
-      promise: getSchoolPage(id).then((page) => {
-        if (id === schoolId.value) relation.value = page.viewer.relation
-        return page.viewer.relation
-      }),
-    }
-    // A failed lookup must be retried on the next fetch, not cached.
-    relationFor.promise.catch(() => {
-      if (relationFor?.id === id) relationFor = null
-    })
-  }
-  return relationFor.promise
-}
+// student directly. The school page entry is shared with the school page screen
+// (schoolPageQuery): the roster waits for its answer, so a 404 there is the
+// same masked rung.
+const queryCache = useQueryCache()
+const pageQuery = useQuery(() => schoolPageQuery(schoolId.value))
+const relation = computed<SchoolViewer['relation'] | null>(
+  () => pageQuery.data.value?.viewer.relation ?? null,
+)
 
 const isCurator = computed(() => relation.value === 'curator')
 /** A school master reading the roster in the master zone. */
@@ -311,57 +302,129 @@ function goBack(): void {
 const search = ref('')
 const trimmedSearch = computed(() => search.value.trim())
 
-// A 404 here means THIS SCHOOL is not available to the viewer (P-08 masking),
-// not "the list is empty" -- a different rung entirely. usePagination keeps
-// only the message string, so the raw error is inspected as it passes by.
-const notFound = ref(false)
-
-const { items, loading, error, loadMoreError, hasMore, loadMore, refresh } = usePagination<
-  SchoolRosterItem | SchoolBlockedItem
->(async (limit, offset) => {
-  try {
-    const viewer = await loadRelation()
-    // The removed tab is the curator's alone; anyone else who lands on ?kind=blocked
-    // is moved to the masters tab.
-    if (kind.value === 'blocked') {
-      if (viewer === 'curator') return await getSchoolBlocks(schoolId.value, { limit, offset })
-      kind.value = 'master'
-      void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
-    }
-    const query = {
-      kind: kind.value,
-      search: trimmedSearch.value || undefined,
-      limit,
-      offset,
-    }
-    return viewer === 'master' && inMasterZone.value
-      ? await getSchoolRoster(schoolId.value, query)
-      : await getSchoolMembers(schoolId.value, query)
-  } catch (e: unknown) {
-    if (e instanceof ApiResponseError && e.status === 404) notFound.value = true
-    throw e
-  }
-}, 20)
+// §1.11.3: search re-queries the same endpoint -- debounce 300ms, trim, offset
+// back to 0 (a new search is a new entry). The timer is cleared on unmount
+// (useDebouncedSearch). A programmatic clear (a tab switch, a URL sync)
+// applies at once, without the debounce.
+const debouncedSearch = ref('')
 
 /** Set only when a switch or a query-sync programmatically clears the input;
  *  the watcher only fires on real value changes, so the flag cannot leak. */
 let suppressSearchWatch = false
 
-// §1.11.3: search re-queries the same endpoint -- debounce 300ms, trim, offset
-// back to 0. refresh() resets the list and bumps usePagination's requestId, so
-// any in-flight older fetch discards its result: the stale-response guard.
-let searchTimer: ReturnType<typeof setTimeout> | undefined
-watch(search, () => {
-  if (suppressSearchWatch) {
-    suppressSearchWatch = false
-    return
+useDebouncedSearch(
+  search,
+  (query) => {
+    debouncedSearch.value = query.trim()
+  },
+  {
+    beforeSchedule: () => {
+      if (!suppressSearchWatch) return true
+      suppressSearchWatch = false
+      debouncedSearch.value = ''
+      return false
+    },
+  },
+)
+
+/** A programmatic clear (a tab switch, a URL sync): the input and the
+ *  query clear together, in the same tick as the tab -- so the new tab's
+ *  list is asked once, never first with the old search. */
+function resetSearch(): void {
+  debouncedSearch.value = ''
+  if (search.value !== '') {
+    suppressSearchWatch = true
+    search.value = ''
   }
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    notFound.value = false
-    void refresh()
-  }, 300)
+}
+
+// The removed tab is the curator's alone; anyone else who lands on
+// ?kind=blocked is moved to the masters tab once the relation is known.
+// Immediate: the relation is often already cached (the school page screen
+// just read it), and a lazy watch would never see it change.
+watch(
+  relation,
+  (viewer) => {
+    if (viewer !== null && viewer !== 'curator' && kind.value === 'blocked') {
+      kind.value = 'master'
+      void router.replace({ ...route, query: { ...route.query, kind: 'master' } })
+    }
+  },
+  { immediate: true },
+)
+
+/** Which endpoint answers this viewer and tab (BE-76, BE-79). */
+const source = computed<SchoolMembersSource>(() => {
+  if (kind.value === 'blocked') return 'blocks'
+  return relation.value === 'master' && inMasterZone.value ? 'roster' : 'members'
 })
+
+// -- Roster data (Pinia Colada, FE-166 step 6: schoolMembersQuery) --
+//
+// One entry per (school, endpoint, tab, search): an answer for an older
+// search, another tab or another school never repaints the current list (the
+// usePagination request counter before). The list waits for the viewer's
+// relation, and never asks the removed tab for anyone but the curator.
+const listQuery = useInfiniteQuery(() =>
+  schoolMembersQuery({
+    schoolId: schoolId.value,
+    source: source.value,
+    kind: kind.value,
+    search: debouncedSearch.value,
+    enabled: relation.value !== null && (kind.value !== 'blocked' || relation.value === 'curator'),
+  }),
+)
+const listState = screenQueryState(listQuery)
+
+const items = computed<(SchoolRosterItem | SchoolBlockedItem)[]>(
+  () => listQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
+)
+
+function is404(e: unknown): boolean {
+  return e instanceof ApiResponseError && e.status === 404
+}
+
+// A 404 means THIS SCHOOL is not available to the viewer (P-08 masking), not
+// "the list is empty" -- a different rung entirely; from the page or the list.
+// Only from a settled request: an entry keeps its error while it refetches,
+// and a school answering again must not read as unavailable meanwhile.
+const notFound = computed(
+  () =>
+    (is404(pageQuery.error.value) && pageQuery.asyncStatus.value === 'idle') ||
+    (is404(listQuery.error.value) && listQuery.asyncStatus.value === 'idle'),
+)
+const pageFailed = computed(
+  () =>
+    pageQuery.data.value === undefined &&
+    pageQuery.status.value === 'error' &&
+    pageQuery.asyncStatus.value === 'idle',
+)
+/** The first page failed (not a 404): the retry rung. A later page's failure is a toast. */
+const error = computed<string | null>(() => {
+  if (notFound.value) return null
+  if (pageFailed.value) return extractApiError(pageQuery.error.value, t('common.checkConnection'))
+  return listState.failed.value
+    ? extractApiError(listQuery.error.value, t('common.checkConnection'))
+    : null
+})
+/** Nothing to show yet and no verdict: the loader. */
+const loading = computed(
+  () => !notFound.value && error.value === null && listQuery.data.value === undefined,
+)
+/** A next page (or a refetch) on its way, under the rows already shown. */
+const fetchingMore = computed(
+  () => listQuery.data.value !== undefined && listQuery.asyncStatus.value === 'loading',
+)
+const hasMore = computed(() => listQuery.hasNextPage.value)
+
+/** A later-page failure keeps the list on screen and reports non-destructively. */
+async function loadMore(): Promise<void> {
+  try {
+    await listQuery.loadNextPage({ throwOnError: true, cancelRefetch: false })
+  } catch (e) {
+    toast.error(extractApiError(e, errorTitle.value))
+  }
+}
 
 // -- The roster switcher (§1.11) -----------------------------------------------
 
@@ -372,17 +435,12 @@ watch(search, () => {
 async function switchKind(next: MemberTab): Promise<void> {
   if (next === kind.value) return
   kind.value = next
-  notFound.value = false
-  if (search.value !== '') {
-    suppressSearchWatch = true
-    search.value = ''
-  }
-  void router.replace({
+  resetSearch()
+  await router.replace({
     name: 'master-school-members',
     params: { id: schoolId.value },
     query: { kind: next },
   })
-  await refresh()
 }
 
 // History navigation between ?kind= tabs is rare (switches use replace) but
@@ -395,12 +453,7 @@ watch(
       next === 'student' ? 'student' : next === 'blocked' ? 'blocked' : 'master'
     if (fromUrl === kind.value) return
     kind.value = fromUrl
-    notFound.value = false
-    if (search.value !== '') {
-      suppressSearchWatch = true
-      search.value = ''
-    }
-    void refresh()
+    resetSearch()
   },
 )
 
@@ -420,16 +473,22 @@ const blockedItems = computed(() =>
 // was simply stale; anything else -> the error toast, the row stays.
 const unblocking = ref<string | null>(null)
 
+/** The person is back in the school: this tab re-reads in place, the other tabs' cached rosters go. */
+async function rereadRosters(): Promise<void> {
+  forgetSchoolRosters(queryCache, schoolId.value)
+  await listQuery.refetch()
+}
+
 async function onUnblock(person: SchoolBlockedItem): Promise<void> {
   if (unblocking.value) return
   unblocking.value = person.user_id
   try {
     await unblockSchoolMember(schoolId.value, person.user_id)
     toast.success(t('user.screens.schoolMembers.toast.unblocked'))
-    await refresh()
+    await rereadRosters()
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
-      await refresh()
+      await rereadRosters()
       return
     }
     toast.error(extractApiError(e, t('user.screens.schoolMembers.toast.unblockFailed')))
@@ -438,28 +497,10 @@ async function onUnblock(person: SchoolBlockedItem): Promise<void> {
   }
 }
 
-// A later-page failure keeps the list on screen and reports non-destructively.
-watch(loadMoreError, (message) => {
-  if (message) toast.error(message)
-})
-
-async function retry(): Promise<void> {
-  notFound.value = false
-  await refresh()
+function retry(): void {
+  void pageQuery.refetch()
+  if (relation.value !== null) void listQuery.refetch()
 }
-
-onMounted(() => {
-  void refresh()
-})
-
-// Router reuse: navigating between this school's rosters reuses the mounted
-// instance, so re-read for the new id instead of waiting for a remount.
-watch(schoolId, () => {
-  if (schoolId.value) {
-    notFound.value = false
-    void refresh()
-  }
-})
 
 // -- Navigation: rows open the member's profile -------------------------------
 

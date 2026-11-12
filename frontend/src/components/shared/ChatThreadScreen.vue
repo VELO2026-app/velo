@@ -191,7 +191,7 @@ import {
   queryDocument,
   rootStyleValue,
 } from '@/platform/dom'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { useLoadingHold } from '@/composables/useLoadingHold'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
@@ -211,6 +211,9 @@ import { useAuthStore } from '@/stores/auth'
 import { extractApiError } from '@/composables/useApiError'
 import { ApiResponseError } from '@/api/client'
 import { useComposerGrowCap } from '@/composables/useComposerGrowCap'
+import { useChatScroll } from '@/composables/useChatScroll'
+import { useViewerTimezone } from '@/composables/useViewerTimezone'
+import { formatTime as formatClockTime } from '@/utils/format'
 
 // tz-i18n 2.2b: load-failed/empty states via chat.* / common.retry.
 
@@ -259,7 +262,8 @@ const error = ref<string | null>(null)
 /** FE-108: the messages read answered 404 -- the thread is gone (deleted
  *  with its spam ticket, or never the caller's). Terminal: no retry, no poll. */
 const gone = ref(false)
-const messages = ref<ChatMessage[]>([])
+// shallowRef: the list is only ever replaced wholesale, never mutated in place.
+const messages = shallowRef<ChatMessage[]>([])
 const feedEl = ref<HTMLElement | null>(null)
 
 // [FE-4] The fog must reach the REAL header, not a guess. The teleported
@@ -309,8 +313,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   islandObserver?.disconnect()
   islandObserver = null
-  feedWrapObserver?.disconnect()
-  feedWrapObserver = null
 })
 
 // PROMPT №741 (track 3, B40): the same viewport-aware cap diary uses.
@@ -320,10 +322,12 @@ const growCap = useComposerGrowCap(composing)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let disposed = false
 
+/** Message clock time in the viewer's profile timezone and the active locale. */
+const viewerTz = useViewerTimezone()
+
 function formatTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  if (Number.isNaN(new Date(iso).getTime())) return ''
+  return formatClockTime(iso, viewerTz.value)
 }
 
 /** BE-166: a support feed may hold an admin reply the reader must never see
@@ -338,57 +342,28 @@ function messageText(m: ChatMessage): string {
   return ''
 }
 
-async function scrollToBottom(): Promise<void> {
-  await nextTick()
-  if (feedEl.value) feedEl.value.scrollTop = feedEl.value.scrollHeight
-}
-
-/** CH-3: pixels the reader may drift from the bottom and still be counted
- *  "at" it -- an incoming message then auto-scrolls; further up (reading
- *  history) it must not yank them down. */
-const NEAR_BOTTOM_PX = 120
-
-/** Pure over the three scroll numbers, so tests can drive it by stubbing
- *  the feed element's metrics (happy-dom measures nothing by itself). */
-function isNearBottom(
-  scrollTop: number,
-  scrollHeight: number,
-  clientHeight: number,
-  threshold = NEAR_BOTTOM_PX,
-): boolean {
-  return scrollHeight - scrollTop - clientHeight <= threshold
-}
-
-function readerNearBottom(): boolean {
-  const el = feedEl.value
-  if (!el) return true
-  return isNearBottom(el.scrollTop, el.scrollHeight, el.clientHeight)
-}
-
-/* [owner pass] KEEP-BOTTOM ON GEOMETRY SHIFTS: the column is sized to the
+/* CH-3: pixels the reader may drift from the bottom and still be counted
+ * "at" it -- an incoming message then auto-scrolls; further up (reading
+ * history) it must not yank them down.
+ *
+ * [owner pass] KEEP-BOTTOM ON GEOMETRY SHIFTS: the column is sized to the
  * LIVE viewport, so the feed's height changes whenever the keyboard opens or
  * closes -- on a shrink the visible window loses its bottom edge and the last
  * message slides under the fold ("saw it without the keyboard, must see it
- * with it"). The decision CANNOT be made from the post-resize geometry (a
- * keyboard subtracts 150-300px, blowing past NEAR_BOTTOM_PX), so the
- * bottom-state is remembered from the reader's own scroll events and the
- * resize consults the PRE-shift state: pinned -> re-pin, instant scrollTop
- * (never smooth); reading history -> untouched (CH-3). Attached from
- * reload() once the v-else branch mounts the wrap; idempotent. */
-let pinnedToBottom = true
+ * with it"). useChatScroll decides from the PRE-shift state remembered on the
+ * reader's own scroll events: pinned -> re-pin, instant scrollTop (never
+ * smooth); reading history -> untouched (CH-3). The wrap (not the scroller)
+ * is observed, attached from reload() once the v-else branch mounts it. */
+const chatScroll = useChatScroll({ scrollEl: feedEl, nearBottomPx: 120 })
+const { rememberBottomState } = chatScroll
 
-function rememberBottomState(): void {
-  pinnedToBottom = readerNearBottom()
+async function scrollToBottom(): Promise<void> {
+  await nextTick()
+  chatScroll.scrollToBottom()
 }
 
-let feedWrapObserver: ResizeObserver | null = null
-
 function attachKeepBottom(): void {
-  if (feedWrapObserver || !wrapEl.value) return
-  feedWrapObserver = new ResizeObserver(() => {
-    if (pinnedToBottom) void scrollToBottom()
-  })
-  feedWrapObserver.observe(wrapEl.value)
+  chatScroll.attachKeepBottom(wrapEl.value)
 }
 
 /** One page, `newest-first from comms -> stored oldest-first` for rendering. */
@@ -504,7 +479,7 @@ async function poll(): Promise<void> {
         fresh.length !== messages.value.length ||
         translationShape(fresh) !== translationShape(messages.value)
       if (changed) {
-        const followDown = hasNew && readerNearBottom()
+        const followDown = hasNew && chatScroll.isNearBottom()
         messages.value = fresh
         dropDelivered()
         if (hasNew) {
@@ -817,7 +792,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   background: var(--velo-bg-card-solid);
   color: var(--velo-text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .chat-thread__bubble--mine {
   background: var(--velo-primary);

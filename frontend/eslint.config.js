@@ -8,6 +8,33 @@ import pluginVue from 'eslint-plugin-vue'
 import pluginTsdoc from 'eslint-plugin-tsdoc'
 import globals from 'globals'
 
+// Timezone-hygiene selectors (see the rule below); shared with the platform
+// block, which must repeat them (flat config replaces same-rule options).
+const DATE_SELECTORS = [
+  {
+    selector: "NewExpression[callee.name='Date'][arguments.length=1][arguments.0.type='Literal']",
+    message: 'Date(string) interprets unpredictably -- use luxon DateTime + useViewerTimezone.',
+  },
+  ...[2, 3, 4, 5, 6, 7].map((n) => ({
+    selector: `NewExpression[callee.name='Date'][arguments.length=${n}]`,
+    message:
+      'new Date(y, m, ...) builds in the runtime tz -- use luxon DateTime + useViewerTimezone.',
+  })),
+  {
+    selector: "CallExpression[callee.name='Date']",
+    message: 'Date() without new -- use new Date() or luxon DateTime.',
+  },
+]
+
+// Dynamic import() of the Telegram SDK: no-restricted-imports only sees static
+// imports, so the lazy-loading door needs its own selector. Allowed inside
+// src/platform/ only (that block omits it).
+const TMA_DYNAMIC_IMPORT = {
+  selector: 'ImportExpression[source.value=/^@tma\\.js\\//]',
+  message:
+    'The Telegram SDK is reachable only inside src/platform/ (lazy-loaded seam): use @/platform/tma-viewport.',
+}
+
 export default [
   js.configs.recommended,
 
@@ -109,24 +136,7 @@ export default [
       // timezone -- a real bug class in a timezone product; use luxon
       // DateTime with useViewerTimezone. Legacy sites ride the warning
       // budget (lint-budget.json) until paid off.
-      'no-restricted-syntax': [
-        'warn',
-        {
-          selector:
-            "NewExpression[callee.name='Date'][arguments.length=1][arguments.0.type='Literal']",
-          message:
-            'Date(string) interprets unpredictably -- use luxon DateTime + useViewerTimezone.',
-        },
-        ...[2, 3, 4, 5, 6, 7].map((n) => ({
-          selector: `NewExpression[callee.name='Date'][arguments.length=${n}]`,
-          message:
-            'new Date(y, m, ...) builds in the runtime tz -- use luxon DateTime + useViewerTimezone.',
-        })),
-        {
-          selector: "CallExpression[callee.name='Date']",
-          message: 'Date() without new -- use new Date() or luxon DateTime.',
-        },
-      ],
+      'no-restricted-syntax': ['warn', ...DATE_SELECTORS, TMA_DYNAMIC_IMPORT],
 
       // --- TMA storage seam. ------------------------------------------------
       'no-restricted-properties': [
@@ -162,6 +172,86 @@ export default [
       // (e.g. AddToGroupSheet's existingGroupIds). A missing default IS the
       // "not provided" semantics, not an omission.
       'vue/require-default-prop': 'off',
+    },
+  },
+
+  // --- P8: the @velo/ui boundary (tz-ui-package.md §4 P8; mirrors the ----
+  // ui-package-boundary.test.ts law). The kit is imported ONLY through its
+  // doors -- the barrels that re-export it plus the two seam doors (the
+  // keyboard factory and the loading rule). (The P8 VTextarea door closed
+  // with FE-153: the field moved into the kit.)
+  // Deep subpaths ('@velo/ui/...') stay banned everywhere. Flat config does
+  // not merge rule options: a later block with the same rule REPLACES the
+  // earlier one for matching files. So this block carries the app-barrel
+  // deep-import patterns ('@/components/ui/*', '@/components/icons/*') too --
+  // otherwise it would silently erase the ban set in the base block above for
+  // every file under src/. The doors override below repeats the patterns it
+  // still needs verbatim.
+  {
+    files: ['src/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/components/ui/*', '@/components/ui/*/*'],
+              message: 'Import from the barrel: import { VButton } from "@/components/ui".',
+            },
+            {
+              group: ['@/components/icons/*', '@/components/icons/*/*'],
+              message: 'Import from the barrel: import { IconHome } from "@/components/icons".',
+            },
+            {
+              group: ['@velo/ui', '@velo/ui/*'],
+              message:
+                'The kit is imported through its doors only: @/components/ui (or @/components/icons).',
+            },
+            {
+              group: ['@tma.js/*'],
+              message:
+                'The Telegram SDK is reachable only inside src/platform/ (lazy-loaded seam): use @/platform/tma-viewport.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      'src/components/ui/index.ts',
+      'src/components/icons/index.ts',
+      'src/composables/useKeyboardFieldScroll.ts',
+      'src/composables/useLoadingHold.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/components/ui/*', '@/components/ui/*/*'],
+              message: 'Import from the barrel: import { VButton } from "@/components/ui".',
+            },
+            {
+              group: ['@/components/icons/*', '@/components/icons/*/*'],
+              message: 'Import from the barrel: import { IconHome } from "@/components/icons".',
+            },
+            // '@velo/ui' (exact barrel) is the door's whole point; deep
+            // subpaths stay banned -- the same law ui-package-boundary
+            // .test.ts enforces.
+            {
+              group: ['@velo/ui/*'],
+              message: 'The exact barrel specifier only: "@velo/ui".',
+            },
+            {
+              group: ['@tma.js/*'],
+              message:
+                'The Telegram SDK is reachable only inside src/platform/ (lazy-loaded seam): use @/platform/tma-viewport.',
+            },
+          ],
+        },
+      ],
     },
   },
 
@@ -204,6 +294,45 @@ export default [
   },
 
   {
+    // The platform seam is the one place allowed to import @tma.js/*; every
+    // other ban from the P8 block is repeated (flat config replaces, not
+    // merges, same-rule options).
+    files: ['src/platform/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/components/ui/*', '@/components/ui/*/*'],
+              message: 'Import from the barrel: import { VButton } from "@/components/ui".',
+            },
+            {
+              group: ['@/components/icons/*', '@/components/icons/*/*'],
+              message: 'Import from the barrel: import { IconHome } from "@/components/icons".',
+            },
+            {
+              group: ['@velo/ui', '@velo/ui/*'],
+              message:
+                'The kit is imported through its doors only: @/components/ui (or @/components/icons).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    // The platform seam may import() the SDK lazily; the timezone selectors
+    // stay (same-rule options are replaced, not merged).
+    files: ['src/platform/**'],
+    ignores: ['src/**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': ['warn', ...DATE_SELECTORS],
+    },
+  },
+
+  {
     // The platform seam and the bootstrap own the host objects.
     files: ['src/platform/**', 'src/main.ts'],
     rules: {
@@ -213,9 +342,8 @@ export default [
 
   {
     // --- Generated code: not held to the comment standard. ----------------
-    // src/api/generated.ts (the OpenAPI client) and
-    // src/platform/skin-brand.generated.ts are build output of generators
-    // that live in backend/** and carry "DO NOT EDIT" headers. Their
+    // src/api/generated.ts (the OpenAPI client) is build output of a
+    // generator that lives in backend/** and carries a "DO NOT EDIT" header. Its
     // docstrings keep `->`, {placeholders} and @-aliases verbatim (~182
     // TSDoc grammar findings in generated.ts alone): hand-escaping is
     // futile -- the next regen wipes it -- and fixing the generator is a
@@ -233,6 +361,120 @@ export default [
   },
 
   {
-    ignores: ['dist/', 'node_modules/', '*.config.*'],
+    // FE-157 5C: the .mjs build scripts. Same type-aware ruleset as the app,
+    // typed through tsconfig.scripts.json (checkJs); Node globals instead of
+    // the browser's.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: {
+        project: ['./tsconfig.scripts.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      // The scripts are untyped JS (implicit-any parameters, JSON.parse
+      // results): the unsafe family would flag ~1300 sites of "any" that the
+      // JSDoc-less code cannot answer. Floating promises, unused vars and the
+      // rest of the type-aware set stay on. Scoped to the .mjs scripts only:
+      // the TypeScript files below keep the full set.
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
+  },
+
+  {
+    // The TypeScript build configs (Vite/Vitest): typed code, so the whole
+    // type-aware set stays on (no no-unsafe-* relaxation), typed through
+    // tsconfig.configs.json (strict, noImplicitAny on); Node globals.
+    files: ['vite.config.ts', 'vitest.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: {
+        project: ['./tsconfig.configs.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  {
+    // The Playwright suite (e2e/ and its config), typed through
+    // e2e/tsconfig.json. Page callbacks run in the browser, hence both sets
+    // of globals.
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+      parserOptions: {
+        project: ['./e2e/tsconfig.json'],
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  {
+    // FE-161: specs take `test`/`expect` from e2e/support/test.ts, which runs
+    // every test under the crash detector. A bare @playwright/test import
+    // would silently opt the spec out.
+    files: ['e2e/**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@playwright/test',
+              importNames: ['test', 'expect'],
+              message: "Import test/expect from './support/test' (the crash detector rides on it).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    // node:test registers tests with top-level test(...) calls that return a
+    // promise nobody awaits by design.
+    files: ['scripts/**/*.test.mjs'],
+    rules: { '@typescript-eslint/no-floating-promises': 'off' },
+  },
+
+  {
+    // FE-131 scripts/lib/skin-package.mjs has a .d.mts sidecar: TypeScript
+    // takes the declaration and leaves the .mjs out of tsconfig.scripts.json's
+    // program, so the type-aware rules cannot run on it. Syntax-level rules
+    // still apply; its types are checked through the .d.mts by vue-tsc.
+    files: ['scripts/lib/skin-package.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+  },
+
+  {
+    // eslint.config.js and the other tooling configs stay unlinted; the two
+    // build configs above are linted. The .d.mts type sidecars of the scripts
+    // (FE-131 scripts/lib/skin-package.d.mts) are declarations only, outside
+    // tsconfig.scripts.json; vue-tsc checks them through their TS importers.
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'eslint.config.js',
+      'stylelint.config.*',
+      'scripts/**/*.d.mts',
+    ],
   },
 ]

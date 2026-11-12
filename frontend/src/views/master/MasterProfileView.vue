@@ -55,12 +55,18 @@
           >
             <template #icon><IconMessages :size="20" /></template>
           </VMenuRow>
-          <VMenuRow :label="t('masterScreens.masterProfile.menu.promocodes')" @click="onPromocodes">
+          <!-- FE-151: promo codes are a payments surface (the backend closes
+               them with the option). -->
+          <VMenuRow
+            v-if="paymentsEnabled"
+            :label="t('masterScreens.masterProfile.menu.promocodes')"
+            @click="onPromocodes"
+          >
             <template #icon><IconPromo :size="20" /></template>
           </VMenuRow>
           <!-- FE-112 (tz-whitelabel §4): the finance screen is the payments
-               module's master surface -- an edition without payments has no
-               menu entry leading to an unregistered route. -->
+               option's master surface -- with the option off (FE-151) there
+               is no menu entry leading to a closed route. -->
           <VMenuRow
             v-if="paymentsEnabled"
             :label="t('masterScreens.masterProfile.menu.withdraw')"
@@ -160,23 +166,24 @@ import {
   IconSupport,
   IconLogout,
 } from '@/components/icons'
-import { useMasterStore } from '@/stores/master'
+import { useMasterProfile } from '@/composables/queries/master'
 import { useAuthStore } from '@/stores/auth'
 import { getChatUnreadSummary } from '@/api/chats'
-import { featureEnabled } from '@/platform/features'
+import { isOptionEnabled } from '@/platform/instance'
 
 const router = useRouter()
-const masterStore = useMasterStore()
 const authStore = useAuthStore()
+// The display name. GET /masters/me answers only a role=master account.
+const { profile: masterProfile } = useMasterProfile(() => authStore.role === 'master')
 
 // FE-112 (tz-whitelabel §4): hides the withdraw entry
-// (i18n:masterScreens.masterProfile.menu.withdraw) in editions without
-// the payments module (see the template comment at the menu row).
-const paymentsEnabled = featureEnabled('payments')
+// (i18n:masterScreens.masterProfile.menu.withdraw) on instances with
+// the payments option off (FE-151) (see the template comment at the menu row).
+const paymentsEnabled = isOptionEnabled('payments')
 
 const displayName = computed(
   () =>
-    masterStore.profile?.display_name ??
+    masterProfile.value?.display_name ??
     authStore.user?.first_name ??
     t('masterScreens.masterProfile.masterWord'),
 )
@@ -248,12 +255,9 @@ async function onLogout(): Promise<void> {
   void router.replace({ path: '/' })
 }
 
-// -- Lifecycle: load the master profile (display_name) for verified masters. --
-onMounted(async () => {
-  if (authStore.role === 'master') {
-    void loadMessagesCount() // fire-and-forget: never blocks the profile
-    await masterStore.fetchMyProfile()
-  }
+// -- Lifecycle: the messages count, for masters (the profile loads itself, above). --
+onMounted(() => {
+  if (authStore.role === 'master') void loadMessagesCount()
 })
 </script>
 

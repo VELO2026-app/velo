@@ -1,36 +1,48 @@
 // =============================================================================
-// VELO Frontend -- Skin package reader (tz-whitelabel §3, F2 "skin, layer 1")
+// VELO Frontend -- Skin package reader (tz-whitelabel §3, F2; FE-131)
 // =============================================================================
 // BUILD-side seam: vite.config.ts calls readSkin() at config time to
-// materialize the derivatives tz-whitelabel §1 lists -- skin-tokens.css,
-// index.html theme-color/font link, and the manifest identity. It is NEVER
+// materialize the derivatives tz-whitelabel §1 lists -- the skin-tokens.css
+// module, index.html theme-color/font, and the manifest identity. It is NEVER
 // imported by the client bundle (node:fs does not exist in the browser).
 //
-// The package itself arrives from the deploy side as public/skin/ (contract
-// of fixed file names, tz-whitelabel §3): brand.json + tokens.css + assets.
-// NO package = the golden VELO build; a MALFORMED brand.json throws here so
-// a broken deploy fails the build instead of shipping a half-skinned app
-// (the full validator lives in scripts/validate-skin.mjs and runs before
-// this in the deploy pipeline).
+// The package arrives from the deploy machine as public/skin/ (apply: build
+// -- the machine puts it into the build context): the machine's DTCG format,
+// primer-package.yaml + tokens/*.tokens.json + assets/ (tz-whitelabel §3.2).
+// Reading and converting it is scripts/lib/skin-package.mjs -- the same
+// engine validate-skin.mjs checks with. NO package = the golden VELO build;
+// a MALFORMED one throws here so a broken deploy fails the build instead of
+// shipping a half-skinned app (`pnpm build` runs validate-skin --build first;
+// this throw is the backstop for a bare `vite build`).
 // =============================================================================
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import {
+  isSkinPackage,
+  loadSkinPackage,
+  readGoldenTokens,
+  skinCss,
+  type LoadedSkinPackage,
+  type SkinFont,
+} from '../../scripts/lib/skin-package.mjs'
+
+export type { SkinFont }
 
 /** A skin package's brand identity, materialized into the build's derivatives. */
 export interface SkinPackage {
   /** Manifest name + short_name + the `{brand}` text source of record. */
   displayName: string
-  /** PWA convention: ≤ 12 chars (validated strictly in validate-skin.mjs). */
+  /** PWA convention: ≤ 12 chars (validated strictly in the engine). */
   shortName: string
   /** The ONE header-color source (tz-whitelabel §1): index.html meta,
    *  manifest theme_color AND --velo-tg-header must all agree; the first
    *  two are materialized from here, the third is checked by the validator
-   *  against skin/tokens.css. */
+   *  against the package's velo.tg.header. */
   themeColor: string
   backgroundColor: string
-  /** Optional webfont stylesheet (brand.json "fontUrl"); absent = Marmelad. */
-  fontUrl?: string
+  /** Self-hosted webfonts of the package (assets/fonts/); empty = Marmelad. */
+  fonts: SkinFont[]
 }
 
 /** The no-skin build. Values mirror index.html/manifest.ts/variables.css —
@@ -40,52 +52,19 @@ export const GOLDEN_SKIN: SkinPackage = {
   shortName: 'VELO',
   themeColor: '#334D6E',
   backgroundColor: '#ffffff',
+  fonts: [],
 }
 
-const HEX = /^#[0-9a-fA-F]{6}$/
-
-function readBrandJson(publicDir: string): SkinPackage {
-  const raw = readFileSync(join(publicDir, 'skin', 'brand.json'), 'utf8')
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
+/** Loads public/skin/ with the engine; throws on the first problems. */
+function loadPackage(publicDir: string): LoadedSkinPackage {
+  const frontendDir = join(publicDir, '..')
+  const pkg = loadSkinPackage(join(publicDir, 'skin'), readGoldenTokens(frontendDir))
+  if (pkg.problems.length > 0) {
     throw new Error(
-      '[skin] public/skin/brand.json is not valid JSON — run scripts/validate-skin.mjs',
+      `[skin] public/skin is not a valid skin package — run scripts/validate-skin.mjs:\n  ${pkg.problems.join('\n  ')}`,
     )
   }
-  const brand = parsed as Record<string, unknown>
-  const str = (key: string): string => {
-    const value = brand[key]
-    if (typeof value !== 'string' || value.trim() === '') {
-      throw new Error(`[skin] brand.json: "${key}" must be a non-empty string`)
-    }
-    return value.trim()
-  }
-  const hex = (key: string): string => {
-    const value = str(key)
-    if (!HEX.test(value)) {
-      throw new Error(`[skin] brand.json: "${key}" must be a 6-digit hex color, got ${value}`)
-    }
-    return value
-  }
-  // Field checks in a fixed order, so a broken package reports its FIRST
-  // problem deterministically (identity -> colours -> font).
-  const displayName = str('displayName')
-  const shortName = str('shortName')
-  const themeColor = hex('themeColor')
-  const backgroundColor = hex('backgroundColor')
-  const fontUrl = brand['fontUrl']
-  if (fontUrl !== undefined && (typeof fontUrl !== 'string' || !/^https:\/\//.test(fontUrl))) {
-    throw new Error('[skin] brand.json: "fontUrl" must be an https:// URL when present')
-  }
-  return {
-    displayName,
-    shortName,
-    themeColor,
-    backgroundColor,
-    ...(fontUrl !== undefined ? { fontUrl: fontUrl.trim() } : {}),
-  }
+  return pkg
 }
 
 /**
@@ -96,34 +75,58 @@ function readBrandJson(publicDir: string): SkinPackage {
  * @param publicDir - The frontend/public directory.
  */
 export function readSkin(publicDir: string): SkinPackage | null {
-  if (!existsSync(join(publicDir, 'skin', 'brand.json'))) return null
-  return readBrandJson(publicDir)
+  const dir = join(publicDir, 'skin')
+  if (!existsSync(dir) || !isSkinPackage(dir)) return null
+  const brand = loadPackage(publicDir).brand
+  if (brand === null) throw new Error('[skin] public/skin: no brand record')
+  return { ...brand }
 }
 
-/** Content of the generated src/styles/skin-tokens.css: the skin's token
- *  overrides verbatim under a banner, or the golden stub. Written by
- *  vite.config.ts at config time so the CSS import order in app.ts
- *  (`variables -> global -> skin`) is mechanical, never hopeful (tz-whitelabel
- *  §3, the cascade paragraph). */
+/**
+ * The background photo a skin package really ships, by what lies in
+ * `skin/assets/bg/`: WebP is preferred (the golden format), PNG is the legacy
+ * one already-released skins carry (the file set is a product contract, not
+ * a format mandate; FE-157).
+ *
+ * @returns The file extension, or null when the package has no photo.
+ *
+ * @param publicDir - The frontend/public directory.
+ */
+export function skinBackgroundFormat(publicDir: string): 'webp' | 'png' | null {
+  const bg = join(publicDir, 'skin', 'assets', 'bg')
+  if (existsSync(join(bg, 'background.webp'))) return 'webp'
+  if (existsSync(join(bg, 'background.png'))) return 'png'
+  return null
+}
+
+/** Content of the virtual module virtual:skin-tokens.css: the package's DTCG
+ *  tokens converted to CSS custom properties (plus an \@font-face rule per
+ *  self-hosted font), or the golden stub. Served by platform/skin-virtual.ts
+ *  at build time so the CSS import order in app.ts (variables, then global,
+ *  then skin) is mechanical, never hopeful (tz-whitelabel §3, the cascade
+ *  paragraph). */
 export function materializedSkinTokens(publicDir: string, skin: SkinPackage | null): string {
   if (skin === null) {
     return `/* GENERATED -- tz-whitelabel §3 cascade stub.
- * No skin package ships with this build (public/skin/brand.json absent):
- * this file is intentionally empty and MUST stay imported AFTER global.css
- * in app.ts. A build with a skin overwrites it with public/skin/tokens.css.
+ * No skin package ships with this build (public/skin/primer-package.yaml
+ * absent): this module is intentionally empty and MUST stay imported AFTER
+ * global.css in app.ts. A build with a skin serves the package's tokens
+ * converted to CSS instead.
  */
 `
   }
-  const tokens = readFileSync(join(publicDir, 'skin', 'tokens.css'), 'utf8')
-  // The package keeps its declarations FLAT (no selector) -- simpler for a
-  // non-CSS author; this file wraps them in :root, because bare declarations
-  // outside a selector are invalid CSS the browser silently drops (caught by
-  // the first dark-theme build: the background applied, the tokens did not).
-  return `/* GENERATED from public/skin/tokens.css (tz-whitelabel §3 cascade) —
- * do not edit; regenerate by rebuilding. Imported AFTER global.css in app.ts.
+  // The photo URL token follows the file that really lies in assets/bg/
+  // (the build spills it over the canonical /bg/ path). No bg/ = the golden
+  // default from global.css stays. A SEPARATE :root block after the
+  // package's: the file on disk wins over any token the package sets.
+  const bgFormat = skinBackgroundFormat(publicDir)
+  const bgOverride =
+    bgFormat === null
+      ? ''
+      : `:root {\n  --velo-app-bg-image: url('/bg/background.${bgFormat}');\n}\n`
+  return `/* GENERATED from public/skin/tokens/*.tokens.json (tz-whitelabel §3 cascade,
+ * FE-131 DTCG engine) — do not edit; regenerate by rebuilding. Imported
+ * AFTER global.css in app.ts.
  */
-:root {
-${tokens}
-}
-`
+${skinCss(loadPackage(publicDir))}${bgOverride}`
 }

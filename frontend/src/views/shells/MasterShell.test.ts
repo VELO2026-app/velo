@@ -111,7 +111,7 @@ async function mount(
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(MasterShell).use(createTestI18n())
-  // The shell reads the schoolsHub store (the Schools tab probe, i18n:tabs.schools).
+  // The shell reads the schools hub (useSchoolsHub -- the Schools tab probe, i18n:tabs.schools).
   const pinia = createPinia()
   app.use(pinia)
   // Seed BEFORE mount so onMounted's probe sees the seeded account.

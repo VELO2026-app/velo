@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // A Telegram Mini App is reopened and reloaded often; the in-memory screen
-// cache (useQuery, stores) starts empty every time, so the first visit of
+// cache (Colada, stores) starts empty every time, so the first visit of
 // every tab drew a skeleton. A few chosen, small, non-sensitive payloads are
 // mirrored here and shown at once on the next start, then revalidated in the
 // background (stale-while-revalidate -- the hydrated copy always counts as
@@ -25,9 +25,13 @@ import { readSessionJson, removeSessionKeys, writeSessionString } from '@/platfo
 
 // Bumped whenever a persisted payload changes shape. 2 (FE-127): the school
 // rename moved the practice school fields and the schools-list fields, so
-// every v1 copy is a payload this build no longer reads.
+// every v1 copy is a payload this build no longer reads. 3 (FE-166): the
+// in-house cache's `q:` slots and the bookings store's `bookings.upcoming`
+// moved to Colada's `colada:` slots -- nothing reads them any more, and they
+// would sit in the size budget until sign-out. 4 (FE-166 step 4): the same
+// for the calendar store's `calendar:` week slots.
 /** Format version of the persisted screen cache; a bump orphans every older copy. */
-export const PERSIST_VERSION = 2
+export const PERSIST_VERSION = 4
 /** sessionStorage key prefix shared by every persisted-cache slot. */
 export const PERSIST_PREFIX = 'velo:screen-cache:'
 /** Total budget for the serialized cache (sessionStorage is ~5 MB). */
@@ -93,6 +97,21 @@ export function writePersisted(name: string, data: unknown, at = Date.now()): vo
   if (owner === null) return
   load()[name] = { at, data }
   if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_DELAY_MS)
+}
+
+/** Forget the current owner's copy of `name` (it no longer holds; batched write). */
+export function removePersisted(name: string): void {
+  if (owner === null) return
+  const all = load()
+  if (!(name in all)) return
+  delete all[name]
+  if (flushTimer === null) flushTimer = setTimeout(flush, FLUSH_DELAY_MS)
+}
+
+/** Names of the current owner's persisted copies that start with `prefix`. */
+export function persistedNames(prefix: string): string[] {
+  if (owner === null) return []
+  return Object.keys(load()).filter((name) => name.startsWith(prefix))
 }
 
 /** Forget everything, every account (sign-out). */

@@ -24,31 +24,6 @@
     "master": "Мастер",
     "approve": "Одобрить выплату"
   },
-  "admin": {
-    "fallbackUserName": "Пользователь",
-    "masterStatus": {
-      "pending": "Ожидает",
-      "verified": "Верифицирован",
-      "rejected": "Отклонён",
-      "suspended": "Заблокирован",
-      "cancelled_by_user": "Аккаунт удалён"
-    },
-    "reportStatus": {
-      "pending": "Ожидает",
-      "resolved": "Решена",
-      "dismissed": "Отклонена"
-    },
-    "reportTarget": {
-      "user": "Юзер",
-      "master": "Мастер",
-      "practice": "Практика"
-    },
-    "relative": {
-      "justNow": "только что",
-      "minutesAgo": "{n} мин назад",
-      "hoursAgo": "{n} ч назад"
-    }
-  },
   "adminScreens": {
     "adminCatalog": {
       "newDirectionPlaceholder": "Новое направление…",

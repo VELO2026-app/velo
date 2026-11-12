@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    // TS 6: rootDir is no longer inferred when outDir is set.
+    "rootDir": "src",
+    "outDir": "dist/types"
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.stories.ts",
+    "src/test-setup.ts"
+  ]
+}

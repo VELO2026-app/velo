@@ -4,9 +4,14 @@
 //
 // Covers loginViaTelegram, restoreSession, logout -- per the ranked T1 plan,
 // sequenced after stores/bookings.ts since this store carries the most
-// incidental complexity relative to its money-criticality: a dynamic
-// @/composables/useAuth import inside logout(), a dynamic @/stores/master
-// import, and storage side effects.
+// incidental complexity relative to its money-criticality: storage side
+// effects and the session-end announcement (platform/session.ts).
+//
+// FE-157: the end of a session resets the other stores through the account
+// scope (platform/session.ts), so the Pinia here is installed in an app with
+// accountScopePlugin -- the way app.ts installs it -- and the resets are
+// asserted on the REAL stores. Every store against the contract, over the
+// real client's 401, lives in stores/session-reset.test.ts.
 //
 // Standalone phase 3: the token's carrier is the PLATFORM's call
 // (platform/session-token.ts) -- sessionStorage in Telegram, localStorage
@@ -14,12 +19,9 @@
 // each carrier by platformName, so these tests assert the actual storage a
 // platform writes, not a stand-in.
 //
-// @/composables/useAuth is mocked WHOLESALE (not partially) specifically so
-// the real module -- which imports useAuthStore from @/stores/auth at module
-// scope, and owns the module-level `isReady` singleton behind
-// waitUntilReady() -- is never evaluated. That singleton/seam is the stage-3
-// blocker (router guards); mocking the whole module here sidesteps it
-// entirely rather than working around it, so nothing from stage 3 leaks in.
+// The composables that react to the session ending (the Telegram logout gate,
+// the role-freshness poll) subscribe through onSessionEnd; their half is in
+// composables/session-end.test.ts.
 //
 // loginViaTelegram calls `api.post` directly (no api/*.ts wrapper), so it is
 // mocked at the @/api/client seam, same pattern as the stage-1 wrapper tests.
@@ -27,8 +29,12 @@
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createApp } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { useMasterStore } from '@/stores/master'
+import { useBookingsStore } from '@/stores/bookings'
+import { accountScopePlugin } from '@/platform/session'
 import { flushPersisted, readPersisted, writePersisted } from '@/composables/persistedCache'
 import { api, ApiNetworkError, ApiResponseError } from '@/api/client'
 import * as usersApi from '@/api/users'
@@ -48,19 +54,6 @@ vi.mock('@/api/client', async (importOriginal) => {
 })
 
 vi.mock('@/api/users')
-
-const masterReset = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({ $reset: masterReset }),
-}))
-
-const bookingsReset = vi.fn()
-vi.mock('@/stores/bookings', () => ({
-  useBookingsStore: () => ({ $reset: bookingsReset }),
-}))
-
-const beginLogout = vi.fn()
-vi.mock('@/composables/useAuth', () => ({ beginLogout }))
 
 const platformClose = vi.fn()
 let platformName: 'telegram' | 'standalone' = 'standalone'
@@ -82,6 +75,22 @@ vi.mock('@/platform', async () => {
   }
 })
 
+/** Put account data into the stores the old hand-kept reset lists covered. */
+function fillAccountStores(): void {
+  const master = useMasterStore()
+  master.onboardingShownThisSession = true
+  const bookings = useBookingsStore()
+  bookings.dismissCheckin('practice_1')
+}
+
+/** The same stores are back to their initial state. */
+function expectAccountStoresReset(): void {
+  const master = useMasterStore()
+  expect(master.onboardingShownThisSession).toBe(false)
+  const bookings = useBookingsStore()
+  expect(bookings.dismissedCheckins).toEqual([])
+}
+
 function fakeUser(overrides: Partial<UserResponse> = {}): UserResponse {
   return {
     id: 'user_1',
@@ -95,14 +104,14 @@ function fakeUser(overrides: Partial<UserResponse> = {}): UserResponse {
 
 describe('useAuthStore', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    // Pinia runs plugins only once installed in an app (as in app.ts).
+    const pinia = createPinia().use(accountScopePlugin)
+    createApp({}).use(pinia)
+    setActivePinia(pinia)
     sessionStorage.clear()
     localStorage.clear()
     vi.mocked(api.post).mockReset()
     vi.mocked(usersApi.getMe).mockReset()
-    masterReset.mockReset()
-    bookingsReset.mockReset()
-    beginLogout.mockReset()
     platformClose.mockReset()
     platformName = 'standalone'
   })
@@ -254,53 +263,54 @@ describe('useAuthStore', () => {
       )
     })
 
-    it('the account boundary resets the bookings store with the session (W-1)', async () => {
-      platformName = 'standalone'
-      vi.mocked(api.post).mockResolvedValue(undefined)
+    it('a refused restore resets the other stores with the session (W-1)', async () => {
+      // The 401 path into _clearSession, not logout: before FE-157 it reset
+      // only the bookings store, and that one asynchronously.
       localStorage.setItem('velo_token', 'tok')
       const store = useAuthStore()
-      store.token = 'tok'
-      store.user = fakeUser()
+      fillAccountStores()
+      vi.mocked(usersApi.getMe).mockRejectedValue(
+        new ApiResponseError(401, 'Session expired', 'unauthorized'),
+      )
 
-      await store.logout()
-      // The reset rides a dynamic import out of _clearSession.
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(bookingsReset).toHaveBeenCalled()
+      await expect(store.restoreSession()).resolves.toBe('rejected')
+
+      expectAccountStoresReset()
     })
   })
 
   describe('logout', () => {
-    it('standalone: resets master store, posts logout, clears session, does NOT touch the Telegram gate', async () => {
+    it('standalone: posts logout, clears session and every store, does NOT touch the Telegram gate', async () => {
       platformName = 'standalone'
       vi.mocked(api.post).mockResolvedValue(undefined)
       localStorage.setItem('velo_token', 'tok')
       const store = useAuthStore()
       store.token = 'tok'
       store.user = fakeUser()
+      fillAccountStores()
 
       await store.logout()
 
-      expect(masterReset).toHaveBeenCalledTimes(1)
+      expectAccountStoresReset()
       expect(api.post).toHaveBeenCalledWith('/api/v1/auth/logout')
       expect(store.token).toBeNull()
       expect(store.user).toBeNull()
       // Standalone phase 3, item 6: the persistent token is gone too.
       expect(localStorage.getItem('velo_token')).toBeNull()
-      expect(beginLogout).not.toHaveBeenCalled()
       expect(platformClose).not.toHaveBeenCalled()
     })
 
-    it('Telegram: arms the logout gate BEFORE clearing session, then closes the Mini App', async () => {
+    it('Telegram: clears the session, then closes the Mini App (the gate: composables/session-end.test.ts)', async () => {
       platformName = 'telegram'
       vi.mocked(api.post).mockResolvedValue(undefined)
       const store = useAuthStore()
       store.token = 'tok'
       store.user = fakeUser()
+      fillAccountStores()
 
       await store.logout()
 
-      expect(beginLogout).toHaveBeenCalledTimes(1)
-      expect(masterReset).toHaveBeenCalledTimes(1)
+      expectAccountStoresReset()
       expect(store.token).toBeNull()
       expect(platformClose).toHaveBeenCalledTimes(1)
     })
@@ -358,6 +368,47 @@ describe('useAuthStore', () => {
       // user/token would be resurrected here even though logout cleared them.
       expect(store.user).toBeNull()
       expect(store.token).toBeNull()
+    })
+
+    it('a 401 for a token replaced while in flight does not end the new session', async () => {
+      const store = useAuthStore()
+      store.token = 'tok_1'
+      store.user = fakeUser()
+      let rejectGetMe: (error: unknown) => void = () => {}
+      vi.mocked(usersApi.getMe).mockImplementation(
+        () =>
+          new Promise<UserResponse>((_resolve, reject) => {
+            rejectGetMe = reject
+          }),
+      )
+      const fetchPromise = store.fetchMe()
+
+      // A new session takes over while the old token's /me is in flight.
+      store.token = 'tok_2'
+      store.user = fakeUser({ id: 'user_2' })
+      fillAccountStores()
+      rejectGetMe(new ApiResponseError(401, 'Session expired', 'unauthorized'))
+
+      await expect(fetchPromise).resolves.toBe(true)
+      expect(store.token).toBe('tok_2')
+      expect(store.user?.id).toBe('user_2')
+      expect(useMasterStore().onboardingShownThisSession).toBe(true)
+    })
+
+    it('a 401 for the current token ends the session and resets the stores', async () => {
+      const store = useAuthStore()
+      store.token = 'tok_1'
+      store.user = fakeUser()
+      fillAccountStores()
+      vi.mocked(usersApi.getMe).mockRejectedValue(
+        new ApiResponseError(401, 'Session expired', 'unauthorized'),
+      )
+
+      await expect(store.fetchMe()).resolves.toBe(true)
+
+      expect(store.token).toBeNull()
+      expect(store.user).toBeNull()
+      expectAccountStoresReset()
     })
 
     it('still writes the result for a request that resolves BEFORE anything else changes the session', async () => {

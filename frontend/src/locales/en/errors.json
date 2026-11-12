@@ -47,6 +47,7 @@
     "mcp_token_not_found": "Token not found — refresh the list",
     "mcp_token_name_taken": "A token with this name already exists — choose another",
     "delivery_window_empty": "The delivery start and end times cannot be the same",
+    "payments_unavailable": "Paid practices are not available on this platform — make the practice free",
     "unauthorized": "Your session has expired — log in again",
     "not_found": "The requested resource was not found",
     "forbidden": "The action is not available",
@@ -58,7 +59,6 @@
   },
   "transcription": {
     "generic": "The transcription service is unavailable",
-    "transcription_not_configured": "Voice input is unavailable",
     "transcription_unavailable": "The transcription service is unavailable",
     "transcription_failed": "The transcription service is unavailable",
     "speech_not_recognized": "Could not recognize the speech",
@@ -73,14 +73,10 @@
       "overview": "Failed to load the period statistics"
     },
     "bookings": {
-      "selected": "Failed to load the booking",
+      "list": "Failed to load your bookings",
       "upcoming": "Failed to load the nearest practice",
       "cancel": "Failed to cancel the booking",
-      "join": "Failed to join the practice",
-      "skipCheckin": "Failed to skip the check-in"
-    },
-    "master": {
-      "profile": "Failed to load the master profile"
+      "join": "Failed to join the practice"
     },
     "calendar": {
       "schoolPractices": "Failed to load the school's practices",

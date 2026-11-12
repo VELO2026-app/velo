@@ -1,0 +1,31 @@
+{
+  "name": "velo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.4.2",
+  "scripts": {
+    "verify": "pnpm -r verify",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "format:check": "pnpm -r format:check",
+    "storybook": "pnpm -C packages/velo-ui storybook",
+    "prepare": "husky frontend/.husky"
+  },
+  "devDependencies": {
+    "eslint": "^10.13.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
+    "prettier": "^3.5.0",
+    "stylelint": "^17.16.0",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "lint-staged": {
+    "{frontend,packages}/**/*.{js,mjs,ts,vue,css,json}": "prettier --write --ignore-unknown --ignore-path frontend/.prettierignore",
+    "frontend/src/**/*.{ts,vue}": "pnpm -C frontend exec eslint --cache --max-warnings 0 --no-warn-ignored",
+    "packages/velo-ui/src/**/*.{ts,vue}": "pnpm -C packages/velo-ui exec eslint --cache --max-warnings 0 --no-warn-ignored"
+  }
+}

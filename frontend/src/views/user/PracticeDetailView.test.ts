@@ -32,11 +32,13 @@
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest'
+import { createApp, nextTick, shallowReactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeDetailView from '@/views/user/PracticeDetailView.vue'
 import type { BookingWithPracticeResponse, SchoolMineItem, PracticeResponse } from '@/api/types'
+import { ApiResponseError } from '@/api/client'
+import { applyInstanceConfig } from '@/platform/instance'
 
 const push = vi.fn()
 const back = vi.fn()
@@ -83,23 +85,31 @@ vi.mock('@/stores/practices', () => ({
   }),
 }))
 
-// -- bookings store (dependency) --
-const bookingsState: { bookings: BookingWithPracticeResponse[] } = { bookings: [] }
-const fetchMyBookings = vi.fn()
-const refreshBookings = vi.fn()
-const refreshMyBookings = vi.fn()
+// -- the bookings list and the cancel mutation (dependencies, FE-157 4F /
+//    FE-166 step 3): how the list is fetched and what the cancel refreshes is
+//    composables/queries/bookings.test.ts's business; this screen owns what it
+//    derives from the list, the B30 refetch on open, the cancel call, the
+//    double-tap guard and the toasts. `cancelBooking` stands for mutateAsync:
+//    it resolves on success and rejects with the API error. --
+// shallowReactive: the recording watcher must see a later swap of the booking.
+const bookingsState = shallowReactive<{ bookings: BookingWithPracticeResponse[] }>({
+  bookings: [],
+})
+const refetchMyBookings = vi.fn()
 const cancelBooking = vi.fn()
-vi.mock('@/stores/bookings', () => ({
-  useBookingsStore: () => ({
-    get bookings() {
-      return bookingsState.bookings
-    },
-    fetchMyBookings,
-    refreshBookings,
-    refreshMyBookings,
-    cancelBooking,
-  }),
-}))
+vi.mock('@/composables/queries/bookings', async () => {
+  const { computed, ref } = await import('vue')
+  return {
+    useMyBookings: () => ({
+      bookings: computed(() => bookingsState.bookings),
+      fetching: ref(false),
+      refetch: refetchMyBookings,
+    }),
+    useCancelBooking: () => ({ mutateAsync: cancelBooking }),
+    // The booking popup (a child) books through this one; not exercised here.
+    usePurchaseBooking: () => ({ mutateAsync: vi.fn() }),
+  }
+})
 
 // -- auth store (dependency): user.id drives isMaster; role gates the manage
 //    kebab (the /master shell's roleGuard would bounce any other role, so the
@@ -119,13 +129,14 @@ vi.mock('@/stores/auth', () => ({
   }),
 }))
 
-// -- schools hub store (dependency): the BE-63 curator check reads my schools
+// -- the schools hub (dependency): the BE-63 curator check reads my schools
 //    (relation + id are all the screen consumes; items are cast per fixture
 //    like the PracticeResponse one) --
 const schoolsHubState: { mine: SchoolMineItem[] } = { mine: [] }
-vi.mock('@/stores/schoolsHub', () => ({
-  useSchoolsHubStore: () => ({
-    get mine() {
+vi.mock('@/composables/queries/schools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/composables/queries/schools')>()),
+  useMySchools: () => ({
+    get value() {
       return schoolsHubState.mine
     },
   }),
@@ -291,10 +302,8 @@ beforeEach(() => {
   fetchPractice.mockReset()
   openPractice.mockReset()
   clearSelected.mockReset()
-  fetchMyBookings.mockReset()
-  refreshBookings.mockReset()
-  refreshMyBookings.mockReset()
-  cancelBooking.mockReset().mockResolvedValue({ ok: true })
+  refetchMyBookings.mockReset()
+  cancelBooking.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
   toastError.mockReset()
@@ -346,12 +355,12 @@ describe('PracticeDetailView', () => {
       expect(text()).toContain('Вечерняя йога')
     })
 
-    it('fetches the practice and refreshes the bookings on mount (B30: not the cached-skip fetchMyBookings)', async () => {
+    it('fetches the practice and refetches the bookings on mount (B30: not only when stale)', async () => {
       mount()
       await flush()
 
       expect(openPractice).toHaveBeenCalledWith('p1')
-      expect(refreshMyBookings).toHaveBeenCalled()
+      expect(refetchMyBookings).toHaveBeenCalled()
     })
   })
 
@@ -399,6 +408,44 @@ describe('PracticeDetailView', () => {
       await flush()
 
       expect(host?.querySelector('.detail__price-row')).toBeNull()
+    })
+  })
+
+  describe('payments option off (FE-163, PM-22 p.2)', () => {
+    beforeEach(() => {
+      applyInstanceConfig({ options: { payments: 'false' } })
+      onTestFinished(() => applyInstanceConfig(null))
+    })
+
+    it('a paid practice, not booked: no price, no book button, «Запись недоступна»', async () => {
+      practicesState.selected = practice({ is_free: false, price_cents: 2500 })
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.detail__price-row')).toBeNull()
+      expect(button('Забронировать')).toBeUndefined()
+      expect(text()).toContain('Запись недоступна')
+    })
+
+    it('a paid practice, already booked: nothing changes -- status, cancel stay', async () => {
+      practicesState.selected = practice({ is_free: false, price_cents: 2500 })
+      bookingsState.bookings = [booking({ status: 'confirmed' })]
+      mount()
+      await flush()
+
+      expect(text()).toContain('Вы записаны')
+      expect(text()).not.toContain('Запись недоступна')
+      expect(button('Отменить бронирование')).toBeDefined()
+    })
+
+    it('a free practice is untouched: price row «Бесплатно» and the book button', async () => {
+      practicesState.selected = practice({ is_free: true, price_cents: 0 })
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.detail__price-value')?.textContent).toContain('Бесплатно')
+      expect(button('Записаться бесплатно')).toBeDefined()
+      expect(text()).not.toContain('Запись недоступна')
     })
   })
 
@@ -712,7 +759,7 @@ describe('PracticeDetailView', () => {
       expect(button('Отменить бронирование')).toBeUndefined()
     })
 
-    it('cancels through the store and reports success', async () => {
+    it('cancels through the cancel mutation and reports success', async () => {
       bookingsState.bookings = [booking({ id: 'b7', status: 'confirmed' })]
       mount()
       await flush()
@@ -720,15 +767,18 @@ describe('PracticeDetailView', () => {
       button('Отменить бронирование')?.click()
       await flush()
 
-      expect(cancelBooking).toHaveBeenCalledWith('b7')
+      expect(cancelBooking).toHaveBeenCalledWith({ bookingId: 'b7', practiceId: 'p1' })
       expect(toastSuccess).toHaveBeenCalledWith('Бронирование отменено')
     })
 
-    it("surfaces the store's REAL error and does NOT claim success", async () => {
-      // W-25: the store returns { ok, error } and raises no toast itself
-      // (PracticeDetailView.vue:~318-325). Swallowing this would tell a user
+    it("surfaces the server's REAL error and does NOT claim success", async () => {
+      // The mutation rejects with the API error and raises no toast itself;
+      // the screen maps the code to its catalog phrase
+      // (i18n:errors.practice_completed). Swallowing this would tell a user
       // their money-back cancel worked when it did not.
-      cancelBooking.mockResolvedValue({ ok: false, error: 'Отмена невозможна менее чем за час' })
+      cancelBooking.mockRejectedValue(
+        new ApiResponseError(400, 'practice completed', 'practice_completed'),
+      )
       bookingsState.bookings = [booking({ status: 'confirmed' })]
       mount()
       await flush()
@@ -736,12 +786,45 @@ describe('PracticeDetailView', () => {
       button('Отменить бронирование')?.click()
       await flush()
 
-      expect(toastError).toHaveBeenCalledWith('Отмена невозможна менее чем за час')
+      expect(toastError).toHaveBeenCalledWith(
+        'Эта практика уже завершена — отменить бронирование нельзя',
+      )
+      expect(toastSuccess).not.toHaveBeenCalled()
+    })
+
+    it('an unmapped error code falls back to the generic cancel message', async () => {
+      // 'cancel_window_closed' is not a real backend code, so the catalog has
+      // no phrase for it and the call site's own fallback
+      // (i18n:storeErrors.bookings.cancel) is shown.
+      cancelBooking.mockRejectedValue(
+        new ApiResponseError(400, 'Too close to start time', 'cancel_window_closed'),
+      )
+      bookingsState.bookings = [booking({ status: 'confirmed' })]
+      mount()
+      await flush()
+
+      button('Отменить бронирование')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось отменить бронирование')
+      expect(toastSuccess).not.toHaveBeenCalled()
+    })
+
+    it('a non-API error falls back to the generic cancel message', async () => {
+      cancelBooking.mockRejectedValue(new Error('boom'))
+      bookingsState.bookings = [booking({ status: 'confirmed' })]
+      mount()
+      await flush()
+
+      button('Отменить бронирование')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось отменить бронирование')
       expect(toastSuccess).not.toHaveBeenCalled()
     })
 
     it('does NOT double-cancel when the button is hit twice in flight', async () => {
-      let resolve!: (v: { ok: boolean }) => void
+      let resolve!: (v: undefined) => void
       cancelBooking.mockReturnValue(
         new Promise((r) => {
           resolve = r
@@ -758,7 +841,7 @@ describe('PracticeDetailView', () => {
 
       expect(cancelBooking).toHaveBeenCalledTimes(1)
 
-      resolve({ ok: true })
+      resolve(undefined)
       await flush()
     })
   })
@@ -873,6 +956,33 @@ describe('PracticeDetailView', () => {
 
       expect(getBookingRecording).toHaveBeenCalledWith('b1')
       expect(button('Посмотреть запись')).toBeDefined()
+    })
+
+    it('FE-157: a slow link for a superseded booking is dropped, not shown', async () => {
+      let resolveOld!: (v: { status: string; url: string }) => void
+      getBookingRecording.mockReturnValueOnce(
+        new Promise((r) => {
+          resolveOld = r
+        }),
+      )
+      practicesState.selected = practice({ scheduled_at: ended, duration_minutes: 60 })
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'confirmed' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      mount()
+      await flush()
+      expect(getBookingRecording).toHaveBeenCalledWith('b1')
+
+      // The booking is cancelled meanwhile: the watcher resets the link and
+      // the (still pending) answer for b1 must not resurrect it.
+      bookingsState.bookings = [
+        booking({ id: 'b1', status: 'cancelled' }, { scheduled_at: ended, duration_minutes: 60 }),
+      ]
+      await flush()
+      resolveOld({ status: 'available', url: 'https://zoom.us/rec/old' })
+      await flush()
+
+      expect(button('Посмотреть запись')).toBeUndefined()
     })
 
     it('a CANCELLED booking never qualifies, even past end', async () => {

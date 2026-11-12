@@ -2,15 +2,16 @@
 // VELO Frontend -- platform/chunk-reload.ts tests (BE-149)
 // =============================================================================
 //
-// Contract: on `vite:preloadError` reload ONCE per session, and only when the
-// once-mark can be held; the second time stay out of the way so a failure that
-// survives a reload cannot become a reload loop. Twin axes: REPEAT (second
-// event, two events in one tick), EMPTY (event without payload), SHORTAGE
-// (storage that throws, mark already spent).
+// Contract: on `vite:preloadError` reload at most once per RELOAD_WINDOW_MS,
+// and only when the mark can be held; inside the window stay out of the way so
+// a failure that survives a reload cannot become a reload loop. After the
+// window (the next deploy in the same long-lived session, FE-157) reload
+// again. Twin axes: REPEAT (second event, two events in one tick), EMPTY
+// (event without payload), SHORTAGE (storage that throws), WINDOW.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
-import { CHUNK_RELOAD_KEY, installChunkReload } from '@/platform/chunk-reload'
+import { CHUNK_RELOAD_KEY, installChunkReload, RELOAD_WINDOW_MS } from '@/platform/chunk-reload'
 
 function preloadError(payload?: unknown): Event {
   const e = new Event('vite:preloadError', { cancelable: true })
@@ -36,12 +37,12 @@ describe('installChunkReload', () => {
 
     expect(reload).toHaveBeenCalledTimes(1)
     expect(e.defaultPrevented).toBe(true)
-    expect(sessionStorage.getItem(CHUNK_RELOAD_KEY)).toBe('1')
+    expect(Number(sessionStorage.getItem(CHUNK_RELOAD_KEY))).toBeGreaterThan(0)
   })
 
   it('REPEAT: the failure survives the reload -> no second reload, error left to Vite', () => {
-    // The state after the reload: same session, mark already spent.
-    sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+    // The state right after the reload: same session, mark set a moment ago.
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now() - 2_000))
     installChunkReload(target, () => sessionStorage, reload)
     const e = preloadError(new TypeError('x'))
 
@@ -110,5 +111,36 @@ describe('installChunkReload', () => {
 
     expect(reload).not.toHaveBeenCalled()
     expect(sessionStorage.getItem(CHUNK_RELOAD_KEY)).toBeNull()
+  })
+
+  it('WINDOW: the next deploy in the same session reloads again once the window passed', () => {
+    let clock = 1_000_000
+    installChunkReload(
+      target,
+      () => sessionStorage,
+      reload,
+      () => clock,
+    )
+
+    target.dispatchEvent(preloadError())
+    clock += RELOAD_WINDOW_MS - 1
+    const inside = preloadError()
+    target.dispatchEvent(inside)
+    clock += 2
+    const after = preloadError()
+    target.dispatchEvent(after)
+
+    expect(reload).toHaveBeenCalledTimes(2)
+    expect(inside.defaultPrevented).toBe(false)
+    expect(after.defaultPrevented).toBe(true)
+  })
+
+  it('WINDOW: a legacy once-per-session mark ("1") does not block a reload', () => {
+    sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+    installChunkReload(target, () => sessionStorage, reload)
+
+    target.dispatchEvent(preloadError())
+
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 })

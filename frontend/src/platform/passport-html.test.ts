@@ -1,12 +1,16 @@
 // =============================================================================
 // VELO Frontend -- passportHtmlDefaults (tz-whitelabel F1, §2.2)
 // =============================================================================
-// index.html ships %VITE_*% passport placeholders; Vite replaces only DEFINED
-// env vars, and CI builds without a .env. The post-transform (build-side
-// seam in platform/passport-html.ts) resolves the leftovers to the golden
-// defaults. This suite pins that contract: undefined -> golden,
+// index.html ships %VELO_BRAND% / %VELO_DEFAULT_LOCALE% passport
+// placeholders (FE-153: no longer %VITE_*% -- Vite's own html pass warned on
+// every env-less build). The post-transform (build-side seam in
+// platform/passport-html.ts) is their only resolver: the VITE_* env var, else
+// the golden default. This suite pins that contract: undefined -> golden,
 // process.env -> wins, unknown placeholder -> untouched.
 // =============================================================================
+
+import { readFileSync, existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -44,7 +48,7 @@ describe('passportHtmlDefaults (tz-whitelabel F1)', () => {
     resolveWithRoot()
     vi.stubEnv('VITE_BRAND', undefined)
     vi.stubEnv('VITE_DEFAULT_LOCALE', undefined)
-    expect(transform('<html lang="%VITE_DEFAULT_LOCALE%"><title>%VITE_BRAND%</title>')).toBe(
+    expect(transform('<html lang="%VELO_DEFAULT_LOCALE%"><title>%VELO_BRAND%</title>')).toBe(
       '<html lang="ru"><title>VELO</title>',
     )
   })
@@ -53,7 +57,7 @@ describe('passportHtmlDefaults (tz-whitelabel F1)', () => {
     resolveWithRoot()
     vi.stubEnv('VITE_BRAND', 'ШКОЛА')
     vi.stubEnv('VITE_DEFAULT_LOCALE', 'en')
-    expect(transform('<html lang="%VITE_DEFAULT_LOCALE%"><title>%VITE_BRAND%</title>')).toBe(
+    expect(transform('<html lang="%VELO_DEFAULT_LOCALE%"><title>%VELO_BRAND%</title>')).toBe(
       '<html lang="en"><title>ШКОЛА</title>',
     )
   })
@@ -61,7 +65,9 @@ describe('passportHtmlDefaults (tz-whitelabel F1)', () => {
   it('an unknown placeholder is left as is (not our contract, not our business)', () => {
     resolveWithRoot()
     vi.stubEnv('VITE_SOMETHING_ELSE', undefined)
-    expect(transform('%VITE_SOMETHING_ELSE%')).toBe('%VITE_SOMETHING_ELSE%')
+    expect(transform('%VELO_SOMETHING_ELSE%')).toBe('%VELO_SOMETHING_ELSE%')
+    // A VITE_-spelled one is Vite's own html env pass, never this plugin's.
+    expect(transform('%VITE_BRAND%')).toBe('%VITE_BRAND%')
   })
 })
 
@@ -87,14 +93,16 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
     expect(transformSkin(FONT_HTML)).toBe(FONT_HTML)
   })
 
-  it('a skin: themeColor and the font link materialize from brand.json (§1 single source)', () => {
+  it('a skin: themeColor and the font preload materialize from the brand record (§1 single source)', () => {
     resolveWithRoot()
     const plugin = passportHtmlDefaults({
       displayName: 'ШКОЛА',
       shortName: 'Школа',
       themeColor: '#1B2A41',
       backgroundColor: '#F5F1EA',
-      fontUrl: 'https://fonts.example.com/rubik.css',
+      fonts: [
+        { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
+      ],
     })
     const transformSkin = (html: string): string => {
       const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
@@ -104,10 +112,25 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
       '<meta name="theme-color" content="#1B2A41" />',
     )
     const out = transformSkin(FONT_HTML)
-    expect(out).toContain('https://fonts.example.com/rubik.css')
+    // FE-131: the package's own font, no external request
+    expect(out).toContain('href="/skin/assets/fonts/rubik-400.woff2" as="font"')
     expect(out).not.toContain('Marmelad')
+    expect(out).not.toContain('googleapis')
     // the tab title follows the skin display name (half-branded tabs read fake)
     expect(transformSkin('<title>VELO</title>')).toBe('<title>ШКОЛА</title>')
+  })
+
+  it('the display name is escaped and never expands as a replace pattern', () => {
+    resolveWithRoot()
+    const plugin = passportHtmlDefaults({
+      displayName: 'A & B $& <i>',
+      shortName: 'AB',
+      themeColor: '#1B2A41',
+      backgroundColor: '#F5F1EA',
+      fonts: [],
+    })
+    const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
+    expect(hook.handler('<title>VELO</title>')).toBe('<title>A &amp; B $&amp; &lt;i&gt;</title>')
   })
 
   it('no skin: the golden title is untouched', () => {
@@ -120,5 +143,40 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
     })
     const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
     expect(hook.handler('<title>VELO</title>')).toBe('<title>VELO</title>')
+  })
+})
+
+describe('real index.html font block -- golden self-host vs skin webfont (FE-157 s2/font)', () => {
+  const INDEX_HTML = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
+  const run = (skin: Parameters<typeof passportHtmlDefaults>[0]): string => {
+    const p = passportHtmlDefaults(skin) as unknown as HtmlPlugin
+    p.configResolved({ mode: 'production', root: process.cwd(), envDir: NO_ENV_DIR })
+    return p.transformIndexHtml.handler(INDEX_HTML)
+  }
+
+  it('golden: Marmelad is preloaded from our own origin, no Google Fonts anywhere', () => {
+    const out = run(null)
+    expect(out).toMatch(
+      /<link rel="preload" href="\/fonts\/marmelad-subset\.woff2" as="font" type="font\/woff2" crossorigin \/>/,
+    )
+    expect(out).not.toContain('googleapis')
+    expect(out).not.toContain('gstatic')
+    expect(existsSync(resolve(process.cwd(), 'public/fonts/marmelad-subset.woff2'))).toBe(true)
+  })
+
+  it('skin fonts still replace the block: their preloads in, ours out (FE-131)', () => {
+    const out = run({
+      displayName: 'ШКОЛА',
+      shortName: 'Школа',
+      themeColor: '#1B2A41',
+      backgroundColor: '#F5F1EA',
+      fonts: [
+        { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
+      ],
+    })
+    expect(out).toContain(
+      '<link rel="preload" href="/skin/assets/fonts/rubik-400.woff2" as="font" type="font/woff2" crossorigin />',
+    )
+    expect(out).not.toContain('marmelad-subset')
   })
 })

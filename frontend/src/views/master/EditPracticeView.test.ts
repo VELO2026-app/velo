@@ -23,8 +23,9 @@
 //
 // PATTERN C (hybrid) -- the two halves are driven through DIFFERENT seams, and
 // mixing them would gut the test (velo-idiom §3 of Step 3):
-//   - DATA half: the practice arrives from useMasterStore's cache OR, on a miss,
-//     from getPractice() (:465-475). The store is a DEPENDENCY, not the thing
+//   - DATA half: the practice arrives from the master's loaded lists
+//     (cachedMyPractice) OR, on a miss, from getPractice(). The lists are a
+//     DEPENDENCY, not the thing
 //     under test, so it is mocked wholesale behind getters over a mutable object
 //     (the guards.test.ts trick, velo-idiom §5); @/api/practices is the other
 //     seam.
@@ -33,8 +34,8 @@
 //     typing into the field, tapping the real teleported DatePickerSheet -- never
 //     by poking `form`. Faking the form would mean asserting our own fixture.
 //
-// NO PINIA. Verified rather than assumed: `useMasterStore` is module-mocked
-// above, and NO child this screen renders resolves a store of its own (grep for
+// NO PINIA. Verified rather than assumed: the master's queries are
+// module-mocked above (and `useQueryCache` with them), and NO child this screen renders resolves a store of its own (grep for
 // use*Store over src/components hits only BookingPopup and RoleSwitchSection,
 // neither of which is in this tree). The PracticeDetailView precedent installs a
 // real Pinia because ITS children need one; ours do not, and installing one to
@@ -130,21 +131,30 @@ const masterState: {
   profile: MasterProfileResponse | null
   profileLoaded: boolean
 } = { practices: [], profile: null, profileLoaded: true }
-const refreshMyPractices = vi.fn()
-vi.mock('@/stores/master', () => ({
-  useMasterStore: () => ({
-    get practices() {
-      return masterState.practices
+// The master's queries (composables/queries/master.ts), getters over the
+// same object: the profile (its confirmed methods; whether it has answered --
+// usePracticeTaxonomyOptions), the practice lists as a warm cache
+// (masterState.practices), and the post-mutation refresh.
+const myPracticesChanged = vi.fn()
+vi.mock('@/composables/queries/master', () => ({
+  useMasterProfile: () => ({
+    profile: {
+      get value() {
+        return masterState.profile
+      },
     },
-    get profile() {
-      return masterState.profile
+    loaded: {
+      get value() {
+        return masterState.profileLoaded
+      },
     },
-    get profileLoaded() {
-      return masterState.profileLoaded
-    },
-    refreshMyPractices,
   }),
+  cachedMyPractice: (_queryCache: unknown, id: string) =>
+    masterState.practices.find((p) => p.id === id),
+  myPracticesChanged: (...args: unknown[]) => myPracticesChanged(...args),
 }))
+// No Pinia here: the screen only hands the query cache to the functions above.
+vi.mock('@pinia/colada', () => ({ useQueryCache: () => ({}) }))
 
 const NOW = new Date('2026-07-20T12:00:00Z')
 
@@ -192,15 +202,19 @@ function mount(): HTMLElement {
   return host
 }
 
-/** Put the practice in the store cache and mount -- the instant path (:465-470). */
+/**
+ * Put the practice in the store cache and mount. The cache is only a
+ * placeholder: the server record (same here) is what fills the form.
+ */
 function mountCached(p: PracticeResponse): HTMLElement {
   masterState.practices = [p]
+  vi.mocked(practicesApi.getPractice).mockResolvedValue(p)
   routeParams.id = p.id
   return mount()
 }
 
 // onMounted's network branch awaits getPractice() then re-renders; the deepest
-// chain in the file is cancel(): await cancelPractice -> await refreshMyPractices
+// chain in the file is cancel(): await cancelPractice -> await myPracticesChanged
 // -> push -> re-render, and the fire-and-forget ensureTaxonomyCatalog().then()
 // lands somewhere alongside it. Four awaits plus the paint; six leaves margin.
 // (velo-idiom §3: count YOUR chain, do not copy a number. This one is counted.)
@@ -283,7 +297,7 @@ function confirmDialogConfirm(label: string): HTMLButtonElement | undefined {
 
 /** Drive the REAL teleported DatePickerSheet: open it, tap `day`, save. */
 async function pickDay(day: number): Promise<void> {
-  host?.querySelector<HTMLElement>('.edit-practice__picker')?.click()
+  host?.querySelector<HTMLElement>('.practice-schedule-picker__trigger')?.click()
   await flush()
 
   const cell = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.dps__day')).find(
@@ -296,6 +310,12 @@ async function pickDay(day: number): Promise<void> {
   const save = document.body.querySelector<HTMLButtonElement>('.v-sheet__save')
   if (!save) throw new Error('sheet save button not rendered')
   save.click()
+  await flush()
+}
+
+/** Make the form dirty with the smallest edit: a new title. */
+async function editTitle(value = 'Новое имя'): Promise<void> {
+  typeInto(titleField(), value)
   await flush()
 }
 
@@ -331,7 +351,7 @@ beforeEach(() => {
     .mockResolvedValue(practice({ status: 'cancelled' }))
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
   vi.mocked(cgApi.getMySchools).mockReset().mockResolvedValue({ items: [] })
-  refreshMyPractices.mockReset().mockResolvedValue(undefined)
+  myPracticesChanged.mockReset().mockResolvedValue(undefined)
   push.mockReset()
   back.mockReset()
   toastError.mockReset()
@@ -375,15 +395,60 @@ describe('EditPracticeView', () => {
       expect(button('Сохранить')).toBeUndefined()
     })
 
-    it('a cache HIT renders instantly and never touches the network', async () => {
-      // :465-470 -- the list already fetched this record; refetching it would
-      // put a spinner in front of a master who just tapped a card they can see.
-      mountCached(practice({ title: 'Вечерняя йога' }))
+    it('a cache HIT shows the placeholder at once, locks Save, then fills the form from the server', async () => {
+      let resolve!: (v: PracticeResponse) => void
+      vi.mocked(practicesApi.getPractice).mockReturnValue(
+        new Promise((r) => {
+          resolve = r
+        }),
+      )
+      masterState.practices = [practice({ title: 'Кэш' })]
+      mount()
       await flush()
 
-      expect(practicesApi.getPractice).not.toHaveBeenCalled()
+      // Placeholder: no spinner, cached values, but Save cannot fire yet.
       expect(host?.querySelector('.edit-practice__loader')).toBeNull()
-      expect(titleField()?.value).toBe('Вечерняя йога')
+      expect(titleField()?.value).toBe('Кэш')
+      expect(button('Сохранить')?.disabled).toBe(true)
+
+      resolve(practice({ title: 'Свежая' }))
+      await flush()
+
+      expect(practicesApi.getPractice).toHaveBeenCalledWith('p1')
+      expect(titleField()?.value).toBe('Свежая')
+      expect(button('Сохранить')?.disabled).toBe(false)
+    })
+
+    it('a stale cache never reaches the PATCH: only the edited field is sent, on the fresh base', async () => {
+      let resolve!: (v: PracticeResponse) => void
+      vi.mocked(practicesApi.getPractice).mockReturnValue(
+        new Promise((r) => {
+          resolve = r
+        }),
+      )
+      masterState.practices = [practice({ description: 'старое' })]
+      mount()
+      await flush()
+      // The master edits the title while the refresh is still in flight.
+      await editTitle('Моя правка')
+      resolve(practice({ description: 'чужая правка' }))
+      await flush()
+
+      // The edit survives; the other field took the fresh server value.
+      expect(titleField()?.value).toBe('Моя правка')
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(sentBody()).toEqual({ title: 'Моя правка' })
+    })
+
+    it('a failed refresh behind a placeholder drops the form instead of leaving stale data to save', async () => {
+      masterState.practices = [practice()]
+      vi.mocked(practicesApi.getPractice).mockRejectedValue(new TypeError('boom'))
+      mount()
+      await flush()
+
+      expect(button('Сохранить')).toBeUndefined()
     })
 
     it('a cache MISS fetches THIS practice by the route id', async () => {
@@ -459,7 +524,7 @@ describe('EditPracticeView', () => {
       mountCached(practice())
       await flush()
 
-      const pickers = Array.from(host?.querySelectorAll('.edit-practice__picker') ?? [])
+      const pickers = Array.from(host?.querySelectorAll('.practice-schedule-picker__trigger') ?? [])
       expect(pickers[0]?.textContent?.trim()).toBe('22 июля 2026')
       expect(pickers[1]?.textContent?.trim()).toBe('13:00')
     })
@@ -784,7 +849,7 @@ describe('EditPracticeView', () => {
     })
 
     it('on success: says the refunds ran, invalidates the cache, leaves the editor', async () => {
-      // refreshMyPractices is not cosmetic (:592): the list still holds the
+      // myPracticesChanged is not cosmetic (:592): the list still holds the
       // pre-cancel record, and THIS screen loads from that cache (:465) -- a
       // stale entry would re-open a cancelled practice with a live cancel button.
       mountCached(practice({ status: 'scheduled' }))
@@ -796,7 +861,7 @@ describe('EditPracticeView', () => {
       await flush()
 
       expect(toastSuccess).toHaveBeenCalledWith('Практика отменена, возвраты выполнены')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
@@ -822,7 +887,7 @@ describe('EditPracticeView', () => {
       expect(toastError).toHaveBeenCalledWith('Не удалось отменить')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(push).not.toHaveBeenCalled()
-      expect(refreshMyPractices).not.toHaveBeenCalled()
+      expect(myPracticesChanged).not.toHaveBeenCalled()
     })
 
     it('falls back to a generic message on a non-API error', async () => {
@@ -915,7 +980,7 @@ describe('EditPracticeView', () => {
       expect(practicesApi.deletePractice).toHaveBeenCalledTimes(1)
       expect(practicesApi.deletePractice).toHaveBeenCalledWith('p7')
       expect(toastSuccess).toHaveBeenCalledWith('Черновик удалён')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
@@ -989,7 +1054,7 @@ describe('EditPracticeView', () => {
 
       expect(practicesApi.updatePractice).toHaveBeenCalledWith('p7', { status: 'scheduled' })
       expect(toastSuccess).toHaveBeenCalledWith('Практика опубликована!')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
       expect(push).toHaveBeenCalledWith({ name: 'master-practices' })
     })
 
@@ -1039,6 +1104,24 @@ describe('EditPracticeView', () => {
       expect(text()).toContain('Введите название')
     })
 
+    it('after a refused Save a fixed field loses its own error at once (FE-157)', async () => {
+      // The shared validation (usePracticeForm) brings create's rule here: a
+      // field the master fixed clears its error without another Save.
+      mountCached(practice())
+      await flush()
+      typeInto(titleField(), '')
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+      expect(host?.querySelector('.v-input--error')).not.toBeNull()
+
+      typeInto(titleField(), 'Новое имя')
+      await flush()
+
+      expect(host?.querySelector('.v-input--error')).toBeNull()
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+    })
+
     // T-35: "refuses a non-https zoom link" lived here. It guarded the manual
     // Zoom URL field, which no longer exists -- there is nothing left on this
     // form for a master to type a link into, so the https validator went with
@@ -1075,61 +1158,67 @@ describe('EditPracticeView', () => {
   })
 
   describe('saving: the PATCH body', () => {
-    it("ships the practice's OWN price back, to the cent", async () => {
-      // MONEY. There is no price field on this form (the section was dropped;
-      // see the template's decision V note) -- the price only survives an edit
-      // because populateForm parks it in `form` and save reads it back
-      // (:449, :548). If that round-trip ever broke, every Save on this screen
-      // would silently reprice the practice, and the students who booked at the
-      // old price are already paid up.
+    it('an edit of the title alone leaves price, schedule and audience out of the body', async () => {
+      // MONEY. There is no price field on this form, and a PATCH built from the
+      // whole form used to write the price it had loaded back on every Save --
+      // a stale price over a concurrent change, for students already paid up.
+      // Now only what the master touched travels.
       mountCached(practice({ price_cents: 2599, is_free: false }))
       await flush()
+      await editTitle()
 
       button('Сохранить')?.click()
       await flush()
 
-      expect(sentBody().price_cents).toBe(2599)
-      expect(sentBody().is_free).toBe(false)
+      expect(sentBody()).toEqual({ title: 'Новое имя' })
     })
 
-    it('survives a price that float arithmetic would mangle (W-6)', async () => {
-      // 57 cents -> '0.57' -> back to 57. parseFloat('0.57') * 100 is
-      // 56.99999999999999 (currency.ts:6-12); a cent lost per save is a real
-      // pricing error, and the master would never see it happen.
-      mountCached(practice({ price_cents: 57, is_free: false }))
+    it('a second Save diffs against what the first one saved, not against the load', async () => {
+      mountCached(practice({ title: 'Йога утром' }))
       await flush()
-
+      await editTitle('Новое имя')
       button('Сохранить')?.click()
       await flush()
 
-      expect(sentBody().price_cents).toBe(57)
-    })
-
-    it('a FREE practice saves as free with a zero price, not as a paid one', async () => {
-      mountCached(practice({ is_free: true, price_cents: 0 }))
-      await flush()
-
+      // Back to the loaded title: the server holds the first save's title
+      // now, so this IS a change and must reach the server.
+      await editTitle('Йога утром')
       button('Сохранить')?.click()
       await flush()
 
-      expect(sentBody().is_free).toBe(true)
-      expect(sentBody().price_cents).toBe(0)
+      const calls = vi.mocked(practicesApi.updatePractice).mock.calls
+      expect(calls).toHaveLength(2)
+      expect(calls[1]?.[1]).toEqual({ title: 'Йога утром' })
     })
 
-    it("round-trips scheduled_at through the practice's OWN timezone", async () => {
-      // populateForm renders 10:00Z as 13:00 Moscow (:441-443); save converts
-      // 13:00 Moscow back to 10:00Z (:523-531). Saving an untouched form must
-      // therefore be a no-op on the schedule -- if the two halves used different
-      // zones, every Save would walk the practice by the UTC offset and the
-      // students booked into it would be told a new time.
+    it('after a save, an edit of another field does not resend the saved one', async () => {
+      mountCached(practice({ contraindications: null }))
+      await flush()
+      await editTitle('Новое имя')
+      button('Сохранить')?.click()
+      await flush()
+
+      typeInto(field('textarea[placeholder*="Беременность"]'), 'Беременность')
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      const calls = vi.mocked(practicesApi.updatePractice).mock.calls
+      expect(calls).toHaveLength(2)
+      expect(calls[1]?.[1]).toEqual({ contraindications: 'Беременность' })
+    })
+
+    it('an untouched Save sends no request at all and still reports saved', async () => {
+      // Round-trip safety: populate -> save of an unchanged form must be a
+      // no-op, not a rewrite of the schedule/price/audience from form strings.
       mountCached(practice())
       await flush()
 
       button('Сохранить')?.click()
       await flush()
 
-      expect(sentBody().scheduled_at).toBe('2026-07-22T10:00:00.000Z')
-      expect(sentBody().timezone).toBe('Europe/Moscow')
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(toastSuccess).toHaveBeenCalledWith('Сохранено')
     })
 
     it('trims the title and nulls out an emptied optional field', async () => {
@@ -1155,28 +1244,30 @@ describe('EditPracticeView', () => {
       expect(sentBody().contraindications).toBeNull()
     })
 
-    it("sends duration as a NUMBER, not the select's string", async () => {
-      // form.duration_minutes is a string from VSelect; save coerces with
-      // parseInt (:543). Shipping "60" to a backend expecting an int is a 422.
+    it("sends a changed duration as a NUMBER, not the select's string", async () => {
+      // form.duration_minutes is a string from VSelect; shipping "60" to a
+      // backend expecting an int is a 422.
       mountCached(practice({ duration_minutes: 90 }))
+      await flush()
+      choose(selectByLabel('Длительность'), '60')
       await flush()
 
       button('Сохранить')?.click()
       await flush()
 
-      expect(sentBody().duration_minutes).toBe(90)
-      expect(typeof sentBody().duration_minutes).toBe('number')
+      expect(sentBody()).toEqual({ duration_minutes: 60 })
     })
 
     it('on success: reports it and invalidates the list cache', async () => {
       mountCached(practice())
       await flush()
+      await editTitle()
 
       button('Сохранить')?.click()
       await flush()
 
       expect(toastSuccess).toHaveBeenCalledWith('Сохранено')
-      expect(refreshMyPractices).toHaveBeenCalled()
+      expect(myPracticesChanged).toHaveBeenCalled()
       // Save is not a "leave the screen" action -- unlike publish/cancel/delete.
       expect(push).not.toHaveBeenCalled()
     })
@@ -1191,6 +1282,7 @@ describe('EditPracticeView', () => {
       )
       mountCached(practice())
       await flush()
+      await editTitle()
 
       button('Сохранить')?.click()
       await flush()
@@ -1203,6 +1295,7 @@ describe('EditPracticeView', () => {
       vi.mocked(practicesApi.updatePractice).mockRejectedValue(new TypeError('boom'))
       mountCached(practice())
       await flush()
+      await editTitle()
 
       button('Сохранить')?.click()
       await flush()
@@ -1224,6 +1317,7 @@ describe('EditPracticeView', () => {
       )
       mountCached(practice())
       await flush()
+      await editTitle()
 
       button('Сохранить')?.click()
       await flush()
@@ -1244,6 +1338,7 @@ describe('EditPracticeView', () => {
       )
       mountCached(practice())
       await flush()
+      await editTitle()
 
       button('Сохранить')?.click()
       await flush()
@@ -1263,6 +1358,7 @@ describe('EditPracticeView', () => {
       )
       mountCached(practice())
       await flush()
+      await editTitle()
 
       button('Сохранить')?.click()
       await nextTick()
@@ -1286,7 +1382,7 @@ describe('EditPracticeView', () => {
 
       await pickDay(25)
 
-      expect(host?.querySelector('.edit-practice__picker')?.textContent?.trim()).toBe(
+      expect(host?.querySelector('.practice-schedule-picker__trigger')?.textContent?.trim()).toBe(
         '25 июля 2026',
       )
 
@@ -1303,7 +1399,7 @@ describe('EditPracticeView', () => {
       mountCached(practice())
       await flush()
 
-      host?.querySelector<HTMLElement>('.edit-practice__picker')?.click()
+      host?.querySelector<HTMLElement>('.practice-schedule-picker__trigger')?.click()
       await flush()
 
       const cells = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.dps__day'))
@@ -1316,6 +1412,39 @@ describe('EditPracticeView', () => {
       // Today itself stays selectable -- `ymd < min` is strict.
       expect(dayCell(20)?.disabled).toBe(false)
       expect(dayCell(21)?.disabled).toBe(false)
+    })
+
+    it('a start moved into the past today is refused with the future-date error (FE-157)', async () => {
+      // The sheet allows today, so the day alone cannot stop it: frozen at
+      // 12:00Z = 15:00 Moscow, the practice's 13:00 on the 20th is two hours
+      // gone. The backend refuses a past scheduled_at with a 422
+      // (UpdatePracticeRequest.scheduled_at_must_be_future); the shared
+      // validation now explains it on the field, as create always did.
+      mountCached(practice())
+      await flush()
+
+      await pickDay(20)
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(text()).toContain('Дата должна быть в будущем')
+      expect(host?.querySelector('.practice-schedule-picker__trigger--error')).not.toBeNull()
+    })
+
+    it('a practice that has already started stays editable while its start is untouched (FE-157)', async () => {
+      // update_practice refuses only a deleted practice, and the past-start
+      // check runs only when scheduled_at is in the PATCH -- so the future
+      // check must not block a title fix on a running practice.
+      mountCached(practice({ status: 'live', scheduled_at: '2026-07-20T11:30:00Z' }))
+      await flush()
+
+      await editTitle()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(sentBody()).toEqual({ title: 'Новое имя' })
+      expect(text()).not.toContain('Дата должна быть в будущем')
     })
   })
 
@@ -1354,15 +1483,16 @@ describe('EditPracticeView', () => {
   })
 
   describe('«Для кого практика» (P5 port, PROMPT №606)', () => {
-    it('a public practice PATCHes audience_kind=public with no group_ids', async () => {
+    it('an untouched audience is NOT sent (a child occurrence would be refused it)', async () => {
       mountCached(practice({ audience_kind: 'public' }))
       await flush()
+      await editTitle()
 
       button('Сохранить')?.click()
       await flush()
 
-      expect(sentBody().audience_kind).toBe('public')
-      expect(sentBody().group_ids).toEqual([])
+      expect(sentBody()).not.toHaveProperty('audience_kind')
+      expect(sentBody()).not.toHaveProperty('group_ids')
     })
 
     it('pre-selects the chips of a groups-audience practice by resolving names -> ids', async () => {
@@ -1388,11 +1518,24 @@ describe('EditPracticeView', () => {
       )
       expect(otherChip?.classList.contains('v-chip--active')).toBe(false)
 
+      // Adding a second group changes the audience: the PAIR is sent whole.
+      Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+        .find((c) => c.textContent?.includes('VIP'))
+        ?.click()
+      await flush()
       button('Сохранить')?.click()
       await flush()
 
       expect(sentBody().audience_kind).toBe('groups')
-      expect(sentBody().group_ids).toEqual(['g2'])
+      expect([...(sentBody().group_ids ?? [])].sort()).toEqual(['g1', 'g2'])
+    })
+
+    it('a failed groups request surfaces a toast instead of an unhandled rejection', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValue(new Error('boom'))
+      mountCached(practice({}))
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить группы')
     })
 
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
@@ -1624,9 +1767,13 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
     await flush()
 
     expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
-    expect(sentBody().audience_kind).toBe('schools')
-    expect(sentBody().group_ids).toEqual([])
-    expect(sentBody()).not.toHaveProperty('school_id')
+    // Untouched: nothing to send. A title edit alone must not drag the
+    // audience (or the school) into the body.
+    expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+    await editTitle()
+    button('Сохранить')?.click()
+    await flush()
+    expect(sentBody()).toEqual({ title: 'Новое имя' })
     // FE-127: this guarded the plural array the school field once was (BE-74
     // made it one id). The contract now names the entity «school», so the
     // guard names the plural of the new field -- the regression it catches is
@@ -1675,8 +1822,7 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
     await flush()
 
     expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
-    expect(sentBody().audience_kind).toBe('public')
-    expect(sentBody()).not.toHaveProperty('school_id')
+    expect(practicesApi.updatePractice).not.toHaveBeenCalled()
   })
 
   it('same-named schools of the master cannot widen a school practice: Edit never asks for schools', async () => {
@@ -1695,11 +1841,12 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
     expect(cgApi.getMySchools).not.toHaveBeenCalled()
     expect(host?.querySelectorAll('.v-chip').length).toBe(0)
 
+    await editTitle()
     button('Сохранить')?.click()
     await flush()
 
     const call = vi.mocked(practicesApi.updatePractice).mock.calls[0]
-    expect(call?.[1]?.audience_kind).toBe('schools')
+    expect(call?.[1]).not.toHaveProperty('audience_kind')
     expect(call?.[1]).not.toHaveProperty('school_id')
   })
 

@@ -30,8 +30,6 @@ const CYR = /[А-Яа-яЁё]/
 const EXEMPT_DIRS = ['src/utils/schoolBranding', 'src/pwa']
 const I18N_REF = /(?<![A-Za-z0-9_-])i18n:([A-Za-z0-9_.]+)/g
 const LINE_COMMENT = /\/\/.*/g
-const BLOCK_COMMENT = /\/\*.*?\*\//gs
-const HTML_COMMENT = /<!--.*?-->/gs
 const TAG = /<[^>]+>/g
 const STRING_LIT = /(`[^`\n]*`|'[^'\n]*'|"[^"\n]*")/g
 const ATTR = /([\w:-]+)="([^"]*[А-Яа-яЁё][^"]*)"/g
@@ -132,6 +130,7 @@ function stripHtmlComments(src) {
 // before testing block tags, so a literal "<template>"/"<style>" WORD inside
 // a comment never opens a block.
 function vueCommentSpans(raw) {
+  /** @type {{ text: string, at: number, line?: number }[]} */
   const out = []
   const openRe = /<(template|script|style)(?=[\s>])/g
   let i = 0
@@ -151,7 +150,7 @@ function vueCommentSpans(raw) {
       i = next
       continue
     }
-    if (oAt === Infinity) break
+    if (!o || oAt === Infinity) break
     const tag = o[1]
     const openEnd = raw.indexOf('>', oAt)
     if (openEnd === -1) break
@@ -198,6 +197,7 @@ function vueCommentSpans(raw) {
 }
 
 function commentsOf(raw, isVue, isCss) {
+  /** @type {{ text: string, at: number, line?: number }[]} */
   const out = []
   const lineOf = (at) => raw.slice(0, at).split('\n').length
   if (isVue) {
@@ -256,7 +256,12 @@ function walk(dir) {
     }
   }
 }
-walk('src')
+// FE-116 (tz-ui-package.md §3.7): the walk also covers packages/velo-ui/src
+// -- same rule for the UI kit, its copy lives in its own stories/tests in
+// English. Exemptions above are frontend-src-relative and never match the
+// ../packages/ prefix.
+const roots = ['src', '../packages/velo-ui/src']
+for (const r of roots) walk(r)
 for (const name of readdirSync('scripts')) {
   const p = join('scripts', name)
   if (statSync(p).isFile() && name.endsWith('.mjs')) commentFiles.push(p)

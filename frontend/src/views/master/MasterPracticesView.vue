@@ -23,7 +23,7 @@
              (checkin_count / max, owner-only -- E12 swap, PROMPT №419: was
              insights.checkins mood tally, now distinct PRE check-ins, see
              practiceCardMeta.ts) + rating distribution (insights.feedbacks,
-             reused from diaryStore cache like AnalyticsView, PAST tab only).
+             reused from the insights cache like AnalyticsView, PAST tab only).
              Also REAL (practiceCardMeta.ts): recurrence days from
              recurrence_days ("Regular" i18n:practice.regular only for a
              series without a day list) and the remaining-sessions line
@@ -55,20 +55,20 @@
     </div>
 
     <!-- Loading -->
-    <div v-if="currentLoading && currentItems.length === 0" class="master-practices__loader">
+    <div v-if="currentLoading" class="master-practices__loader">
       <VLoader size="lg" />
     </div>
 
     <!-- Error (INITIAL load only -- a failed page-N is toasted by onLoadMore and
          must not replace the pages already on screen; mirrors the loading rung
          above and MyBookingsView.vue:28) -->
-    <div v-else-if="currentError && currentItems.length === 0" class="master-practices__content">
+    <div v-else-if="currentError" class="master-practices__content">
       <VEmptyState
         icon="warning"
         :title="t('masterScreens.masterPractices.loadFailed')"
         :description="currentError"
       >
-        <VButton size="sm" variant="outline" @click="masterStore.refreshMyPractices()">
+        <VButton size="sm" variant="outline" @click="retryCurrent">
           {{ t('common.retry') }}
         </VButton>
       </VEmptyState>
@@ -179,7 +179,7 @@
 
       <!-- Load more -->
       <div v-if="currentHasMore" class="master-practices__load-more">
-        <VButton variant="ghost" block :loading="currentLoading" @click="onLoadMore">
+        <VButton variant="ghost" block :loading="currentFetching" @click="onLoadMore">
           {{ t('common.showMore') }}
         </VButton>
       </div>
@@ -189,7 +189,8 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useNow } from '@/composables/useNow'
 import { useRoute, useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VEmptyState, VSegmentTrack, VRatingBadges } from '@/components/ui'
@@ -201,8 +202,9 @@ import {
   IconHourglass,
   IconWarning,
 } from '@/components/icons'
-import { useMasterStore } from '@/stores/master'
-import { useDiaryStore } from '@/stores/diary'
+import { useMyPractices } from '@/composables/queries/master'
+import { extractApiError } from '@/composables/useApiError'
+import { usePracticeInsights } from '@/composables/queries/diary'
 import { useToast } from '@/composables/useToast'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
@@ -214,11 +216,9 @@ import type { PracticeResponse } from '@/api/types'
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const masterStore = useMasterStore()
-const diaryStore = useDiaryStore()
-
-// Reactive insights cache (shared with Analytics / PracticeReviews — often warm).
-const insightsCache = diaryStore.insightsCache
+// Practices' insights in the Colada cache, shared with Analytics / the
+// practice screen -- often warm (composables/queries/diary.ts).
+const insightsCache = usePracticeInsights()
 
 // Active tab is mirrored in the URL query (?tab=past) so that returning from a
 // practice detail via router.back() restores the tab the user left from
@@ -230,14 +230,13 @@ const activeTab = ref<'upcoming' | 'past'>(route.query.tab === 'past' ? 'past' :
 // ordering per bucket (nearest-first for upcoming, most-recent-first for
 // past) -- no client-side filter/sort left to hide the next ordering bug.
 //
-// A4 V5 (PROMPT №571): fetchUpcomingPractices() is a one-shot cache -- it
-// no-ops once upcomingLoaded is true (stores/master.ts:117-121) -- but the
-// backend transitions a practice scheduled/live -> completed BY WALL CLOCK
-// (the autofinalize worker, practices/service.py's state machine), not on
-// request. Without a local time check, a class that ended five minutes ago
-// stays rendered under t('masterScreens.masterPractices.tab.upcoming') until something else (an edit,
-// create, cancel elsewhere) happens to call refreshMyPractices(), or a hard
-// reload. Mirrors MasterDashboardView's own 60s clock + practiceHasEnded
+// A4 V5 (PROMPT №571): the upcoming list is cached (queries/master.ts) --
+// but the backend transitions a practice scheduled/live -> completed BY WALL
+// CLOCK (the autofinalize worker, practices/service.py's state machine), not
+// on request. Without a local time check, a class that ended five minutes ago
+// stays rendered under t('masterScreens.masterPractices.tab.upcoming') until
+// the list is asked again (a change of a practice, the staleness window, a
+// hard reload). Mirrors MasterDashboardView's own 60s clock + practiceHasEnded
 // filter (nearestPractices) exactly -- same fix, same idiom, applied to
 // the full list instead of the dashboard's top-2 preview. Draft is
 // deliberately EXCLUDED from this filter (unlike Dashboard's narrower
@@ -245,35 +244,39 @@ const activeTab = ref<'upcoming' | 'past'>(route.query.tab === 'past' ? 'past' :
 // created and still legitimately belongs in t('masterScreens.masterPractices.tab.upcoming') until the
 // master publishes or deletes it -- it is not something the clock auto-
 // finalizes away.
-const now = ref(Date.now())
-let clockInterval: ReturnType<typeof setInterval> | null = null
+const now = useNow(60_000)
+
+// Each tab's list loads when the tab is shown (T22-3/T22-5): the past one is
+// never asked for until the master opens it.
+const upcoming = useMyPractices('upcoming', { enabled: () => activeTab.value === 'upcoming' })
+const past = useMyPractices('past', { enabled: () => activeTab.value === 'past' })
 
 const upcomingPractices = computed(() =>
-  masterStore.practicesUpcoming.filter(
+  upcoming.practices.value.filter(
     (p) => !((p.status === 'scheduled' || p.status === 'live') && practiceHasEnded(p, now.value)),
   ),
 )
 
 // -- Past: completed ONLY, most-recent first -- server-side now (T22-5). --
-const pastPractices = computed(() => masterStore.practicesPast)
+const pastPractices = computed(() => past.practices.value)
 
-// Tab-aware state: which bucket's loading/error/hasMore the current tab shows.
-const currentItems = computed(() =>
-  activeTab.value === 'past' ? pastPractices.value : upcomingPractices.value,
-)
-const currentLoading = computed(() =>
-  activeTab.value === 'past'
-    ? masterStore.practicesPastLoading
-    : masterStore.practicesUpcomingLoading,
-)
+// Tab-aware state: the list the current tab shows. Loading / error are the
+// INITIAL load's only (nothing to show yet): a failed page-N is toasted by
+// onLoadMore and must not replace the pages already on screen (MyBookingsView).
+const current = computed(() => (activeTab.value === 'past' ? past : upcoming))
+const currentLoading = computed(() => current.value.loading.value)
 const currentError = computed(() =>
-  activeTab.value === 'past' ? masterStore.practicesPastError : masterStore.practicesUpcomingError,
+  current.value.failed.value
+    ? extractApiError(current.value.error.value, t('common.checkConnection'))
+    : null,
 )
-const currentHasMore = computed(() =>
-  activeTab.value === 'past'
-    ? masterStore.practicesPastHasMore
-    : masterStore.practicesUpcomingHasMore,
-)
+const currentFetching = computed(() => current.value.fetching.value)
+const currentHasMore = computed(() => current.value.hasMore.value)
+
+/** The error state's retry: ask the current tab's list again. */
+function retryCurrent(): void {
+  void current.value.refetch()
+}
 
 const tabOptions = [
   { value: 'upcoming' as const, label: t('masterScreens.masterPractices.tab.upcoming') },
@@ -329,7 +332,7 @@ function ratingPcts(id: string): Record<MoodScaleKey, number> {
  *  entirely. */
 function loadTabInsights(): Promise<void[]> {
   if (activeTab.value !== 'past') return Promise.resolve([])
-  return Promise.all(pastPractices.value.map((p) => diaryStore.loadInsights(p.id)))
+  return Promise.all(pastPractices.value.map((p) => insightsCache.load(p.id)))
 }
 
 /** Eager-load insights for the visible tab. Bounded to the currently-loaded page;
@@ -347,31 +350,15 @@ function goDetail(id: string): void {
   void router.push({ name: 'master-practice-detail', params: { id } })
 }
 
-/** Lazily fetch the bucket a tab needs -- each tab paginates independently
- *  and fetches on activation (T22-3/T22-5): t('masterScreens.masterPractices.tab.past') is never fetched
- *  until the master actually switches to it. No-op if already loaded. */
-async function ensureBucketLoaded(tab: 'upcoming' | 'past'): Promise<void> {
-  if (tab === 'past') await masterStore.fetchPastPractices()
-  else await masterStore.fetchUpcomingPractices()
-}
-
 async function onLoadMore(): Promise<void> {
-  if (activeTab.value === 'past') {
-    await masterStore.loadMorePastPractices()
-    // A failed page-N keeps the list (usePagination routes it away from
-    // `error`) but would be SILENT without this. Toast it, as the six admin
-    // lists do. No manual clearing: the composable resets loadMoreError on
-    // the next attempt.
-    if (masterStore.practicesPastLoadMoreError) {
-      toast.error(masterStore.practicesPastLoadMoreError)
-    }
-  } else {
-    await masterStore.loadMoreUpcomingPractices()
-    if (masterStore.practicesUpcomingLoadMoreError) {
-      toast.error(masterStore.practicesUpcomingLoadMoreError)
-    }
+  try {
+    await current.value.loadMore()
+  } catch (e) {
+    // A failed page-N keeps the list but would be SILENT without this. Toast
+    // it, as the six admin lists do.
+    toast.error(extractApiError(e, t('masterScreens.masterPractices.loadFailed')))
   }
-  await loadTabData()
+  // The new page's rating badges: the pastPractices watch below.
 }
 
 watch(activeTab, async (tab) => {
@@ -379,21 +366,13 @@ watch(activeTab, async (tab) => {
   if (route.query.tab !== tab) {
     void router.replace({ query: { ...route.query, tab } })
   }
-  await ensureBucketLoaded(tab)
   await loadTabData()
 })
 
-onMounted(async () => {
-  clockInterval = setInterval(() => {
-    now.value = Date.now()
-  }, 60_000)
-  await ensureBucketLoaded(activeTab.value)
-  await loadTabData()
-})
+// The rating badges follow the past list: its first page, a next page, a refetch.
+watch(pastPractices, () => void loadTabData())
 
-onUnmounted(() => {
-  if (clockInterval) clearInterval(clockInterval)
-})
+onMounted(() => void loadTabData())
 </script>
 
 <style scoped>

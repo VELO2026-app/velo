@@ -1,6 +1,7 @@
 {
   "common": {
     "brandName": "@:brand",
+    "pwaDescription": "A platform for well-being practices",
     "today": "Today",
     "tomorrow": "Tomorrow",
     "yesterday": "Yesterday",
@@ -19,6 +20,7 @@
     "hide": "Hide",
     "all": "All",
     "reset": "Reset",
+    "onlineUnavailable": "Online connection unavailable",
     "backHome": "Home",
     "backToSchools": "My schools",
     "submitSend": "Send",

@@ -66,8 +66,39 @@
       "moodEmpty": "Пока нет отметок",
       "moodOf": "{n} из {total}",
       "masterFallback": "Мастер",
-      "temporarilyHidden": "Временно недоступен",
-      "menuAria": "Меню"
+      "temporarilyHidden": "Временно недоступен"
+    }
+  },
+  "methodPicker": {
+    "custom": "Свой вариант",
+    "directionPlaceholder": "Укажите направление…"
+  },
+  "masterCard": {
+    "profileUnavailable": "Профиль мастера недоступен"
+  },
+  "admin": {
+    "fallbackUserName": "Пользователь",
+    "masterStatus": {
+      "pending": "Ожидает",
+      "verified": "Верифицирован",
+      "rejected": "Отклонён",
+      "suspended": "Заблокирован",
+      "cancelled_by_user": "Аккаунт удалён"
+    },
+    "reportStatus": {
+      "pending": "Ожидает",
+      "resolved": "Решена",
+      "dismissed": "Отклонена"
+    },
+    "reportTarget": {
+      "user": "Юзер",
+      "master": "Мастер",
+      "practice": "Практика"
+    },
+    "relative": {
+      "justNow": "только что",
+      "minutesAgo": "{n} мин назад",
+      "hoursAgo": "{n} ч назад"
     }
   }
 }

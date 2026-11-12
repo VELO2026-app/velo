@@ -62,7 +62,7 @@
         :description="t('user.screens.schoolAnalytics.loadFailedHint')"
       >
         <template #action>
-          <VButton variant="outline" @click="refresh">{{ t('common.retry') }}</VButton>
+          <VButton variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
         </template>
       </VEmptyState>
 
@@ -199,10 +199,13 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
+import { useQuery } from '@pinia/colada'
+import { schoolAnalyticsQuery } from '@/composables/queries/schools'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { useRoute, useRouter } from 'vue-router'
 import { ApiResponseError } from '@/api/client'
-import { getSchoolAnalytics, type SchoolAnalyticsPeriod } from '@/api/schools'
+import type { SchoolAnalyticsPeriod } from '@/api/schools'
 import type { SchoolAnalyticsResponse } from '@/api/types'
 import { VAvatar, VButton, VCard, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
 import DistributionCard from '@/components/shared/DistributionCard.vue'
@@ -275,64 +278,42 @@ function moodStripBars(counts?: Partial<Record<MoodScaleKey, number>>) {
   }))
 }
 
-const loading = ref(true)
-// A period-switch refetch keeps the grid mounted (no full-screen flash);
-// the root carries aria-busy while it runs.
-const refetching = ref(false)
-const error = ref(false)
-const notFound = ref(false)
-const data = ref<SchoolAnalyticsResponse | null>(null)
+// -- The analytics (Pinia Colada, FE-166 step 6: schoolAnalyticsQuery) --
+//
+// One entry per (school, period): rapid slider taps race their responses,
+// but each lands in its own period's entry, so the numbers on screen always
+// answer the LAST selected period (the hand-kept request counter before).
+// A period switch keeps the previous period's grid mounted (no full-screen
+// flash) while the new one loads -- the root carries aria-busy; a NEW
+// school (router reuse) starts from the loader, never from the previous
+// school's numbers.
+const analyticsQuery = useQuery(() =>
+  schoolAnalyticsQuery({ schoolId: schoolId.value, period: period.value }),
+)
+const analyticsState = screenQueryState(analyticsQuery)
 
-// Out-of-order guard: rapid slider taps race their responses; the numbers
-// on screen must always answer the LAST selected period.
-let requestSeq = 0
+// Only from a settled request: an entry keeps its error while it refetches,
+// and a school answering again must not read as unavailable meanwhile.
+const notFound = computed(() => {
+  const e = analyticsQuery.error.value
+  return (
+    e instanceof ApiResponseError && e.status === 404 && analyticsQuery.asyncStatus.value === 'idle'
+  )
+})
+const data = computed<SchoolAnalyticsResponse | null>(() =>
+  notFound.value ? null : (analyticsQuery.data.value ?? null),
+)
+/** Nothing to show yet and an answer awaited (the first load, a new school, a retry). */
+const loading = computed(
+  () => !notFound.value && data.value === null && !analyticsState.failed.value,
+)
+/** The previous period's numbers stand in while the selected one loads. */
+const refetching = computed(() => analyticsQuery.isPlaceholderData.value)
+const error = computed(() => !notFound.value && analyticsState.failed.value)
 
-async function refresh(): Promise<void> {
-  const seq = ++requestSeq
-  if (data.value === null) {
-    loading.value = true
-  } else {
-    refetching.value = true
-  }
-  error.value = false
-  notFound.value = false
-  try {
-    const fresh = await getSchoolAnalytics(schoolId.value, period.value)
-    if (seq === requestSeq) data.value = fresh
-  } catch (e) {
-    if (seq !== requestSeq) return
-    if (e instanceof ApiResponseError && e.status === 404) {
-      notFound.value = true
-    } else {
-      error.value = true
-    }
-  } finally {
-    if (seq === requestSeq) {
-      loading.value = false
-      refetching.value = false
-    }
-  }
+function retry(): void {
+  void analyticsQuery.refetch()
 }
-
-// The slider drives the fetch.
-watch(period, () => {
-  void refresh()
-})
-
-// Router reuse: navigating between this school's screens reuses the mounted
-// instance, so re-read for the new id instead of waiting for a remount.
-// A NEW school also drops the previous school's numbers: showing them under
-// the new route (even briefly) is the stale-data state this screen forbids.
-watch(schoolId, () => {
-  if (schoolId.value) {
-    data.value = null
-    void refresh()
-  }
-})
-
-onMounted(() => {
-  void refresh()
-})
 
 // BE-78 (2): in the MASTER zone a practice card opens the practice
 // analytics screen (i18n:shared.analytics.title; its back is

@@ -16,8 +16,8 @@
 // and the tests that pinned them now assert the call, its body and the refresh.
 //
 // PATTERN A (store-backed), all three stores REAL. Seams: @/api/practices
-// (getPractice), @/api/bookings (getMyBookings -- the refresh after a submit is
-// a real network boundary now), and @/api/diary auto-mocked wholesale, so "only
+// (getPractice), @/api/bookings (getMyBookings -- a guard that the screen itself
+// loads no bookings; FE-166 marks them stale through Colada instead), and @/api/diary auto-mocked wholesale, so "only
 // createReflection was called" is asserted against the whole module rather than
 // a hand-picked export. One pinia instance goes to both setActivePinia and
 // app.use (SC-03).
@@ -97,6 +97,9 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
 import ReflectionView from '@/views/user/ReflectionView.vue'
 import { useDiaryStore } from '@/stores/diary'
 import { usePracticesStore } from '@/stores/practices'
@@ -112,7 +115,7 @@ vi.mock('@/api/practices', async () => {
   return { ...actual, getPractice: vi.fn() }
 })
 
-// -- the refresh after a submit (bookings store -> getMyBookings).
+// -- the bookings list: the screen never loads it (FE-166: the submit marks it stale).
 vi.mock('@/api/bookings', async () => {
   const actual = await vi.importActual<typeof import('@/api/bookings')>('@/api/bookings')
   return { ...actual, getMyBookings: vi.fn() }
@@ -186,7 +189,7 @@ function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(ReflectionView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
 }
 
@@ -554,7 +557,7 @@ describe('ReflectionView', () => {
   // ===========================================================================
   // The submit. The body the VIEW builds is captured off $onAction (exactly what
   // onSubmit hands the store); what reaches the network is read off the
-  // createReflection seam, and the refresh off getMyBookings.
+  // createReflection seam, and the stale mark off the Colada bookings entry.
   // ===========================================================================
   describe('submitting the reflection', () => {
     /** Captures the (practiceId, body) the VIEW hands the store at .vue:98-100. */
@@ -642,23 +645,28 @@ describe('ReflectionView', () => {
       expect(host?.querySelector('textarea')).toBeNull()
     })
 
-    it('a successful submit refreshes the bookings list -- has_reflection comes from the server', async () => {
+    it('a successful submit makes the bookings stale -- has_reflection comes from the server', async () => {
       // Replaces "the dashboard banner is dismissed for this practice". That test
       // was right for the stub: with no backend flag, a client-side set of
       // dismissed practices was the only thing that stopped the screen
       // re-asking. BE-108 removed the set; the server's has_reflection is the
-      // one source now, and the view's part in it is to refetch the list.
+      // one source now. FE-166: the submit marks the booking keys stale
+      // (INVALIDATES.submitReflection) -- a list on screen refetches, one off
+      // screen refetches on its next read.
       mount()
       await flush()
-      // SC-15: nothing fetched the list before the submit -- the screen itself
-      // never loads bookings, so the call below is the refresh and nothing else.
+      const cache = useQueryCache(pinia)
+      cache.setQueryData(keys.bookings.list(), { pages: [], pageParams: [] })
+      // SC-15: the entry is fresh before the submit -- the screen itself never
+      // loads bookings, so the stale mark below comes from the submit alone.
+      expect(cache.get(keys.bookings.list())?.when).not.toBe(0)
       expect(getMyBookingsMock).not.toHaveBeenCalled()
 
       submitBtn()?.click()
       await flush()
 
       expect(successTitle()).toBe('Спасибо, что поделились')
-      expect(getMyBookingsMock).toHaveBeenCalledTimes(1)
+      expect(cache.get(keys.bookings.list())?.when).toBe(0)
     })
 
     it('the "sent" state is not kept in the browser', async () => {

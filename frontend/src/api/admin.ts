@@ -100,6 +100,7 @@ export type {
   WithdrawalStatus,
   PayoutDetails,
 } from '@/api/types'
+import { path } from '@/api/path'
 
 // ============================================================================
 // Stats
@@ -184,7 +185,7 @@ export function getParticipants(
  * application-approval verify path.
  */
 export function makeMaster(userId: string): Promise<AdminMasterActionResponse> {
-  return api.post<AdminMasterActionResponse>(`/api/v1/admin/users/${userId}/make-master`, {})
+  return api.post<AdminMasterActionResponse>(path`/api/v1/admin/users/${userId}/make-master`, {})
 }
 
 /**
@@ -192,7 +193,7 @@ export function makeMaster(userId: string): Promise<AdminMasterActionResponse> {
  * Fallback for AdminMasterReviewView when router state is unavailable.
  */
 export function getMasterById(userId: string): Promise<AdminMasterDetail> {
-  return api.get<AdminMasterDetail>(`/api/v1/admin/masters/${userId}`)
+  return api.get<AdminMasterDetail>(path`/api/v1/admin/masters/${userId}`)
 }
 
 /**
@@ -203,7 +204,7 @@ export function editMasterMethods(
   userId: string,
   methods: string[],
 ): Promise<AdminMasterActionResponse> {
-  return api.patch<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/methods`, {
+  return api.patch<AdminMasterActionResponse>(path`/api/v1/admin/masters/${userId}/methods`, {
     methods,
   })
 }
@@ -219,7 +220,7 @@ export function editMasterProfile(
   userId: string,
   body: AdminMasterProfileUpdate,
 ): Promise<AdminMasterActionResponse> {
-  return api.patch<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/profile`, body)
+  return api.patch<AdminMasterActionResponse>(path`/api/v1/admin/masters/${userId}/profile`, body)
 }
 
 /**
@@ -243,7 +244,7 @@ export function verifyMaster(
   if (promote && promote.length) body.promote = promote
   if (masterOnly && masterOnly.length) body.master_only = masterOnly
   if (canCreateSchools) body.can_create_schools = true
-  return api.post<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/verify`, body)
+  return api.post<AdminMasterActionResponse>(path`/api/v1/admin/masters/${userId}/verify`, body)
 }
 
 /**
@@ -259,7 +260,7 @@ export function setMasterSchoolRight(
   canCreateSchools: boolean,
 ): Promise<MasterSchoolRightResponse> {
   return api.patch<MasterSchoolRightResponse>(
-    `/api/v1/admin/masters/${userId}/can-create-schools`,
+    path`/api/v1/admin/masters/${userId}/can-create-schools`,
     {
       can_create_schools: canCreateSchools,
     },
@@ -268,7 +269,9 @@ export function setMasterSchoolRight(
 
 /** Reject a pending master application with a reason. */
 export function rejectMaster(userId: string, reason: string): Promise<AdminMasterActionResponse> {
-  return api.post<AdminMasterActionResponse>(`/api/v1/admin/masters/${userId}/reject`, { reason })
+  return api.post<AdminMasterActionResponse>(path`/api/v1/admin/masters/${userId}/reject`, {
+    reason,
+  })
 }
 
 /**
@@ -276,7 +279,7 @@ export function rejectMaster(userId: string, reason: string): Promise<AdminMaste
  * scheduled/live practices, balance, pending withdrawals — WARN-not-block.
  */
 export function getRevokePreview(userId: string): Promise<RevokeMasterAdvisory> {
-  return api.get<RevokeMasterAdvisory>(`/api/v1/admin/masters/${userId}/revoke-preview`)
+  return api.get<RevokeMasterAdvisory>(path`/api/v1/admin/masters/${userId}/revoke-preview`)
 }
 
 /**
@@ -286,7 +289,7 @@ export function getRevokePreview(userId: string): Promise<RevokeMasterAdvisory> 
  * blocks on the advisory.
  */
 export function revokeMaster(userId: string): Promise<RevokeMasterAdvisory> {
-  return api.post<RevokeMasterAdvisory>(`/api/v1/admin/masters/${userId}/revoke`)
+  return api.post<RevokeMasterAdvisory>(path`/api/v1/admin/masters/${userId}/revoke`)
 }
 
 /**
@@ -326,7 +329,7 @@ export function approveMethodChange(
   if (promote && promote.length) body.promote = promote
   if (masterOnly && masterOnly.length) body.master_only = masterOnly
   return api.post<MethodChangeActionResponse>(
-    `/api/v1/admin/masters/${userId}/method-change-request/approve`,
+    path`/api/v1/admin/masters/${userId}/method-change-request/approve`,
     body,
   )
 }
@@ -337,7 +340,7 @@ export function rejectMethodChange(
   reason: string,
 ): Promise<MethodChangeActionResponse> {
   return api.post<MethodChangeActionResponse>(
-    `/api/v1/admin/masters/${userId}/method-change-request/reject`,
+    path`/api/v1/admin/masters/${userId}/method-change-request/reject`,
     { reason },
   )
 }
@@ -362,19 +365,19 @@ export function getReports(
  * Fallback for AdminReportDetailView when router state is unavailable.
  */
 export function getReportById(reportId: string): Promise<ReportResponse> {
-  return api.get<ReportResponse>(`/api/v1/admin/reports/${reportId}`)
+  return api.get<ReportResponse>(path`/api/v1/admin/reports/${reportId}`)
 }
 
 /** Resolve a moderation report with a resolution note. */
 export function resolveReport(reportId: string, resolutionNote: string): Promise<ReportResponse> {
-  return api.post<ReportResponse>(`/api/v1/admin/reports/${reportId}/resolve`, {
+  return api.post<ReportResponse>(path`/api/v1/admin/reports/${reportId}/resolve`, {
     resolution_note: resolutionNote,
   })
 }
 
 /** Dismiss a moderation report, optionally with a note. */
 export function dismissReport(reportId: string, resolutionNote?: string): Promise<ReportResponse> {
-  return api.post<ReportResponse>(`/api/v1/admin/reports/${reportId}/dismiss`, {
+  return api.post<ReportResponse>(path`/api/v1/admin/reports/${reportId}/dismiss`, {
     resolution_note: resolutionNote ?? null,
   })
 }
@@ -398,9 +401,12 @@ export function approveWithdrawal(
   withdrawalId: string,
   note?: string,
 ): Promise<AdminWithdrawalResponse> {
-  return api.post<AdminWithdrawalResponse>(`/api/v1/admin/withdrawals/${withdrawalId}/approve`, {
-    note: note ?? null,
-  })
+  return api.post<AdminWithdrawalResponse>(
+    path`/api/v1/admin/withdrawals/${withdrawalId}/approve`,
+    {
+      note: note ?? null,
+    },
+  )
 }
 
 /** Reject a payout withdrawal with a note. */
@@ -408,7 +414,7 @@ export function rejectWithdrawal(
   withdrawalId: string,
   note: string,
 ): Promise<AdminWithdrawalResponse> {
-  return api.post<AdminWithdrawalResponse>(`/api/v1/admin/withdrawals/${withdrawalId}/reject`, {
+  return api.post<AdminWithdrawalResponse>(path`/api/v1/admin/withdrawals/${withdrawalId}/reject`, {
     note,
   })
 }
@@ -465,7 +471,7 @@ export function getAdminPractices(
 
 /** Practice detail with its roster for the admin oversight view. */
 export function getAdminPracticeDetail(id: string): Promise<AdminPracticeDetailResponse> {
-  return api.get<AdminPracticeDetailResponse>(`/api/v1/admin/practices/${id}`)
+  return api.get<AdminPracticeDetailResponse>(path`/api/v1/admin/practices/${id}`)
 }
 
 /** T21-1 (PROMPT №541): meeting status, per-booking minutes present, and the
@@ -473,7 +479,7 @@ export function getAdminPracticeDetail(id: string): Promise<AdminPracticeDetailR
  * until now (PROMPT №540 audit). */
 export function getAdminZoomAttendance(practiceId: string): Promise<AdminZoomAttendanceResponse> {
   return api.get<AdminZoomAttendanceResponse>(
-    `/api/v1/admin/practices/${practiceId}/zoom-attendance`,
+    path`/api/v1/admin/practices/${practiceId}/zoom-attendance`,
   )
 }
 
@@ -506,5 +512,5 @@ export function getAdminPromos(
 
 /** Deactivate a promo from the admin oversight list. */
 export function deactivateAdminPromo(promoId: string): Promise<PromoResponse> {
-  return api.patch<PromoResponse>(`/api/v1/admin/promos/${promoId}/deactivate`)
+  return api.patch<PromoResponse>(path`/api/v1/admin/promos/${promoId}/deactivate`)
 }

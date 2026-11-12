@@ -18,15 +18,18 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
+  INSTANCE_CONFIG_URL,
   TELEGRAM_LAUNCH_KEY,
   TELEGRAM_SCRIPT_URL,
   _resetLaunchForTests,
   applyStandaloneViewport,
   hasLaunchParams,
   isTelegramLaunch,
+  loadInstanceConfig,
   loadTelegramScript,
   prepareHost,
 } from '@/platform/launch'
+import { INSTANCE, applyInstanceConfig } from '@/platform/instance'
 
 const BASE_VIEWPORT =
   'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes, interactive-widget=resizes-visual'
@@ -267,5 +270,101 @@ describe('prepareHost -- the decision applied to the real host', () => {
 
     expect(captured!.src).toBe(TELEGRAM_SCRIPT_URL)
     expect(viewportMeta().content).toBe(BASE_VIEWPORT)
+  })
+})
+
+describe('loadInstanceConfig -- the runtime /config.json (FE-129)', () => {
+  // apiBaseUrl is a live getter, so state applied in one test is visible in
+  // the next -- every test resets the runtime config; the snapshot fields
+  // (brand, locales, default locale) are pinned in instance.test.ts through
+  // a fresh module import instead.
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    applyInstanceConfig(null)
+  })
+
+  it('requests exactly /config.json, without caching', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response('{}', { headers: { 'content-type': 'application/json' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await loadInstanceConfig()
+
+    expect(fetchMock).toHaveBeenCalledWith(INSTANCE_CONFIG_URL, { cache: 'no-store' })
+  })
+
+  it('a rendered config reaches the instance seams', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ apiBaseUrl: 'https://api.school.example' }), {
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    )
+
+    await loadInstanceConfig()
+
+    expect(INSTANCE.apiBaseUrl).toBe('https://api.school.example')
+  })
+
+  it('an HTML answer (dev-server SPA fallback) is "no config", not a crash', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('<!doctype html><html lang="ru"></html>', {
+            headers: { 'content-type': 'text/html' },
+          }),
+      ),
+    )
+
+    await expect(loadInstanceConfig()).resolves.toBeUndefined()
+    expect(INSTANCE.apiBaseUrl).toBe('')
+  })
+
+  it('a non-200 answer is "no config" too', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('nope', { status: 404 })),
+    )
+
+    await expect(loadInstanceConfig()).resolves.toBeUndefined()
+  })
+
+  it('a failed fetch (no config in dev) is tolerated silently', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('network down')
+      }),
+    )
+
+    await expect(loadInstanceConfig()).resolves.toBeUndefined()
+  })
+
+  it('malformed JSON is tolerated: build-time defaults apply', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{oops', { headers: { 'content-type': 'application/json' } })),
+    )
+
+    await expect(loadInstanceConfig()).resolves.toBeUndefined()
+    expect(INSTANCE.apiBaseUrl).toBe('')
+  })
+
+  it('prepareHost includes the config load (browser branch)', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('{"brand":"ШКОЛА"}', { headers: { 'content-type': 'application/json' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    window.history.replaceState(null, '', '/')
+
+    await prepareHost()
+
+    expect(fetchMock).toHaveBeenCalledWith(INSTANCE_CONFIG_URL, { cache: 'no-store' })
   })
 })

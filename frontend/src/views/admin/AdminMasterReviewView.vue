@@ -72,367 +72,221 @@
       <div class="mreview__seclabel">{{ t('adminScreens.adminMasterReview.information') }}</div>
       <VCard class="mreview__info" padding="none">
         <!-- Display name (i18n:adminScreens.adminMasterReview.displayNameTitle) = data.profile.display_name (text) -->
-        <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.displayNameTitle') }}</div>
-          <template v-if="editing === 'display_name'">
-            <div class="mreview__edit">
-              <VInput
-                v-model="draftText"
-                :placeholder="t('adminScreens.adminMasterReview.fields.displayName')"
-                :error="fieldError"
-              />
-              <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('ui.cancel')
-                }}</VButton>
-                <VButton
-                  variant="primary"
-                  size="sm"
-                  :loading="savingField"
-                  @click="saveDisplayName"
-                  >{{ t('ui.save') }}</VButton
-                >
-              </div>
-            </div>
+        <EditableFieldRow
+          :label="t('adminScreens.adminMasterReview.displayNameTitle')"
+          :edit-label="t('adminScreens.adminMasterReview.edit.displayName')"
+          v-bind="rowBind('display_name')"
+          @start="startField('display_name')"
+          @cancel="cancelField"
+          @save="saveField"
+        >
+          <template #edit>
+            <VInput
+              v-model="draftText"
+              :placeholder="t('adminScreens.adminMasterReview.fields.displayName')"
+              :error="fieldError"
+            />
           </template>
-          <template v-else>
-            <div class="mreview__v">{{ displayNameField }}</div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.displayName')"
-              @click="startField('display_name')"
-            >
-              <IconPen :size="22" />
-            </button>
-          </template>
-        </div>
+          {{ displayNameField }}
+        </EditableFieldRow>
 
         <!-- Account name (i18n:adminScreens.adminMasterReview.accountNameTitle) = User.first_name / last_name (two-part text) -->
-        <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.accountNameTitle') }}</div>
-          <template v-if="editing === 'account_name'">
-            <div class="mreview__edit">
-              <VInput
-                v-model="draftFirst"
-                :placeholder="t('adminScreens.adminMasterReview.fields.firstNamePlaceholder')"
-              />
-              <VInput
-                v-model="draftLast"
-                :placeholder="t('adminScreens.adminMasterReview.fields.lastNamePlaceholder')"
-              />
-              <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
-              <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('ui.cancel')
-                }}</VButton>
-                <VButton
-                  variant="primary"
-                  size="sm"
-                  :loading="savingField"
-                  @click="saveAccountName"
-                  >{{ t('ui.save') }}</VButton
-                >
-              </div>
-            </div>
+        <EditableFieldRow
+          :label="t('adminScreens.adminMasterReview.accountNameTitle')"
+          :edit-label="t('adminScreens.adminMasterReview.edit.accountName')"
+          :error="fieldError"
+          v-bind="rowBind('account_name')"
+          @start="startField('account_name')"
+          @cancel="cancelField"
+          @save="saveField"
+        >
+          <template #edit>
+            <VInput
+              v-model="draftFirst"
+              :placeholder="t('adminScreens.adminMasterReview.fields.firstNamePlaceholder')"
+            />
+            <VInput
+              v-model="draftLast"
+              :placeholder="t('adminScreens.adminMasterReview.fields.lastNamePlaceholder')"
+            />
           </template>
-          <template v-else>
-            <div class="mreview__v">{{ accountName }}</div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.accountName')"
-              @click="startField('account_name')"
-            >
-              <IconPen :size="22" />
-            </button>
-          </template>
-        </div>
+          {{ accountName }}
+        </EditableFieldRow>
 
         <!-- About (i18n:adminScreens.adminMasterReview.fields.about) = bio (textarea) -->
-        <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.fields.about') }}</div>
-          <template v-if="editing === 'bio'">
-            <div class="mreview__edit">
-              <VTextarea
-                v-model="draftText"
-                :placeholder="t('adminScreens.adminMasterReview.fields.aboutPlaceholder')"
-                :rows="3"
-              />
-              <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
-              <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('ui.cancel')
-                }}</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveBio">{{
-                  t('ui.save')
-                }}</VButton>
-              </div>
-            </div>
+        <EditableFieldRow
+          :label="t('adminScreens.adminMasterReview.fields.about')"
+          :edit-label="t('adminScreens.adminMasterReview.edit.about')"
+          :error="fieldError"
+          value-class="mreview__v--bio"
+          v-bind="rowBind('bio')"
+          @start="startField('bio')"
+          @cancel="cancelField"
+          @save="saveField"
+        >
+          <template #edit>
+            <VTextarea
+              v-model="draftText"
+              :placeholder="t('adminScreens.adminMasterReview.fields.aboutPlaceholder')"
+              :rows="3"
+            />
           </template>
-          <template v-else>
-            <div class="mreview__v mreview__v--bio">{{ bio }}</div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.about')"
-              @click="startField('bio')"
-            >
-              <IconPen :size="22" />
-            </button>
-          </template>
-        </div>
+          {{ bio }}
+        </EditableFieldRow>
 
         <!-- Email (text) -->
-        <div class="mreview__row">
-          <div class="mreview__k">Email</div>
-          <template v-if="editing === 'email'">
-            <div class="mreview__edit">
-              <VInput
-                v-model="draftText"
-                type="email"
-                placeholder="you@example.com"
-                :error="fieldError"
-              />
-              <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('ui.cancel')
-                }}</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="saveEmail">{{
-                  t('ui.save')
-                }}</VButton>
-              </div>
-            </div>
+        <EditableFieldRow
+          label="Email"
+          :edit-label="t('adminScreens.adminMasterReview.edit.email')"
+          v-bind="rowBind('email')"
+          @start="startField('email')"
+          @cancel="cancelField"
+          @save="saveField"
+        >
+          <template #edit>
+            <VInput
+              v-model="draftText"
+              type="email"
+              placeholder="you@example.com"
+              :error="fieldError"
+            />
           </template>
-          <template v-else>
-            <div class="mreview__v">{{ email }}</div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.email')"
-              @click="startField('email')"
-            >
-              <IconPen :size="22" />
-            </button>
-          </template>
-        </div>
+          {{ email }}
+        </EditableFieldRow>
 
         <!-- Phone (i18n:adminScreens.adminMasterReview.phone) = text input -->
-        <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.phone') }}</div>
-          <template v-if="editing === 'phone'">
-            <div class="mreview__edit">
-              <VInput v-model="draftText" placeholder="+7…" :error="fieldError" />
-              <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('ui.cancel')
-                }}</VButton>
-                <VButton variant="primary" size="sm" :loading="savingField" @click="savePhone">{{
-                  t('ui.save')
-                }}</VButton>
-              </div>
-            </div>
+        <EditableFieldRow
+          :label="t('adminScreens.adminMasterReview.phone')"
+          :edit-label="t('adminScreens.adminMasterReview.edit.phone')"
+          v-bind="rowBind('phone')"
+          @start="startField('phone')"
+          @cancel="cancelField"
+          @save="saveField"
+        >
+          <template #edit>
+            <VInput v-model="draftText" placeholder="+7…" :error="fieldError" />
           </template>
-          <template v-else>
-            <div class="mreview__v">{{ phone }}</div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.phone')"
-              @click="startField('phone')"
-            >
-              <IconPen :size="22" />
-            </button>
-          </template>
-        </div>
+          {{ phone }}
+        </EditableFieldRow>
 
         <!-- Experience (i18n:adminScreens.adminMasterReview.experience) = experience_years (number) -->
-        <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.experience') }}</div>
-          <template v-if="editing === 'experience_years'">
-            <div class="mreview__edit">
-              <VInput
-                v-model="draftText"
-                type="number"
-                :placeholder="t('adminScreens.adminMasterReview.fields.experienceYears')"
-                :error="fieldError"
-              />
-              <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('ui.cancel')
-                }}</VButton>
-                <VButton
-                  variant="primary"
-                  size="sm"
-                  :loading="savingField"
-                  @click="saveExperience"
-                  >{{ t('ui.save') }}</VButton
-                >
-              </div>
-            </div>
+        <EditableFieldRow
+          :label="t('adminScreens.adminMasterReview.experience')"
+          :edit-label="t('adminScreens.adminMasterReview.edit.experience')"
+          v-bind="rowBind('experience_years')"
+          @start="startField('experience_years')"
+          @cancel="cancelField"
+          @save="saveField"
+        >
+          <template #edit>
+            <VInput
+              v-model="draftText"
+              type="number"
+              :placeholder="t('adminScreens.adminMasterReview.fields.experienceYears')"
+              :error="fieldError"
+            />
           </template>
-          <template v-else>
-            <div class="mreview__v">{{ experience }}</div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.experience')"
-              @click="startField('experience_years')"
-            >
-              <IconPen :size="22" />
-            </button>
-          </template>
-        </div>
+          {{ experience }}
+        </EditableFieldRow>
 
         <!-- Practice languages (i18n:adminScreens.adminMasterReview.fields.languages) = languages (chip toggle, fixed set + custom) -->
-        <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.fields.languages') }}</div>
-          <template v-if="editing === 'languages'">
-            <div class="mreview__edit">
-              <div class="mreview__chips">
-                <VChip
-                  v-for="l in languageOptions"
-                  :key="l"
-                  size="md"
-                  clickable
-                  :active="draftLangs.includes(l)"
-                  @click="toggleDraft(draftLangs, l)"
-                >
-                  {{ l }}
-                </VChip>
-              </div>
-              <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
-              <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('ui.cancel')
-                }}</VButton>
-                <VButton
-                  variant="primary"
-                  size="sm"
-                  :loading="savingField"
-                  @click="saveLanguages"
-                  >{{ t('ui.save') }}</VButton
-                >
-              </div>
+        <EditableFieldRow
+          :label="t('adminScreens.adminMasterReview.fields.languages')"
+          :edit-label="t('adminScreens.adminMasterReview.edit.languages')"
+          :error="fieldError"
+          value-class="mreview__chips"
+          v-bind="rowBind('languages')"
+          @start="startField('languages')"
+          @cancel="cancelField"
+          @save="saveField"
+        >
+          <template #edit>
+            <div class="mreview__chips">
+              <VChip
+                v-for="l in languageOptions"
+                :key="l"
+                size="md"
+                clickable
+                :active="draftLangs.includes(l)"
+                @click="toggleDraft(draftLangs, l)"
+              >
+                {{ l }}
+              </VChip>
             </div>
           </template>
-          <template v-else>
-            <div class="mreview__v mreview__chips">
-              <VChip v-for="l in languages" :key="l" size="md">{{ l }}</VChip>
-              <span v-if="!languages.length" class="mreview__muted">—</span>
-            </div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.languages')"
-              @click="startField('languages')"
-            >
-              <IconPen :size="22" />
-            </button>
-          </template>
-        </div>
+          <VChip v-for="l in languages" :key="l" size="md">{{ l }}</VChip>
+          <span v-if="!languages.length" class="mreview__muted">—</span>
+        </EditableFieldRow>
 
         <!-- Practice directions (i18n:adminScreens.adminMasterReview.fields.directions) = methods (chip toggle, own endpoint, unchanged) -->
-        <div class="mreview__row">
-          <div class="mreview__k">
-            {{ t('adminScreens.adminMasterReview.fields.directions') }}
-          </div>
-          <div v-if="editingMethods" class="mreview__methods-edit">
+        <EditableFieldRow
+          :label="t('adminScreens.adminMasterReview.fields.directions')"
+          :edit-label="t('adminScreens.adminMasterReview.edit.directions')"
+          variant="methods"
+          :editing="editingMethods"
+          :saving="savingMethods"
+          :error="methodsError"
+          :save-label="t('adminScreens.adminMasterReview.save')"
+          @start="startMethods"
+          @cancel="cancelMethods"
+          @save="saveMethods"
+        >
+          <template #edit>
             <!-- T4/F2-F6 (PROMPT №409): swapped the flat legacy AVAILABLE_METHODS
                  toggle for the writable two-level picker, mirroring the swap
                  already done in EditProfileView.vue -- an admin can now pick a
                  fresh direction→style pair from the R5 DB catalog, not just
                  toggle among pre-existing flat strings. -->
             <MethodTaxonomyPicker v-model="methodsDraft" />
-            <p v-if="methodsError" class="mreview__methods-err">{{ methodsError }}</p>
-            <div class="mreview__methods-actions">
-              <VButton variant="ghost" size="sm" :disabled="savingMethods" @click="cancelMethods">
-                {{ t('ui.cancel') }}
-              </VButton>
-              <VButton variant="primary" size="sm" :loading="savingMethods" @click="saveMethods">
-                {{ t('adminScreens.adminMasterReview.save') }}
-              </VButton>
-            </div>
-          </div>
-          <template v-else>
-            <div class="mreview__v">
-              <!-- Q2: render the flat direction — style methods as the batch-L
-                   two-level readonly picker (direction heading + style chips) so both
-                   direction AND style show. Fully-legacy methods that don't map to
-                   the taxonomy fall back to verbatim chips; empty → «—». -->
-              <MethodTaxonomyPicker v-if="hasParsedMethods" :model-value="methods" readonly />
-              <div v-else-if="methods.length" class="mreview__chips">
-                <VChip v-for="m in methods" :key="m" size="md">{{ m }}</VChip>
-              </div>
-              <span v-else class="mreview__muted">—</span>
-            </div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.directions')"
-              @click="startMethods"
-            >
-              <IconPen :size="22" />
-            </button>
           </template>
-        </div>
+          <!-- Q2: render the flat direction — style methods as the batch-L
+               two-level readonly picker (direction heading + style chips) so both
+               direction AND style show. Fully-legacy methods that don't map to
+               the taxonomy fall back to verbatim chips; empty → «—». -->
+          <MethodTaxonomyPicker v-if="hasParsedMethods" :model-value="methods" readonly />
+          <div v-else-if="methods.length" class="mreview__chips">
+            <VChip v-for="m in methods" :key="m" size="md">{{ m }}</VChip>
+          </div>
+          <span v-else class="mreview__muted">—</span>
+        </EditableFieldRow>
 
         <!-- Certificates (i18n:adminScreens.adminMasterReview.certificates) = certifications (free-text add/remove chips). -->
-        <div class="mreview__row">
-          <div class="mreview__k">{{ t('adminScreens.adminMasterReview.certificates') }}</div>
-          <template v-if="editing === 'certifications'">
-            <div class="mreview__edit">
-              <div v-if="draftCerts.length" class="mreview__chips">
-                <VChip
-                  v-for="(c, i) in draftCerts"
-                  :key="`${c}-${i}`"
-                  size="md"
-                  clickable
-                  @click="draftCerts.splice(i, 1)"
-                >
-                  {{ c }} ✕
-                </VChip>
-              </div>
-              <div class="mreview__cert-add">
-                <VInput
-                  v-model="certInput"
-                  :placeholder="t('adminScreens.adminMasterReview.certificateEnter')"
-                  @keydown.enter.prevent="addCert"
-                />
-                <VButton variant="ghost" size="sm" :disabled="!certInput.trim()" @click="addCert">{{
-                  t('ui.add')
-                }}</VButton>
-              </div>
-              <p v-if="fieldError" class="mreview__edit-err">{{ fieldError }}</p>
-              <div class="mreview__edit-actions">
-                <VButton variant="ghost" size="sm" :disabled="savingField" @click="cancelField">{{
-                  t('ui.cancel')
-                }}</VButton>
-                <VButton
-                  variant="primary"
-                  size="sm"
-                  :loading="savingField"
-                  @click="saveCertifications"
-                  >{{ t('ui.save') }}</VButton
-                >
-              </div>
+        <EditableFieldRow
+          :label="t('adminScreens.adminMasterReview.certificates')"
+          :edit-label="t('adminScreens.adminMasterReview.edit.certificates')"
+          :error="fieldError"
+          value-class="mreview__chips"
+          v-bind="rowBind('certifications')"
+          @start="startField('certifications')"
+          @cancel="cancelField"
+          @save="saveField"
+        >
+          <template #edit>
+            <div v-if="draftCerts.length" class="mreview__chips">
+              <VChip
+                v-for="(c, i) in draftCerts"
+                :key="`${c}-${i}`"
+                size="md"
+                clickable
+                @click="draftCerts.splice(i, 1)"
+              >
+                {{ c }} ✕
+              </VChip>
+            </div>
+            <div class="mreview__cert-add">
+              <VInput
+                v-model="certInput"
+                :placeholder="t('adminScreens.adminMasterReview.certificateEnter')"
+                @keydown.enter.prevent="addCert"
+              />
+              <VButton variant="ghost" size="sm" :disabled="!certInput.trim()" @click="addCert">{{
+                t('ui.add')
+              }}</VButton>
             </div>
           </template>
-          <template v-else>
-            <div class="mreview__v mreview__chips">
-              <VChip v-for="(c, i) in certifications" :key="`${c}-${i}`" size="md">{{ c }}</VChip>
-              <span v-if="!certifications.length" class="mreview__muted">—</span>
-            </div>
-            <button
-              type="button"
-              class="mreview__pen"
-              :aria-label="t('adminScreens.adminMasterReview.edit.certificates')"
-              @click="startField('certifications')"
-            >
-              <IconPen :size="22" />
-            </button>
-          </template>
-        </div>
+          <VChip v-for="(c, i) in certifications" :key="`${c}-${i}`" size="md">{{ c }}</VChip>
+          <span v-if="!certifications.length" class="mreview__muted">—</span>
+        </EditableFieldRow>
       </VCard>
 
       <!-- Documents (i18n:adminScreens.adminMasterReview.documents) -->
@@ -639,7 +493,7 @@ import {
   VConfirmDialog,
   VAccordion,
 } from '@/components/ui'
-import { IconIdCard, IconPen, IconView, IconClock } from '@/components/icons'
+import { IconIdCard, IconView, IconClock } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import {
   getMasterById,
@@ -660,6 +514,7 @@ import type {
 import { extractApiError } from '@/composables/useApiError'
 import { masterDisplayName, masterStatusLabel } from '@/utils/adminHelpers'
 import { LANGUAGES } from '@/utils/languages'
+import EditableFieldRow from '@/components/admin/EditableFieldRow.vue'
 import MethodTaxonomyPicker from '@/components/shared/MethodTaxonomyPicker.vue'
 import { parseMethods, flattenMethods, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
 
@@ -947,49 +802,56 @@ async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
   }
 }
 
-async function saveDisplayName(): Promise<void> {
-  const v = draftText.value.trim()
-  if (!v) {
-    fieldError.value = t('adminScreens.adminMasterReview.validation.enterDisplayName')
-    return
+/** Props every generic row shares: whether its editor is open and the save state. */
+function rowBind(field: ProfileField): { editing: boolean; saving: boolean } {
+  return { editing: editing.value === field, saving: savingField.value }
+}
+
+/**
+ * Build the PATCH body for the open editor from its drafts.
+ *
+ * @returns The patch, or null after surfacing a validation error in `fieldError`.
+ */
+function buildPatch(field: ProfileField): AdminMasterProfileUpdate | null {
+  const text = draftText.value.trim()
+  switch (field) {
+    case 'display_name':
+      if (!text) {
+        fieldError.value = t('adminScreens.adminMasterReview.validation.enterDisplayName')
+        return null
+      }
+      return { display_name: text }
+    case 'bio':
+      return { bio: text || null }
+    case 'email':
+      return { email: text || null }
+    case 'phone':
+      return { phone: text || null }
+    case 'experience_years': {
+      const n = Number(draftText.value)
+      if (!Number.isInteger(n) || n < 0 || n > 50) {
+        fieldError.value = t('adminScreens.adminMasterReview.validation.experienceRange')
+        return null
+      }
+      return { experience_years: n }
+    }
+    case 'account_name':
+      return {
+        first_name: draftFirst.value.trim() || null,
+        last_name: draftLast.value.trim() || null,
+      }
+    case 'languages':
+      return { languages: [...draftLangs.value] }
+    case 'certifications':
+      return { certifications: [...draftCerts.value] }
   }
-  await saveProfile({ display_name: v })
 }
 
-async function saveBio(): Promise<void> {
-  await saveProfile({ bio: draftText.value.trim() || null })
-}
-
-async function saveEmail(): Promise<void> {
-  await saveProfile({ email: draftText.value.trim() || null })
-}
-
-async function savePhone(): Promise<void> {
-  await saveProfile({ phone: draftText.value.trim() || null })
-}
-
-async function saveExperience(): Promise<void> {
-  const n = Number(draftText.value)
-  if (!Number.isInteger(n) || n < 0 || n > 50) {
-    fieldError.value = t('adminScreens.adminMasterReview.validation.experienceRange')
-    return
-  }
-  await saveProfile({ experience_years: n })
-}
-
-async function saveAccountName(): Promise<void> {
-  await saveProfile({
-    first_name: draftFirst.value.trim() || null,
-    last_name: draftLast.value.trim() || null,
-  })
-}
-
-async function saveLanguages(): Promise<void> {
-  await saveProfile({ languages: [...draftLangs.value] })
-}
-
-async function saveCertifications(): Promise<void> {
-  await saveProfile({ certifications: [...draftCerts.value] })
+/** Save the field whose editor is open (the single handler of every row's save). */
+async function saveField(): Promise<void> {
+  if (!editing.value) return
+  const patch = buildPatch(editing.value)
+  if (patch) await saveProfile(patch)
 }
 
 // Stub: document viewing has no backend yet → Zod (documents are empty until then).
@@ -1166,7 +1028,7 @@ onMounted(loadMaster)
 .mreview__photo {
   width: var(--velo-size-104);
   height: var(--velo-size-104);
-  border-radius: var(--velo-radius-14);
+  border-radius: var(--radius-md);
   object-fit: cover;
   margin-bottom: var(--space-2);
 }
@@ -1202,15 +1064,6 @@ onMounted(loadMaster)
   padding: var(--space-1) var(--velo-inset-row);
 }
 
-.mreview__row {
-  position: relative;
-  padding: var(--space-3) 0;
-}
-
-.mreview__row + .mreview__row {
-  border-top: var(--velo-border-width) solid var(--velo-border);
-}
-
 .mreview__k {
   font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
@@ -1224,22 +1077,6 @@ onMounted(loadMaster)
   margin-top: var(--velo-gap-3);
 }
 
-.mreview__v--bio {
-  line-height: 1.35;
-}
-
-.mreview__pen {
-  position: absolute;
-  top: var(--space-3);
-  right: 0;
-  display: flex;
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--velo-primary);
-  cursor: pointer;
-}
-
 /* -- Methods (practice directions) display + editor (T3) -- */
 .mreview__chips {
   display: flex;
@@ -1251,51 +1088,7 @@ onMounted(loadMaster)
   color: var(--velo-text-muted);
 }
 
-.mreview__methods-edit {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-}
-
-.mreview__methods-err {
-  margin: 0;
-  font-size: var(--velo-fs-16);
-  color: var(--velo-error);
-}
-
-.mreview__methods-actions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.mreview__methods-actions :deep(.v-btn) {
-  flex: 1;
-}
-
 /* -- Batch H: generic per-field inline editor (text / number / chips) -- */
-.mreview__edit {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-}
-
-.mreview__edit-err {
-  margin: 0;
-  font-size: var(--velo-fs-16);
-  color: var(--velo-error);
-}
-
-.mreview__edit-actions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.mreview__edit-actions :deep(.v-btn) {
-  flex: 1;
-}
-
 .mreview__cert-add {
   display: flex;
   gap: var(--space-2);

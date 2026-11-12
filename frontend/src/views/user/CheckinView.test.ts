@@ -40,13 +40,13 @@
 //
 // TICKS = 10. Counted, not copied (SC-08). The submit chain is the deep one:
 //   onSubmit -> submitCheckin -> await upsertCheckin (1) ->
-//   await refreshAfterDiaryMutation -> await Promise.allSettled([feed.refresh()])
+//   await diaryFeedChanged -> await Promise.allSettled([feed.refresh()])
 //   -> feed.refresh -> await loadMore -> await listDiaryFeed (2,3) -> refresh
-//   resumes (4) -> allSettled (5) -> refreshAfterDiaryMutation resumes (6) ->
-//   submitCheckin returns (7) -> onSubmit resumes, sets submitted, fires
-//   refreshBookings -> +1 final re-render = ~8.
-// The mount chain is shallower (~5): onMounted -> await fetchMyBookings ->
-// pagination.refresh -> await loadMore -> await getMyBookings, plus the
+//   resumes (4) -> allSettled (5) -> diaryFeedChanged resumes (6) ->
+//   submitCheckin returns (7) -> onSubmit resumes, sets submitted (the booking
+//   keys were marked stale by the store, FE-166) -> +1 final re-render = ~8.
+// The mount chain is shallower (~5): useMyBookings (Colada) -> fetch ->
+// await getMyBookings -> entry state -> re-render, plus the
 // DETACHED fetchPractice (.vue:202 is not awaited). 10 is two over the deeper
 // chain; an over-count is harmless (velo-idiom §3) and an under-count would fail
 // loudly on the toEqual body assertions rather than silently.
@@ -105,6 +105,9 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada, setInfiniteQueryData, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
+import { keys } from '@/composables/queries/keys'
 import CheckinView from '@/views/user/CheckinView.vue'
 import { useBookingsStore } from '@/stores/bookings'
 import { useDiaryStore } from '@/stores/diary'
@@ -262,8 +265,16 @@ function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
   app = createApp(CheckinView).use(createTestI18n())
-  app.use(pinia)
+  app.use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
+}
+
+/** Write the bookings list straight into the Colada entry the screen reads (as a refetch would). */
+function setBookingsList(items: BookingWithPracticeResponse[]): void {
+  useQueryCache(pinia).setQueryData(keys.bookings.list(), {
+    pages: [bookingsPage(items)],
+    pageParams: [0],
+  })
 }
 
 async function flush(): Promise<void> {
@@ -329,6 +340,14 @@ afterEach(() => {
   // No overlay purge: nothing in this tree teleports to document.body. See the
   // "TRAPS ABSENT" note in the banner -- this omission is deliberate, not missed.
 })
+
+/** The unfiltered diary feed held in the cache, as a visit to the diary leaves it. */
+function seedDiaryFeed(): void {
+  setInfiniteQueryData(useQueryCache(), keys.diary.feed({}), {
+    pages: [{ items: [], next_cursor: null }],
+    pageParams: [null],
+  })
+}
 
 describe('CheckinView', () => {
   describe('state ladder', () => {
@@ -635,8 +654,7 @@ describe('CheckinView', () => {
 
       // The bookings list refreshes from elsewhere (another device, the
       // dashboard) and now carries has_checkin.
-      const bookings = useBookingsStore()
-      bookings.bookings = [booking({ has_checkin: true })]
+      setBookingsList([booking({ has_checkin: true })])
       await flush()
 
       expect(successTitle()).toBe('Check-in отправлен')
@@ -651,8 +669,7 @@ describe('CheckinView', () => {
       mount()
       await flush()
 
-      const bookings = useBookingsStore()
-      bookings.bookings = [booking({ has_checkin: true })]
+      setBookingsList([booking({ has_checkin: true })])
 
       // No await: the watch has not run and the form is still mounted.
       const btn = submitBtn()
@@ -823,11 +840,11 @@ describe('CheckinView', () => {
     })
 
     it('refreshes the bookings after a successful submit -- at the NETWORK, not just a spy', async () => {
-      // W27 (diary.ts:218-233): the store deliberately STOPPED refreshing
-      // bookings, on the grounds that this view does it itself (.vue:155). If
-      // that ever regresses, has_checkin stays stale and the dashboard keeps
-      // offering a check-in the user already made. One GET at mount, one after
-      // the submit.
+      // FE-166: the submit marks the booking keys stale (diary store ->
+      // invalidateAfter('submitCheckin')), and the list this screen holds
+      // refetches. If that ever regresses, has_checkin stays stale and the
+      // dashboard keeps offering a check-in the user already made. One GET at
+      // mount, one after the submit.
       mount()
       await flush()
       expect(getMyBookingsMock).toHaveBeenCalledTimes(1)
@@ -839,12 +856,15 @@ describe('CheckinView', () => {
     })
 
     it('refreshes the diary feed too -- the check-in is a timeline event', async () => {
-      // submitCheckin -> refreshAfterDiaryMutation -> feed.refresh (diary.ts:76).
+      // submitCheckin -> diaryFeedChanged -> the feed's first page reloaded.
       // Verified one level down rather than from the .vue comment.
       mount()
       await flush()
       expect(listDiaryFeedMock).not.toHaveBeenCalled()
 
+      // The diary as a visit left it: the submit reloads its first page
+      // (composables/queries/diary.ts, diaryFeedChanged).
+      seedDiaryFeed()
       submitBtn()?.click()
       await flush()
 

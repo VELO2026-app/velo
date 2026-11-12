@@ -1,79 +1,76 @@
 /**
- * VELO Frontend -- useToast Composable (Phase F2.1)
+ * VELO Frontend -- useToast Composable (Phase F2.1; FE-141 provide/inject seam)
  *
- * Global toast notification system. Renders via VToast component
- * mounted once in App.vue.
+ * Global toast notification system. The STATE lives in `@velo/ui`
+ * (src/toast.ts -- the factory, the injection key and the contract types
+ * moved there in P8 batch 6 together with the kit VToast renderer); this
+ * module is the app's push-side door over that seam.
  *
- * @example
- * ```ts
- * import { useToast } from '@/composables/useToast'
- * const toast = useToast()
- * toast.success(message)
- * toast.error(message)
- * toast.info(message)
- * ```
+ * Renders via VToast (kit) mounted once in App.vue. App.vue calls
+ * provideToast() here once in its setup; every useToast() call below
+ * injects that one instance. Missing-provider handling follows the FE-118
+ * i18n seam (packages/velo-ui/src/i18n.ts): dev builds warn once and fall
+ * back to the old module singleton, so components mounted outside App.vue
+ * (standalone test mounts) keep working instead of breaking.
+ *
+ * Usage:
+ *   `import { useToast } from '@/composables/useToast'`
+ *   const toast = useToast()
+ *   toast.success('Saved!')
+ *   toast.error('Network error')
+ *   toast.info('Updated')
  */
 
-import { ref, readonly } from 'vue'
+import { getCurrentInstance, inject } from 'vue'
+import {
+  createToastApi,
+  provideToast as provideKitToast,
+  TOAST_INJECTION_KEY,
+  type Toast,
+  type ToastApi,
+  type ToastVariant,
+} from '@/components/ui'
 
-/** Visual kind of a toast: success, error or info. */
-export type ToastVariant = 'success' | 'error' | 'info'
+export type { Toast, ToastApi, ToastVariant }
+export { TOAST_INJECTION_KEY }
 
-/** One toast in the global queue: id, message, variant. */
-export interface Toast {
-  id: number
-  message: string
-  variant: ToastVariant
+/**
+ * Host wiring -- App.vue calls this once in its setup. Creates a fresh toast
+ * state and provides it under the kit's injection key (the key the kit
+ * VToast injects); returns the instance for hosts that also push toasts
+ * themselves.
+ */
+export function provideToast(): ToastApi {
+  return provideKitToast()
 }
 
-// Module-level singleton state (shared across all useToast() calls)
-let _nextId = 0
-const _toasts = ref<Toast[]>([])
+let warnedNoProvider = false
 
-const TOAST_DURATION_MS = 3000
-/** F-06: max simultaneous toasts -- oldest is dropped when exceeded. */
-const MAX_TOASTS = 3
-
-function _push(message: string, variant: ToastVariant) {
-  // F-06: drop oldest toast if at capacity to prevent stack overflow.
-  if (_toasts.value.length >= MAX_TOASTS) {
-    _toasts.value.shift()
+/**
+ * Read the toast API from the enclosing provider. Without a provider (or
+ * outside any component), dev builds warn once -- loud, not fatal, the
+ * FE-118 seam pattern -- and a module singleton keeps the old behavior
+ * (standalone test mounts keep pushing into a live queue).
+ */
+export function useToast(): ToastApi {
+  // inject() only resolves inside a component setup; a non-component caller
+  // (composable invoked from a plain test scope) would trip Vue's own
+  // out-of-setup warning for nothing -- route it straight to the fallback.
+  const api = getCurrentInstance() ? inject(TOAST_INJECTION_KEY, null) : null
+  if (api) return api
+  if (import.meta.env.DEV && !warnedNoProvider) {
+    warnedNoProvider = true
+    console.warn(
+      '[useToast] no toast provider above this call -- using the module ' +
+        'singleton fallback. Call provideToast() once in App.vue (FE-141).',
+    )
   }
-  const id = ++_nextId
-  _toasts.value.push({ id, message, variant })
-  setTimeout(() => {
-    _toasts.value = _toasts.value.filter((t) => t.id !== id)
-  }, TOAST_DURATION_MS)
+  return fallbackToastApi()
 }
 
-/** Show global toasts (success, error, info) rendered by the single VToast instance in App.vue. */
-export function useToast() {
-  /** Show a success toast */
-  const success = (message: string): void => {
-    _push(message, 'success')
-  }
-
-  /** Show an error toast */
-  const error = (message: string): void => {
-    _push(message, 'error')
-  }
-
-  /** Show an info toast */
-  const info = (message: string): void => {
-    _push(message, 'info')
-  }
-
-  /** Dismiss a toast by id */
-  const dismiss = (id: number): void => {
-    _toasts.value = _toasts.value.filter((t) => t.id !== id)
-  }
-
-  return {
-    /** Reactive list of active toasts (for VToast component) */
-    toasts: readonly(_toasts),
-    success,
-    error,
-    info,
-    dismiss,
-  }
+/** The pre-FE-141 shared state, now just the no-provider fallback. */
+let fallbackInstance: ToastApi | null = null
+function fallbackToastApi(): ToastApi {
+  if (!fallbackInstance) fallbackInstance = createToastApi()
+  return fallbackInstance
 }

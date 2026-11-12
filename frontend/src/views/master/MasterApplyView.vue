@@ -272,12 +272,13 @@ import { extractApiError } from '@/composables/useApiError'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import { LANGUAGES } from '@/utils/languages'
 import MethodTaxonomyPicker from '@/components/shared/MethodTaxonomyPicker.vue'
-import { useMasterStore } from '@/stores/master'
+import { loadMasterProfile } from '@/composables/queries/master'
+import { useQueryCache } from '@pinia/colada'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const toast = useToast()
-const masterStore = useMasterStore()
+const queryCache = useQueryCache()
 const authStore = useAuthStore()
 
 // -- Step state --
@@ -486,9 +487,9 @@ async function submit(skipDocuments = false): Promise<void> {
       // Self-provision (PROMPT №307): a no-profile role='master' account (an
       // admin who switched into master mode) is verified immediately -- go
       // straight to the master zone, no pending screen, no applicant marker.
-      // Refresh the store so masterNoProfileGuard sees the fresh profile
-      // instead of the stale profileMissing from the earlier 403.
-      await masterStore.fetchMyProfile(true)
+      // Refetch the profile so masterNoProfileGuard sees it instead of the
+      // stale "no application" from the earlier 403.
+      await loadMasterProfile(queryCache, { force: true })
       toast.success(t('masterScreens.masterApply.toast.profileCreated'))
       void router.push({ name: 'master-dashboard' })
     } else {

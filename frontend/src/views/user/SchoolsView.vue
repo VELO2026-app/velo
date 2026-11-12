@@ -4,7 +4,7 @@
   The schools tab's own screen
   (i18n:user.screens.schools.title; route /user/schools, name user-schools):
   the dock tab is visible only to curators (UserShell filters by the
-  schoolsHub store), and this hub is where it lands.
+  schools hub, useSchoolsHub), and this hub is where it lands.
 
   Per the owner's mockups (Design_prototype/mockups/schools-*.png):
     - no schools -> the default screen with the create-school CTA
@@ -97,8 +97,9 @@ import { t } from '@/locales'
 import { computed, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useQuery } from '@/composables/useQuery'
-import { userSchoolsQuery } from '@/composables/queries'
+import { useQuery } from '@pinia/colada'
+import { userSchoolsQuery } from '@/composables/queries/schools'
+import { screenQueryState } from '@/composables/queries/screenState'
 import SchoolRow from '@/components/shared/SchoolRow.vue'
 import { IconPlusFilled } from '@/components/icons'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
@@ -107,20 +108,19 @@ import VHeader from '@/components/layout/VHeader.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 
-// Tab screen: the list lives in the screen-data cache (useQuery), so a
+// Tab screen: the list lives in the screen-data cache (Colada), so a
 // return through the dock renders the schools at once and refreshes them in
 // the background (staleTime 0 -- a just-joined school shows up on the next
 // visit) instead of a spinner on every visit.
-const schoolsQuery = useQuery(userSchoolsQuery(authStore.role ?? ''))
+const schoolsQuery = useQuery(() => userSchoolsQuery(authStore.role ?? ''))
 // Kept alive as a tab root (TabRouterView): a return revalidates quietly
 // (the shown data stays). The first activation is the mount itself.
 let activations = 0
 onActivated(() => {
-  if (activations++ > 0) void schoolsQuery.revalidate()
+  if (activations++ > 0) void schoolsQuery.refresh()
 })
-const loading = schoolsQuery.isPending
-/** Only an error with nothing to show replaces the list. */
-const error = computed(() => schoolsQuery.error.value != null && !schoolsQuery.data.value)
+/** Only an error with nothing to show (and no retry running) replaces the list. */
+const { loading, failed: error } = screenQueryState(schoolsQuery)
 const schools = computed(() => schoolsQuery.data.value?.schools ?? [])
 /** BE-18: the admin-issued right to found a school. False is the honest
  *  default on a failed flag fetch -- an offered «+» that only ever answers
@@ -128,7 +128,7 @@ const schools = computed(() => schoolsQuery.data.value?.schools ?? [])
 const canCreate = computed(() => schoolsQuery.data.value?.canCreate ?? false)
 
 function load(): void {
-  void schoolsQuery.refresh()
+  void schoolsQuery.refetch()
 }
 </script>
 

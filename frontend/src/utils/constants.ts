@@ -7,6 +7,8 @@
 // value changes, update it here too.
 // =============================================================================
 
+import { isOptionEnabled } from '@/platform/instance'
+
 // ---------------------------------------------------------------------------
 // Time window constants (NEW-1)
 // Mirror: backend config.py checkin_window_hours / feedback_window_hours.
@@ -43,18 +45,20 @@ export const WITHDRAWAL_FEE_EUROS = 2
 
 /**
  * Real composer voice recording (tap mic `->` record `->` transcribe `->`
- * text in the field). FALSE is the kill-switch: the mic disc never renders and both
+ * text in the field). Follows the instance's `llm` option (FE-163, PM-22
+ * p.10: read once at module load -- /config.json is applied before the app
+ * graph is imported). FALSE is the kill-switch: the mic disc never renders and both
  * composers behave exactly as before the feature -- no call-site changes
  * needed. Transcription goes through POST /api/v1/ai/transcribe (GT-41); the
  * browser holds no provider key and talks to no third party.
  */
-export const COMPOSER_VOICE_INPUT = true
+export const COMPOSER_VOICE_INPUT = isOptionEnabled('llm')
 
 // ---------------------------------------------------------------------------
 // Field voice input, step 2 (FE-94, transcription via our own backend) --
 // kill-switch
 // Used by: EntryView (edit-mode content field), ExternalActivityCreateView
-// (thoughts VTextarea via :voice-input)
+// (thoughts VoiceTextarea via :voice-input)
 // ---------------------------------------------------------------------------
 
 /**
@@ -65,7 +69,7 @@ export const COMPOSER_VOICE_INPUT = true
  * the feature -- no call-site changes needed. Same backend transcription as
  * the composer (POST /api/v1/ai/transcribe, GT-41).
  */
-export const TEXTAREA_VOICE_INPUT = true
+export const TEXTAREA_VOICE_INPUT = isOptionEnabled('llm')
 
 // ---------------------------------------------------------------------------
 // Master onboarding (WS-1, item 2)
