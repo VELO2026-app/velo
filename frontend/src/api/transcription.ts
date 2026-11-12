@@ -12,11 +12,13 @@
  * backend with the key -- they are about how we ask the model, and the
  * browser no longer talks to it.
  *
- * WHY A RAW FETCH, OUTSIDE src/api/client.ts -- the same reason the old
- * module gave, with one addition. The shared client aborts every request at
- * 15 seconds; a minute of audio does not come back in 15 seconds, and an
- * abort on our side does not stop the completion the server is already
- * paying for. The timeout ladder is deliberate:
+ * THE SHARED CLIENT, WITH ITS OWN TIMEOUT (FE-157). This module used to
+ * send a raw fetch because the shared client aborted every request at 15
+ * seconds; a minute of audio does not come back in 15 seconds, and an abort
+ * on our side does not stop the completion the server is already paying for.
+ * api.request() now takes a per-call timeout, so the request rides the client
+ * (token, request id, 401 handling) with a longer one. The timeout ladder is
+ * deliberate:
  * `browser 30s > backend 25s (WAIT_SECONDS, backend modules/ai/transcription.py)`;
  * a take the backend gives up on has its recording deleted, so a job not yet started never reaches the model.
  * Whoever gives up first must not be the party holding the bill.
@@ -26,11 +28,11 @@
  */
 
 import i18n from '@/locales'
-import { INSTANCE } from '@/platform/instance'
 
 import { blobToBase64 } from '@/utils/audio'
 
-import { getAuthToken } from './client'
+import { api, ApiResponseError } from './client'
+import type { TranscribeRequest, TranscribeResponse } from './generated'
 
 /** Transcription outcome: ok plus the transcript, or a user-facing error message. */
 export interface TranscribeResult {
@@ -41,7 +43,6 @@ export interface TranscribeResult {
 }
 
 const TRANSCRIBE_URL = '/api/v1/ai/transcribe'
-const BASE_URL = INSTANCE.apiBaseUrl
 const TIMEOUT_MS = 30000
 
 /**
@@ -72,14 +73,7 @@ function transcriptionError(code: string | null): string {
   return genericError()
 }
 
-/** Read the machine code out of our own error envelope: `{error, message}`. */
-function codeOf(payload: unknown): string | null {
-  if (typeof payload !== 'object' || payload === null) return null
-  const code = (payload as { error?: unknown }).error
-  return typeof code === 'string' ? code : null
-}
-
-/** Send a recorded audio take to our backend for transcription (raw fetch: the 15-second shared-client timeout does not fit a minute of audio). */
+/** Send a recorded audio take to our backend for transcription (shared client with a 30-second timeout: a minute of audio does not fit the default 15). */
 export async function transcribeAudio(audio: Blob): Promise<TranscribeResult> {
   let base64: string
   try {
@@ -88,40 +82,24 @@ export async function transcribeAudio(audio: Blob): Promise<TranscribeResult> {
     return { ok: false, error: genericError() }
   }
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
-  const token = getAuthToken()
-
-  let response: Response
+  let payload: TranscribeResponse | undefined
   try {
-    response = await fetch(`${BASE_URL}${TRANSCRIBE_URL}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ audio_base64: base64 }),
-      signal: controller.signal,
+    const body: TranscribeRequest = { audio_base64: base64 }
+    payload = await api.request<TranscribeResponse | undefined>('POST', TRANSCRIBE_URL, {
+      body,
+      timeoutMs: TIMEOUT_MS,
     })
-  } catch {
-    clearTimeout(timer)
-    return { ok: false, error: genericError() }
-  }
-  clearTimeout(timer)
-
-  let payload: unknown
-  try {
-    payload = await response.json()
-  } catch {
-    return { ok: false, error: genericError() }
+  } catch (error) {
+    // Our own envelope carries the machine code; a network failure, a
+    // timeout or a body that is not JSON (nginx answering a 413 in HTML)
+    // carries none and lands on the generic sentence.
+    return {
+      ok: false,
+      error: transcriptionError(error instanceof ApiResponseError ? error.code : null),
+    }
   }
 
-  if (!response.ok) {
-    const code = codeOf(payload)
-    return { ok: false, error: transcriptionError(code) }
-  }
-
-  const text = (payload as { text?: unknown }).text
+  const text: unknown = payload?.text
   // A 200 with no usable text is not a success. The backend raises
   // speech_not_recognized instead of returning an empty transcript, so this
   // guard covers a response shape we did not expect -- never a silent paste
