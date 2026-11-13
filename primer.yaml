@@ -140,6 +140,10 @@ host:
 verbs:
   setrole:        { run: python scripts/set_role.py --yes, args: [telegram_id, role] }
   backfill-comms: { run: python scripts/backfill_comms_sync.py }
+  # The measurement BE-183 is decided on (BE-201): read only, on every role --
+  # it is taken on prod. One verb per form: the machine has no optional args.
+  signature-stats:       { run: python scripts/signature_stats.py }
+  signature-stats-since: { run: python scripts/signature_stats.py --since, args: [since] }
   # The outbox dead-letter queue; `ids` is event ids joined by commas.
   comms-outbox-list-dead:   { run: python scripts/comms_outbox.py list-dead }
   comms-outbox-requeue:     { run: python scripts/comms_outbox.py requeue, args: [ids] }

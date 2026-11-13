@@ -111,6 +111,27 @@ def test_a_verb_that_deletes_is_destructive_and_a_reset_never_runs_on_prod() -> 
     assert "comms-outbox" not in verbs, "the verb with `command` is gone"
 
 
+def test_the_signature_measurement_runs_on_every_role_and_wipes_nothing() -> None:
+    """BE-195 part 3: the measurement BE-183 is decided on (BE-201) is taken
+    on prod. The machine takes no optional argument -- each declared arg is
+    required (`verb <n> <arg>=<value>`) -- so `--since` is a second verb.
+    Both are compared whole: any `roles` (prod must stay in), `destructive`
+    or `service` (the app runs it) is red here."""
+    verbs = _verbs()
+    measuring = {
+        n: v
+        for n, v in verbs.items()
+        if shlex.split(v["run"])[1] == "scripts/signature_stats.py"
+    }
+    assert measuring == {
+        "signature-stats": {"run": "python scripts/signature_stats.py"},
+        "signature-stats-since": {
+            "run": "python scripts/signature_stats.py --since",
+            "args": ["since"],
+        },
+    }
+
+
 # -- comms_outbox.py: `ids` is one comma-joined value --------------------------
 
 
