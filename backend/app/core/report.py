@@ -120,7 +120,7 @@ def _build(name: str) -> str:
     return value
 
 
-PROVIDES = ("STORAGE_ADDRESS",)
+PROVIDES = ("PRODUCT_STORAGE_ADDRESS",)
 """The names velo gives other stacks: `provides` of primer.yaml (BE-193 --
 the point of velo-storage for comms). The machine reads them in /health
 after `up` and holds each seam a service requires to one of them. The two

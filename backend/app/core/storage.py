@@ -16,7 +16,7 @@ Buckets come from the registry (app/core/storage_registry.yaml) through
 place the suite writes. The key's NAME comes from the registry, its secret
 from ``settings.storage_secret_key``; the address from
 ``settings.storage_endpoint`` -- the point of the stack velo-storage, which
-the machine gives the app and comms under one name (BE-193). A signed link
+the machine gives the app and comms at one alias (BE-193). A signed link
 is valid for exactly the host it was signed for, so that is also the host
 of every link comms opens.
 

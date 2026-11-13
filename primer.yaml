@@ -112,7 +112,7 @@ env:
 # What velo gives the services: comms takes it by a seam `from: product`.
 # The app names the same keys in /health (core/report.py, PROVIDES).
 provides:
-  STORAGE_ADDRESS: { stack: velo-storage, endpoint: files }
+  PRODUCT_STORAGE_ADDRESS: { stack: velo-storage, endpoint: files }
 
 packages:
   skin:

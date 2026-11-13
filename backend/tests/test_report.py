@@ -91,7 +91,7 @@ async def _revision_now() -> str:
 async def test_health_is_the_eleven_fields_and_details(client: AsyncClient) -> None:
     """The document of protocol 9.1, field by field. `seams.provides` was
     `[]` -- right while primer.yaml provided nothing; BE-193 gave comms the
-    point of velo-storage (STORAGE_ADDRESS), so it is report.PROVIDES, which
+    point of velo-storage (PRODUCT_STORAGE_ADDRESS), so it is report.PROVIDES, which
     tests/test_primer_env.py holds equal to primer.yaml's `provides`."""
     resp = await client.get("/health")
 

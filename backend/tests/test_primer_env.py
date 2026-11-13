@@ -316,13 +316,17 @@ def test_the_point_of_the_storage_reaches_the_app() -> None:
 def test_what_velo_provides_is_what_health_names() -> None:
     """primer.yaml's `provides` and /health's `seams.provides`
     (core/report.py PROVIDES) are one list: the machine holds a seam a
-    service requires to the live /health after `up`."""
+    service requires to the live /health after `up`. The name is the one
+    the service's own seam carries -- comms v4 takes the storage's point as
+    PRODUCT_STORAGE_ADDRESS (BE-194 part 3); a seam matches by name, so the
+    app's own STORAGE_ADDRESS was the wrong name for it."""
     provides = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["provides"]
     assert isinstance(provides, dict) and provides, "primer.yaml provides"
     assert report.PROVIDES, "report.PROVIDES is not empty"
     assert len(set(report.PROVIDES)) == len(report.PROVIDES), "each name once"
     assert set(provides) == set(report.PROVIDES)
-    assert provides["STORAGE_ADDRESS"] == {"stack": "velo-storage", "endpoint": "files"}
+    point = {"stack": "velo-storage", "endpoint": "files"}
+    assert provides["PRODUCT_STORAGE_ADDRESS"] == point
 
 
 def test_each_place_passes_its_own() -> None:
