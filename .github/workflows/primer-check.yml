@@ -64,12 +64,12 @@ jobs:
       #   6. Rejected: waiting for the tag -- the step would stay out of CI
       #      with no date.
       PRIDEM_REPOSITORY: inzoddwetrust/primer
-      # BE-194 part 4: the machine's verbs of the project, a verb's `service`
-      # (DM-86), on top of jobs and the length of a minted value (DM-22) and
-      # `check` as the runner's own user (DM-88). Not the final pin: the
-      # commit of the machine velo-test is installed with is named by Primer
-      # separately.
-      PRIDEM_COMMIT: 4a2ee5f7b2ff5ef750ef1f1841df236bd9b2d418
+      # BE-195 part 4: a verb on a job of another entry of the product, run as
+      # a one-off container (DM-86 pass 4b), on top of a verb's `service`
+      # (DM-86), jobs and the length of a minted value (DM-22) and `check` as
+      # the runner's own user (DM-88). Not the final pin: the commit of the
+      # machine velo-test is installed with is named by Primer separately.
+      PRIDEM_COMMIT: 24b4ea8996f5edf57981f2dc252f559f7053149c
     steps:
       - uses: actions/checkout@v4
         with:

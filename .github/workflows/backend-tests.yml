@@ -253,6 +253,16 @@ jobs:
           echo "NET=$net" >> "$GITHUB_ENV"
           echo "network: $net"
 
+      - name: Check velo-storage as the verb storage-check runs it
+        run: |
+          # The init's read-only mode right after apply: exactly the command
+          # the machine builds for primer.yaml's `storage-check` -- run --rm
+          # --no-deps on the job, the words of `run` after its entrypoint
+          # (tests/test_primer_verbs.py holds the two equal). Exit 1 on any
+          # finding decides this step.
+          docker compose -p "$PROJECT" -f docker-compose.storage.yml \
+            run --rm --no-deps -T velo-storage-init --check
+
       - name: Start Postgres and Redis on the same network
         env:
           PG_IMAGE: ${{ steps.images.outputs.postgres }}

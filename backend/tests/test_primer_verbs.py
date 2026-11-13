@@ -55,6 +55,30 @@ def _seeds() -> dict:
     return {str(name): spec for name, spec in seeds.items()}
 
 
+def _jobs_of(entry: str) -> set[str]:
+    stack = _primer()["stacks"][entry]
+    return {job["service"] for job in (stack.get("jobs") or {}).values()}
+
+
+def _on_a_job(verb: dict) -> bool:
+    """A verb whose service is a job of its entry (machine 24b4ea8, DM-86
+    pass 4b): a one-off container, `run` being the words after the job's
+    entrypoint -- no command of this tree."""
+    entry = verb.get("entry", _primer()["name"])
+    return verb.get("service") in _jobs_of(entry)
+
+
+def _app_verbs() -> dict:
+    """The verbs the app runs: `python scripts/<x>.py` of this tree."""
+    verbs = {n: v for n, v in _verbs().items() if not _on_a_job(v)}
+    assert verbs, "the app runs verbs"
+    return verbs
+
+
+def _script(verb: dict) -> str:
+    return shlex.split(verb["run"])[1]
+
+
 def _verbs() -> dict:
     verbs = _primer()["verbs"]
     assert isinstance(verbs, dict) and verbs, "primer.yaml declares verbs"
@@ -90,8 +114,12 @@ def test_every_name_is_a_machine_name() -> None:
 
 
 def test_every_command_names_a_script_of_this_tree() -> None:
+    """Every seed and every verb the app runs names a script of this tree.
+    Was every verb -- right while all verbs ran in the app; a verb on a job
+    (machine 24b4ea8) runs the job's own entrypoint, and
+    test_storage_check_is_the_jobs_check_and_ci_runs_it_so holds it."""
     commands = {f"seed {n}": s["run"] for n, s in _seeds().items()}
-    commands |= {f"verb {n}": v["run"] for n, v in _verbs().items()}
+    commands |= {f"verb {n}": v["run"] for n, v in _app_verbs().items()}
     for where, run in commands.items():
         words = shlex.split(run)
         assert words[:1] == ["python"] and len(words) > 1, f"{where}: {run!r}"
@@ -104,8 +132,10 @@ def test_a_verb_that_deletes_is_destructive_and_a_reset_never_runs_on_prod() -> 
     verbs = _verbs()
     marked = {n for n, v in verbs.items() if v.get("destructive") is True}
     assert marked == DESTRUCTIVE
-    for name, verb in verbs.items():
-        if shlex.split(verb["run"])[1] == "scripts/seed.py":
+    # The resets are found among the verbs the app runs: a verb on a job has
+    # no script (machine 24b4ea8); `marked` above still covers every verb.
+    for name, verb in _app_verbs().items():
+        if _script(verb) == "scripts/seed.py":
             assert verb.get("destructive") is True, name
             assert verb.get("roles") == NOT_ON_PROD, name
     assert "comms-outbox" not in verbs, "the verb with `command` is gone"
@@ -116,12 +146,12 @@ def test_the_signature_measurement_runs_on_every_role_and_wipes_nothing() -> Non
     on prod. The machine takes no optional argument -- each declared arg is
     required (`verb <n> <arg>=<value>`) -- so `--since` is a second verb.
     Both are compared whole: any `roles` (prod must stay in), `destructive`
-    or `service` (the app runs it) is red here."""
-    verbs = _verbs()
+    or `service` (the app runs it) is red here. Found among the verbs the
+    app runs -- a verb on a job has no script (machine 24b4ea8)."""
     measuring = {
         n: v
-        for n, v in verbs.items()
-        if shlex.split(v["run"])[1] == "scripts/signature_stats.py"
+        for n, v in _app_verbs().items()
+        if _script(v) == "scripts/signature_stats.py"
     }
     assert measuring == {
         "signature-stats": {"run": "python scripts/signature_stats.py"},
@@ -130,6 +160,43 @@ def test_the_signature_measurement_runs_on_every_role_and_wipes_nothing() -> Non
             "args": ["since"],
         },
     }
+
+
+BACKEND_TESTS = ROOT / ".github" / "workflows" / "backend-tests.yml"
+STORAGE_CHECK_STEP = "Check velo-storage as the verb storage-check runs it"
+
+
+def test_storage_check_is_the_jobs_check_and_ci_runs_it_so() -> None:
+    """BE-195 part 4: the init's read-only check on demand -- the job of
+    velo-storage run by the machine as `compose run --rm --no-deps <service>
+    <words of run> <args>` (24b4ea8). The script takes exactly `--check` in
+    $1, so `run` is that one word; on every role, wiping nothing. CI runs the
+    very command the machine builds: change `run`, and CI must follow."""
+    on_jobs = {n: v for n, v in _verbs().items() if _on_a_job(v)}
+    assert on_jobs == {
+        "storage-check": {
+            "run": "--check",
+            "entry": "velo-storage",
+            "service": "velo-storage-init",
+        }
+    }
+    verb = on_jobs["storage-check"]
+    primer = _primer()
+    assert verb["entry"] in primer["stacks"] and verb["entry"] != primer["name"]
+    assert verb["service"] in _jobs_of(verb["entry"])
+    machine = ["velo-storage-init", *shlex.split(verb["run"])]
+    jobs = yaml.safe_load(BACKEND_TESTS.read_text(encoding="utf-8"))["jobs"]
+    steps = [
+        s
+        for j in jobs.values()
+        for s in j["steps"]
+        if s.get("name") == STORAGE_CHECK_STEP
+    ]
+    assert len(steps) == 1, f"backend-tests.yml: one step {STORAGE_CHECK_STEP!r}"
+    words = shlex.split(steps[0]["run"].replace("\\\n", " "), comments=True)
+    at = words.index("run")
+    assert words[at : at + 4] == ["run", "--rm", "--no-deps", "-T"], words
+    assert words[at + 4 :] == machine, words
 
 
 # -- comms_outbox.py: `ids` is one comma-joined value --------------------------
