@@ -15,12 +15,25 @@
 #   --suspend <user>  master -> user via revoke_master() (suspended)
 #   --reset-master <user>  fresh cycle: delete the MasterProfile row and set
 #                     role=user -- there is NO api/cli path for this, it is
-#                     a local-only jump
+#                     a local-only jump. What comms sees follows (BE-219):
+#                     the lost capabilities go out as group:masters /
+#                     group:admins deltas (sync_membership_delta), like
+#                     set_role to_user; the switched-away-admin marker is
+#                     left as it is, so a marker holder stays an admin
 #   --block/--unblock <user>  users.is_active toggle
 #
 # EVERYTHING here is a local-dev convenience. NEVER point it at a shared,
 # staging or production database: it approves applications without a human
 # admin and --reset-master deletes profile rows.
+#
+# EXIT CODES (the result an operator reads):
+#   0 -- done, or nothing to do (--promote on a master), or a --watch run
+#        that ended; --watch logs a refused item (VeloError) and goes on;
+#   1 -- refused with a message (SystemExit): an unknown or ambiguous user
+#        reference, no outstanding offer, the last admin (--reset-master);
+#        or a service refusal of --promote / --suspend / --accept-offer,
+#        raised as a traceback;
+#   2 -- wrong arguments (argparse).
 #
 # Audit: the real services record audit entries. The acting "admin" is the
 # first role=admin user if one exists, otherwise the target user themselves
@@ -61,9 +74,11 @@ from app.modules.schools.service import accept_school_master_offer
 # mapped the first ORM operation dies in configure_mappers(). Same reason
 # normalize_master_methods.py imports its models explicitly.
 from app.modules.masters.models import MasterProfile
+from app.core.events import GROUP_ADMINS, GROUP_MASTERS, sync_membership_delta
 from app.modules.users.models import User, UserRole
-from app.modules.users.schemas import has_admin_home
+from app.modules.users.schemas import has_admin_capability
 from app.modules.users.service import (
+    lock_user_row,
     refuse_last_admin_drop,
     take_admin_roster_lock,
 )
@@ -246,27 +261,71 @@ async def run_suspend(ref: str, dry_run: bool) -> None:
         log(f"SUSPENDED: {describe(user, await session.get(MasterProfile, user.id))}")
 
 
+async def reset_master(
+    session: AsyncSession, ref: str, dry_run: bool
+) -> User | None:
+    """Delete the master profile and set role=user, through the projection.
+
+    No commit (the caller's, run_reset_master); returns the user, or None
+    on a dry run. Locks in the order of LOCK ORDER in
+    app/modules/users/service.py: the admin roster lock, the users row
+    (lock_user_row, refreshed), then the profile FOR UPDATE (refreshed) --
+    every capability is read from rows this transaction holds, so a
+    verify_master or a role switch that committed while it waited is seen.
+
+    What comms sees follows (BE-219), as in set_role.to_user: a verified
+    profile deleted is group:masters left; role=user without the marker is
+    group:admins and the support roster left -- the last holder is refused
+    first (ConflictError last_admin, BE-202). The marker is not cleared, so
+    a marker holder keeps the admin capability and no admin delta goes.
+    """
+    await take_admin_roster_lock(session)
+    user = await resolve_user(session, ref)
+    user = await lock_user_row(session, user.id)
+    profile = (
+        await session.execute(
+            select(MasterProfile)
+            .where(MasterProfile.user_id == user.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    log(f"target: {describe(user, profile)}")
+    if dry_run:
+        log("[DRY] would DELETE the master_profiles row and set role=user")
+        return None
+
+    had_master = (
+        profile is not None
+        and (profile.data or {}).get("account", {}).get("status") == "verified"
+    )
+    had_admin = has_admin_capability(user.role, user.credentials)
+    has_admin = has_admin_capability(UserRole.USER.value, user.credentials)
+    if had_admin and not has_admin:
+        await refuse_last_admin_drop(session, user)
+
+    if profile is not None:
+        await session.delete(profile)
+    user.role = UserRole.USER.value
+    await sync_membership_delta(
+        session, user, group_key=GROUP_MASTERS, had=had_master, has=False
+    )
+    await sync_membership_delta(
+        session, user, group_key=GROUP_ADMINS, had=had_admin, has=has_admin
+    )
+    return user
+
+
 async def run_reset_master(ref: str, dry_run: bool) -> None:
     factory = get_session_factory()
     async with factory() as session:
-        # BE-202: role=user is the admin drop for an admin-role holder
-        # without the marker -- the admin roster lock first, the last
-        # holder refused (LOCK ORDER in app/modules/users/service.py).
-        await take_admin_roster_lock(session)
-        user = await resolve_user(session, ref)
-        profile = await session.get(MasterProfile, user.id)
-        log(f"target: {describe(user, profile)}")
-        if dry_run:
-            log("[DRY] would DELETE the master_profiles row and set role=user")
+        try:
+            user = await reset_master(session, ref, dry_run)
+        except VeloError as exc:
+            # Nothing committed: the session closes and rolls back.
+            raise SystemExit(f"refused ({exc.code}): {exc.message}") from exc
+        if user is None:
             return
-        if user.role == UserRole.ADMIN and not has_admin_home(user.credentials):
-            try:
-                await refuse_last_admin_drop(session, user)
-            except VeloError as exc:
-                raise SystemExit(f"refused ({exc.code}): {exc.message}") from exc
-        if profile is not None:
-            await session.delete(profile)
-        user.role = UserRole.USER
         await session.commit()
         await session.refresh(user)
         log(f"RESET: {describe(user, None)} (profile row deleted -- apply fresh)")

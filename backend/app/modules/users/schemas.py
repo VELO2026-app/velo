@@ -99,6 +99,17 @@ def has_admin_home(credentials: dict | None) -> bool:
     return role_switch.get("home_role") == "admin"
 
 
+def has_admin_capability(role: str, credentials: dict | None) -> bool:
+    """Whether the account holds the admin capability (BE-202, BE-219).
+
+    role == admin OR the switched-away-admin marker -- the set velo declares
+    on the comms `support` roster and in group:admins. The SQL twin is
+    users/service.py admin_capability_clause; the two read the same rows
+    the same way (tests/test_be202_last_admin.py pins them together).
+    """
+    return role == UserRole.ADMIN or has_admin_home(credentials)
+
+
 def credentials_without_admin_home(credentials: dict | None) -> dict:
     """Return a copy of credentials with the switched-away-admin marker cleared.
 

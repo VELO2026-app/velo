@@ -35,8 +35,10 @@
 #   the new address; a stale writer restores the old one, the trigger
 #   raises the version, nobody emits). The writers: update_user,
 #   switch_user_role, reset_user_to_onboarding (here), make_master
-#   (admin/users), revoke_master (admin/masters), scripts/set_role and
-#   scripts/seed. The login upsert (auth/service.py) merges in SQL
+#   (admin/users), revoke_master (admin/masters), scripts/set_role,
+#   scripts/seed and scripts/dev_admin_simulator (--reset-master, BE-219:
+#   it writes the role only, and reads the capability it projects from the
+#   row it holds). The login upsert (auth/service.py) merges in SQL
 #   (`credentials || fresh` under the row lock ON CONFLICT takes) and needs
 #   nothing from here.
 #
@@ -108,6 +110,16 @@
 #
 #   GAINING the capability takes no lock: a concurrent gain can only raise
 #   the count the drop reads.
+#
+#   THE PROFILE AFTER THE USERS ROW, ON --reset-master TOO (BE-219), and not
+#   measured there: taken the other way round (profile, then users) it would
+#   close no cycle today. Every writer that takes a person's users row and
+#   then that person's profile (make_master, revoke_master, set_role, seed)
+#   is a drop path behind the roster lock, which --reset-master takes first;
+#   the writers that take the profile first (verify / reject / apply / the
+#   profile edits, the ledgers, refund_booking) never take that person's
+#   users row after it. The order is kept for the next writer, not because
+#   a test can turn it red.
 # =============================================================================
 
 from uuid import UUID
@@ -176,8 +188,8 @@ async def take_admin_roster_lock(session: AsyncSession) -> None:
 def admin_capability_clause() -> ColumnElement[bool]:
     """The admin capability as SQL: role == admin OR the marker.
 
-    Same reading as `role == ADMIN or has_admin_home(credentials)` -- the
-    set velo declares on the comms `support` roster.
+    The SQL twin of users/schemas.py has_admin_capability -- the set velo
+    declares on the comms `support` roster.
     """
     return or_(
         User.role == UserRole.ADMIN.value,

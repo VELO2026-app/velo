@@ -42,7 +42,11 @@ from app.modules.admin.masters import service as admin_masters_service
 from app.modules.admin.users import service as admin_users_service
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
-from app.modules.users.schemas import credentials_without_admin_home, has_admin_home
+from app.modules.users.schemas import (
+    credentials_without_admin_home,
+    has_admin_capability,
+    has_admin_home,
+)
 from app.modules.users.service import admin_capability_clause
 from scripts import dev_admin_simulator, seed, set_role
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -251,7 +255,9 @@ async def test_clause_and_python_agree(offset, role, credentials, holder) -> Non
     uid = await _make_user(BAND_MIN + offset, role=role, credentials=credentials)
     row = await _row(uid)
     in_sql = uid in await _holders()
-    in_python = row.role == UserRole.ADMIN.value or has_admin_home(row.credentials)
+    # BE-219: the Python form is has_admin_capability now -- the twin of the
+    # clause, pinned to it here rather than to an inline copy of the rule.
+    in_python = has_admin_capability(row.role, row.credentials)
     assert in_sql == in_python == holder
 
 
