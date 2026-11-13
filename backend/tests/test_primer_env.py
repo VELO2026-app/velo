@@ -22,6 +22,7 @@ BE-193 part 2a: the point of velo-storage reaches the app, what velo
 provides is what /health names, and each CI place passes its own.
 BE-193 part 2b: velo-storage-init is the stack's job, and the storage's
 secrets are of one minted form, in CI too.
+BE-207: the slot `texts` against the frontend that reads it.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -110,8 +111,15 @@ def test_every_variable_of_app_environment_is_declared() -> None:
 
 @pytest.mark.parametrize(
     "removed",
-    ["SECRET_KEY", "APP_ENV", "ALLOW_STRIPE_STUB", "ALLOW_ZOOM_STUB",
-     "CORS_ORIGINS", "PUBLIC_LINK_BASE", "MCP_OAUTH_ISSUER_URL"],
+    [
+        "SECRET_KEY",
+        "APP_ENV",
+        "ALLOW_STRIPE_STUB",
+        "ALLOW_ZOOM_STUB",
+        "CORS_ORIGINS",
+        "PUBLIC_LINK_BASE",
+        "MCP_OAUTH_ISSUER_URL",
+    ],
 )
 def test_a_removed_key_is_neither_passed_nor_declared(removed: str) -> None:
     assert removed not in _app_environment()
@@ -390,3 +398,47 @@ def test_the_storage_secrets_are_minted_at_40_in_ci_too() -> None:
         value = ci.get(name)
         assert isinstance(value, str) and len(value) == 40, (name, value)
         assert MINTED_ALPHABET.fullmatch(value), name
+
+
+# -- BE-207: the slot `texts` --------------------------------------------------
+
+FRONTEND = ROOT / "frontend"
+
+
+def _texts_slot() -> dict:
+    slot = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["packages"]["texts"]
+    assert isinstance(slot, dict) and slot, "primer.yaml declares packages.texts"
+    return slot
+
+
+def test_the_texts_package_is_mounted_whole_where_nginx_serves_its_ui() -> None:
+    """The machine runs `validate` with <dir> = the path of the mount
+    (steps/packages.py, 24b4ea8), and validate-texts reads a package's ROOT
+    (primer-package.yaml, ui/<lang>.json). So the package is mounted whole,
+    with no `from`, and nginx's alias is its ui/ below that path."""
+    slot = _texts_slot()
+    assert slot["apply"] == "runtime"
+    mounts = slot["mount"]
+    assert mounts, "the slot mounts"
+    front = [m for m in mounts if m.get("service") == "frontend"]
+    assert len(front) == 1, mounts
+    assert set(front[0]) == {"service", "path"}, front[0]
+    conf = (FRONTEND / "nginx.conf").read_text(encoding="utf-8")
+    aliases = re.findall(r"location /texts/ui/ \{\s*alias ([^;]+);", conf)
+    assert aliases == [front[0]["path"] + "/ui/"], aliases
+
+
+def test_the_texts_validate_is_a_command_of_the_frontend_image() -> None:
+    """`validate` is validate-texts with the machine's <dir>, and the
+    frontend's image makes that command; the slot's contract is the major
+    the check reads."""
+    slot = _texts_slot()
+    assert slot["validate"] == "validate-texts <dir>"
+    dockerfile = (FRONTEND / "Dockerfile").read_text(encoding="utf-8")
+    made = r"^RUN ln -s \S+ /usr/local/bin/validate-texts$"
+    assert re.search(made, dockerfile, re.M), "the image makes validate-texts"
+    lib = FRONTEND / "scripts" / "lib" / "texts-package.mjs"
+    majors = re.findall(r"^const CONTRACT_MAJOR = (\d+)$", lib.read_text(), re.M)
+    assert len(majors) == 1, majors
+    major = int(majors[0])
+    assert slot["contract"] == f">={major},<{major + 1}"

@@ -120,6 +120,17 @@ packages:
     apply: build
     build:
       - { service: frontend, path: public/skin }
+  # Texts of the instance (BE-207, FE-133): overlays of the product's wording,
+  # applied at the start of the container. The package is mounted whole, so
+  # validate-texts gets its root (primer-package.yaml, ui/<lang>.json) and
+  # nginx serves /srv/texts/ui/ from it. The mount for comms comes with the
+  # lock on comms v4.0.0 -- the name of its variable is comms' to confirm.
+  texts:
+    contract: ">=1,<2"
+    validate: validate-texts <dir>
+    apply: runtime
+    mount:
+      - { service: frontend, path: /srv/texts }
 
 # In transition (protocol 4.2, 11.2): each host leaves with its channel.
 # A host opens only while one of its options is on (protocol 4.2).

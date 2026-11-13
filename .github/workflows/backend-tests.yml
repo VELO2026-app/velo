@@ -62,6 +62,9 @@ on:
       - docker-compose.storage.yml
       - primer.yaml
       - .github/workflows/backend-tests.yml
+      - frontend/nginx.conf
+      - frontend/Dockerfile
+      - frontend/scripts/lib/texts-package.mjs
   pull_request:
     branches: [deploy-machine]
     paths:
@@ -71,6 +74,9 @@ on:
       - docker-compose.storage.yml
       - primer.yaml
       - .github/workflows/backend-tests.yml
+      - frontend/nginx.conf
+      - frontend/Dockerfile
+      - frontend/scripts/lib/texts-package.mjs
 
 concurrency:
   group: backend-tests-${{ github.ref }}
@@ -143,7 +149,9 @@ jobs:
               module(name, True)
           dev = kind == "test"
           for path in ("/app/tests", "/app/pyproject.toml", "/primer.yaml", "/docker-compose.yml",
-                       "/docker-compose.storage.yml", "/comms-profile/types.yaml", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
+                       "/docker-compose.storage.yml", "/comms-profile/types.yaml",
+                       "/frontend/nginx.conf", "/frontend/Dockerfile",
+                       "/frontend/scripts/lib/texts-package.mjs", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
               (present if dev else absent)(path)
           for name in ("pytest", "pytest_asyncio", "ruff"):
               module(name, dev)
