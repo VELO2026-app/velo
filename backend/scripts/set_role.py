@@ -38,6 +38,12 @@
 #              balance, or a pending withdrawal. When allowed: flip the role and
 #              soft-freeze the profile (account.status=suspended,
 #              availability.is_accepting=false) -- nothing is deleted.
+#
+# THE LAST ADMIN (BE-202): -> master and -> user clear the switched-away
+# marker and leave a non-admin role, so on an admin-capability holder they
+# are the drop. The last holder is refused -- message, exit 1, nothing
+# committed. _find_user takes the admin roster lock before the row (LOCK
+# ORDER in app/modules/users/service.py).
 # =============================================================================
 
 from __future__ import annotations
@@ -67,6 +73,7 @@ from app.core.events import (  # noqa: E402  # Phase 6 / T0
     GROUP_MASTERS,
     sync_membership_delta,
 )
+from app.core.exceptions import ConflictError  # noqa: E402  # BE-202
 from app.modules.masters.models import MasterProfile  # noqa: E402
 from app.modules.practices.models import Practice, PracticeStatus  # noqa: E402
 from app.modules.schools.service import (  # noqa: E402  # BE-59
@@ -76,6 +83,10 @@ from app.modules.users.models import User, UserRole  # noqa: E402
 from app.modules.users.schemas import (  # noqa: E402
     credentials_without_admin_home,
     has_admin_home,
+)
+from app.modules.users.service import (  # noqa: E402  # BE-202
+    refuse_last_admin_drop,
+    take_admin_roster_lock,
 )
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus  # noqa: E402
 
@@ -151,7 +162,12 @@ async def _find_user(session: AsyncSession, telegram_id: int) -> User | None:
     the CLI's single commit -- the users -> master_profiles order written in
     app/modules/users/service.py (ROW LOCK ON users). This is the row's
     first load in the session, so the lock reads its committed values.
+
+    BE-202: the admin roster lock comes first, before the row -- every
+    handler but to_admin can drop an admin capability (LOCK ORDER in
+    app/modules/users/service.py).
     """
+    await take_admin_roster_lock(session)
     stmt = (
         select(User)
         .where(User.telegram_id == telegram_id)
@@ -404,6 +420,15 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
     had_master = _master_capability(profile)
     had_admin = _admin_capability(user)
 
+    if had_master and user.role == UserRole.MASTER:
+        warn("Already a verified master — nothing to do.")
+        return False
+
+    # BE-202: every path below sets role=master and clears the marker --
+    # the drop, for a holder. The last one is refused before any write.
+    if had_admin:
+        await refuse_last_admin_drop(session, user)
+
     async def _emit_deltas() -> None:
         await sync_membership_delta(
             session, user, group_key=GROUP_MASTERS, had=had_master, has=True
@@ -424,10 +449,6 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
 
     if profile is not None:
         status = (profile.data or {}).get("account", {}).get("status")
-
-        if status == "verified" and user.role == UserRole.MASTER:
-            warn("Already a verified master — nothing to do.")
-            return False
 
         if status == "verified":
             if not _confirm("Set role to master?", assume_yes):
@@ -508,6 +529,11 @@ async def to_user(session: AsyncSession, user: User, assume_yes: bool) -> bool:
     if user.role == UserRole.USER and profile is None:
         warn("Already a plain user — nothing to do.")
         return False
+
+    # BE-202: the flip below clears the marker and leaves role=user -- the
+    # drop, for a holder. The last one is refused before any write.
+    if _admin_capability(user):
+        await refuse_last_admin_drop(session, user)
 
     if not _confirm("Set role to user?", assume_yes):
         warn("Cancelled.")
@@ -613,7 +639,13 @@ async def main() -> int:
             await _print_summary(session, user)
             print(f"{C}Change:{N} role {user.role} -> {role.value}")
 
-            applied = await _HANDLERS[role](session, user, args.yes)
+            try:
+                applied = await _HANDLERS[role](session, user, args.yes)
+            except ConflictError as exc:
+                # BE-202: last_admin. Nothing is committed: the session
+                # closes without a commit and rolls the transaction back.
+                err(f"Refused ({exc.code}): {exc.message}.")
+                return 1
             if applied:
                 await session.commit()
                 ok("Committed.")

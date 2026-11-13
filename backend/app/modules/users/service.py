@@ -65,16 +65,59 @@
 #   the one taking master_profiles first, and it is turned. The KEY SHARE
 #   of a child insert does not conflict with FOR NO KEY UPDATE, so it does
 #   not count as a position in this order.
+#
+# LOCK ORDER (BE-202): ADMIN ROSTER -> users -> master_profiles. THE ONE
+# PLACE IT IS WRITTEN; every path that can take the admin capability away
+# points here.
+#
+#   THE ADMIN CAPABILITY is role == admin OR the switched-away-admin marker
+#   (credentials.role_switch.home_role == "admin") -- the set velo declares
+#   on the comms `support` roster (core/events/sync.py, GROUP SEMANTICS).
+#   comms 3.14 serves a section whose roster was ever declared by its
+#   members only, and by NOBODY once the product removed them all. So the
+#   last holder of the capability is never let go: refuse_last_admin_drop
+#   answers 409 last_admin before the role is written.
+#
+#   THE PATHS THAT DROP IT: make_master (admin/users), revoke_master
+#   (admin/masters), scripts/set_role (to_master / to_user, through
+#   _find_user), scripts/seed (ensure_master), scripts/dev_admin_simulator
+#   (--reset-master; --promote / --suspend reach the first two).
+#
+#   THE ROSTER LOCK. Counting the other holders and then dropping is
+#   check-then-act: two drops of the last two holders would each count the
+#   other and both pass. take_admin_roster_lock is a transaction-scoped
+#   advisory lock on one constant; every drop path takes it as its FIRST
+#   lock -- before the target's users row -- unconditionally (whether the
+#   target holds the capability is known only once its row is taken), and
+#   counts under it. The lock is released at commit, so the second drop
+#   counts after the first committed. Nothing else takes it: it is a
+#   position in no other order, and a drop path waiting for it holds
+#   nothing. Taken AFTER the target's row on one path and before it on
+#   another, it would deadlock two drops of the same person; hence first,
+#   everywhere.
+#
+#   WHY NOT ROW LOCKS ON THE HOLDERS. Locking every holder's users row
+#   (FOR NO KEY UPDATE, by id, before the target) would put OTHER people's
+#   users rows ahead of the target's master_profiles row. refund_booking
+#   (payments/refund.py) takes the master's profile FOR UPDATE and then the
+#   student's users row (record_user_ledger): a revoke of master M holding
+#   admin S's row and waiting for M's profile, against a refund of S's
+#   booking on M's practice holding that profile and waiting for S's row,
+#   is a 40P01. FOR SHARE on the other holders deadlocks two drops against
+#   each other instead. The advisory lock shares no row with anybody.
+#
+#   GAINING the capability takes no lock: a concurrent gain can only raise
+#   the count the drop reads.
 # =============================================================================
 
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events import emit_user_upserted  # Phase 6 / T0
-from app.core.exceptions import ForbiddenError
+from app.core.exceptions import ConflictError, ForbiddenError
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
 from app.modules.users.schemas import (
@@ -104,6 +147,67 @@ async def lock_user_row(session: AsyncSession, user_id: UUID) -> User | None:
             .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
+
+
+# The one key of the admin roster lock (LOCK ORDER, module header). A NAMED
+# constant, like the relay's and the push listener's
+# (core/events/relay.py _RELAY_ADVISORY_LOCK_KEY 4_701_047_000_047,
+# core/comms_listener.py _LISTENER_ADVISORY_LOCK_KEY 4_701_134_000_134,
+# which name this one back): any other advisory lock on this number would
+# hold every admin drop while held. Three advisory locks exist in this
+# database -- those two and this one; a new one picks another number and
+# says so in all three places.
+ADMIN_ROSTER_LOCK_KEY = 4_701_202_000_202
+
+
+async def take_admin_roster_lock(session: AsyncSession) -> None:
+    """Take the admin roster lock for the rest of the transaction.
+
+    The FIRST lock of every path that can drop an admin capability (LOCK
+    ORDER, module header). Transaction-scoped: released at commit or
+    rollback, never explicitly. Re-entrant within one transaction, so a
+    seed that ensures several masters takes it once in effect.
+    """
+    await session.execute(
+        select(func.pg_advisory_xact_lock(ADMIN_ROSTER_LOCK_KEY))
+    )
+
+
+def admin_capability_clause() -> ColumnElement[bool]:
+    """The admin capability as SQL: role == admin OR the marker.
+
+    Same reading as `role == ADMIN or has_admin_home(credentials)` -- the
+    set velo declares on the comms `support` roster.
+    """
+    return or_(
+        User.role == UserRole.ADMIN.value,
+        User.credentials["role_switch"]["home_role"].astext
+        == UserRole.ADMIN.value,
+    )
+
+
+async def refuse_last_admin_drop(session: AsyncSession, user: User) -> None:
+    """409 last_admin when nobody but `user` holds the admin capability.
+
+    Called by a drop path on the branch where `user` is about to lose the
+    capability, BEFORE the role or the marker is written. Counts the other
+    holders under the admin roster lock, which the caller took as its first
+    lock (LOCK ORDER, module header); without it the count is a picture,
+    not a decision. The caller's transaction is rolled back on the raise
+    (get_db_session for the routes; the scripts do not commit).
+    """
+    others = (
+        await session.execute(
+            select(func.count())
+            .select_from(User)
+            .where(admin_capability_clause(), User.id != user.id)
+        )
+    ).scalar_one()
+    if others == 0:
+        raise ConflictError(
+            message="Cannot take the admin role from the last admin",
+            code="last_admin",
+        )
 
 
 logger = structlog.get_logger()

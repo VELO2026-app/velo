@@ -134,7 +134,11 @@ from app.modules.practices.service import (  # noqa: E402
 )
 from app.modules.users.models import User, UserRole  # noqa: E402
 from app.modules.users.schemas import has_admin_home  # noqa: E402
-from app.modules.users.service import lock_user_row  # noqa: E402
+from app.modules.users.service import (  # noqa: E402
+    lock_user_row,
+    refuse_last_admin_drop,
+    take_admin_roster_lock,
+)
 
 PROFILES_DIR = _SCRIPTS_DIR / "seed_profiles"
 
@@ -316,7 +320,14 @@ async def ensure_master(
     through the UI before the seed ran). The third case is re-verified in
     place rather than rejected -- a pending application on the demo master
     would leave every seeded practice unpublishable.
+
+    BE-202: the flip to master is the admin drop for a holder whose role is
+    not master yet, so the admin roster lock is taken first -- before the
+    user's row; seed_profile touches the session first here -- and the last
+    holder is refused: the exception rolls back the whole seed run (LOCK
+    ORDER in app/modules/users/service.py).
     """
+    await take_admin_roster_lock(session)
     user = await ensure_user(
         session, spec["telegram_id"], spec["display_name"]
     )
@@ -333,6 +344,10 @@ async def ensure_master(
     # master clears the round-trip marker, and that IS the admin drop: it
     # leaves group:admins and the support roster, as in make_master.
     had_admin = _admin_capability(user)
+    # BE-202: _set_role_master below runs only for a role that is not
+    # master yet, and then clears the marker -- the drop, for a holder.
+    if had_admin and user.role != UserRole.MASTER.value:
+        await refuse_last_admin_drop(session, user)
 
     if profile is None:
         session.add(

@@ -22,10 +22,10 @@
 #   6. Notify the applicant: master.rejected with the reason (BE-104)
 #   7. Return updated profile
 #
-# REVOKE FLOW (lock order, BE-85):
-#   users FOR NO KEY UPDATE first, then MasterProfile FOR UPDATE
-#   (_load_verified_master) -- the order is written once, in
-#   users/service.py (ROW LOCK ON users).
+# REVOKE FLOW (lock order, BE-85, BE-202):
+#   the admin roster lock, users FOR NO KEY UPDATE, then MasterProfile
+#   FOR UPDATE (_load_verified_master) -- the order is written once, in
+#   users/service.py (LOCK ORDER).
 #
 # JSONB SAFETY:
 #   All mutations use copy.deepcopy() + set_jsonb() (P-03).
@@ -86,7 +86,11 @@ from app.modules.users.schemas import (
     credentials_without_admin_home,
     has_admin_home,
 )
-from app.modules.users.service import lock_user_row
+from app.modules.users.service import (
+    lock_user_row,
+    refuse_last_admin_drop,
+    take_admin_roster_lock,
+)
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
 
 logger = structlog.get_logger()
@@ -259,9 +263,14 @@ async def _load_verified_master(
     takes the user and then writes the profile. Raises NotFoundError if
     profile/user missing, ConflictError if not verified (revoke only makes
     sense on a live capability — status=="verified").
+
+    BE-202: the mutating path drops the admin capability of a master
+    holding the switched-away marker, so it takes the admin roster lock
+    before the users row (LOCK ORDER, users/service.py).
     """
     user: User | None = None
     if for_update:
+        await take_admin_roster_lock(session)
         user = await lock_user_row(session, user_id)
         if user is None:
             # The profile's FK to users is ON DELETE CASCADE: without a
@@ -384,6 +393,11 @@ async def revoke_master(
 
     # -- role reset (mirror set_role._set_role): only if currently master --
     if user.role == UserRole.MASTER.value:
+        # BE-202: role is master, so had_admin IS the marker, and clearing
+        # it below is the drop -- the last holder is refused before any
+        # write (LOCK ORDER, users/service.py).
+        if had_admin:
+            await refuse_last_admin_drop(session, user)
         user.role = UserRole.USER.value
         cleared = credentials_without_admin_home(user.credentials)
         if cleared != (user.credentials or {}):

@@ -81,6 +81,7 @@ TID_SWITCH_ADMIN = 89421
 TID_BACKFILL_A = 89430
 TID_BACKFILL_B = 89431
 TID_CLI = 89440
+TID_CLI_KEEPER = 89414  # BE-202: the admin kept while TID_CLI drops its own
 
 BAND_MIN, BAND_MAX = 89400, 89499
 
@@ -950,9 +951,16 @@ class TestGroupSync:
         )
 
     async def test_cli_set_role_round_trip(self, client, db_session):
-        """scripts/set_role.py: to_admin emits +admins, to_user drops all."""
+        """scripts/set_role.py: to_admin emits +admins, to_user drops all.
+
+        BE-202: another admin is kept in the band -- to_master on the last
+        holder is refused now (test_be202_last_admin.py), and before
+        BE-202 this test passed on a lone admin because nothing counted
+        the others."""
         from scripts.set_role import to_admin, to_master, to_user
 
+        await login_user(client, telegram_id=TID_CLI_KEEPER)
+        await _make_admin(db_session, TID_CLI_KEEPER)
         login = await login_user(client, telegram_id=TID_CLI)
         result = await db_session.execute(
             select(User).where(User.telegram_id == TID_CLI)

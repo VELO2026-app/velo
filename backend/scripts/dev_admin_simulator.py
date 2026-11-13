@@ -62,6 +62,11 @@ from app.modules.schools.service import accept_school_master_offer
 # normalize_master_methods.py imports its models explicitly.
 from app.modules.masters.models import MasterProfile
 from app.modules.users.models import User, UserRole
+from app.modules.users.schemas import has_admin_home
+from app.modules.users.service import (
+    refuse_last_admin_drop,
+    take_admin_roster_lock,
+)
 
 SIM_NOTES = "dev_admin_simulator"
 
@@ -244,12 +249,21 @@ async def run_suspend(ref: str, dry_run: bool) -> None:
 async def run_reset_master(ref: str, dry_run: bool) -> None:
     factory = get_session_factory()
     async with factory() as session:
+        # BE-202: role=user is the admin drop for an admin-role holder
+        # without the marker -- the admin roster lock first, the last
+        # holder refused (LOCK ORDER in app/modules/users/service.py).
+        await take_admin_roster_lock(session)
         user = await resolve_user(session, ref)
         profile = await session.get(MasterProfile, user.id)
         log(f"target: {describe(user, profile)}")
         if dry_run:
             log("[DRY] would DELETE the master_profiles row and set role=user")
             return
+        if user.role == UserRole.ADMIN and not has_admin_home(user.credentials):
+            try:
+                await refuse_last_admin_drop(session, user)
+            except VeloError as exc:
+                raise SystemExit(f"refused ({exc.code}): {exc.message}") from exc
         if profile is not None:
             await session.delete(profile)
         user.role = UserRole.USER

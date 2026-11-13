@@ -92,6 +92,9 @@ export const ERROR_CODES = [
   'zoom_unavailable',
   'zoom_host_token_unavailable',
   'already_master',
+  // BE-202: 409 when an admin action or the CLI would take the admin role
+  // from its last holder -- the support roster in comms would empty.
+  'last_admin',
   'master_offer_not_found',
   'blocked_by_master',
   'master_profile_not_found',

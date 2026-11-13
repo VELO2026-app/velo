@@ -106,6 +106,19 @@ async def _clean(db_session: AsyncSession):
     await _drain()
 
 
+# BE-202: a drop of the admin capability is refused for its last holder
+# (409 last_admin). A test that drops its own admin keeps this one in the
+# band as an explicit precondition, rather than leaning on whatever holders
+# other files left in the shared database.
+_KEEPER_TID = BAND_MIN + 9
+
+
+async def _keep_another_admin(client: AsyncClient, db_session: AsyncSession) -> None:
+    keeper = await _user(client, db_session, _KEEPER_TID)
+    keeper.role = "admin"
+    await db_session.commit()
+
+
 async def _user(client: AsyncClient, db_session: AsyncSession, tid: int, **kw) -> User:
     return (await _login(client, db_session, tid, **kw))[0]
 
@@ -264,7 +277,12 @@ class TestPaths:
         M drops the admin capability (role master, marker cleared) and
         leaves the profile as it was; A gives the capability back. The
         roster sees member False, then True.
+
+        BE-202: another admin is kept in the band -- M on the last holder
+        is refused now (test_be202_last_admin.py), and before BE-202 this
+        test passed on a lone admin because nothing counted the others.
         """
+        await _keep_another_admin(client, db_session)
         user = await _user(client, db_session, BAND_MIN + 4)
         assert await set_role.to_master(db_session, user, assume_yes=True)
         assert await set_role.to_admin(db_session, user, assume_yes=True)
@@ -290,7 +308,13 @@ class TestPaths:
     ) -> None:
         """scripts/seed.py ensure_master on a reused account that is an
         admin: the flip to master is the admin drop, projected like every
-        other path's -- group:admins and the roster both say False."""
+        other path's -- group:admins and the roster both say False.
+
+        BE-202: another admin is kept in the band -- the flip of the last
+        holder is refused now (test_be202_last_admin.py), and before
+        BE-202 this test passed on a lone admin because nothing counted
+        the others."""
+        await _keep_another_admin(client, db_session)
         user = await _user(client, db_session, BAND_MIN + 5)
         user.role = "admin"
         await db_session.commit()

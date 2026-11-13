@@ -63,7 +63,11 @@ from app.modules.users.schemas import (
     credentials_without_admin_home,
     has_admin_home,
 )
-from app.modules.users.service import lock_user_row
+from app.modules.users.service import (
+    lock_user_row,
+    refuse_last_admin_drop,
+    take_admin_roster_lock,
+)
 
 logger = structlog.get_logger()
 
@@ -434,8 +438,9 @@ async def make_master(
     Idempotent-reject: a user who is already a master -> 409 (already_master).
     Write session (get_db_session); the caller flushes (P-01, no commit here).
 
-    BE-85: the users row is taken FOR NO KEY UPDATE first and the
-    already_master check reads it under that lock; the profile comes
+    BE-85: the users row is taken FOR NO KEY UPDATE first (after the admin
+    roster lock, BE-202) and the already_master check reads it under that
+    lock; the profile comes
     after it -- the users -> master_profiles order written in
     users/service.py (ROW LOCK ON users).
 
@@ -455,7 +460,13 @@ async def make_master(
 
     master.verified (BE-104) goes ONLY when not had_master -- the same
     transition condition as announce_pending_master_offers below.
+
+    BE-202: this path drops the admin capability of whoever holds it (role
+    master, marker cleared), so it takes the admin roster lock first and
+    refuses the last holder with 409 last_admin before writing anything --
+    LOCK ORDER in users/service.py.
     """
+    await take_admin_roster_lock(session)
     user = await lock_user_row(session, user_id)
     if user is None:
         raise NotFoundError("User not found")
@@ -464,6 +475,15 @@ async def make_master(
         raise ConflictError(
             message="User is already a master", code="already_master"
         )
+
+    # Phase 6 / T0: admin capability BEFORE any write -- the role flip
+    # and the cleared marker below ARE the drop. BE-202: the last holder
+    # is refused here, while nothing is written yet.
+    had_admin = (
+        user.role == UserRole.ADMIN.value or has_admin_home(user.credentials)
+    )
+    if had_admin:
+        await refuse_last_admin_drop(session, user)
 
     profile = (
         await session.execute(
@@ -506,11 +526,7 @@ async def make_master(
 
     # Set role=master and clear the switched-away-admin marker (R-1): an
     # authoritative role change makes this the account's home role.
-    # Phase 6 / T0: admin capability BEFORE the write -- clearing the
-    # marker below (or demoting an admin-role holder) IS the drop.
-    had_admin = (
-        user.role == UserRole.ADMIN.value or has_admin_home(user.credentials)
-    )
+    # had_admin was read above, before the first write.
     user.role = UserRole.MASTER.value
     cleared = credentials_without_admin_home(user.credentials)
     if cleared != (user.credentials or {}):

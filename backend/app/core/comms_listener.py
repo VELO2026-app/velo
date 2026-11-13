@@ -70,8 +70,10 @@ logger = structlog.get_logger()
 # BE-134: the advisory-lock key of the push listener. A NAMED constant, like
 # the relay's (core/events/relay.py _RELAY_ADVISORY_LOCK_KEY, which names
 # this one back): any other lock on this number would keep the listener
-# idle while held. Two advisory locks exist in this database -- the relay's
-# and this one; a new one picks another number and says so in both places.
+# idle while held. Three advisory locks exist in this database -- the
+# relay's, this one and the admin roster lock (users/service.py
+# ADMIN_ROSTER_LOCK_KEY 4_701_202_000_202, BE-202); a new one picks another
+# number and says so in all three places.
 _LISTENER_ADVISORY_LOCK_KEY = 4_701_134_000_134
 
 CHANGES_PATH = "/api/v1/notifications/changes"

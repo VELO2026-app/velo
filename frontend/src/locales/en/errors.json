@@ -11,6 +11,7 @@
     "zoom_unavailable": "Zoom did not respond. Try again in a minute",
     "zoom_host_token_unavailable": "Zoom did not let the meeting start. Try again; if it repeats, contact support",
     "already_master": "You are already a master",
+    "last_admin": "The last admin cannot lose the admin role — support would be left with no operators",
     "master_offer_not_found": "The appointment is invalid or has been cancelled",
     "blocked_by_master": "The master of this practice has blocked you",
     "master_profile_not_found": "Master profile not found",
