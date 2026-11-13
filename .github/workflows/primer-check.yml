@@ -64,10 +64,12 @@ jobs:
       #   6. Rejected: waiting for the tag -- the step would stay out of CI
       #      with no date.
       PRIDEM_REPOSITORY: inzoddwetrust/primer
-      # BE-193 part 2b: jobs of a stack and the length of a minted value
-      # (DM-22), and `check` as the runner's own user -- HOME from passwd,
-      # DOCKER_CONFIG at $HOME/.docker (DM-88); no sudo.
-      PRIDEM_COMMIT: c4b380041b3a8937dd1ebd1db439e12b159176a1
+      # BE-194 part 4: the machine's verbs of the project, a verb's `service`
+      # (DM-86), on top of jobs and the length of a minted value (DM-22) and
+      # `check` as the runner's own user (DM-88). Not the final pin: the
+      # commit of the machine velo-test is installed with is named by Primer
+      # separately.
+      PRIDEM_COMMIT: 4a2ee5f7b2ff5ef750ef1f1841df236bd9b2d418
     steps:
       - uses: actions/checkout@v4
         with:
