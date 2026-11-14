@@ -3,7 +3,8 @@
 #
 # No agents, no judgment. Jobs (FE-157 s1: the former single `frontend` job is
 # split so the pieces run in parallel; every step it had is kept, see below):
-#   scope        — classifies the PR diff, sizes the jobs below.
+#   scope        — classifies the PR diff, or the range a push brought
+#                  (FE-187), and sizes the jobs below.
 #   lint         — the FE-73 zero-warning budget (eslint over the app AND
 #                  packages/velo-ui; its cache is reused only for identical
 #                  lint inputs) + the other lint gates + prettier, both
@@ -49,8 +50,9 @@
 # runs in its own workflow, backend-tests.yml (BE-197); on test the stand
 # runs it on every rollout.
 #
-# Scope (per PR type): a `scope` job classifies the PR's diff
-# (.github/scripts/ci-scope.mjs) and the jobs below size themselves:
+# Scope (per PR type): a `scope` job classifies the PR's diff -- or, on a
+# push, everything the push brought, before..sha (FE-187) -- with
+# .github/scripts/ci-scope.mjs, and the jobs below size themselves:
 #   docs-only PR            -> everything skipped (green in seconds)
 #   comment-only code edits -> lint (lint + format) only
 #   backend/**              -> drift; frontend jobs skipped unless touched too
@@ -58,7 +60,12 @@
 #   + image only when the PR touches what the image build reads
 #     (Dockerfile, frontend/nginx*, editions.json, lockfile, workspace
 #     manifests, .dockerignore) or the gate itself
-# Pushes to test always run the full gate -- the trunk is the backstop.
+# A push is sized like a PR (FE-187). It gets the full gate only when its
+# range cannot be trusted: a new branch (before all zeros), a before outside
+# the history, a forced push (before not an ancestor of sha). So the trunk is
+# no longer the backstop for a misclassification: before FE-187 every push
+# ran the full gate; now the classifier's own test, run in the scope job, is
+# what guards it.
 # Skipped jobs report "skipped", which satisfies a required status check.
 #
 # Runs are cancelled only for pull requests (a newer push supersedes the old
@@ -97,21 +104,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      # The defaults are what a run without a classification gets: all.
       frontend: ${{ steps.scope.outputs.frontend || 'full' }}
       drift: ${{ steps.scope.outputs.drift || 'true' }}
       docker: ${{ steps.scope.outputs.docker || 'true' }}
     steps:
       - uses: actions/checkout@v7
-        if: github.event_name == 'pull_request'
         with:
-          # The PR merge commit + its first parent (the base tip): the diff
-          # between them is exactly what the PR contributes.
-          fetch-depth: 2
+          # PR: the merge commit + its first parent (the base tip) -- the diff
+          # between them is exactly what the PR contributes. Push: the whole
+          # history (FE-187) -- a push carries any number of commits, and
+          # whether before is an ancestor of sha needs the history between.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
 
-      - name: Classify the PR diff
+      # The classifier is the gate's size: its own test runs where it runs.
+      - name: Test the classifier
+        run: node --test .github/scripts/ci-scope.test.mjs
+
+      - name: Classify the PR diff or the push range
         id: scope
-        if: github.event_name == 'pull_request'
-        run: node .github/scripts/ci-scope.mjs HEAD^1 HEAD
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            node .github/scripts/ci-scope.mjs HEAD^1 HEAD
+          else
+            node .github/scripts/ci-scope.mjs --push "$BEFORE" "$GITHUB_SHA"
+          fi
 
   lint:
     name: lint — eslint budget / format
