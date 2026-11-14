@@ -38,7 +38,9 @@
 #   (admin/users), revoke_master (admin/masters), scripts/set_role,
 #   scripts/seed and scripts/dev_admin_simulator (--reset-master, BE-219:
 #   it writes the role only, and reads the capability it projects from the
-#   row it holds). The login upsert (auth/service.py) merges in SQL
+#   row it holds; --block / --unblock, BE-220: is_active only, a snapshot
+#   field, taken the same way so "already" is read from the held row). The
+#   login upsert (auth/service.py) merges in SQL
 #   (`credentials || fresh` under the row lock ON CONFLICT takes) and needs
 #   nothing from here.
 #
