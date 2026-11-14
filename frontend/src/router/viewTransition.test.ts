@@ -13,7 +13,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { UPDATE_TIMEOUT_MS, installViewTransitions, transitionKind } from '@/router/viewTransition'
+import {
+  UPDATE_TIMEOUT_MS,
+  __resetViewTransitionsForTest,
+  installViewTransitions,
+  transitionKind,
+} from '@/router/viewTransition'
 
 const Blank = defineComponent({ render: () => h('div') })
 
@@ -63,6 +68,8 @@ async function waitMs(ms: number): Promise<void> {
 
 describe('tab switches: CSS fade-through on every host', () => {
   afterEach(() => {
+    // A navigation on real timers arms them; none may outlive the test (FE-186).
+    __resetViewTransitionsForTest()
     vi.useRealTimers()
     root().remove('vt-leave', 'vt-fallback', 'vt-tab', 'vt-forward', 'vt-back')
   })
@@ -211,6 +218,8 @@ describe('hosts with View Transitions', () => {
   })
 
   afterEach(() => {
+    // Real timers here: WebKit's fallback fade arms one (FE-186).
+    __resetViewTransitionsForTest()
     Reflect.deleteProperty(doc, 'startViewTransition')
     Reflect.deleteProperty(win, 'GestureEvent')
     vi.unstubAllGlobals()
@@ -310,5 +319,67 @@ describe('hosts with View Transitions', () => {
     expect(settled).toBe(true)
     expect(started[0]?.skipTransition).toHaveBeenCalled()
     release()
+  })
+})
+
+// FE-186: a timer of the screen change that outlives its test -- the test
+// environment has taken `document` away by the time it fires -- must not
+// throw: CI failed with an unhandled ReferenceError and no failed test.
+describe('the timers of a screen change outlive no document (FE-186)', () => {
+  afterEach(() => {
+    __resetViewTransitionsForTest()
+    vi.useRealTimers()
+    root().remove('vt-leave', 'vt-fallback', 'vt-tab', 'vt-forward', 'vt-back')
+  })
+
+  /** Run `fire` with `document` gone from the global scope, then put it back. */
+  function withoutDocument(fire: () => void): void {
+    const kept = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    expect(kept).toBeDefined()
+    Reflect.deleteProperty(globalThis, 'document')
+    try {
+      expect(typeof document).toBe('undefined')
+      fire()
+    } finally {
+      Object.defineProperty(globalThis, 'document', kept as PropertyDescriptor)
+    }
+  }
+
+  it('the fade-in timer (clearFallback) fires with no document: nothing is thrown', async () => {
+    vi.useFakeTimers()
+    const router = makeRouter()
+    await router.push('/user/dashboard')
+    await router.push('/user/practice/7')
+    await settle()
+    expect(root().contains('vt-fallback')).toBe(true) // the timer is armed
+    withoutDocument(() => {
+      expect(() => vi.advanceTimersByTime(600)).not.toThrow()
+    })
+  })
+
+  it('the fade-out safety timer (endLeave) fires with no document: nothing is thrown', async () => {
+    vi.useFakeTimers()
+    const router = makeRouter()
+    await router.push('/user/dashboard')
+    router.beforeResolve(() => new Promise<boolean>(() => undefined)) // never answers
+    void router.push('/user/calendar')
+    await vi.advanceTimersByTimeAsync(10)
+    expect(root().contains('vt-leave')).toBe(true) // the safety timer is armed
+    withoutDocument(() => {
+      expect(() => vi.advanceTimersByTime(1300)).not.toThrow()
+    })
+  })
+
+  it('__resetViewTransitionsForTest leaves no timer of a screen change pending', async () => {
+    vi.useFakeTimers()
+    const router = makeRouter()
+    await router.push('/user/dashboard')
+    await router.push('/user/practice/7') // the fade-in timer
+    router.beforeResolve(() => new Promise<boolean>(() => undefined))
+    void router.push('/user/calendar') // the fade-out safety timer
+    await vi.advanceTimersByTimeAsync(10)
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    __resetViewTransitionsForTest()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
