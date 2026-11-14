@@ -65,6 +65,7 @@ on:
       - frontend/nginx.conf
       - frontend/Dockerfile
       - frontend/scripts/lib/texts-package.mjs
+      - frontend/scripts/lib/skin-package.mjs
   pull_request:
     branches: [deploy-machine]
     paths:
@@ -77,6 +78,7 @@ on:
       - frontend/nginx.conf
       - frontend/Dockerfile
       - frontend/scripts/lib/texts-package.mjs
+      - frontend/scripts/lib/skin-package.mjs
 
 concurrency:
   group: backend-tests-${{ github.ref }}
@@ -151,7 +153,8 @@ jobs:
           for path in ("/app/tests", "/app/pyproject.toml", "/primer.yaml", "/docker-compose.yml",
                        "/docker-compose.storage.yml", "/comms-profile/types.yaml",
                        "/frontend/nginx.conf", "/frontend/Dockerfile",
-                       "/frontend/scripts/lib/texts-package.mjs", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
+                       "/frontend/scripts/lib/texts-package.mjs",
+                       "/frontend/scripts/lib/skin-package.mjs", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
               (present if dev else absent)(path)
           for name in ("pytest", "pytest_asyncio", "ruff"):
               module(name, dev)

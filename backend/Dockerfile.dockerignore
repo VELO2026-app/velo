@@ -37,6 +37,8 @@
 !frontend/nginx.conf
 !frontend/Dockerfile
 !frontend/scripts/lib/texts-package.mjs
+# BE-218: the skin's contract the frontend reads (tests/test_primer_env.py).
+!frontend/scripts/lib/skin-package.mjs
 # BE-190 fix: the test stage needs them too (tests/test_primer_env.py).
 !backend/ci.env
 !.github/workflows/ci.yml

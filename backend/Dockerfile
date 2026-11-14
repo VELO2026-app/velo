@@ -169,11 +169,12 @@ COPY primer.yaml docker-compose.yml docker-compose.storage.yml /
 # values are invented; the runtime stage has none of them.
 COPY backend/ci.env /backend/ci.env
 COPY .github/workflows/ci.yml .github/workflows/backend-tests.yml /.github/workflows/
-# BE-207: the slot `texts` of primer.yaml against the frontend that reads it
-# -- nginx's alias, the image's validate-texts and the contract the check
-# reads (tests/test_primer_env.py). Code of the frontend, no value.
+# BE-207, BE-218: the slots `texts` and `skin` of primer.yaml against the
+# frontend that reads them -- nginx's alias, the image's validate-texts and
+# the contracts the frontend reads (tests/test_primer_env.py). Code of the
+# frontend, no value.
 COPY frontend/nginx.conf frontend/Dockerfile /frontend/
-COPY frontend/scripts/lib/texts-package.mjs /frontend/scripts/lib/
+COPY frontend/scripts/lib/texts-package.mjs frontend/scripts/lib/skin-package.mjs /frontend/scripts/lib/
 # The comms product profile, which the suite checks every notification
 # against (tests/notification_guard.py). /comms-profile is where the tests'
 # Path(__file__).resolve().parents[2] / "comms-profile" lands from

@@ -24,6 +24,7 @@ BE-193 part 2b: velo-storage-init is the stack's job, and the storage's
 secrets are of one minted form, in CI too.
 BE-207: the slot `texts` against the frontend that reads it.
 BE-194: comms' profile, data of the machine, against the tree and ci.env.
+BE-218: the skin's slot against the generation the frontend reads.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -463,3 +464,21 @@ def test_comms_takes_its_profile_from_this_tree() -> None:
     language = _ci_env()["DEFAULT_LANGUAGE"]
     assert language, "ci.env names a default language"
     assert (profile / "templates" / f"{language}.yaml").is_file(), language
+
+
+# -- BE-218: the skin's slot ----------------------------------------------------
+
+
+def test_the_skin_slot_is_the_generation_the_frontend_reads() -> None:
+    """The frontend reads one generation of the skin package
+    (skin-package.mjs, SKIN_CONTRACT_MAJOR); the slot of primer.yaml is that
+    generation, else the machine gives a package the build refuses (FE-150).
+    As the texts slot (BE-207)."""
+    skin = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["packages"]["skin"]
+    lib = FRONTEND / "scripts" / "lib" / "skin-package.mjs"
+    majors = re.findall(
+        r"^export const SKIN_CONTRACT_MAJOR = (\d+)$", lib.read_text(), re.M
+    )
+    assert len(majors) == 1, majors
+    major = int(majors[0])
+    assert skin["contract"] == f">={major},<{major + 1}", skin

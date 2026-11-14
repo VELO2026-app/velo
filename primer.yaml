@@ -119,7 +119,9 @@ provides:
 
 packages:
   skin:
-    contract: ">=1,<2"
+    # The generation the frontend reads (frontend/scripts/lib/skin-package.mjs,
+    # SKIN_CONTRACT_MAJOR); tests/test_primer_env.py holds them equal.
+    contract: ">=2,<3"
     apply: build
     build:
       - { service: frontend, path: public/skin }
