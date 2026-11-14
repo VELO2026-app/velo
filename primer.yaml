@@ -6,7 +6,10 @@ name: velo
 kind: product
 
 dependencies:
-  comms: { repo: git@github.com:aivis-one/comms.git, version: ">=4,<5" }
+  # comms v4 takes its profile as data of the machine (form D, protocol 4.5):
+  # copied from this repository, checked by `comms validate --profile` before
+  # the rollout. The instance's default_language needs templates in it.
+  comms: { repo: git@github.com:aivis-one/comms.git, version: ">=4,<5", data: { profile: comms-profile } }
 
 editions:
   # One edition, `ai` (owner ruling 5.11); its modules are the table

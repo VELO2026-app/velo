@@ -23,6 +23,7 @@ provides is what /health names, and each CI place passes its own.
 BE-193 part 2b: velo-storage-init is the stack's job, and the storage's
 secrets are of one minted form, in CI too.
 BE-207: the slot `texts` against the frontend that reads it.
+BE-194: comms' profile, data of the machine, against the tree and ci.env.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -442,3 +443,23 @@ def test_the_texts_validate_is_a_command_of_the_frontend_image() -> None:
     assert len(majors) == 1, majors
     major = int(majors[0])
     assert slot["contract"] == f">={major},<{major + 1}"
+
+
+# -- BE-194: comms' profile as data of the machine ------------------------------
+
+
+def test_comms_takes_its_profile_from_this_tree() -> None:
+    """comms v4 takes its profile as data of the machine (form D, protocol
+    4.5): the machine copies `data.profile` of this repository and runs
+    `comms validate --profile` before the rollout. The machine checks only
+    the form of the path; that it is a profile here is this test's -- a
+    directory with types.yaml, with templates for the default language
+    (comms does not start without them; ci.env's, an instance's passport is
+    checked by comms itself)."""
+    comms = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["dependencies"]["comms"]
+    assert comms.get("data") == {"profile": "comms-profile"}, comms
+    profile = ROOT / comms["data"]["profile"]
+    assert (profile / "types.yaml").is_file(), profile
+    language = _ci_env()["DEFAULT_LANGUAGE"]
+    assert language, "ci.env names a default language"
+    assert (profile / "templates" / f"{language}.yaml").is_file(), language
