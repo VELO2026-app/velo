@@ -37,6 +37,15 @@ stacks:
     frontend: { service: frontend, port: 3000 }
     migrate:  python -m alembic upgrade head
     test:     { run: python -m pytest tests/ --junitxml=/tmp/junit.xml, target: test }
+    # The frontend's API types by the product's own commands (contract 3
+    # rule 23): openapi prints the document, generate turns <openapi> into
+    # <out>, in the app's image; on a test box a different text is committed
+    # by commit_as. `out` is the file CI's drift-check holds to the schema.
+    types:
+      openapi: python scripts/dump_openapi.py
+      generate: python scripts/generate_ts_types.py <openapi> <out>
+      out: frontend/src/api/generated.ts
+      commit_as: velo-types
     # Demo people and their data: never on prod (the machine refuses a seed
     # outside its roles; the resets of primer.yaml's verbs have the same).
     seeds:

@@ -47,55 +47,32 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      # KNOWN CEILING -- pridem is installed from a commit of the machine, not
-      # from a release.
-      #   1. Mechanics: the machine has no release tag yet (version 0.0.0, no
-      #      GitHub Release), so the wheel and the lock README pins by tag do
-      #      not exist. pridem is built here from the commit below, by the
-      #      path of the machine's own release.yml: runtime wheels from its
-      #      wheels/ by requirements.lock (--no-index --require-hashes),
-      #      flit_core by requirements-build.lock, then the package without
-      #      dependencies and without build isolation.
-      #   2. Status: acknowledged by design.
-      #   3. Task: DM-57 -- the first tag of the machine.
-      #   4. Unfreeze when: inzoddwetrust/primer has its first tag vX.Y.Z.
-      #   5. Fix: README's recipe -- the wheel of the GitHub Release by that
-      #      tag, its sha256 and the sha256 of requirements.lock at the tag.
-      #   6. Rejected: waiting for the tag -- the step would stay out of CI
-      #      with no date.
-      PRIDEM_REPOSITORY: inzoddwetrust/primer
-      # BE-195 part 4: a verb on a job of another entry of the product, run as
-      # a one-off container (DM-86 pass 4b), on top of a verb's `service`
-      # (DM-86), jobs and the length of a minted value (DM-22) and `check` as
-      # the runner's own user (DM-88). Not the final pin: the commit of the
-      # machine velo-test is installed with is named by Primer separately.
-      PRIDEM_COMMIT: 24b4ea8996f5edf57981f2dc252f559f7053149c
+      # The machine pinned by its release, as its README has it: the tag, the
+      # sha256 of its wheel and of requirements.lock at the tag (BE-194, the
+      # machine's first release v0.1.0, DM-103). Not the final pin: the
+      # release velo-test is installed with is named by Primer separately.
+      PRIDEM_TAG: v0.1.0
+      PRIDEM_WHEEL_SHA256: "daf26ee4b85b4d6ca253b8691bd0efa29b8f0cdf3508a10af032f19c0e4c2e0e"
+      PRIDEM_LOCK_SHA256: "8c3a137cab01cdff7044b3caa1af3ad0d82b45e7df2917993a2d4338f243b85e"
     steps:
       - uses: actions/checkout@v4
         with:
           path: velo
 
-      - uses: actions/checkout@v4
-        with:
-          repository: ${{ env.PRIDEM_REPOSITORY }}
-          ref: ${{ env.PRIDEM_COMMIT }}
-          path: pridem-src
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: pridem, pinned by commit
-        working-directory: pridem-src
+      - name: pridem, pinned by its release
         run: |
-          # The checkout is the pinned commit, not whatever the ref resolved to.
-          have=$(git rev-parse HEAD)
-          if [ "$have" != "$PRIDEM_COMMIT" ]; then
-            echo "pridem checkout is $have, want $PRIDEM_COMMIT"; exit 1
-          fi
-          python -m pip install --no-index --find-links wheels/ --require-hashes -r requirements.lock
-          python -m pip install --require-hashes -r requirements-build.lock
-          python -m pip install --no-deps --no-build-isolation .
+          base=https://github.com/inzoddwetrust/primer
+          wheel="pridem-${PRIDEM_TAG#v}-py3-none-any.whl"
+          curl -fsSLO "$base/releases/download/$PRIDEM_TAG/$wheel"
+          curl -fsSL -o requirements.lock "https://raw.githubusercontent.com/inzoddwetrust/primer/$PRIDEM_TAG/requirements.lock"
+          echo "$PRIDEM_WHEEL_SHA256  $wheel" | sha256sum -c --strict
+          echo "$PRIDEM_LOCK_SHA256  requirements.lock" | sha256sum -c --strict
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install --no-deps "$wheel"
           pridem version
 
       - name: pridem check

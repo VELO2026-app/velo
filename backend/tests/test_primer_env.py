@@ -26,6 +26,7 @@ BE-207: the slot `texts` against the frontend that reads it.
 BE-194: comms' profile, data of the machine, against the tree and ci.env.
 BE-218: the skin's slot against the generation the frontend reads.
 BE-194 part 6: the lock on comms v4.0.0 and the bot's token by its seam.
+BE-194 (v0.1.0): the frontend's types by the product's commands.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -540,3 +541,30 @@ def test_the_bot_token_is_comms_seam() -> None:
         "from": "comms",
         "when": "telegram",
     }
+
+
+# -- BE-194 (machine v0.1.0): the frontend's types ------------------------------
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+
+
+def test_the_types_are_made_by_the_products_scripts_into_what_ci_checks() -> None:
+    """Contract 3 rule 23 (machine v0.1.0): `openapi` prints the document,
+    `generate` turns <openapi> into <out> -- in that order, the order of
+    generate_ts_types.py's argv -- both in the app's image (scripts/ of this
+    tree). `out` is the very file CI's drift-check holds to the schema
+    (ci.yml), so the box and CI judge one file. On one entry, velo's."""
+    stacks = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["stacks"]
+    declared = {name for name, entry in stacks.items() if entry.get("types")}
+    assert declared == {"velo"}, declared
+    types = stacks["velo"]["types"]
+    assert set(types) == {"openapi", "generate", "out", "commit_as"}, types
+    for command in (types["openapi"], types["generate"]):
+        words = command.split()
+        assert words[0] == "python" and words[1].startswith("scripts/"), command
+        assert (SCRIPTS / words[1].removeprefix("scripts/")).is_file(), command
+    generate = types["generate"].split()
+    assert generate[2:] == ["<openapi>", "<out>"], types["generate"]
+    drift = re.findall(r"git diff --exit-code -- (\S+)", CI_YML.read_text())
+    assert drift == [types["out"]], drift
+    assert types["commit_as"], "the types commit names its author"
