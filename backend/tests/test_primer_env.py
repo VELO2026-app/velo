@@ -475,7 +475,9 @@ def test_the_skin_slot_is_the_generation_the_frontend_reads() -> None:
     """The frontend reads one generation of the skin package
     (skin-package.mjs, SKIN_CONTRACT_MAJOR); the slot of primer.yaml is that
     generation, else the machine gives a package the build refuses (FE-150).
-    As the texts slot (BE-207)."""
+    As the texts slot (BE-207). And the slot is optional (contract 3 rule 71,
+    machine v0.1.0): a passport with no skin builds the golden VELO -- the
+    test held only the contract while the machine knew no `optional`."""
     skin = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["packages"]["skin"]
     lib = FRONTEND / "scripts" / "lib" / "skin-package.mjs"
     majors = re.findall(
@@ -484,6 +486,7 @@ def test_the_skin_slot_is_the_generation_the_frontend_reads() -> None:
     assert len(majors) == 1, majors
     major = int(majors[0])
     assert skin["contract"] == f">={major},<{major + 1}", skin
+    assert skin.get("optional") is True, skin
 
 
 # -- BE-194 part 6: the lock on comms, the bot's token by a seam ----------------
