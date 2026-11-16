@@ -9,8 +9,9 @@
 #   workflow_call  -- from ci.yml on every PR / push to test (Chromium only).
 #                     `advisory: true` keeps a red sweep from failing the job
 #                     for the burn-in period (see ci.yml).
-#   schedule       -- nightly on test: Chromium (Telegram on Android) and
-#                     WebKit (Telegram on iOS).
+#   schedule       -- nightly on the default branch (deploy-machine):
+#                     Chromium (Telegram on Android) and WebKit (Telegram on
+#                     iOS).
 #   workflow_dispatch -- by hand, either set.
 #
 # The stack: Postgres 16 and Redis 7 as job services (the majors and images of
