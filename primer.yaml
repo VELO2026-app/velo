@@ -101,7 +101,9 @@ env:
   ZOOM_CLIENT_SECRET:           { source: asked, when: zoom }
   ZOOM_SDK_CLIENT_SECRET:       { source: asked, when: zoom }
   TELEGRAM_LOGIN_CLIENT_SECRET: { source: asked, when: telegram }
-  TELEGRAM_BOT_TOKEN:           { source: asked, when: telegram }
+  # The bot's token is one copy, comms' (it provides it, comms v4.0.0); the
+  # passport of velo holds none.
+  TELEGRAM_BOT_TOKEN:           { source: seam, from: comms, when: telegram }
   # seams of comms
   COMMS_API_URL:         { source: seam, from: comms }
   COMMS_SERVICE_TOKEN:   { source: seam, from: comms }

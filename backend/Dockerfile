@@ -163,7 +163,7 @@ COPY backend/pyproject.toml ./
 # where the tests' Path(__file__).resolve().parents[2] lands from /app/tests,
 # as for the comms profile below. No file holds a value (protocol 5.1); the
 # storage file holds one constant of the product, the root login.
-COPY primer.yaml docker-compose.yml docker-compose.storage.yml /
+COPY primer.yaml primer.lock docker-compose.yml docker-compose.storage.yml /
 # The one settings environment of CI and the two workflows that read it --
 # test_primer_env.py holds them and Settings together (BE-190 fix). The
 # values are invented; the runtime stage has none of them.

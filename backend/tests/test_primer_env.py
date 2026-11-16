@@ -25,6 +25,7 @@ secrets are of one minted form, in CI too.
 BE-207: the slot `texts` against the frontend that reads it.
 BE-194: comms' profile, data of the machine, against the tree and ci.env.
 BE-218: the skin's slot against the generation the frontend reads.
+BE-194 part 6: the lock on comms v4.0.0 and the bot's token by its seam.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -482,3 +483,60 @@ def test_the_skin_slot_is_the_generation_the_frontend_reads() -> None:
     assert len(majors) == 1, majors
     major = int(majors[0])
     assert skin["contract"] == f">={major},<{major + 1}", skin
+
+
+# -- BE-194 part 6: the lock on comms, the bot's token by a seam ----------------
+
+LOCK = ROOT / "primer.lock"
+FULL_COMMIT = re.compile(r"[0-9a-f]{40}")
+
+
+def _version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.split("."))
+
+
+def _in_range(version: str, spec: str) -> bool:
+    """`>=4,<5`-style ranges of primer.yaml: each bound a comparison."""
+    have = _version(version)
+    checks = {
+        ">=": lambda b: have >= b,
+        "<=": lambda b: have <= b,
+        ">": lambda b: have > b,
+        "<": lambda b: have < b,
+        "==": lambda b: have == b,
+    }
+    for bound in spec.split(","):
+        bound = bound.strip()
+        op = next(o for o in (">=", "<=", "==", ">", "<") if bound.startswith(o))
+        limit = _version(bound[len(op) :])
+        if not checks[op](limit + (0,) * (len(have) - len(limit))):
+            return False
+    return True
+
+
+def test_the_lock_names_a_real_release_of_comms() -> None:
+    """The lock pins comms to its tag v4.0.0 and the tag's full commit. The
+    machine's check reads only the form (7..40 hex: the placeholder 0000000
+    passed it) and leaves the tag to the box's network; this holds the rest:
+    a full commit that is no placeholder, the tag of the version, the
+    version inside the range primer.yaml asks for, no placeholder comment."""
+    text = LOCK.read_text(encoding="utf-8")
+    assert "PLACEHOLDER" not in text
+    comms = yaml.safe_load(text)["dependencies"].get("comms")
+    assert comms and comms.get("commit"), "the lock pins comms"
+    commit = comms["commit"]
+    assert FULL_COMMIT.fullmatch(commit) and set(commit) != {"0"}, commit
+    assert comms["tag"] == f"v{comms['version']}", comms
+    wanted = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["dependencies"]["comms"]
+    assert _in_range(comms["version"], wanted["version"]), (comms, wanted["version"])
+
+
+def test_the_bot_token_is_comms_seam() -> None:
+    """One copy of the bot's token, comms' (it provides it from v4.0.0): a
+    seam, under the option telegram as before; velo asks no token."""
+    env = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["env"]
+    assert env["TELEGRAM_BOT_TOKEN"] == {
+        "source": "seam",
+        "from": "comms",
+        "when": "telegram",
+    }

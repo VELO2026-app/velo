@@ -18,12 +18,13 @@
 # CHANNELS ARE THE PROFILE'S (comms protocol 3.0.0): a request never
 # names a channel, the profile routes each type. Every velo-emitted
 # type is routed to [in_app, telegram] -- the bell always gets the row,
-# telegram delivers where the deploy configured the bot. comms refuses
-# to start when a type routes into a channel whose keys are all empty
-# on that deploy (comms app/profile/loader.py _check_routes), so
-# `telegram` here REQUIRES TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_URL in
-# the comms environment. The msg.* types declare no channels: comms
-# emits them itself and they take its default, in_app.
+# telegram delivers where the instance has it on. comms v4 accepts a
+# type routed into a channel the instance switched off: a delivery into
+# it ends in the outcome "channel unavailable" and the type's other
+# channels go on (comms app/profile/loader.py, v4.0.0). velo keeps the
+# channel it needs on by its own options_required: [telegram] in
+# primer.yaml. The msg.* types declare no channels: comms emits them
+# itself and they take its default, in_app.
 #
 # CATEGORY GRID (§3, locked as v1 + decision A of 2026-07-28;
 # customer edits = this file):

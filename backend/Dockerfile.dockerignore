@@ -28,6 +28,8 @@
 !backend/pyproject.toml
 # BE-192: the test stage needs them (tests/test_primer_env.py); no values.
 !primer.yaml
+# BE-194 part 6: the lock's guard (tests/test_primer_env.py).
+!primer.lock
 !docker-compose.yml
 # BE-193: the test stage needs it too (tests/test_primer_env.py, the root
 # login of the storage stack).

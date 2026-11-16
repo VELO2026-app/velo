@@ -61,6 +61,7 @@ on:
       - docker-compose.yml
       - docker-compose.storage.yml
       - primer.yaml
+      - primer.lock
       - .github/workflows/backend-tests.yml
       - frontend/nginx.conf
       - frontend/Dockerfile
@@ -74,6 +75,7 @@ on:
       - docker-compose.yml
       - docker-compose.storage.yml
       - primer.yaml
+      - primer.lock
       - .github/workflows/backend-tests.yml
       - frontend/nginx.conf
       - frontend/Dockerfile
@@ -150,7 +152,8 @@ jobs:
           for name in ("uvicorn", "fastapi", "alembic", "sqlalchemy"):
               module(name, True)
           dev = kind == "test"
-          for path in ("/app/tests", "/app/pyproject.toml", "/primer.yaml", "/docker-compose.yml",
+          for path in ("/app/tests", "/app/pyproject.toml", "/primer.yaml", "/primer.lock",
+                       "/docker-compose.yml",
                        "/docker-compose.storage.yml", "/comms-profile/types.yaml",
                        "/frontend/nginx.conf", "/frontend/Dockerfile",
                        "/frontend/scripts/lib/texts-package.mjs",

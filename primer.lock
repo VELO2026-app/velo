@@ -1,7 +1,4 @@
-# PLACEHOLDER: comms has no tag v4.0.0 yet. The line below is the form of the
-# lock, not a release: replace it with the real tag and its commit before the
-# first rollout.
 schema: 1
-resolved_at: 2026-11-03T00:00:00Z
+resolved_at: 2026-11-14T00:00:00Z
 dependencies:
-  comms: { version: "4.0.0", tag: v4.0.0, commit: "0000000" }
+  comms: { version: "4.0.0", tag: v4.0.0, commit: "438cbba946eb884e40fbce406cab92fea75e6b43" }
