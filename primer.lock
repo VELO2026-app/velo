@@ -1,4 +1,4 @@
 schema: 1
-resolved_at: 2026-11-14T00:00:00Z
+resolved_at: 2026-11-16T00:00:00Z
 dependencies:
-  comms: { version: "4.0.0", tag: v4.0.0, commit: "438cbba946eb884e40fbce406cab92fea75e6b43" }
+  comms: { version: "4.0.1", tag: v4.0.1, commit: "ec2ca8dd42eb52702f45183400a3f5878438357e" }
