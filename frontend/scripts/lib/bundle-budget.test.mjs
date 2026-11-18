@@ -138,9 +138,12 @@ test('removing a value or the ceiling counts as a raise', () => {
   assert.equal(checkBudgetRaise(BUDGET, { ceiling: BUDGET.ceiling }, []).length, 2)
 })
 
-test('a base without a ceiling (the gate being introduced) is not a raise', () => {
+test('a base without a ceiling has the FE-157 targets: introducing them is no raise, a higher ceiling is', () => {
   const base = { entryGzip: 100000, precacheBytes: 500000 }
   assert.deepEqual(checkBudgetRaise(base, BUDGET, []), [])
+  const higher = { ...BUDGET, ceiling: { entryGzip: 160000, precacheBytes: 1000000 } }
+  assert.equal(checkBudgetRaise(base, higher, []).length, 1)
+  assert.deepEqual(checkBudgetRaise(base, higher, [CEILING_LABEL]), [])
 })
 
 test('a base without a budget file checks nothing', () => {
