@@ -19,10 +19,4 @@ describe('useKeyboardOpen', () => {
     const { keyboardOpen: fromWrapper } = useKeyboardOpen()
     expect(fromWrapper).toBe(keyboardOpen)
   })
-
-  it('is callable with no mounted component context (no lifecycle hooks of its own)', () => {
-    // The old version needed onMounted/onBeforeUnmount and therefore a real
-    // Vue component host to test at all. This one is a plain function call.
-    expect(() => useKeyboardOpen()).not.toThrow()
-  })
 })

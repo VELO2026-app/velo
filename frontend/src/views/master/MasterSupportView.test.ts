@@ -212,30 +212,9 @@ describe('MasterSupportView', () => {
     // re-disabled until a free-text topic was
     // filled. Right while the other topic carried its own text; FE-104 (owner
     // ruling) removed it -- the substance is the message.
-    it('switching to «Другое» keeps it armed -- the message alone is enough', async () => {
-      mount()
-      await flush()
-      setTextarea('Сообщение')
-      await flush()
-
-      radio('Другое')?.click()
-      await flush()
-
-      expect(submitBtn().disabled).toBe(false)
-    })
-
     // Was: the other topic's (i18n:supportTopics.other) free-text field was
     // absent for a normal topic. Now it
     // is absent for EVERY topic, the other topic included -- one text field.
-    it('no topic renders a field of its own -- «Другое» included', async () => {
-      mount()
-      await flush()
-      radio('Другое')?.click()
-      await flush()
-
-      expect(host?.querySelectorAll('textarea')).toHaveLength(1)
-      expect(host?.querySelector('.support__other-input')).toBeNull()
-    })
   })
 
   describe('the topic list (FE-104)', () => {

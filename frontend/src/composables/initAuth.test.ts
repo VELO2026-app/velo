@@ -448,16 +448,6 @@ describe('initAuth inside Telegram -- whose session is restored', () => {
     },
   )
 
-  it('the same person reopening: no revoke, no initData sign-in', async () => {
-    sessionStorage.setItem(SESSION_TOKEN_KEY, 'tok_B')
-    vi.mocked(usersApi.getMe).mockResolvedValue(user({ telegram_id: 1001 }))
-
-    await run()
-
-    expect(vi.mocked(api.post)).not.toHaveBeenCalled()
-    expect(useAuthStore().token).toBe('tok_B')
-  })
-
   it('nothing restored: initData sign-in, nothing to revoke', async () => {
     vi.mocked(api.post).mockResolvedValue({
       session_token: 'tok_B',

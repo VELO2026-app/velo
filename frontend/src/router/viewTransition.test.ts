@@ -138,16 +138,23 @@ describe('tab switches: CSS fade-through on every host', () => {
   })
 
   it('never starts a View Transition, even where the API exists', async () => {
+    // Fake timers like its neighbours: on real ones the fade's safety and
+    // fallback timers outlived the test and, when the file ended within
+    // 480 ms, fired after the environment was torn down (document gone).
+    vi.useFakeTimers()
     const doc = document as unknown as Record<string, unknown>
     const start = vi.fn()
     doc.startViewTransition = start
     try {
       const router = makeRouter()
       await router.push('/user/dashboard')
-      await router.push('/user/calendar')
+      const nav = router.push('/user/calendar')
+      await vi.advanceTimersByTimeAsync(100)
+      await nav
       await settle()
       expect(start).not.toHaveBeenCalled()
       expect(router.currentRoute.value.path).toBe('/user/calendar')
+      await vi.runOnlyPendingTimersAsync()
     } finally {
       Reflect.deleteProperty(doc, 'startViewTransition')
     }

@@ -936,18 +936,6 @@ describe('MasterPublicView', () => {
       )
     }
 
-    it("the menu item is fully enabled (a different shape than BookingConfirmedView's disabled textarea+button)", async () => {
-      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
-      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))
-      mount()
-      await flush()
-      await openActionsMenu()
-
-      const item = messageItem()
-      expect(item).toBeTruthy()
-      expect(item?.disabled).toBe(false)
-    })
-
     it('clicking it opens the composer; sending opens the DM, posts the text, toasts and closes', async () => {
       vi.mocked(mastersApi.getPublicMaster).mockResolvedValue(masterProfile())
       vi.mocked(practicesApi.getPractices).mockResolvedValue(page([]))

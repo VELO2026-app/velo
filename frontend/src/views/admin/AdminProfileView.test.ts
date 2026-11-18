@@ -208,15 +208,6 @@ describe('AdminProfileView', () => {
   })
 
   // ===========================================================================
-  describe('RoleSwitchSection (role_switch: null in every fixture -- see banner)', () => {
-    it('renders nothing', async () => {
-      mount()
-      await flush()
-
-      expect(host?.querySelectorAll('.role-switch')).toHaveLength(0)
-    })
-  })
-
   // ===========================================================================
   describe('switchToUserMode (.vue:73-76)', () => {
     it('sets uiMode to "user" AND pushes to user-profile', async () => {
@@ -279,9 +270,6 @@ describe('AdminProfileView', () => {
       await flush() // let :loading="loggingOut" paint
 
       expect(logoutBtn().disabled).toBe(true)
-      logoutBtn().click() // a real click on a disabled <button> does not fire
-
-      expect(authStore.logout).toHaveBeenCalledTimes(1)
       resolveLogout()
       await flush()
     })

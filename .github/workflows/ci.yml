@@ -7,12 +7,16 @@
 #                  (FE-187), and sizes the jobs below.
 #   lint         — the FE-73 zero-warning budget (eslint over the app AND
 #                  packages/velo-ui; its cache is reused only for identical
-#                  lint inputs) + the other lint gates + prettier, both
-#                  packages. Closes --no-verify past the pre-commit
-#                  lint-staged pass.
-#   test         — vue-tsc typecheck + vitest of the whole workspace
-#                  (frontend with v8 coverage + the coverage ratchet, then
-#                  @velo/ui).
+#                  lint inputs) + the other lint gates. Closes --no-verify
+#                  past the pre-commit lint-staged pass.
+#   format       — prettier, both packages (its own job: it waits on nothing).
+#   typecheck    — vue-tsc + the scripts / configs / e2e tsconfigs (its own
+#                  job, so the test job does not wait on it).
+#   test         — the frontend vitest suite in three shards cut by recorded
+#                  duration, each with v8 coverage (FE-204).
+#   test-report  — merges the shards: one verdict, one coverage map, the
+#                  coverage ratchet.
+#   test-other   — the node:test suite of frontend/scripts + @velo/ui.
 #   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
 #                  vue-tsc + vite build with the FE-153 build-log gate.
 #   e2e          — Playwright smoke scenarios on the golden build served by
@@ -183,11 +187,33 @@ jobs:
       - name: Lint (zero-warning budget; covers packages/ via lint-budget)
         run: pnpm -C frontend lint
 
+  format:
+    name: format — prettier
+    needs: scope
+    if: needs.scope.outputs.frontend != 'skip'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
       - name: Format check
         run: pnpm -C frontend format:check && pnpm -C packages/velo-ui format:check
 
-  test:
-    name: test — typecheck / vitest (+ @velo/ui)
+  typecheck:
+    name: typecheck — vue-tsc
     needs: scope
     if: needs.scope.outputs.frontend == 'full'
     runs-on: ubuntu-latest
@@ -211,14 +237,115 @@ jobs:
       - name: Typecheck (vue-tsc)
         run: pnpm -C frontend typecheck
 
-      # FE-157 5A.1: the frontend suite runs with v8 coverage (one pass, not
-      # two); the ratchet (frontend/coverage-budget.json) fails below the
-      # floors and puts the table in the step summary.
-      - name: Tests + coverage (frontend)
-        run: pnpm -C frontend test:coverage
+  # FE-204: the frontend suite in three shards cut by recorded duration
+  # (frontend/vitest.sequencer.ts over test-durations.json), each with v8
+  # coverage of the files it loaded; test-report merges them. Same tests,
+  # same coverage: the union of the shards is the whole suite by construction.
+  test:
+    name: test — vitest shard ${{ matrix.shard }}/3
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Tests + coverage (frontend, one shard)
+        env:
+          VITEST_SHARD: "1"
+        run: pnpm -C frontend exec vitest run --coverage --shard=${{ matrix.shard }}/3 --reporter=blob --reporter=default
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          path: frontend/.vitest-reports/
+          include-hidden-files: true
+          retention-days: 1
+
+  # FE-157 5A.1 + FE-204: the shards' reports merged into one verdict and one
+  # coverage map; the ratchet (frontend/coverage-budget.json) fails below the
+  # floors, or when an app file is missing from the report.
+  test-report:
+    name: test — merge + coverage ratchet
+    needs: test
+    if: ${{ !cancelled() && needs.test.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: A shard failed
+        if: needs.test.result != 'success'
+        run: |
+          echo "vitest shards: ${{ needs.test.result }}" >&2
+          exit 1
+
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: vitest-blob-*
+          path: frontend/.vitest-reports
+          merge-multiple: true
+
+      - name: Merge the shards (tests + coverage)
+        run: pnpm -C frontend exec vitest run --merge-reports --coverage
 
       - name: Coverage ratchet
         run: pnpm -C frontend coverage:budget
+
+  test-other:
+    name: test — scripts + @velo/ui
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Tests (frontend/scripts, node:test)
+        run: cd frontend && node --test scripts/lib/*.test.mjs
 
       - name: Tests (@velo/ui)
         run: pnpm -C packages/velo-ui test
@@ -683,7 +810,7 @@ jobs:
 
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.12'
+          python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
 

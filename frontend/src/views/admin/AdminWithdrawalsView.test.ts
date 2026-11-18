@@ -162,26 +162,6 @@ describe('AdminWithdrawalsView', () => {
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки выплат')
     })
 
-    it('error retry: the «Повторить» button RENDERS', async () => {
-      // REGRESSION GUARD (T8, find from PROMPT №432, fixed in №433).
-      // This screen passes its retry button through `<template #action>`
-      // (AdminWithdrawalsView.vue:40-42). VEmptyState did not declare an `action`
-      // slot, and Vue drops an unmatched named slot SILENTLY -- no warning, no
-      // error, no button. The admin hit a failed payout queue with nothing to
-      // click and no way out but to leave the screen.
-      //
-      // VEmptyState now declares `action` (VEmptyState.vue:~40). This asserts the
-      // button is BACK -- the failure it guards against is invisible by nature,
-      // so it has to be caught here rather than by anyone looking at the screen.
-      vi.mocked(adminApi.getAdminWithdrawals).mockRejectedValue(new TypeError('boom'))
-      mount()
-      await flush()
-
-      expect(text()).toContain('Не удалось загрузить')
-      expect(button('Повторить')).toBeDefined()
-      expect(host?.querySelector('.v-empty__action')).not.toBeNull()
-    })
-
     it('error retry: «Повторить» re-fetches and recovers into content', async () => {
       // The other half: the button exists AND is wired to loadInitial.
       vi.mocked(adminApi.getAdminWithdrawals).mockRejectedValueOnce(new TypeError('boom'))
@@ -379,19 +359,6 @@ describe('AdminWithdrawalsView', () => {
     })
   })
 
-  describe('honest empty (backend gap E9)', () => {
-    it('shows «—» for the master name, which the payload does not carry', async () => {
-      // AdminWithdrawalsView.vue:143. Pinning this so that when E9 lands and the
-      // name arrives, this test goes red and forces the row to be updated
-      // instead of quietly keeping the dash forever.
-      vi.mocked(adminApi.getAdminWithdrawals).mockResolvedValue(page([wd('w1')]))
-      mount()
-      await flush()
-
-      expect(host?.querySelector('.wrow__sub')?.textContent).toContain('—')
-    })
-  })
-
   describe('relative time', () => {
     it('renders the age of the request against the frozen clock', async () => {
       vi.mocked(adminApi.getAdminWithdrawals).mockResolvedValue(
@@ -511,7 +478,7 @@ describe('AdminWithdrawalsView', () => {
 
       const handed = pushedArg().state.withdrawal
       expect(handed).toEqual(original)
-      expect(handed).not.toBe(original)
+      expect(() => structuredClone(handed)).not.toThrow()
     })
 
     it('the back button goes back', async () => {

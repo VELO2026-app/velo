@@ -6,7 +6,13 @@
 // to $GITHUB_STEP_SUMMARY when that is set (CI). Exit code 1 when any metric
 // is below its floor. A metric well above its floor is not an error, but the
 // table asks to raise the floor -- a ratchet that never tightens guards nothing.
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+//
+// FE-204: CI merges the coverage of test shards. A merge only knows the files
+// some shard loaded, so an app file no test imports would silently drop out
+// of the denominator. Every app file must therefore be in the report; a
+// missing one fails here rather than flattering the percentage.
+import { appendFileSync, existsSync, globSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const METRICS = ['statements', 'branches', 'functions', 'lines']
 const summaryPath = new URL('../coverage/coverage-summary.json', import.meta.url)
@@ -16,7 +22,23 @@ if (!existsSync(summaryPath)) {
   )
   process.exit(1)
 }
-const total = JSON.parse(readFileSync(summaryPath, 'utf8')).total
+const summary = JSON.parse(readFileSync(summaryPath, 'utf8'))
+const total = summary.total
+
+// The same set as vitest.config.ts coverage.include minus its exclude (and
+// the setup files, which Vitest leaves out of coverage on its own).
+const root = fileURLToPath(new URL('..', import.meta.url))
+const reported = new Set(Object.keys(summary).map((f) => f.replaceAll('\\', '/')))
+const NOT_APP = /(\.test\.ts|\.d\.ts)$|^src\/main\.ts$|^src\/test-setup(\.node)?\.ts$/
+const missing = globSync('src/**/*.{ts,vue}', { cwd: root })
+  .filter((f) => !NOT_APP.test(f))
+  .filter((f) => !reported.has(`${root}${f}`.replaceAll('\\', '/')))
+if (missing.length) {
+  console.error(
+    `coverage-budget: ${missing.length} app file(s) missing from the report -- no test loads them:\n  ${missing.join('\n  ')}`,
+  )
+  process.exit(1)
+}
 const budget = JSON.parse(readFileSync(new URL('../coverage-budget.json', import.meta.url), 'utf8'))
 
 // A floor trailing the measurement by this many points (percent) is stale.

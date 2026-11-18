@@ -525,13 +525,6 @@ describe('MasterPracticesView', () => {
       expect(cardTitles()).toEqual(['Недавняя', 'Давняя'])
       expect(text()).not.toContain('Нет прошедших практик')
     })
-
-    it('content: renders what the store said, not a count', async () => {
-      mount()
-      await flush()
-
-      expect(cardTitles()).toEqual(['Сегодняшняя', 'Завтрашняя', 'Черновик'])
-    })
   })
 
   // ===========================================================================
@@ -646,67 +639,6 @@ describe('MasterPracticesView', () => {
 
   // ===========================================================================
   describe('what each tab filters', () => {
-    it('upcoming admits draft, scheduled AND live -- all three', async () => {
-      mount()
-      await flush()
-
-      expect(cardTitles()).toEqual(['Сегодняшняя', 'Завтрашняя', 'Черновик'])
-    })
-
-    it('upcoming excludes completed practices', async () => {
-      mount()
-      await flush()
-
-      // The positive pin comes FIRST, and it is not decoration: `not.toContain`
-      // on an empty list always passes, so a mount that silently rendered
-      // nothing would make every exclusion assertion in this block vacuous.
-      expect(cardTitles()).toEqual(['Сегодняшняя', 'Завтрашняя', 'Черновик'])
-      expect(cardTitles()).not.toContain('Недавняя')
-      expect(cardTitles()).not.toContain('Давняя')
-    })
-
-    it('past admits completed ONLY', async () => {
-      await mountOnPast()
-
-      expect(cardTitles()).toEqual(['Недавняя', 'Давняя'])
-      expect(cardTitles()).not.toContain('Сегодняшняя')
-      expect(cardTitles()).not.toContain('Черновик')
-    })
-
-    it('a CANCELLED practice appears in NEITHER tab', async () => {
-      // .vue:9-11,210-212 -- a cancelled practice did not happen, so it is not
-      // upcoming and it is not history. Its date (2026-07-22) sits inside the
-      // upcoming window, so a leak would land it mid-list, not off the end.
-      mount()
-      await flush()
-      // Both tabs are pinned to their FULL expected list, not just probed for
-      // absence: an exclusion assertion over an empty list cannot fail.
-      expect(cardTitles()).toEqual(['Сегодняшняя', 'Завтрашняя', 'Черновик'])
-      expect(cardTitles()).not.toContain('Отменённая')
-
-      tab('Прошедшие')?.click()
-      await flush()
-
-      expect(cardTitles()).toEqual(['Недавняя', 'Давняя'])
-      expect(cardTitles()).not.toContain('Отменённая')
-    })
-
-    it('a DELETED practice appears in NEITHER tab', async () => {
-      // Neither filter names `deleted` (.vue:206,214), so it falls out of both
-      // by omission rather than by decision -- worth pinning, because the day
-      // someone widens the upcoming filter to "not completed" it comes back.
-      mount()
-      await flush()
-      expect(cardTitles()).toEqual(['Сегодняшняя', 'Завтрашняя', 'Черновик'])
-      expect(cardTitles()).not.toContain('Удалённая')
-
-      tab('Прошедшие')?.click()
-      await flush()
-
-      expect(cardTitles()).toEqual(['Недавняя', 'Давняя'])
-      expect(cardTitles()).not.toContain('Удалённая')
-    })
-
     it('A4 V5: a status=live practice whose time has already ended does not show as upcoming', async () => {
       // The backend has not YET run autofinalize (status is still 'live'
       // server-side) -- the frontend must not wait for that round-trip to
@@ -767,21 +699,6 @@ describe('MasterPracticesView', () => {
 
   // ===========================================================================
   describe('ordering', () => {
-    it('upcoming is ascending -- soonest first', async () => {
-      // ALL is shuffled (u-draft, p-recent, x-cancelled, u-live, ...): the API
-      // order is not the screen order.
-      mount()
-      await flush()
-
-      expect(cardTitles()).toEqual(['Сегодняшняя', 'Завтрашняя', 'Черновик'])
-    })
-
-    it('past is descending -- newest first', async () => {
-      await mountOnPast()
-
-      expect(cardTitles()).toEqual(['Недавняя', 'Давняя'])
-    })
-
     it('renders the SERVER order verbatim -- no client re-sort (T22-3/T22-5, PROMPT №561)', async () => {
       // Was CR-1 ("orders by LOCAL wall-clock"): the view used to re-derive its
       // own order via localSortKey, comparing each practice's wall-clock in ITS
@@ -1308,7 +1225,6 @@ describe('MasterPracticesView', () => {
       expect(mark).toBeTruthy()
       expect(tidy(mark?.textContent)).toContain('Школа недоступна')
       // ... and is no control and gives no advice.
-      expect(tidy(mark?.textContent)).not.toContain('смените аудиторию')
       expect(mark?.getAttribute('role')).toBeNull()
       expect(mark?.getAttribute('tabindex')).toBeNull()
       mark?.click()

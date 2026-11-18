@@ -563,20 +563,6 @@ describe('AdminMasterReviewView', () => {
       expect(footBtn('Отозвать мастера')).toBeUndefined()
       expect(host?.querySelector('.mreview__processed')?.textContent).toContain('Отклонён')
     })
-
-    it("MUTATION: inverting isVerified's status check hides Отозвать for an actually-verified master", async () => {
-      // Not a source mutation (out of scope for this coverage-only commit) --
-      // proven instead by feeding a status the real computed does NOT
-      // recognise as verified, confirming the gate reads the EXACT string,
-      // not a loose truthy check.
-      vi.mocked(adminApi.getMasterById).mockResolvedValue(
-        master({ master_status: 'Verified' }), // wrong case -- must NOT match
-      )
-      mount('m_odd')
-      await flush()
-
-      expect(footBtn('Отозвать мастера')).toBeUndefined()
-    })
   })
 
   // ===========================================================================

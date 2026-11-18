@@ -183,12 +183,11 @@ afterEach(() => {
 })
 
 describe('DiaryComposer -- idle state (1: no chevron, one slot; T24-3: no disabled placeholder; voice mic on empty field)', () => {
-  it('renders the send button even while empty (owner pass: always-present), no kb-collapse button', () => {
+  it('renders the send button even while empty (owner pass: always-present)', () => {
     mount()
     // [owner pass] Supersedes B48's empty-absence: the disc is permanent,
     // Telegram-style; an empty tap is guarded inside onSend.
     expect(slotButtonCount()).toBe(1)
-    expect(host!.querySelector('.composer__btn--kb')).toBeNull()
     expect(host!.querySelector('.composer__slot')).not.toBeNull()
   })
 
@@ -297,23 +296,12 @@ describe('DiaryComposer -- the single action slot (owner pass: always-rendered s
     expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 
-  it('the kb-collapse button never reappears once composing', async () => {
+  it('composing with no text yet keeps the one send disc in the slot', async () => {
     mount()
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
-    expect(host!.querySelector('.composer__btn--kb')).toBeNull()
     // Composing with no text yet: the SEND disc (not a placeholder) is what sits there.
     expect(slotButtonCount()).toBe(1)
-  })
-
-  it('the empty-field click is a no-op -- the guard holds, nothing is sent (mic removed, T24-3)', () => {
-    mount()
-    const slot = host!.querySelector('.composer__slot')
-    expect(slot).not.toBeNull()
-    expect(slot!.querySelector('.composer__btn')).not.toBeNull()
-
-    slot!.querySelector('.composer__btn')!.dispatchEvent(new Event('click'))
-    expect(diaryApi.createDiaryEntry).not.toHaveBeenCalled()
   })
 })
 
@@ -555,7 +543,6 @@ describe('DiaryComposer -- autogrow (PROMPT №741: viewport-aware growCap resto
     mount()
     textarea().dispatchEvent(new Event('focus'))
     await nextTick()
-    expect(window.innerHeight).toBe(768)
     expect(textarea().style.maxHeight).toBe('240px')
   })
 

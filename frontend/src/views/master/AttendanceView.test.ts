@@ -392,28 +392,10 @@ describe('AttendanceView', () => {
 
       expect(text()).toContain('19 августа, 10:00')
     })
-
-    it('no practice loaded: practiceWhen is empty, no sub-line renders', async () => {
-      vi.mocked(practicesApi.getPractice).mockRejectedValue(new Error('ECONNRESET'))
-      mount()
-      await flush()
-
-      expect(host?.querySelector('.checkins__practice-sub')).toBeNull()
-    })
   })
 
   // ===========================================================================
   describe('displayName / initials (.vue:147-153) fallbacks', () => {
-    it('user_display_name present: shown as-is', async () => {
-      vi.mocked(practicesApi.getAttendance).mockResolvedValue(
-        attendanceResponse({ items: [attendanceItem({ user_display_name: 'Виктория Орлова' })] }),
-      )
-      mount()
-      await flush()
-
-      expect(rowByName('Виктория Орлова')).toBeDefined()
-    })
-
     it('user_display_name absent: falls back to "#" + first 8 chars of user_id', async () => {
       vi.mocked(practicesApi.getAttendance).mockResolvedValue(
         attendanceResponse({

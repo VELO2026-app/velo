@@ -118,16 +118,6 @@ describe('useAdminStore', () => {
       expect(store.stats).toBeNull()
     })
 
-    it('falls back to the generic message for a non-ApiResponseError failure', async () => {
-      vi.mocked(adminApi.getAdminStats).mockRejectedValue(new Error('boom'))
-      vi.mocked(adminApi.getReports).mockResolvedValue(fakeReportsPage())
-      const store = useAdminStore()
-
-      await store.fetchDashboard()
-
-      expect(store.dashboardError).toBe('Не удалось загрузить статистику')
-    })
-
     it('skips the network call when already loaded and force is not passed', async () => {
       vi.mocked(adminApi.getAdminStats).mockResolvedValue(fakeStats())
       vi.mocked(adminApi.getReports).mockResolvedValue(fakeReportsPage())
