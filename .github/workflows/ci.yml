@@ -449,7 +449,11 @@ jobs:
   # no backend is needed. Its own job: a browser binary and a build of its
   # own, kept off the fast gate. The Chromium binary is cached by the
   # Playwright version (a new version = a new revision = a fresh download);
-  # system libraries are not part of the cache and are installed every run.
+  # system libraries are not part of the cache. FE-204: on a cache hit they
+  # are not installed either -- ubuntu-latest ships Google Chrome with every
+  # library Chromium needs, and the apt step (apt-get update against the
+  # mirrors) took 160-270 s in a third of the runs. A missing library fails
+  # the browser launch, so this cannot pass silently.
   e2e:
     name: e2e — Playwright smoke
     needs: scope
@@ -489,13 +493,10 @@ jobs:
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Install Chromium system libraries (cache hit)
-        if: steps.browser-cache.outputs.cache-hit == 'true'
-        working-directory: frontend
-        run: pnpm exec playwright install-deps chromium
-
+      # FE-204: vite only -- this job needs the dist. vue-tsc runs in the
+      # typecheck job and the skin validation in the build job.
       - name: Build the app (golden)
-        run: pnpm -C frontend build
+        run: pnpm -C frontend exec vite build
 
       - name: Smoke scenarios (+ crash-detector self-checks)
         run: pnpm -C frontend e2e:smoke
@@ -618,12 +619,13 @@ jobs:
           v=$(pnpm exec playwright --version | awk '{print $2}')
           [ "$v" = "1.64.1" ] || { echo "playwright $v does not match the image tag v1.64.1 -- update container: above"; exit 1; }
 
+      # FE-204: vite only (types are the typecheck job's).
       - name: Build head
-        run: pnpm -C frontend build
+        run: pnpm -C frontend exec vite build
 
       - name: Build base
         working-directory: ${{ runner.temp }}/base
-        run: pnpm -C frontend build
+        run: pnpm -C frontend exec vite build
 
       - name: Shoot both builds and compare
         working-directory: frontend
