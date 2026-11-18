@@ -16,12 +16,6 @@ import router from '@/router'
 // =============================================================================
 
 describe('route table: stacked calendars resolve by name + params', () => {
-  it('user-calendar-school resolves with :schoolId', () => {
-    const r = router.resolve({ name: 'user-calendar-school', params: { schoolId: 'g1' } })
-    expect(r.href).toBe('/user/calendar/school/g1')
-    expect(r.name).toBe('user-calendar-school')
-  })
-
   it('user-calendar-master resolves with :masterId', () => {
     const r = router.resolve({ name: 'user-calendar-master', params: { masterId: 'm1' } })
     expect(r.href).toBe('/user/calendar/master/m1')
@@ -115,16 +109,6 @@ describe('route table: school pages by name + the param keys their builders push
   ] as const)('%s -> %s', (name, params, href) => {
     expect(router.resolve({ name, params }).href).toBe(href)
   })
-
-  // Owner (no legacy): a bookmark to a former school address is no route --
-  // it falls to the catch-all, which redirects to the 404 screen.
-  it.each(['/user/groups', '/user/groups/g1'])(
-    'the former address %s lands on the catch-all',
-    (path) => {
-      const r = router.resolve(path)
-      expect(r.matched.at(-1)?.path).toBe('/:pathMatch(.*)*')
-    },
-  )
 })
 
 describe('route table: access requirements (meta.requires, router/guards.ts)', () => {

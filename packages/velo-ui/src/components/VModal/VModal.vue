@@ -128,6 +128,9 @@ watch(
       unlockBodyScroll()
     }
   },
+  // immediate: an overlay mounted already open locks from the first frame
+  // (FE-205) -- a plain watch only saw the later false→true flip.
+  { immediate: true },
 )
 
 onMounted(() => {

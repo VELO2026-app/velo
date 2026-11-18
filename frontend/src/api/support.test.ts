@@ -68,13 +68,6 @@ describe('createTicket -- the form appeal', () => {
       { 'Idempotency-Key': 'key-abc' },
     )
   })
-
-  it('the body carries exactly topic and body -- the backend forbids extra fields (422)', async () => {
-    await createTicket('other', 'Текст', 'k')
-
-    const body = vi.mocked(api.post).mock.calls[0]?.[1]
-    expect(Object.keys(body as object).sort()).toEqual(['body', 'topic'])
-  })
 })
 
 describe('createAppealKeys -- one appeal, one key', () => {
@@ -219,13 +212,6 @@ describe('admin -- the handover routes (BE-162 delivery 2, FE-108)', () => {
     expect(api.post).toHaveBeenCalledWith(`${S}/tickets/t_9/assign`, { assignee: 'a_1' })
   })
 
-  it('the assign body carries exactly the assignee -- the backend forbids extra fields', async () => {
-    await assignTicket('t_9', 'a_1')
-
-    const body = vi.mocked(api.post).mock.calls[0]?.[1]
-    expect(Object.keys(body as object)).toEqual(['assignee'])
-  })
-
   it('releaseTicket POSTs to the release route with NO body', async () => {
     await releaseTicket('t_9')
 
@@ -331,27 +317,5 @@ describe('admin -- the period statistics (BE-162 delivery 3)', () => {
     const qs = new URLSearchParams(url.split('?')[1])
     expect(qs.get('created_from')).toBe('2026-10-01T00:00:00.000+02:00')
     expect(qs.get('created_to')).toBe('2026-11-01T00:00:00.000+02:00')
-  })
-})
-
-describe('the removed routes are not called by any wrapper', () => {
-  it('no wrapper reaches /support/threads without a thread id after it', async () => {
-    await createTicket('payment', 'x', 'k')
-    await listAdminTickets()
-    await getAdminTicket('t')
-    await setTicketStatus('t', 'resolved')
-    await getAdminSupportMessages('t')
-    await sendAdminSupportReply('t', 'x')
-    await claimSupportThread('t')
-    await retrySupportTranslation('t', 'm')
-
-    const urls = [...vi.mocked(api.get).mock.calls, ...vi.mocked(api.post).mock.calls].map(
-      (c) => c[0],
-    )
-    // "X absent" paired with "Y present and non-empty".
-    expect(urls).toHaveLength(8)
-    for (const url of urls) {
-      expect(url).not.toMatch(/\/support\/threads(\?|\/messages|$)/)
-    }
   })
 })

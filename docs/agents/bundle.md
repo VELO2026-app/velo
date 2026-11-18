@@ -15,9 +15,9 @@
 
 Понижение закрепляет экономию в том же PR: бюджет не копит запас под следующий рост.
 
-## Метки (job `bundle-budget-guard`)
+## Метки (workflow `Bundle budget`, job `bundle-budget-guard`)
 
-Лёгкий job без install и сборки сравнивает `bundle-budget.json` базовой ветки и PR. Смена метки перезапускает только его.
+Лёгкий job без install и сборки сравнивает `bundle-budget.json` базовой ветки и PR. Живёт в своём workflow `.github/workflows/bundle-budget.yml` (FE-206) и перезапускается на смену любой метки. Основной `CI` на метки не реагирует. Метки бюджета запускают и workflow `Visual`, но там выполняется только `visual — scope`: сравнение экранов идёт лишь на метки `visual` и `no-visual-change`.
 
 | Что выросло | Нужна метка | Кто ставит |
 | --- | --- | --- |
