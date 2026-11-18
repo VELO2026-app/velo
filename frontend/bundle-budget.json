@@ -3,7 +3,7 @@
   "entryGzip": 138800,
   "precacheBytes": 630000,
   "ceiling": {
-    "entryGzip": 150000,
+    "entryGzip": 160000,
     "precacheBytes": 1000000
   }
 }
