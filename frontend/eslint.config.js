@@ -393,7 +393,7 @@ export default [
     // The TypeScript build configs (Vite/Vitest): typed code, so the whole
     // type-aware set stays on (no no-unsafe-* relaxation), typed through
     // tsconfig.configs.json (strict, noImplicitAny on); Node globals.
-    files: ['vite.config.ts', 'vitest.config.ts'],
+    files: ['vite.config.ts', 'vitest.config.ts', 'vitest.sequencer.ts'],
     languageOptions: {
       globals: { ...globals.node },
       parserOptions: {
