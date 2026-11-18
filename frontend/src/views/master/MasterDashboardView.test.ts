@@ -99,6 +99,7 @@ import * as mastersApi from '@/api/masters'
 import * as usersApi from '@/api/users'
 import * as practicesApi from '@/api/practices'
 import * as notificationsApi from '@/api/notifications'
+import { ApiResponseError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import type {
   PracticeResponse,
