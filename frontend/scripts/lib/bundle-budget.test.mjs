@@ -1,0 +1,148 @@
+// =============================================================================
+// FE-183 -- unit tests for the bundle budget rules
+// (node:test; run by `pnpm test` -- vitest globs src/** only).
+// =============================================================================
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  assertBudgetShape,
+  checkBudget,
+  checkBudgetRaise,
+  suggestBudget,
+  CEILING_LABEL,
+  GROWTH_LABEL,
+} from './bundle-budget.mjs'
+
+const BUDGET = {
+  entryGzip: 100000,
+  precacheBytes: 500000,
+  ceiling: { entryGzip: 150000, precacheBytes: 1000000 },
+}
+const at = (entryGzip, precacheBytes) => ({ entryGzip, precacheBytes })
+
+test('a build equal to the budget passes', () => {
+  const { failures, md } = checkBudget(at(100000, 500000), BUDGET)
+  assert.deepEqual(failures, [])
+  assert.match(md, /Bundle budget: ok/)
+  assert.doesNotMatch(md, /--modules/)
+})
+
+test('the window is +-2%: edges pass, one byte beyond fails', () => {
+  assert.deepEqual(checkBudget(at(102000, 510000), BUDGET).failures, [])
+  assert.deepEqual(checkBudget(at(98000, 490000), BUDGET).failures, [])
+  assert.equal(checkBudget(at(102001, 500000), BUDGET).failures.length, 1)
+  assert.equal(checkBudget(at(100000, 510001), BUDGET).failures.length, 1)
+})
+
+test('over the budget points at the label and at --modules', () => {
+  const { failures, md } = checkBudget(at(103000, 500000), BUDGET)
+  assert.equal(failures.length, 1)
+  assert.match(failures[0], /over the budget/)
+  assert.match(failures[0], new RegExp(GROWTH_LABEL))
+  assert.match(md, /node frontend\/scripts\/bundle-report\.mjs --modules/)
+})
+
+test('below the budget by more than 2% fails with a ready number', () => {
+  const { failures } = checkBudget(at(90000, 500000), BUDGET)
+  assert.equal(failures.length, 1)
+  assert.match(failures[0], /lower the budget to 90900/)
+})
+
+test('the suggested budget passes the same gate and is rounded up', () => {
+  for (const actual of [90000, 97999, 12345, 1000]) {
+    const next = { ...BUDGET, entryGzip: suggestBudget(actual) }
+    assert.deepEqual(checkBudget(at(actual, 500000), next).failures, [], String(actual))
+  }
+  assert.equal(suggestBudget(1000), 1010)
+  assert.equal(suggestBudget(12345), 12469)
+})
+
+test('the ceiling has no tolerance and fails even when the budget allows it', () => {
+  const wide = { ...BUDGET, entryGzip: 152000 }
+  assert.deepEqual(checkBudget(at(150000, 500000), wide).failures, [])
+  const { failures } = checkBudget(at(150001, 500000), wide)
+  assert.equal(failures.length, 1)
+  assert.match(failures[0], /over the ceiling/)
+  assert.match(failures[0], new RegExp(CEILING_LABEL))
+  const pre = checkBudget(at(100000, 1000001), { ...BUDGET, precacheBytes: 1000001 })
+  assert.match(pre.failures[0], /over the ceiling/)
+})
+
+test('over the ceiling and over the budget reports both', () => {
+  assert.equal(checkBudget(at(160000, 500000), BUDGET).failures.length, 2)
+})
+
+test('an unmeasured precache fails', () => {
+  const { failures } = checkBudget(at(100000, null), BUDGET)
+  assert.equal(failures.length, 1)
+  assert.match(failures[0], /no sw\.js/)
+})
+
+test('the report shows the delta against the base build, n/a without one', () => {
+  const withBase = checkBudget(at(101000, 500000), BUDGET, at(100000, 500000)).md
+  assert.match(withBase, /\+1\.00 kB \(\+1\.0%\)/)
+  const without = checkBudget(at(101000, 500000), BUDGET).md
+  assert.match(without, /\| n\/a \|/)
+})
+
+test('assertBudgetShape wants numeric budget and ceiling', () => {
+  assert.doesNotThrow(() => assertBudgetShape(BUDGET))
+  assert.throws(() => assertBudgetShape({ ...BUDGET, entryGzip: 'x' }), /entryGzip/)
+  assert.throws(() => assertBudgetShape({ ...BUDGET, ceiling: undefined }), /ceiling\.entryGzip/)
+  assert.throws(
+    () => assertBudgetShape({ ...BUDGET, ceiling: { entryGzip: 1 } }),
+    /ceiling\.precacheBytes/,
+  )
+})
+
+// --- label rule (the guard job) ---------------------------------------------
+
+test('no raise, no label needed; lowering needs no label', () => {
+  assert.deepEqual(checkBudgetRaise(BUDGET, BUDGET, []), [])
+  assert.deepEqual(
+    checkBudgetRaise(BUDGET, { ...BUDGET, entryGzip: 90000, precacheBytes: 1 }, []),
+    [],
+  )
+})
+
+test('raising a budget value without the label fails, with it passes', () => {
+  const head = { ...BUDGET, entryGzip: 100001 }
+  const failures = checkBudgetRaise(BUDGET, head, [])
+  assert.equal(failures.length, 1)
+  assert.match(failures[0], /entryGzip raised 100000 -> 100001/)
+  assert.deepEqual(checkBudgetRaise(BUDGET, head, [GROWTH_LABEL]), [])
+})
+
+test('raising one value and lowering the other still needs the label', () => {
+  const head = { ...BUDGET, entryGzip: 90000, precacheBytes: 500001 }
+  assert.equal(checkBudgetRaise(BUDGET, head, []).length, 1)
+})
+
+test('raising the ceiling needs bundle-ceiling; bundle-growth is not enough', () => {
+  const head = { ...BUDGET, ceiling: { ...BUDGET.ceiling, entryGzip: 160000 } }
+  assert.equal(checkBudgetRaise(BUDGET, head, []).length, 1)
+  assert.equal(checkBudgetRaise(BUDGET, head, [GROWTH_LABEL]).length, 1)
+  assert.deepEqual(checkBudgetRaise(BUDGET, head, [CEILING_LABEL]), [])
+})
+
+test('both raised needs both labels', () => {
+  const head = { ...BUDGET, entryGzip: 101000, ceiling: { ...BUDGET.ceiling, entryGzip: 160000 } }
+  assert.equal(checkBudgetRaise(BUDGET, head, []).length, 2)
+  assert.equal(checkBudgetRaise(BUDGET, head, [GROWTH_LABEL]).length, 1)
+  assert.deepEqual(checkBudgetRaise(BUDGET, head, [GROWTH_LABEL, CEILING_LABEL]), [])
+})
+
+test('removing a value or the ceiling counts as a raise', () => {
+  const noCeiling = { entryGzip: 100000, precacheBytes: 500000 }
+  assert.equal(checkBudgetRaise(BUDGET, noCeiling, []).length, 2)
+  assert.equal(checkBudgetRaise(BUDGET, { ceiling: BUDGET.ceiling }, []).length, 2)
+})
+
+test('a base without a ceiling (the gate being introduced) is not a raise', () => {
+  const base = { entryGzip: 100000, precacheBytes: 500000 }
+  assert.deepEqual(checkBudgetRaise(base, BUDGET, []), [])
+})
+
+test('a base without a budget file checks nothing', () => {
+  assert.deepEqual(checkBudgetRaise(null, BUDGET, []), [])
+})
