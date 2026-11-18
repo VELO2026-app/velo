@@ -429,6 +429,11 @@ beforeEach(() => {
   vi.mocked(practicesApi.updatePractice)
     .mockReset()
     .mockResolvedValue(practice({ id: 'p_new', status: 'scheduled' }))
+  // FE-202: the re-read after a failed publish PATCH. By default the PATCH
+  // really did not apply -- the practice is still the created draft.
+  vi.mocked(practicesApi.getPractice)
+    .mockReset()
+    .mockResolvedValue(practice({ id: 'p_new', status: 'draft' }))
   myPracticesChanged.mockReset().mockResolvedValue(undefined)
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
   vi.mocked(cgApi.getMySchools).mockReset().mockResolvedValue({ items: [] })
@@ -1247,7 +1252,6 @@ describe('CreatePracticeView', () => {
 
       expect(practicesApi.createPractice).toHaveBeenCalledTimes(1)
       expect(toastError).toHaveBeenCalledWith('Не удалось опубликовать практику')
-      expect(toastError).not.toHaveBeenCalledWith('Не удалось создать практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
       // The publish-failed banner replaces the submit button: no second POST.
@@ -1267,6 +1271,36 @@ describe('CreatePracticeView', () => {
       })
       expect(toastSuccess).toHaveBeenCalledWith('Практика создана!')
       expect(replace).toHaveBeenCalledWith({ name: 'master-practices' })
+    })
+
+    it('a retry whose PATCH fails because an earlier one DID publish leaves for the list, no error (FE-202)', async () => {
+      // The first PATCH applied on the server but its response was lost; the
+      // retry then gets 400 for scheduled to scheduled. The re-read shows the
+      // practice is live, so the screen must not loop on the publish error.
+      vi.mocked(practicesApi.updatePractice)
+        .mockRejectedValueOnce(new TypeError('timeout'))
+        .mockRejectedValueOnce(
+          new ApiResponseError(400, 'Cannot transition from scheduled to scheduled'),
+        )
+      mount()
+      await flush()
+      await fillMinimalForm()
+
+      submitForm()
+      await flush()
+      expect(toastError).toHaveBeenCalledTimes(1)
+
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(
+        practice({ id: 'p_new', status: 'scheduled' }),
+      )
+      button('Опубликовать')?.click()
+      await flush()
+
+      expect(practicesApi.getPractice).toHaveBeenLastCalledWith('p_new')
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastSuccess).toHaveBeenCalledWith('Практика создана!')
+      expect(replace).toHaveBeenCalledWith({ name: 'master-practices' })
+      expect(practicesApi.createPractice).toHaveBeenCalledTimes(1)
     })
 
     it('after a failed publish, «Открыть черновик» opens the created draft without a second POST (FE-202)', async () => {

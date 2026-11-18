@@ -54,7 +54,7 @@
       <!-- Draft restore prompt (B2): a stored draft is NOT auto-filled — the
            master chooses to restore it or start fresh. -->
       <Banner
-        v-if="showDraftBanner"
+        v-if="showDraftBanner && !unpublishedId"
         variant="info"
         :title="t('masterScreens.createPractice.draft.resumeConfirm')"
         class="create-practice__draft-banner"
@@ -415,9 +415,13 @@
             <VButton variant="secondary" size="sm" :loading="submitting" @click="retryPublish">{{
               t('masterScreens.createPractice.publishFailed.publish')
             }}</VButton>
-            <VButton variant="ghost" size="sm" @click="openUnpublishedDraft">{{
-              t('masterScreens.createPractice.publishFailed.openDraft')
-            }}</VButton>
+            <VButton
+              variant="ghost"
+              size="sm"
+              :disabled="submitting"
+              @click="openUnpublishedDraft"
+              >{{ t('masterScreens.createPractice.publishFailed.openDraft') }}</VButton
+            >
           </div>
         </template>
       </Banner>
@@ -451,7 +455,7 @@ import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
 import { myPracticesChanged, useMasterProfile, useMyPractices } from '@/composables/queries/master'
 import { useQueryCache } from '@pinia/colada'
-import { createPractice, updatePractice } from '@/api/practices'
+import { createPractice, getPractice, updatePractice } from '@/api/practices'
 import { getMySchools, getSchoolMembers } from '@/api/schools'
 import { getPublicMaster } from '@/api/masters'
 import type { SchoolMemberItem } from '@/api/types'
@@ -888,10 +892,10 @@ async function submit(): Promise<void> {
     // whatever it already is -- forcing 'scheduled' on it here would be
     // this form silently changing a practice it did not create) and takes
     // the master straight to that existing practice instead of the list.
-    // Draft cleared here too (this exact submission already exists, so
-    // there is nothing left for it to resurrect into) -- same drop as the
-    // normal path below, just earlier, since there is no publish step
-    // left that could still fail and need the draft preserved for a retry.
+    // The local draft is dropped here too: this exact submission already
+    // exists, so there is nothing left for it to resurrect into. The normal
+    // path below drops it as well, after the publish or after its failure
+    // (publishCreated).
     // FE-92 / BE-102 publish (owner, 3 October): the backend creates the
     // master's practice ALREADY PUBLISHED, in the same request (Zoom, the
     // school's announcement, one message to the master). The front sends no
@@ -933,10 +937,16 @@ async function submit(): Promise<void> {
 /**
  * Publish the created practice: draft to scheduled.
  *
- * @returns Whether the PATCH succeeded. On failure the id is kept in
+ * @returns Whether the practice is published. On failure the id is kept in
  * unpublishedId (which makes the form inert), the local draft is dropped,
  * the error is toasted and the lists are refreshed, since they now hold the
  * server-side draft.
+ *
+ * @remarks A failed PATCH may still have published the practice: the server
+ * applied it but the response was lost (client timeout, dropped connection).
+ * A retry would then get a 400 for scheduled to scheduled on every tap, so
+ * the practice is re-read first and a scheduled or live status counts as
+ * published. If the re-read fails too, the PATCH failure stands.
  */
 async function publishCreated(id: string): Promise<boolean> {
   try {
@@ -944,6 +954,11 @@ async function publishCreated(id: string): Promise<boolean> {
     unpublishedId.value = null
     return true
   } catch (e) {
+    const current = await getPractice(id).catch(() => null)
+    if (current?.status === 'scheduled' || current?.status === 'live') {
+      unpublishedId.value = null
+      return true
+    }
     unpublishedId.value = id
     // The form's content now lives in the server-side draft: drop the local
     // copy (and block a late autosave), or the next visit would restore it
@@ -993,7 +1008,9 @@ async function retryPublish(): Promise<void> {
 /** Publish-failed banner: open the created draft instead of publishing here. */
 function openUnpublishedDraft(): void {
   const id = unpublishedId.value
-  if (!id) return
+  // Not while a publish retry runs: its result would navigate or toast over
+  // the practice screen.
+  if (!id || submitting.value) return
   void router.replace({ name: 'master-practice-detail', params: { id } })
 }
 </script>
