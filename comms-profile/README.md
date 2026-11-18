@@ -37,9 +37,10 @@ roll out again. The green line in the comms log is `profile_installed`
 with `types=` the number of types in `types.yaml`.
 
 Channels are routed HERE, never by the request: every velo-emitted
-type declares `channels: [in_app, telegram]`, so the comms deploy must
-have `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_URL` set, or it refuses to
-start.
+type declares `channels: [in_app, telegram]`. comms v4 starts with a
+channel switched off on the instance: a delivery into it ends in the
+outcome "channel unavailable", the type's other channels go on. velo
+keeps telegram on by `options_required: [telegram]` in `primer.yaml`.
 
 Editing notification texts = editing the YAML here, commit to the
 velo repo, `velo update`. No velo code or comms code is involved

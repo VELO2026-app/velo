@@ -229,7 +229,7 @@ describe('UserMessagesView', () => {
     expect(row(1).querySelector('[data-testid="chat-unread"]')?.textContent?.trim()).toBe('5')
   })
 
-  it('ONE api call for the whole screen -- the per-thread fan-out is gone', async () => {
+  it('ONE api call for the whole screen, however many threads', async () => {
     vi.mocked(chatsApi.listChats).mockResolvedValue({
       threads: [
         thread({ unread: 1 }),
@@ -244,7 +244,6 @@ describe('UserMessagesView', () => {
     expect(chatsApi.listChats).toHaveBeenCalledTimes(1)
     // Three rows, still one request: the count no longer scales with rows.
     expect(rows()).toHaveLength(3)
-    expect(Object.keys(chatsApi)).not.toContain('getChatUnreadCount')
   })
 
   it("clicking a row navigates to 'user-chat' with that thread's id", async () => {

@@ -61,7 +61,7 @@ describe('extractApiError', () => {
   })
 
   describe('trace code suffix', () => {
-    /** An error as api/client.ts builds it from a response with X-Trace-ID. */
+    /** An error as api/client.ts builds it from a response with X-Request-ID. */
     function traced(status: number, code: string, traceId: string | null): ApiResponseError {
       const e = new ApiResponseError(status, 'raw backend detail', code)
       e.traceId = traceId

@@ -9,18 +9,39 @@
 # simulator works at the service layer, exactly where the admin routers land.
 #
 #   --watch / --once  pending master applications -> verify_master(),
-#                     pending method-change requests -> approve_method_change()
+#                     pending method-change requests -> approve_method_change();
+#                     a refused item is logged, the pass goes on and ends on
+#                     one summary line, `pass: N verified, M approved, K
+#                     refused`, and one line per refusal (BE-220)
 #   --promote <user>  user -> master via make_master() (creates the profile,
 #                     re-verifies pending/rejected/suspended, sets the role)
 #   --suspend <user>  master -> user via revoke_master() (suspended)
 #   --reset-master <user>  fresh cycle: delete the MasterProfile row and set
 #                     role=user -- there is NO api/cli path for this, it is
-#                     a local-only jump
-#   --block/--unblock <user>  users.is_active toggle
+#                     a local-only jump. What comms sees follows (BE-219):
+#                     the lost capabilities go out as group:masters /
+#                     group:admins deltas (sync_membership_delta), like
+#                     set_role to_user; the switched-away-admin marker is
+#                     left as it is, so a marker holder stays an admin
+#   --block/--unblock <user>  users.is_active toggle, under lock_user_row;
+#                     the change goes out as a user_upserted snapshot in the
+#                     same transaction (BE-220); the value it already has
+#                     writes nothing and sends nothing
 #
 # EVERYTHING here is a local-dev convenience. NEVER point it at a shared,
 # staging or production database: it approves applications without a human
 # admin and --reset-master deletes profile rows.
+#
+# EXIT CODES (the result an operator reads):
+#   0 -- done, or nothing to do (--promote on a master, --block on a
+#        blocked user), a --once pass with no refusal, or a --watch loop
+#        stopped with Ctrl-C (its refusals are in each pass's summary);
+#   1 -- a --once pass with at least one refused item (BE-220); or refused
+#        with a message (SystemExit): an unknown or ambiguous user
+#        reference, no outstanding offer, the last admin (--reset-master);
+#        or a service refusal of --promote / --suspend / --accept-offer,
+#        raised as a traceback;
+#   2 -- wrong arguments (argparse).
 #
 # Audit: the real services record audit entries. The acting "admin" is the
 # first role=admin user if one exists, otherwise the target user themselves
@@ -61,7 +82,19 @@ from app.modules.schools.service import accept_school_master_offer
 # mapped the first ORM operation dies in configure_mappers(). Same reason
 # normalize_master_methods.py imports its models explicitly.
 from app.modules.masters.models import MasterProfile
+from app.core.events import (
+    GROUP_ADMINS,
+    GROUP_MASTERS,
+    emit_user_upserted,
+    sync_membership_delta,
+)
 from app.modules.users.models import User, UserRole
+from app.modules.users.schemas import has_admin_capability
+from app.modules.users.service import (
+    lock_user_row,
+    refuse_last_admin_drop,
+    take_admin_roster_lock,
+)
 
 SIM_NOTES = "dev_admin_simulator"
 
@@ -141,69 +174,127 @@ async def scan(
         data = p.data or {}
         if (data.get("account") or {}).get("status") == "pending" and matches(p):
             applications.append(p)
-        if (data.get("profile") or {}).get("method_change_request") and matches(p):
+        # BE-220: pending only -- the gate approve_method_change applies
+        # itself. A rejected request stays in the profile with status
+        # "rejected"; picked up here it was a refusal on every pass, which
+        # a --once exit code would now report as a failure that is not one.
+        request = (data.get("profile") or {}).get("method_change_request")
+        pending = isinstance(request, dict) and request.get("status") == "pending"
+        if pending and matches(p):
             method_changes.append(p)
     return applications, method_changes
 
 
 async def watch_pass(
     session: AsyncSession, only: str | None, can_create_schools: bool, dry_run: bool
-) -> None:
+) -> list[str]:
+    """One pass over the pending requests; returns one line per refusal.
+
+    The scan's objects leave the session (expunge_all) once the items are
+    reduced to (id, label, proposed methods). The services take the profile
+    FOR UPDATE without populate_existing, so a profile the scan had loaded
+    would come back from the identity map as the scan saw it -- a request
+    another admin decided in between would be approved over the decision
+    instead of refused (par0 §8). Expunged, the service's locked read is
+    the first load of the row in this session.
+
+    A rollback expires every object still in the session, and an expired
+    attribute read here is IO outside the async context (MissingGreenlet):
+    that is how the first refusal used to break the pass, in the very line
+    that logged it. So nothing read after a rollback is an object from
+    before it -- the actor is fetched again for each item.
+    """
     applications, method_changes = await scan(session, only)
     if not applications and not method_changes:
         log("nothing pending")
-    for profile in applications:
-        target = await session.get(User, profile.user_id)
-        actor = target if target is not None else await first_admin(session)
-        label = describe(target, profile)
+        return []
+    users = {
+        u.id: u
+        for u in (
+            await session.execute(
+                select(User).where(
+                    User.id.in_([p.user_id for p in applications + method_changes])
+                )
+            )
+        ).scalars()
+    }
+    apps = [(p.user_id, describe(users.get(p.user_id), p)) for p in applications]
+    changes = [
+        (
+            p.user_id,
+            describe(users.get(p.user_id), p),
+            (p.data or {})
+            .get("profile", {})
+            .get("method_change_request", {})
+            .get("proposed_methods", []),
+        )
+        for p in method_changes
+    ]
+    session.expunge_all()
+
+    async def actor_for(user_id: UUID) -> User | None:
+        target = await session.get(User, user_id, populate_existing=True)
+        return target if target is not None else await first_admin(session)
+
+    verified = approved = 0
+    refused: list[str] = []
+    for user_id, label in apps:
         if dry_run:
             log(f"[DRY] would verify application: {label}")
             continue
         try:
             await verify_master(
-                profile.user_id,
-                actor,
+                user_id,
+                await actor_for(user_id),
                 f"{SIM_NOTES}: auto-approved master application",
                 session,
                 can_create_schools=can_create_schools,
             )
             await session.commit()
+            verified += 1
             log(f"VERIFIED application: {label}")
         except VeloError as e:
             await session.rollback()
-            log(f"skip application {profile.user_id}: {e.message}")
-    for profile in method_changes:
-        target = await session.get(User, profile.user_id)
-        actor = target if target is not None else await first_admin(session)
-        label = describe(target, profile)
-        proposed = (
-            (profile.data or {}).get("profile", {}).get("method_change_request", {}).get("proposed_methods", [])
-        )
+            refused.append(f"application {user_id} ({label}): {e.message}")
+            log(f"skip application {user_id}: {e.message}")
+    for user_id, label, proposed in changes:
         if dry_run:
             log(f"[DRY] would approve method change for {label}: {proposed}")
             continue
         try:
-            await approve_method_change(profile.user_id, actor, session)
+            await approve_method_change(user_id, await actor_for(user_id), session)
             await session.commit()
+            approved += 1
             log(f"APPROVED method change: {label} -> {proposed}")
         except VeloError as e:
             await session.rollback()
-            log(f"skip method change {profile.user_id}: {e.message}")
+            refused.append(f"method change {user_id} ({label}): {e.message}")
+            log(f"skip method change {user_id}: {e.message}")
+    if not dry_run:
+        log(f"pass: {verified} verified, {approved} approved, {len(refused)} refused")
+        for line in refused:
+            log(f"  refused: {line}")
+    return refused
 
 
 async def run_watch(
     once: bool, interval: float, only: str | None, can_create_schools: bool, dry_run: bool
-) -> None:
+) -> int:
+    """Returns the exit code: --once -> 1 when its pass refused anything.
+
+    The loop (no --once) ends only on Ctrl-C or cancellation -> 0; each of
+    its passes reports its own refusals in the summary.
+    """
     factory = get_session_factory()
     while True:
         async with factory() as session:
-            await watch_pass(session, only, can_create_schools, dry_run)
+            refused = await watch_pass(session, only, can_create_schools, dry_run)
         if once:
-            return
+            return 1 if refused else 0
         try:
             await asyncio.sleep(interval)
         except asyncio.CancelledError:
-            return
+            return 0
 
 
 async def actor_or_self(session: AsyncSession, target: User) -> User:
@@ -241,32 +332,115 @@ async def run_suspend(ref: str, dry_run: bool) -> None:
         log(f"SUSPENDED: {describe(user, await session.get(MasterProfile, user.id))}")
 
 
+async def reset_master(
+    session: AsyncSession, ref: str, dry_run: bool
+) -> User | None:
+    """Delete the master profile and set role=user, through the projection.
+
+    No commit (the caller's, run_reset_master); returns the user, or None
+    on a dry run. Locks in the order of LOCK ORDER in
+    app/modules/users/service.py: the admin roster lock, the users row
+    (lock_user_row, refreshed), then the profile FOR UPDATE (refreshed) --
+    every capability is read from rows this transaction holds, so a
+    verify_master or a role switch that committed while it waited is seen.
+
+    What comms sees follows (BE-219), as in set_role.to_user: a verified
+    profile deleted is group:masters left; role=user without the marker is
+    group:admins and the support roster left -- the last holder is refused
+    first (ConflictError last_admin, BE-202). The marker is not cleared, so
+    a marker holder keeps the admin capability and no admin delta goes.
+    """
+    await take_admin_roster_lock(session)
+    user = await resolve_user(session, ref)
+    user = await lock_user_row(session, user.id)
+    profile = (
+        await session.execute(
+            select(MasterProfile)
+            .where(MasterProfile.user_id == user.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    log(f"target: {describe(user, profile)}")
+    if dry_run:
+        log("[DRY] would DELETE the master_profiles row and set role=user")
+        return None
+
+    had_master = (
+        profile is not None
+        and (profile.data or {}).get("account", {}).get("status") == "verified"
+    )
+    had_admin = has_admin_capability(user.role, user.credentials)
+    has_admin = has_admin_capability(UserRole.USER.value, user.credentials)
+    if had_admin and not has_admin:
+        await refuse_last_admin_drop(session, user)
+
+    if profile is not None:
+        await session.delete(profile)
+    user.role = UserRole.USER.value
+    await sync_membership_delta(
+        session, user, group_key=GROUP_MASTERS, had=had_master, has=False
+    )
+    await sync_membership_delta(
+        session, user, group_key=GROUP_ADMINS, had=had_admin, has=has_admin
+    )
+    return user
+
+
 async def run_reset_master(ref: str, dry_run: bool) -> None:
     factory = get_session_factory()
     async with factory() as session:
-        user = await resolve_user(session, ref)
-        profile = await session.get(MasterProfile, user.id)
-        log(f"target: {describe(user, profile)}")
-        if dry_run:
-            log("[DRY] would DELETE the master_profiles row and set role=user")
+        try:
+            user = await reset_master(session, ref, dry_run)
+        except VeloError as exc:
+            # Nothing committed: the session closes and rolls back.
+            raise SystemExit(f"refused ({exc.code}): {exc.message}") from exc
+        if user is None:
             return
-        if profile is not None:
-            await session.delete(profile)
-        user.role = UserRole.USER
         await session.commit()
         await session.refresh(user)
         log(f"RESET: {describe(user, None)} (profile row deleted -- apply fresh)")
 
 
+async def set_active(
+    session: AsyncSession, ref: str, active: bool, dry_run: bool
+) -> User | None:
+    """Set users.is_active through the projection; no commit (the caller's).
+
+    Returns the user when a change was written, None when there is nothing
+    to write (the value it already has, or a dry run). The row is taken with
+    lock_user_row (ROW LOCK ON users, app/modules/users/service.py) and
+    refreshed, so "already" is read from a row this transaction holds: of
+    two concurrent --block runs one writes and one finds it done.
+
+    is_active is a field of the user_upserted snapshot (the trigger raises
+    snapshot_version when it changes), so the change goes out as a snapshot
+    in this transaction. It is not a field of the admin capability and comms
+    does not read it for its rosters, so the admin roster lock is not taken.
+    The same value again sends nothing -- unlike update_user, which re-sends
+    a snapshot field it was given even unchanged (comms reads that as a
+    replay); here there is no request to answer, only the row.
+    """
+    user = await resolve_user(session, ref)
+    user = await lock_user_row(session, user.id)
+    log(f"target: {describe(user, None)} is_active={user.is_active}")
+    if user.is_active == active:
+        log(f"already {'unblocked' if active else 'blocked'} -- nothing to do")
+        return None
+    if dry_run:
+        log(f"[DRY] would set is_active={active}")
+        return None
+    user.is_active = active
+    await emit_user_upserted(session, user)
+    return user
+
+
 async def run_block(ref: str, blocked: bool, dry_run: bool) -> None:
     factory = get_session_factory()
     async with factory() as session:
-        user = await resolve_user(session, ref)
-        log(f"target: {describe(user, None)} is_active={user.is_active}")
-        if dry_run:
-            log(f"[DRY] would set is_active={not blocked}")
+        user = await set_active(session, ref, not blocked, dry_run)
+        if user is None:
             return
-        user.is_active = not blocked
         await session.commit()
         log(f"{'BLOCKED' if blocked else 'UNBLOCKED'}: {user.first_name} is_active={user.is_active}")
 
@@ -305,7 +479,7 @@ async def run_accept_offer(ref: str, dry_run: bool) -> None:
             )
 
 
-async def main() -> None:
+async def main() -> int:
     parser = argparse.ArgumentParser(
         description="LOCAL DEV ONLY -- admin simulator (auto-approve). "
         "Never point at a shared/staging/production database."
@@ -334,7 +508,7 @@ async def main() -> None:
 
     try:
         if args.watch or args.once:
-            await run_watch(
+            return await run_watch(
                 once=args.once,
                 interval=args.interval,
                 only=args.only,
@@ -357,8 +531,9 @@ async def main() -> None:
         log("stopped")
     finally:
         await dispose_engine()
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(main()))
 

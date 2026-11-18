@@ -17,19 +17,21 @@
 #
 # THE POINT OF THIS MODULE:
 #   It is the ONE place in the backend that knows which host is currently
-#   alive. Both config (TELEGRAM_BOT_URL, normalized once at startup in
-#   config.py) and data (photo_url, normalized on every login in
-#   auth/service.py) flow through normalize_telegram_url().
+#   alive: TELEGRAM_LINK_DOMAIN below. Both config (TELEGRAM_BOT_URL,
+#   normalized once at startup in config.py) and data (photo_url, normalized
+#   on every login in auth/service.py) flow through normalize_telegram_url().
 #
-#   When the next host dies: change settings.telegram_link_domain
-#   (env TELEGRAM_LINK_DOMAIN) -- and nothing else in the codebase.
+#   When the next host dies: change TELEGRAM_LINK_DOMAIN -- and nothing else
+#   in the codebase. A constant, not a setting (BE-192): which Telegram host
+#   is alive is a fact about Telegram, the same for every instance, and it
+#   ships with the code.
 # =============================================================================
 
 from urllib.parse import urlsplit, urlunsplit
 
 # Hosts Telegram treats as aliases of one another. Any of them can reach us
-# either from .env (hand-written) or from Telegram itself (initData photo_url),
-# so all of them are candidates for rewriting.
+# either from a seam value (TELEGRAM_BOT_URL) or from Telegram itself
+# (initData photo_url), so all of them are candidates for rewriting.
 #
 # t.me         -- dead since 2026-07-13 (registry-level, worldwide)
 # telegram.me  -- alive, current default (verified: serves /i/userpic/, 200)
@@ -43,6 +45,10 @@ TELEGRAM_LINK_HOSTS: frozenset[str] = frozenset(
     }
 )
 
+# The host every Telegram link and avatar URL is rewritten onto. If telegram.me
+# dies too, telegram.dog (another TLD, not subject to the .me registry).
+TELEGRAM_LINK_DOMAIN = "telegram.me"
+
 
 def normalize_telegram_url(url: str | None, live_host: str) -> str | None:
     """Rewrite a Telegram link/avatar URL onto the host that is currently alive.
@@ -54,7 +60,7 @@ def normalize_telegram_url(url: str | None, live_host: str) -> str | None:
     Args:
         url: URL to normalize, e.g. "https://t.me/i/userpic/320/abc.svg".
         live_host: Host currently serving Telegram links
-            (settings.telegram_link_domain), e.g. "telegram.me".
+            (TELEGRAM_LINK_DOMAIN), e.g. "telegram.me".
 
     Returns:
         The same URL with its host swapped for live_host, or the input

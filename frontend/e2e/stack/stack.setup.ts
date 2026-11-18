@@ -10,11 +10,13 @@
  *    a custom group, invite tokens.
  * 3. The ids the parameterized routes need -> `e2e/.state/params.json`
  *    (keys: e2e/sweep/routes.ts). Seeded ids are random, so they are read
- *    from the API, never hard-coded.
+ *    from the API, never hard-coded. A single-use value is minted once per
+ *    project that depends on this setup and filed under that project
+ *    (PROJECT_PARAM_KEYS, FE-188).
  */
 import { randomUUID } from 'node:crypto'
 import { test as setup } from '@playwright/test'
-import { PARAM_KEYS } from '../sweep/routes'
+import { PARAM_KEYS, PROJECT_PARAM_KEYS } from '../sweep/routes'
 import { login } from './auth'
 import { apiAs, sessionAlive, statusOf } from './client'
 import {
@@ -198,14 +200,32 @@ setup('sessions and route parameters', async () => {
     'group_invite',
   )
 
-  // A master invite is single-use (the screen claims it): a fresh one per run.
-  p.masterInviteToken = tokenFrom(
-    (await admin<{ invite_link: string }>('POST', '/api/v1/admin/masters/invite', { body: {} }))
-      .invite_link,
-    'master_onboarding',
-  )
+  // A master invite is single-use (the screen claims it): a fresh one per
+  // project that runs after this setup (FE-188, PROJECT_PARAM_KEYS) --
+  // sweep and sweep-webkit open the screen in parallel.
+  const setupName = setup.info().project.name
+  const projects = setup
+    .info()
+    .config.projects.filter((project) => project.dependencies.includes(setupName))
+    .map((project) => project.name)
+  const byProject: Record<string, Params> = {}
+  for (const project of projects) {
+    byProject[project] = {
+      masterInviteToken: tokenFrom(
+        (await admin<{ invite_link: string }>('POST', '/api/v1/admin/masters/invite', { body: {} }))
+          .invite_link,
+        'master_onboarding',
+      ),
+    }
+  }
 
-  const empty = PARAM_KEYS.filter((k) => !p[k])
+  const perProject = new Set<string>(PROJECT_PARAM_KEYS)
+  const empty = [
+    ...PARAM_KEYS.filter((k) => !perProject.has(k) && !p[k]),
+    ...projects.flatMap((project) =>
+      PROJECT_PARAM_KEYS.filter((k) => !byProject[project]?.[k]).map((k) => `${k} of ${project}`),
+    ),
+  ]
   if (empty.length) throw new Error(`e2e setup: no value for ${empty.join(', ')}`)
-  writeParams(p)
+  writeParams({ common: p, byProject })
 })

@@ -251,13 +251,11 @@ async def test_zoom_tracked_practice_defers_instead_of_deciding_immediately(
     its name and assertions claim (a stub-mode active meeting is no longer
     treated as tracked; see
     test_stub_mode_active_meeting_decides_immediately_not_deferred below
-    for THAT case). The credential fields are patched directly (not the
-    is_zoom_stub property itself, which is read-only) so this genuinely
-    exercises "real credentials configured", not a mocked-away check.
+    for THAT case). BE-192: the stub is the suite's switch alone
+    (settings._zoom_stub, conftest.py) -- every instance runs real Zoom -- so
+    turning it off here is exactly the state of every instance.
     """
-    monkeypatch.setattr(settings, "zoom_account_id", "test-account-id")
-    monkeypatch.setattr(settings, "zoom_client_id", "test-client-id")
-    monkeypatch.setattr(settings, "zoom_client_secret", "real-secret-not-the-test-sentinel")
+    monkeypatch.setattr(settings, "_zoom_stub", False)
 
     master_id = await _make_master(client, db_session, 79302)
     practice = await _create_practice(db_session, master_id)
@@ -288,7 +286,7 @@ async def test_stub_mode_active_meeting_decides_immediately_not_deferred(
 
     PROMPT №543: no monkeypatch needed HERE specifically because
     conftest.py's session-scoped setup_infrastructure pins
-    settings.zoom_client_secret = "TEST" for the whole suite -- this test
+    settings._zoom_stub = True for the whole suite -- this test
     relies on that suite-level pin, not on any server's actual credential
     state (which this file previously and wrongly claimed to know).
     """

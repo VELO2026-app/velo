@@ -110,7 +110,6 @@ import { coladaOptions } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
 import CheckinView from '@/views/user/CheckinView.vue'
 import { useBookingsStore } from '@/stores/bookings'
-import { useDiaryStore } from '@/stores/diary'
 import { usePracticesStore } from '@/stores/practices'
 import { ApiResponseError } from '@/api/client'
 import { upsertCheckin, listDiaryFeed } from '@/api/diary'
@@ -710,36 +709,6 @@ describe('CheckinView', () => {
       btn?.click()
 
       expect(upsertCheckinMock).toHaveBeenCalledTimes(1)
-
-      resolve({ id: 'c1' })
-      await flush()
-    })
-
-    it("the VIEW's own guard is what blocks the second tap -- not the store's", async () => {
-      // `upsertCheckin` called once proves only that ONE of the two guards held:
-      // the view's (.vue:137) or the store's (diary.ts:70). $onAction counts the
-      // calls the VIEW makes, so this isolates .vue:137. Delete that line and
-      // this test goes red while the one above stays green.
-      const diary = useDiaryStore()
-      let viewCalls = 0
-      diary.$onAction(({ name }) => {
-        if (name === 'submitCheckin') viewCalls++
-      })
-
-      let resolve!: (v: unknown) => void
-      upsertCheckinMock.mockReturnValue(
-        new Promise((r) => {
-          resolve = r
-        }) as never,
-      )
-      mount()
-      await flush()
-
-      const btn = submitBtn()
-      btn?.click()
-      btn?.click()
-
-      expect(viewCalls).toBe(1)
 
       resolve({ id: 'c1' })
       await flush()

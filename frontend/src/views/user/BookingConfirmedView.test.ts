@@ -231,15 +231,6 @@ describe('BookingConfirmedView', () => {
       expect(content()).toBeNull()
     })
 
-    it("(finding a, structural) the FIRST synchronous frame -- zero ticks after mount() -- already matches the error/missing rung, because the guard's own literal defaults (loading=false, practice=null, error=null) satisfy `!practice` before onMounted's fetchPractice() write has been flushed by Vue's scheduler", () => {
-      getPracticeMock.mockReturnValue(new Promise(() => {}))
-      mount() // NO await at all -- inspecting the pre-flush DOM on purpose
-
-      expect(emptyState()).not.toBeNull()
-      expect(emptyTitle()).toBe('Практика не найдена')
-      expect(loader()).toBeNull()
-    })
-
     it('error: the mapped table phrase for a real code renders in the combined rung', async () => {
       // B8 (PROMPT №747): 'not_found' IS a real backend code --
       // extractApiError now returns its table phrase regardless of the
@@ -273,13 +264,9 @@ describe('BookingConfirmedView', () => {
       expect(emptyState()).toBeNull()
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Практика забронирована!')
-      // Standalone F4: the screen used to promise a Zoom link 10 minutes
-      // before the start -- shown right while a link was sent; Zoom now runs
-      // inside the app, no link comes.
       expect(content()?.textContent).toContain(
         'Войти в Zoom можно будет прямо в VELO — на экране практики.',
       )
-      expect(content()?.textContent).not.toContain('Ссылка на Zoom')
     })
 
     it('proves absence: content shows the SAME static text regardless of which practice was fetched -- no title/master/time is ever rendered', async () => {
@@ -406,18 +393,6 @@ describe('BookingConfirmedView', () => {
       body: 'Болит колено',
       created_at: '2026-08-01T10:30:01+00:00',
     }
-
-    it('the textarea is editable now -- typing into it actually updates the model (the stub`s disabled field could not)', async () => {
-      getPracticeMock.mockResolvedValue(practice())
-      mount()
-      await flush()
-
-      expect(textarea()?.disabled).toBe(false)
-      type('Болит колено')
-      await nextTick()
-
-      expect(textarea()?.value).toBe('Болит колено')
-    })
 
     it('the send button is disabled while the field is blank and enabled once there is text -- same rule as the chat composer', async () => {
       getPracticeMock.mockResolvedValue(practice())

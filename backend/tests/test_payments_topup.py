@@ -17,7 +17,7 @@
 # FIXES applied:
 #   - auth returns "session_token" not "token"
 #   - expire_all() is sync (no await)
-#   - patch settings.stripe_secret_key to bypass is_stripe_stub guard
+#   - patch settings.server_role to bypass the is_stripe_stub guard
 # =============================================================================
 
 import json
@@ -100,10 +100,9 @@ def _build_stripe_event(
 
 
 def _bypass_stripe_stub():
-    """Patch settings so is_stripe_stub returns False."""
-    return patch.object(
-        settings, "stripe_secret_key", "sk_test_not_stub",
-    )
+    """Patch settings so is_stripe_stub returns False: the role of an
+    instance without the stub (BE-192, the stub follows SERVER_ROLE)."""
+    return patch.object(settings, "server_role", "prod")
 
 
 # ---------------------------------------------------------------------------

@@ -294,9 +294,11 @@ def test_decode_rejects_a_code_that_is_not_16_bytes() -> None:
 #
 # The block between the two sentinel comments below is duplicated VERBATIM in
 # frontend/src/composables/useAuth.test.ts. Two copies, because no single
-# build context can see both trees (the backend image copies app/ tests/
-# scripts/ migrations/ + .env.example; the frontend image is built from
-# frontend/ alone), so a shared file would be unreachable to one of them.
+# build context carries both trees (the backend test image is built from the
+# repository root but carries only what backend/Dockerfile.dockerignore
+# allows -- parts of backend/ and comms-profile/, no frontend/; the frontend
+# image is built from frontend/ alone), so a shared file would be unreachable
+# to one of them.
 #
 # TWO MECHANISMS, catching two different mistakes:
 #   1. THIS FILE runs the real decode_practice_code against its own copy --
