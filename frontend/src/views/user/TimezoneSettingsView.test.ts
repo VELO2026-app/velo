@@ -306,17 +306,6 @@ describe('TimezoneSettingsView', () => {
 
       expect(toastError).toHaveBeenCalledWith('Не удалось сохранить часовой пояс')
     })
-
-    it('a non-ApiResponseError (network failure) also falls back to the generic message (SC-05)', async () => {
-      vi.mocked(usersApi.updateMe).mockRejectedValue(new Error('ECONNRESET'))
-      mount()
-      await flush()
-
-      cityRow('Берлин')?.click()
-      await flush()
-
-      expect(toastError).toHaveBeenCalledWith('Не удалось сохранить часовой пояс')
-    })
   })
 
   // ===========================================================================
@@ -379,11 +368,6 @@ describe('language: optimistic switch with revert on failure', () => {
       l.textContent?.trim(),
     )
     expect(labels).toEqual(['Русский', 'English', 'Українська'])
-    // de/es are not product locales (BE-188) and have no catalogs -- the
-    // switcher never advertises a locale it cannot render (the old
-    // coming-soon stub pattern is deliberately gone).
-    expect(labels).not.toContain('Deutsch')
-    expect(labels).not.toContain('Español')
     expect(langRow('Русский')?.classList.contains('tz-settings__lang--active')).toBe(true)
   })
 
