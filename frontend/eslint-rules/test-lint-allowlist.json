@@ -1,0 +1,4 @@
+{
+  "policy": "FE-203: known test-rule findings, counted per file (repo-relative path -> rule -> exact count). The list only shrinks: a file with more findings than its entry fails the lint, a file with fewer fails it too until the entry is lowered. 2026-11-19: empty -- the six fixed pauses (useViewportGeometry, WeekStrip, SchoolStudentProfileView, MasterPublicView, SchoolMembersView) plus the two the rule found beyond them (viewTransition, guards) were replaced by fake timers or a released promise.",
+  "files": {}
+}

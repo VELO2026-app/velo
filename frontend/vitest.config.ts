@@ -86,7 +86,13 @@ export default defineConfig({
         'src/main.ts',
         // A shard has no include (above): keep it to the app's own code.
         ...(process.env.VITEST_SHARD
-          ? ['**/*.{json,svg,css,png,webp,jpg,woff2,html}', 'scripts/**', 'e2e/**', '*.config.*']
+          ? [
+              '**/*.{json,svg,css,png,webp,jpg,woff2,html}',
+              'scripts/**',
+              'eslint-rules/**',
+              'e2e/**',
+              '*.config.*',
+            ]
           : []),
       ],
       // json-summary feeds scripts/coverage-budget.mjs (the ratchet gate).
@@ -100,13 +106,14 @@ export default defineConfig({
     // Pure utils/platform tests need no DOM and run under plain node.
     projects: [
       // FE-204: the build tooling's own tests (scripts/lib), formerly
-      // node:test -- one runner for every test without a browser.
+      // node:test -- one runner for every test without a browser. FE-203:
+      // the local ESLint plugin's rule tests (eslint-rules/) ride here too.
       {
         extends: true,
         test: {
           name: 'scripts',
           environment: 'node',
-          include: ['scripts/**/*.test.mjs'],
+          include: ['scripts/**/*.test.mjs', 'eslint-rules/**/*.test.mjs'],
           testTimeout: 5000,
         },
       },

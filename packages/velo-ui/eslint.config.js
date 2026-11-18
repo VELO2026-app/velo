@@ -24,6 +24,10 @@ import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
 import globals from 'globals'
+// FE-203: the test rules live in the app's local plugin (one rule set and
+// one exception list for both packages; frontend/scripts/lint-budget.mjs
+// runs this config, so the frontend lint task already covers the plugin).
+import { testRulesConfig } from '../../frontend/eslint-rules/index.mjs'
 
 export default [
   js.configs.recommended,
@@ -110,6 +114,9 @@ export default [
       '@typescript-eslint/no-unsafe-return': 'off',
     },
   },
+
+  // FE-203: no fixed pauses, no flake masking -- the frontend's rules.
+  ...testRulesConfig(['src/**/*.test.ts']),
 
   {
     // The platform seam owns the host objects (FE-143) -- the kit's mirror

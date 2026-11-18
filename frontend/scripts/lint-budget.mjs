@@ -31,9 +31,11 @@ const cacheArgs = (name) => [
 ]
 const args = ['src/', '--max-warnings', String(budget.maxWarnings)]
 // FE-157 5C: the app run also covers its build tooling (scripts/*.mjs, the
-// Vite/Vitest configs, and the Playwright suite); the kit package has no such files.
+// local ESLint plugin in eslint-rules/, the Vite/Vitest configs, and the
+// Playwright suite); the kit package has no such files.
 const appArgs = [
   'scripts/',
+  'eslint-rules/',
   'e2e/',
   'playwright.config.ts',
   'vite.config.ts',

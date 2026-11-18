@@ -7,6 +7,7 @@ import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
 import pluginTsdoc from 'eslint-plugin-tsdoc'
 import globals from 'globals'
+import { testRulesConfig } from './eslint-rules/index.mjs'
 
 // Timezone-hygiene selectors (see the rule below); shared with the platform
 // block, which must repeat them (flat config replaces same-rule options).
@@ -284,6 +285,12 @@ export default [
     },
   },
 
+  // --- FE-203: no fixed pauses, no flake masking (docs/testing.md rule 10).
+  // The local plugin in eslint-rules/, with its shrink-only exception list
+  // (eslint-rules/test-lint-allowlist.json). vitest.config.ts is checked for
+  // a raised testTimeout / retry.
+  ...testRulesConfig(['src/**/*.test.ts'], ['vitest.config.ts']),
+
   {
     // The barrels and the components themselves may use deep paths internally
     // (a barrel importing its own export through itself would be circular).
@@ -361,10 +368,11 @@ export default [
   },
 
   {
-    // FE-157 5C: the .mjs build scripts. Same type-aware ruleset as the app,
+    // FE-157 5C: the .mjs build scripts (and, FE-203, the local ESLint
+    // plugin in eslint-rules/). Same type-aware ruleset as the app,
     // typed through tsconfig.scripts.json (checkJs); Node globals instead of
     // the browser's.
-    files: ['scripts/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'eslint-rules/**/*.mjs'],
     languageOptions: {
       globals: { ...globals.node },
       parserOptions: {
@@ -451,7 +459,7 @@ export default [
   {
     // node:test registers tests with top-level test(...) calls that return a
     // promise nobody awaits by design.
-    files: ['scripts/**/*.test.mjs'],
+    files: ['scripts/**/*.test.mjs', 'eslint-rules/**/*.test.mjs'],
     rules: { '@typescript-eslint/no-floating-promises': 'off' },
   },
 
