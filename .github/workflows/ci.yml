@@ -7,12 +7,13 @@
 #                  (FE-187), and sizes the jobs below.
 #   lint         — the FE-73 zero-warning budget (eslint over the app AND
 #                  packages/velo-ui; its cache is reused only for identical
-#                  lint inputs) + the other lint gates + prettier, both
-#                  packages. Closes --no-verify past the pre-commit
-#                  lint-staged pass.
-#   test         — vue-tsc typecheck + vitest of the whole workspace
-#                  (frontend with v8 coverage + the coverage ratchet, then
-#                  @velo/ui).
+#                  lint inputs) + the other lint gates. Closes --no-verify
+#                  past the pre-commit lint-staged pass.
+#   format       — prettier, both packages (its own job: it waits on nothing).
+#   typecheck    — vue-tsc + the scripts / configs / e2e tsconfigs (its own
+#                  job, so the test job does not wait on it).
+#   test         — vitest of the whole workspace (frontend with v8 coverage
+#                  + the coverage ratchet, then @velo/ui).
 #   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
 #                  vue-tsc + vite build with the FE-153 build-log gate.
 #   e2e          — Playwright smoke scenarios on the golden build served by
@@ -174,11 +175,33 @@ jobs:
       - name: Lint (zero-warning budget; covers packages/ via lint-budget)
         run: pnpm -C frontend lint
 
+  format:
+    name: format — prettier
+    needs: scope
+    if: needs.scope.outputs.frontend != 'skip'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
       - name: Format check
         run: pnpm -C frontend format:check && pnpm -C packages/velo-ui format:check
 
-  test:
-    name: test — typecheck / vitest (+ @velo/ui)
+  typecheck:
+    name: typecheck — vue-tsc
     needs: scope
     if: needs.scope.outputs.frontend == 'full'
     runs-on: ubuntu-latest
@@ -201,6 +224,28 @@ jobs:
 
       - name: Typecheck (vue-tsc)
         run: pnpm -C frontend typecheck
+
+  test:
+    name: test — vitest (+ @velo/ui)
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
 
       # FE-157 5A.1: the frontend suite runs with v8 coverage (one pass, not
       # two); the ratchet (frontend/coverage-budget.json) fails below the
