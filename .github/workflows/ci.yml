@@ -292,8 +292,10 @@ jobs:
   # FE-183: the label rule of bundle-budget.json. Deliberately light: no
   # `needs`, no install, no build -- so the `scope` filter on label events
   # does not apply and a label change re-runs only this job. The base file
-  # comes from the base branch tip, the labels from the event payload (passed
-  # through env, never interpolated into the script).
+  # is the first parent of the merge ref (HEAD^1, as in `scope`), the very
+  # base this PR was merged onto: a budget lowered on the base branch since
+  # then must not look like a raise made by this PR. The labels come from the
+  # event payload (passed through env, never interpolated into the script).
   bundle-budget-guard:
     name: bundle budget guard
     if: github.event_name == 'pull_request'
@@ -301,12 +303,13 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
 
       - name: Budget file of the base branch
         run: |
-          git fetch --depth=1 origin "+refs/heads/$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
-          if git cat-file -e "origin/$GITHUB_BASE_REF:frontend/bundle-budget.json" 2>/dev/null; then
-            git show "origin/$GITHUB_BASE_REF:frontend/bundle-budget.json" > "$RUNNER_TEMP/base-budget.json"
+          if git cat-file -e "HEAD^1:frontend/bundle-budget.json" 2>/dev/null; then
+            git show "HEAD^1:frontend/bundle-budget.json" > "$RUNNER_TEMP/base-budget.json"
           fi
 
       - name: Budget or ceiling raised without its label

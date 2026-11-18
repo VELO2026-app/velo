@@ -42,6 +42,7 @@ function run(
   budget: Budget,
   withSw = true,
   swList = '{url:"pre.bin",revision:null}',
+  withCeiling = true,
 ) {
   const dir = join(root, name)
   mkdirSync(join(dir, 'assets'), { recursive: true })
@@ -52,7 +53,7 @@ function run(
     writeFileSync(join(dir, 'sw.js'), `precacheAndRoute([${swList}],{})`)
   }
   const budgetPath = join(dir, 'budget.json')
-  writeFileSync(budgetPath, JSON.stringify({ ceiling: CEILING, ...budget }))
+  writeFileSync(budgetPath, JSON.stringify(withCeiling ? { ceiling: CEILING, ...budget } : budget))
   const r = spawnSync('node', [script, '--dist', dir, '--budget', budgetPath], {
     encoding: 'utf8',
     env: { ...process.env, GITHUB_STEP_SUMMARY: '' },
@@ -105,11 +106,9 @@ describe('bundle-report --budget', () => {
   })
 
   it('fails when the budget file has no ceiling', () => {
-    const dir = join(root, 'no-ceiling')
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'b.json'), JSON.stringify({ entryGzip, precacheBytes }))
-    const r = spawnSync('node', [script, '--budget', join(dir, 'b.json')], { encoding: 'utf8' })
+    const r = run('no-ceiling', { entryGzip, precacheBytes }, true, undefined, false)
     expect(r.status).not.toBe(0)
+    expect(r.out).toContain('no positive numeric ceiling.entryGzip')
   })
 
   it('counts a URL listed twice once (the PWA plugin repeats the manifest icons)', () => {
