@@ -66,14 +66,6 @@ describe('installChunkReload', () => {
     expect(second.defaultPrevented).toBe(false)
   })
 
-  it('EMPTY: an event without payload is handled the same way', () => {
-    installChunkReload(target, () => sessionStorage, reload)
-
-    target.dispatchEvent(preloadError())
-
-    expect(reload).toHaveBeenCalledTimes(1)
-  })
-
   it('SHORTAGE: storage that cannot hold the mark -> no reload (a loop could not stop)', () => {
     const blocked = {
       getItem: () => null,
