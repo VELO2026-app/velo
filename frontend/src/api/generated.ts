@@ -841,7 +841,7 @@ export interface LowCheckinPractice {
   total: number
 }
 
-/** GET /api/v1/masters/me/analytics?period=week|month|quarter. Everything the master's analytics screen shows, for one calendar period in the MASTER'S OWN timezone -- unlike the dashboard grid above, whose bounds are UTC. bookings_count is the rate denominator: bookings on the period's completed practices that were not cancelled. Counted in bookings rather than distinct people because a check-in is unique per booking. Deltas carry the two conventions from core/periods.py: counts use a signed percent change (null when the previous period had no base), rates use a spread in percentage POINTS (null when the previous period had no denominator). The client renders "--" for either null. rate fields are 0 when the period has no bookings -- an honest empty, the same answer the admin dashboards give. */
+/** GET /api/v1/masters/me/analytics?period=week|month|quarter. Everything the master's analytics screen shows, for one calendar period in the MASTER'S OWN timezone -- unlike the dashboard grid above, whose bounds are UTC. bookings_count is the rate denominator: bookings on the period's completed practices that were not cancelled. Counted in bookings rather than distinct people because a check-in is unique per booking. Deltas carry the two conventions from core/periods.py: counts use a signed percent change (null when the previous period had no base), rates use a spread in percentage POINTS (null when the previous period had no denominator). The client renders "--" for either null. rate fields are 0 when the period has no bookings -- an honest empty, the same answer the admin dashboards give. conducted_practices (BE-222) is the current period's practices -- the same ones practices_count counts -- newest first, each with the summary the practice's own analytics screen shows. The sum of the rows' `after` is `feedbacks`; their `reviews_total` counts reviews with text only. An empty period is an empty list. */
 export interface MasterAnalyticsResponse {
   practices_count: number
   practices_delta_pct: number | null
@@ -857,6 +857,7 @@ export interface MasterAnalyticsResponse {
   feedback_rate_delta_pp: number | null
   checkins: ScoreZoneCounts
   feedbacks: ScoreZoneCounts
+  conducted_practices: PracticeAnalyticsSummary[]
 }
 
 /** The user's master-application state, read from MasterProfile.data.account. Surfaced on UserResponse (T5) so a role='user' applicant can see the verdict of their application (pending / verified / rejected + the rejection reason) without the master-only GET /masters/me endpoint. Set by the GET /users/me router from the same MasterProfile load used for master capability. */
@@ -1322,22 +1323,22 @@ export interface PracticeAnalyticsPair {
   is_school_student: boolean
 }
 
-/** GET /practices/{id}/analytics -- the header and both distributions. `attended` is the denominator of every "X of N" on the screen; the "check-ins before" figure is the sum of `before` (PRE check-ins of the attended), so the blocks reconcile. */
+/** GET /practices/{id}/analytics -- the summary plus how it is read. Adds what depends on the reader or names the leading master: the reader's role, the school for a curator, the master's name and avatar. */
 export interface PracticeAnalyticsResponse {
   practice_id: string
-  viewer_role: PracticeAnalyticsViewerRole
-  school_id: string | null
   title: string
   direction: string | null
   scheduled_at: string
   timezone: string
-  master_name: string
-  master_avatar_url: string | null
   attended: number
   before: ScoreZoneCounts
   after: ScoreZoneCounts
   pairs_total: number
   reviews_total: number
+  viewer_role: PracticeAnalyticsViewerRole
+  school_id: string | null
+  master_name: string
+  master_avatar_url: string | null
 }
 
 /** One attendee's review WITH text (a rating alone is not listed here). */
@@ -1348,6 +1349,20 @@ export interface PracticeAnalyticsReview {
   comment: string
   created_at: string
   is_school_student: boolean
+}
+
+/** One completed practice's analytics, without anything about its reader. The part of /practices/{id}/analytics that does not depend on who reads it, and so also the row of the master's conducted-practices list (BE-222, MasterAnalyticsResponse.conducted_practices): one class, one computation (practice_analytics_service.practice_analytics_counts), so a row of the list and the practice's own screen cannot disagree. `attended` is the denominator of every "X of N"; the "check-ins before" figure is the sum of `before` (PRE check-ins of the attended), so the blocks reconcile. `after` holds every review of the attended -- its sum is the number of reviews left. `reviews_total` is NOT that number: it is how many of those reviews carry text, the total of the /analytics/reviews list. `pairs_total` is the total of /analytics/pairs. */
+export interface PracticeAnalyticsSummary {
+  practice_id: string
+  title: string
+  direction: string | null
+  scheduled_at: string
+  timezone: string
+  attended: number
+  before: ScoreZoneCounts
+  after: ScoreZoneCounts
+  pairs_total: number
+  reviews_total: number
 }
 
 /** GET /api/v1/practices/{id}/insights -- aggregated data. All data is anonymous: no user IDs, names, or comment texts. Only numeric distributions and counts. */
