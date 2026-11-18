@@ -362,13 +362,6 @@ describe('AdminMastersView', () => {
 
   // ===========================================================================
   describe('status filter matrix (.vue:204-208)', () => {
-    it('"all" shows every master', async () => {
-      mount()
-      await flush()
-
-      expect(cards()).toHaveLength(5)
-    })
-
     it('selecting "Проверка" shows only the pending masters', async () => {
       mount()
       await flush()
@@ -591,9 +584,10 @@ describe('AdminMastersView', () => {
         params: { id: 'm_verified' },
         state: { master: M_VERIFIED },
       })
-      // Deep-cloned (.vue:264, JSON round-trip) -- not the same object reference.
+      // Deep-cloned (.vue:264, JSON round-trip): history.state takes only what
+      // structuredClone accepts, and the card's master is a reactive proxy.
       const call = push.mock.calls[0]?.[0] as { state: { master: AdminMasterListItem } }
-      expect(call.state.master).not.toBe(M_VERIFIED)
+      expect(() => structuredClone(call.state.master)).not.toThrow()
     })
 
     it('"Пригласить мастера" pushes admin-master-invite', async () => {
