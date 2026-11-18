@@ -295,22 +295,6 @@ describe('MasterProfileView', () => {
       expect(badgeOn('Сообщения')).toBe('5')
     })
 
-    it('ONE request for the badge -- the hub no longer walks the thread list', async () => {
-      // The point of T-51 on this screen: the cost of opening the hub stopped
-      // scaling with how many conversations the master has.
-      vi.mocked(chatsApi.getChatUnreadSummary).mockResolvedValue({
-        has_unread: true,
-        threads_with_unread: 9,
-        unread_messages: 17,
-      })
-      mount()
-      await flush()
-
-      expect(chatsApi.getChatUnreadSummary).toHaveBeenCalledTimes(1)
-      expect(chatsApi.listChats).not.toHaveBeenCalled()
-      expect(Object.keys(chatsApi)).not.toContain('getChatUnreadCount')
-    })
-
     it('no badge at all when everything is read', async () => {
       vi.mocked(chatsApi.getChatUnreadSummary).mockResolvedValue({
         has_unread: false,

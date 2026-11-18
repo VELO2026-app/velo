@@ -39,7 +39,6 @@ describe('useToast', () => {
 
       const messages = toast.toasts.value.map((t) => t.message)
       expect(messages).toEqual(['two', 'three', 'four'])
-      expect(toast.toasts.value.length).toBe(3)
     })
 
     it('a third toast does NOT evict anything (cap is exclusive at 3)', () => {

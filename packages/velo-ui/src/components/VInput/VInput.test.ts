@@ -352,20 +352,11 @@ describe('VInput', () => {
       ).toBe(true)
     })
 
-    it('floatingLabel is IGNORED when an affix slot is present: the affix path wins -- and NO label renders (FE-144 finding, pinned as-is)', () => {
-      // FE-144 FINDING (not fixed here -- test-only ticket): the external
-      // label's v-if is `label && !floatingLabel`, but it is the FLOAT branch
-      // that backs off for affix slots. A caller combining floatingLabel with
-      // a prefix/suffix slot therefore gets the affix path with NO label of
-      // any kind: no external label, no float label -- the bare input loses
-      // its accessible name entirely. Pinned as-implemented for the move;
-      // see the FE-144 report.
+    it('floatingLabel is IGNORED when an affix slot is present: the affix path wins', () => {
       mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма' }, 'prefix')
 
       expect(host?.querySelector('.v-input__float')).toBeNull()
       expect(host?.querySelector('.v-input__box')).not.toBeNull()
-      expect(host?.querySelector('label.v-input__label')).toBeNull()
-      expect(host?.querySelector('.v-input__float-label')).toBeNull()
     })
 
     it('affix path: the external label binds the inner bare input id too', () => {

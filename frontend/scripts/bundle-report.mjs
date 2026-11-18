@@ -13,15 +13,20 @@
 //   node scripts/bundle-report.mjs --modules       per-chunk module dump, see below
 //   node scripts/bundle-report.mjs --budget [file] size gate, see below
 //
-// --budget compares the built dist/ with the baseline in bundle-budget.json
-// (default: frontend/bundle-budget.json; values = the golden build after
-// FE-157 stage 2). Exit code 1 when
-//   - the app chunk gzip exceeds the budget by more than 2% (tolerance for
-//     build noise), or
-//   - the PWA precache bytes exceed the budget (no tolerance).
-// It always prints a markdown table with the delta against the budget, and
-// appends it to $GITHUB_STEP_SUMMARY when that is set (CI). Raising the
-// budget is a deliberate edit of bundle-budget.json in the same PR.
+// --budget compares the built dist/ with bundle-budget.json (default:
+// frontend/bundle-budget.json). Rules live in scripts/lib/bundle-budget.mjs,
+// policy and the agent rule in docs/agents/bundle.md (FE-183). Exit code 1 when
+//   - a size is above the ceiling (hard limit, no tolerance), or
+//   - a size is more than 2% above the floating budget, or
+//   - a size is more than 2% below it (the failure prints the value to lower
+//     the budget to, so a saving is locked in the same PR).
+// It prints a markdown table (delta against the budget and against the base
+// branch build) and appends it to $GITHUB_STEP_SUMMARY when that is set (CI).
+// --base <file> reads the base build sizes ({entryGzip, precacheBytes}) for the
+// "vs base" column; --save-sizes <file> writes this build's sizes in that shape
+// (CI keeps them from the pushes to the base branch). Raising the budget needs
+// the `bundle-growth` label, raising the ceiling `bundle-ceiling`: the
+// bundle-budget-guard CI job checks the labels, no build needed.
 //
 // --modules runs its OWN production build into a temporary outDir (dist/ is
 // left untouched on the golden build; with a skin in public/skin/ the
@@ -52,6 +57,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
+import { assertBudgetShape, checkBudget } from './lib/bundle-budget.mjs'
 
 const frontendDir = fileURLToPath(new URL('..', import.meta.url))
 
@@ -278,60 +284,6 @@ function printModules(chunks, { find, top }) {
   if (!hits) console.log('  no module matches')
 }
 
-/** Entry gzip may exceed the budget by this fraction before the gate fails. */
-const ENTRY_TOLERANCE = 0.02
-
-/** Signed delta of `actual` against `base`: "+1.20 kB (+0.8%)". */
-function delta(actual, base) {
-  const diff = actual - base
-  const pct = base === 0 ? 0 : (diff / base) * 100
-  const sign = diff > 0 ? '+' : diff < 0 ? '-' : '±'
-  return `${sign}${(Math.abs(diff) / 1000).toFixed(2)} kB (${sign}${Math.abs(pct).toFixed(1)}%)`
-}
-
-/**
- * Check a report against the budget.
- *
- * @returns Markdown summary and the list of failures (empty = within budget).
- */
-function checkBudget(r, budget) {
-  const failures = []
-  const entryLimit = Math.floor(budget.entryGzip * (1 + ENTRY_TOLERANCE))
-  const entryOk = r.entry.gzip <= entryLimit
-  if (!entryOk) {
-    failures.push(
-      `app chunk gzip ${kb(r.entry.gzip)} exceeds budget ${kb(budget.entryGzip)} by more than ${ENTRY_TOLERANCE * 100}% (limit ${kb(entryLimit)})`,
-    )
-  }
-  const rows = [
-    `| app chunk gzip | ${kb(budget.entryGzip)} | ${kb(r.entry.gzip)} | ${delta(r.entry.gzip, budget.entryGzip)} | limit ${kb(entryLimit)} | ${entryOk ? 'ok' : 'FAIL'} |`,
-  ]
-  if (!r.precache) {
-    failures.push('no sw.js in dist/: precache cannot be checked')
-    rows.push(
-      `| precache bytes | ${kb(budget.precacheBytes)} | n/a | n/a | limit ${kb(budget.precacheBytes)} | FAIL |`,
-    )
-  } else {
-    const ok = r.precache.bytes <= budget.precacheBytes
-    if (!ok) {
-      failures.push(`precache ${kb(r.precache.bytes)} exceeds budget ${kb(budget.precacheBytes)}`)
-    }
-    rows.push(
-      `| precache bytes | ${kb(budget.precacheBytes)} | ${kb(r.precache.bytes)} | ${delta(r.precache.bytes, budget.precacheBytes)} | limit ${kb(budget.precacheBytes)} | ${ok ? 'ok' : 'FAIL'} |`,
-    )
-  }
-  const md = [
-    `### Bundle budget: ${failures.length ? 'FAIL' : 'ok'}`,
-    '',
-    '| metric | budget | actual | delta | gate | status |',
-    '| --- | --- | --- | --- | --- | --- |',
-    ...rows,
-    '',
-    ...failures.map((f) => `- ${f}`),
-  ].join('\n')
-  return { md, failures }
-}
-
 const argv = process.argv.slice(2)
 const asJson = argv.includes('--json')
 
@@ -355,16 +307,18 @@ if (argv.includes('--modules')) {
     const budgetPath =
       next && !next.startsWith('--') ? next : join(frontendDir, 'bundle-budget.json')
     const budget = JSON.parse(readFileSync(budgetPath, 'utf8'))
-    for (const key of ['entryGzip', 'precacheBytes']) {
-      if (!Number.isFinite(budget[key])) {
-        throw new Error(`bundle-report: ${budgetPath} has no numeric ${key}`)
-      }
-    }
-    const { md, failures } = checkBudget(r, budget)
+    assertBudgetShape(budget, budgetPath)
+    const sizes = { entryGzip: r.entry.gzip, precacheBytes: r.precache ? r.precache.bytes : null }
+    const basePath = flagValue(argv, '--base')
+    const base =
+      basePath && existsSync(basePath) ? JSON.parse(readFileSync(basePath, 'utf8')) : null
+    const { md, failures } = checkBudget(sizes, budget, base)
     console.log(md)
     if (process.env.GITHUB_STEP_SUMMARY) {
       appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${md}\n`)
     }
+    const savePath = flagValue(argv, '--save-sizes')
+    if (savePath) writeFileSync(savePath, `${JSON.stringify(sizes)}\n`)
     if (failures.length) process.exit(1)
   } else if (asJson) console.log(JSON.stringify(r, null, 2))
   else printReport(r)

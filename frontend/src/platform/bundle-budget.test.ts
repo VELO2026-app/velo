@@ -3,7 +3,9 @@
 // =============================================================================
 // `bundle-report --budget` runs against a synthetic dist/ whose entry gzip
 // size is measured here, so the budget is set relative to the real number:
-// +2% of the budget passes, beyond it fails; a precache over budget fails.
+// within +-2% of the budget passes, beyond it fails (FE-183: both sides, both
+// metrics); over the ceiling fails. The rules themselves are pinned by
+// scripts/lib/bundle-budget.test.mjs; this file is the CLI end to end.
 // =============================================================================
 
 import { spawnSync } from 'node:child_process'
@@ -20,7 +22,10 @@ afterAll(() => rmSync(root, { recursive: true, force: true }))
 interface Budget {
   entryGzip: number
   precacheBytes: number
+  ceiling?: { entryGzip: number; precacheBytes: number }
 }
+
+const CEILING = { entryGzip: 1_000_000, precacheBytes: 1_000_000 }
 
 // Deterministic, poorly compressible entry content.
 let seed = 12345
@@ -37,6 +42,7 @@ function run(
   budget: Budget,
   withSw = true,
   swList = '{url:"pre.bin",revision:null}',
+  withCeiling = true,
 ) {
   const dir = join(root, name)
   mkdirSync(join(dir, 'assets'), { recursive: true })
@@ -47,7 +53,7 @@ function run(
     writeFileSync(join(dir, 'sw.js'), `precacheAndRoute([${swList}],{})`)
   }
   const budgetPath = join(dir, 'budget.json')
-  writeFileSync(budgetPath, JSON.stringify(budget))
+  writeFileSync(budgetPath, JSON.stringify(withCeiling ? { ceiling: CEILING, ...budget } : budget))
   const r = spawnSync('node', [script, '--dist', dir, '--budget', budgetPath], {
     encoding: 'utf8',
     env: { ...process.env, GITHUB_STEP_SUMMARY: '' },
@@ -76,10 +82,33 @@ describe('bundle-report --budget', () => {
     expect(r.out).toContain('FAIL')
   })
 
-  it('fails when precache exceeds the budget, even by one byte', () => {
-    const r = run('over-precache', { entryGzip, precacheBytes: precacheBytes - 1 })
+  it('fails when precache exceeds the budget by more than 2%', () => {
+    const r = run('over-precache', { entryGzip, precacheBytes: Math.floor(precacheBytes / 1.03) })
     expect(r.status).toBe(1)
     expect(r.out).toContain('precache')
+  })
+
+  it('fails with the value to lower the budget to when the build is >2% below it', () => {
+    const r = run('below', { entryGzip: Math.ceil(entryGzip * 1.1), precacheBytes })
+    expect(r.status).toBe(1)
+    expect(r.out).toContain(`lower the budget to ${Math.ceil(entryGzip * 1.01)}`)
+    expect(r.out).toContain('bundle-report.mjs --modules')
+  })
+
+  it('fails over the ceiling even when the budget allows it', () => {
+    const r = run('ceiling', {
+      entryGzip,
+      precacheBytes,
+      ceiling: { entryGzip: entryGzip - 1, precacheBytes: 1_000_000 },
+    })
+    expect(r.status).toBe(1)
+    expect(r.out).toContain('over the ceiling')
+  })
+
+  it('fails when the budget file has no ceiling', () => {
+    const r = run('no-ceiling', { entryGzip, precacheBytes }, true, undefined, false)
+    expect(r.status).not.toBe(0)
+    expect(r.out).toContain('no positive numeric ceiling.entryGzip')
   })
 
   it('counts a URL listed twice once (the PWA plugin repeats the manifest icons)', () => {
@@ -98,5 +127,7 @@ describe('bundle-report --budget', () => {
     ) as Budget
     expect(Number.isFinite(b.entryGzip)).toBe(true)
     expect(Number.isFinite(b.precacheBytes)).toBe(true)
+    expect(b.ceiling?.entryGzip).toBe(150_000)
+    expect(b.ceiling?.precacheBytes).toBe(1_000_000)
   })
 })

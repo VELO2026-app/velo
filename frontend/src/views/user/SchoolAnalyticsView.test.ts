@@ -431,7 +431,7 @@ describe('SchoolAnalyticsView', () => {
     expect(text()).toContain('Пока нет отзывов')
   })
 
-  it('404 is the school being unavailable; «К школе» follows the zone (user)', async () => {
+  it('404 is the school being unavailable; «К школе» goes back to the master school page', async () => {
     vi.mocked(cgApi.getSchoolAnalytics).mockRejectedValue(
       new ApiResponseError(404, 'not found', 'not_found'),
     )
@@ -462,19 +462,6 @@ describe('SchoolAnalyticsView', () => {
     await flush()
     // FE-93: the analytics screen mounts in the master zone only -- the back
     // target is the master school page unconditionally.
-    expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
-  })
-
-  it('the master zone backs into the master school page', async () => {
-    routeState.name = 'master-school-analytics'
-    vi.mocked(cgApi.getSchoolAnalytics).mockRejectedValue(
-      new ApiResponseError(404, 'not found', 'not_found'),
-    )
-    mount()
-    await flush()
-
-    buttonWith('К школе')?.click()
-    await flush()
     expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
