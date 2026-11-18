@@ -6,6 +6,8 @@ dist/
 
 # Coverage report (vitest --coverage; scripts/coverage-budget.mjs reads it)
 coverage/
+# Vitest blob reports of the CI test shards (FE-204)
+.vitest-reports/
 
 # Playwright output (FE-157 5A.2)
 test-results/

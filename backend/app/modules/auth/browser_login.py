@@ -25,7 +25,7 @@
 # the login, so a return opened anywhere else is refused -- here, and before
 # any request to Telegram (the frontend refuses it too, without calling us).
 #
-# THE RETURN ADDRESS is the frontend's own origin, read from CORS_ORIGINS
+# THE RETURN ADDRESS is the frontend's own origin, https://<domains.frontend>
 # (see return_url). It is never taken from the client.
 #
 # SECRETS. The state, the mark, the code and the verifier are never logged.
@@ -37,7 +37,6 @@ import hashlib
 import hmac
 import json
 import secrets
-from urllib.parse import urlsplit
 
 from app.core.config import settings
 from app.core.redis import get_redis
@@ -56,73 +55,26 @@ LOGIN_TTL_SECONDS = 600
 _KEY_PREFIX = "auth:browser_login:"
 
 
-def return_url() -> str | None:
-    """The redirect URI of the browser sign-in, or None when not configured.
-
-    The frontend's origin is the ONE https address in CORS_ORIGINS -- the
-    installer writes it there from the frontend domain it asked for, and the
-    sign-in's own first request is a cross-origin call from that frontend,
-    so it cannot work without being listed there anyway.
+def return_url() -> str:
+    """The redirect URI of the browser sign-in: the frontend's own origin
+    (https://<domains.frontend>, BE-192) and RETURN_PATH.
 
     KNOWN CEILING -- one frontend per backend.
-      1. Mechanics: the return address is derived from CORS_ORIGINS only when
-         it lists exactly one https origin (bare scheme://host[:port], no
-         path, query, fragment or credentials). With two addresses there, or
-         one http:// address, or the development wildcard, there is no single
-         answer: browser sign-in reports "not configured" (start answers 404).
+      1. Mechanics: the return address is built from the ONE frontend host of
+         the instance (DOMAIN_FRONTEND). A second frontend on the same
+         backend would be sent back to the first one's origin.
       2. Status: acknowledged by design.
       3. Task: none -- the Standalone phase 3 gate (dispatcher's answer, item
-         1) fixed one frontend per server; no server has two today.
-      4. Unfreeze trigger: a second address in CORS_ORIGINS -- the login
-         screen of every frontend then says sign-in is not configured.
+         1) fixed one frontend per server, and the passport has one
+         domains.frontend.
+      4. Unfreeze trigger: the passport gets a second frontend domain.
       5. Agreed fix: take the address from the Origin of the start request,
-         check it against CORS_ORIGINS, and keep it under the state.
-      6. Rejected: a separate key for the frontend address -- a second copy
-         of the fact the installer already wrote into CORS_ORIGINS; two
-         copies drift apart.
+         check it against the instance's frontend hosts, and keep it under
+         the state.
+      6. Rejected: an address sent by the client and not checked -- the
+         return address must never come from the client (module header).
     """
-    origin, _reason = _frontend_origin()
-    return f"{origin}{RETURN_PATH}" if origin is not None else None
-
-
-def _frontend_origin() -> tuple[str | None, str]:
-    """The frontend origin from CORS_ORIGINS, or None and why not.
-
-    The ONE implementation of the rule return_url() states; state() (velo
-    doctor) reads the same reason instead of re-deriving it. Reasons:
-    "ok", "empty", "several", "wildcard", "not_https" (another scheme),
-    "not_origin" (a path, query, fragment, credentials or no host).
-    """
-    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-    if not origins:
-        return None, "empty"
-    if len(origins) > 1:
-        return None, "several"
-    if origins[0] == "*":
-        return None, "wildcard"
-    parts = urlsplit(origins[0])
-    if parts.scheme != "https":
-        return None, "not_https"
-    if (
-        not parts.hostname
-        or parts.path
-        or parts.query
-        or parts.fragment
-        or parts.username
-        or parts.password
-    ):
-        return None, "not_origin"
-    return f"https://{parts.netloc}", "ok"
-
-
-def state() -> tuple[list[str], str]:
-    """Why browser sign-in is or is not configured, for velo doctor:
-    (missing Telegram login key NAMES, CORS_ORIGINS reason). Configured
-    exactly when the list is empty and the reason is "ok" -- the same two
-    facts the endpoints check (telegram_oidc.configured, return_url). No
-    value of any key is returned."""
-    _origin, reason = _frontend_origin()
-    return telegram_oidc.missing_keys(), reason
+    return f"{settings.frontend_origin}{RETURN_PATH}"
 
 
 def _key(state: str) -> str:

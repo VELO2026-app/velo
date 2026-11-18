@@ -30,7 +30,7 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import comms_listener, llm
-from app.core.config import Settings, settings
+from app.core.config import settings
 from app.core.database import get_engine
 from app.core.events.models import CommsFeedCursor, OutboxEvent
 from app.core.llm import LlmResult
@@ -44,6 +44,7 @@ from app.modules.support.router import router as support_router
 from app.modules.support.service import MESSAGE_RECEIVED_TYPE
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.settings_instance import build_settings
 
 _TID_MIN = 88700
 _TID_MAX = 88799
@@ -1080,9 +1081,14 @@ async def test_a_support_language_the_backend_does_not_know_refuses_the_start(
     value: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("SUPPORT_LANGUAGE", value)
+    """BE-196: built from tests/settings_instance.py (every product
+    language on) instead of the process environment, as the rest of the
+    startup contract is: the environment is CI's ci.env or velo-test's
+    passport, and the case must not ride on either. The refusal is the
+    same; the set it is checked against is now the instance's -- a product
+    language the instance has off: tests/test_instance_languages.py."""
     with pytest.raises(ValueError, match="SUPPORT_LANGUAGE"):
-        Settings()
+        build_settings(monkeypatch, support_language=value)
 
 
 @pytest.mark.parametrize("value", ["en", "ru", "uk"])
@@ -1090,5 +1096,10 @@ async def test_every_backend_language_is_a_support_language(
     value: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("SUPPORT_LANGUAGE", value)
-    assert Settings().support_language == value
+    """Every product language can be the support language of an instance
+    that has it on. BE-196: from tests/settings_instance.py rather than the
+    environment -- on a velo-test passport without uk this read the
+    passport's languages, not the product's, and went red for uk."""
+    s = build_settings(monkeypatch, support_language=value)
+    assert value in s.languages
+    assert s.support_language == value

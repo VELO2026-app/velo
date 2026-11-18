@@ -52,7 +52,13 @@ from app.modules.support.models import (
     SupportTranslationJob,
 )
 from app.modules.users.models import User, UserRole
-from tests.helpers import auth_headers, fresh_execute, full_cleanup_range, login_user
+from tests.helpers import (
+    auth_headers,
+    fresh_execute,
+    full_cleanup_range,
+    login_user,
+    sent_data,
+)
 from tests.school_race_harness import assert_no_deadlock, race
 
 BAND_MIN, BAND_MAX = 60200, 60239
@@ -249,7 +255,7 @@ async def _row(thread_id: UUID) -> SupportTicket:
 async def _signals(thread_id: UUID) -> list[dict]:
     p = OutboxEvent.payload
     return [
-        e.payload
+        sent_data(e)
         for e in (
             await fresh_execute(
                 select(OutboxEvent)
