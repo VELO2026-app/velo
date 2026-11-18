@@ -271,8 +271,10 @@ describe('SchoolMembersView', () => {
     await flush()
     expect(text()).toContain('В школе пока нет мастеров')
 
-    // A search that returns nothing is a DIFFERENT sentence. Fake timers run
-    // out the 300ms debounce, then the re-query lands.
+    // A search that returns nothing is a DIFFERENT sentence. It follows the
+    // typed text at once (the trimmed search, not the answer); the 300ms
+    // debounce is run out on the fake clock only so the empty answer of the
+    // re-query is in before the check and cannot flip the sentence back.
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page([]))
     vi.useFakeTimers()
     const input = inputEl()

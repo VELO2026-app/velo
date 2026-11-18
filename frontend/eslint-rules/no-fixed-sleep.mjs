@@ -6,8 +6,20 @@
 //     `new Promise(...)` executor -- the `await new Promise((r) =>
 //     setTimeout(r, 500))` idiom, a sleep(ms) helper, a mock that settles
 //     after a delay. A literal 0 (one macrotask) is a flush, not a pause;
-//   - `setTimeout` / `setInterval` imported from node:timers/promises
+//   - `setTimeout` / `setInterval` imported by name from node:timers/promises
 //     (`await setTimeout(500)`).
+//
+// Known gaps (syntax only, no data flow; left for a follow-up, not caught):
+//   - an aliased or destructured timer (`const t = setTimeout`,
+//     `const { setTimeout: t } = globalThis`);
+//   - a namespace or default import of node:timers/promises
+//     (`import * as timers`, `timers.setTimeout(500)`);
+//   - `scheduler.wait(ms)` and `promisify(setTimeout)`;
+//   - a sleep helper defined outside *.test.ts and imported by the test;
+//   - `vi.waitFor` / `expect.poll` with a raised `{ timeout }` (they poll a
+//     condition, so they are bounded waits, but the bound is not checked);
+//   - no-flake-masking: a skip marker in a comment at the END of a multi-line
+//     `it.skip(...)` (only comments above or on the first line count).
 import { RATCHET_SCHEMA, SHRINK_MESSAGE, createRatchet } from './ratchet.mjs'
 
 const TIMERS = new Set(['setTimeout', 'setInterval'])
@@ -53,7 +65,9 @@ function insidePromiseExecutor(node) {
 
 const INSTEAD =
   'Wait for the thing itself: the awaited operation, an event (transitionend, an emit), ' +
-  'or vi.useFakeTimers() + await vi.advanceTimersByTimeAsync(ms).'
+  'or vi.useFakeTimers() + await vi.advanceTimersByTimeAsync(ms). For a mock that must ' +
+  'stay pending, return a promise the test releases itself: ' +
+  'let release; new Promise((r) => { release = r }), then release() when the test is ready.'
 
 /** @type {import('eslint').Rule.RuleModule} */
 export default {

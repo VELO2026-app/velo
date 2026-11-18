@@ -101,7 +101,8 @@ const NOW = new Date('2026-07-20T12:00:00Z')
 // them. The flag is the screen's own (./analyticsFlags.ts) -- the describes
 // exercising the parked UI skip themselves while it is false.
 // -----------------------------------------------------------------------------
-/** Runs the describe body only when the parked payments UI is restored (FE-201). */
+/** Runs the describe body only when the parked payments UI is restored.
+ * skip: FE-201 -- payments are parked behind PAYMENTS_TAB_ENABLED. */
 const whenPaymentsLive = describe.skipIf(!PAYMENTS_TAB_ENABLED)
 
 /** U+2212 MINUS SIGN -- the screen's negative sign (.vue:465,470), NOT '-'. */

@@ -4,38 +4,65 @@
 // exception list (test-lint-allowlist.json). Both eslint.config.js files
 // (the app's and packages/velo-ui's) spread `testRulesConfig()`.
 //
-// The list is passed as rule OPTIONS, so it is part of the resolved config:
-// editing it invalidates the ESLint cache like any other config change.
-import { existsSync, readFileSync } from 'node:fs'
+// Cache: ESLint fingerprints a plugin by name and meta.version only, not by
+// its code. meta.version is therefore a hash of the rule sources, so an edit
+// to a rule invalidates every cached result (locally and in CI, whose cache
+// key also hashes eslint-rules/**). The list is passed as rule OPTIONS, so it
+// is part of the resolved config and invalidates the cache the same way.
+import { createHash } from 'node:crypto'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import noFixedSleep from './no-fixed-sleep.mjs'
 import noFlakeMasking from './no-flake-masking.mjs'
 import { ALLOWLIST_PATH, REPO_ROOT } from './ratchet.mjs'
 
 const RULES = ['no-fixed-sleep', 'no-flake-masking']
 
+/** The files the rules run on, repo-relative: a list key must be one. */
+const LINTED = /^(frontend|packages\/velo-ui)\/(src\/.+\.test\.ts|vitest\.config\.ts)$/
+
+/** A hash of the rule sources (the *.mjs here, tests excluded). */
+function sourceHash() {
+  const dir = fileURLToPath(new URL('.', import.meta.url))
+  const hash = createHash('sha256')
+  for (const name of readdirSync(dir).sort()) {
+    if (!name.endsWith('.mjs') || name.endsWith('.test.mjs')) continue
+    hash.update(name).update(readFileSync(path.join(dir, name)))
+  }
+  return hash.digest('hex').slice(0, 16)
+}
+
 export const plugin = {
-  meta: { name: 'velo-tests' },
+  meta: { name: 'velo-tests', version: sourceHash() },
   rules: { 'no-fixed-sleep': noFixedSleep, 'no-flake-masking': noFlakeMasking },
 }
 
 /**
  * Reads the exception list and splits it per rule.
  *
+ * @param listPath - The list file, repo-relative (tests pass a temp file).
  * @returns `{ [rule]: { [repoPath]: count } }` for the rule options.
- * @throws Error when an entry names a missing file or an unknown rule -- a
- * stale entry would keep a debt allowance nobody can see.
+ * @throws Error when an entry names a file the rules do not lint, a missing
+ * file or an unknown rule -- such an entry would keep a debt allowance
+ * nobody can see.
  */
-function loadAllowlist() {
-  const raw = JSON.parse(readFileSync(path.join(REPO_ROOT, ALLOWLIST_PATH), 'utf8'))
+export function loadAllowlist(listPath = ALLOWLIST_PATH) {
+  const raw = JSON.parse(readFileSync(path.resolve(REPO_ROOT, listPath), 'utf8'))
   const perRule = Object.fromEntries(RULES.map((r) => [r, {}]))
   for (const [file, counts] of Object.entries(raw.files ?? {})) {
+    if (!LINTED.test(file)) {
+      throw new Error(
+        `${listPath}: ${file} is not a file the test rules lint ` +
+          '(frontend/ or packages/velo-ui/: src/**/*.test.ts, vitest.config.ts) -- fix the key.',
+      )
+    }
     if (!existsSync(path.join(REPO_ROOT, file))) {
-      throw new Error(`${ALLOWLIST_PATH}: ${file} does not exist -- remove its entry.`)
+      throw new Error(`${listPath}: ${file} does not exist -- remove its entry.`)
     }
     for (const [rule, count] of Object.entries(counts)) {
       if (!RULES.includes(rule)) {
-        throw new Error(`${ALLOWLIST_PATH}: ${file} names an unknown rule "${rule}".`)
+        throw new Error(`${listPath}: ${file} names an unknown rule "${rule}".`)
       }
       perRule[rule][file] = count
     }

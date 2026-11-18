@@ -115,8 +115,21 @@ export default [
     },
   },
 
-  // FE-203: no fixed pauses, no flake masking -- the frontend's rules.
-  ...testRulesConfig(['src/**/*.test.ts']),
+  // FE-203: no fixed pauses, no flake masking -- the frontend's rules;
+  // vitest.config.ts is checked for a raised timeout / retry.
+  ...testRulesConfig(['src/**/*.test.ts'], ['vitest.config.ts']),
+
+  {
+    // FE-203: vitest.config.ts is linted for the test rules only. It sits
+    // outside tsconfig.json (src/ only), so the type-aware rules cannot run
+    // on it; Node globals instead of the browser's.
+    files: ['vitest.config.ts'],
+    ...tseslint.configs.disableTypeChecked,
+    languageOptions: {
+      ...tseslint.configs.disableTypeChecked.languageOptions,
+      globals: { ...globals.node },
+    },
+  },
 
   {
     // The platform seam owns the host objects (FE-143) -- the kit's mirror
@@ -152,6 +165,7 @@ export default [
   },
 
   {
-    ignores: ['dist/', 'node_modules/', '*.config.*', 'storybook-static/'],
+    // vitest.config.ts is the one config linted (FE-203, the block above).
+    ignores: ['dist/', 'node_modules/', '*.config.*', '!vitest.config.ts', 'storybook-static/'],
   },
 ]

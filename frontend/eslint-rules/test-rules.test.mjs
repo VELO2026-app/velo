@@ -2,9 +2,13 @@
 // exception), so each catches what it names, lets the safe twin through, and
 // the exception list ratchets: over -> every finding, equal -> pass, under ->
 // "lower the entry".
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { RuleTester } from 'eslint'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import { findRuleDisables } from './directives.mjs'
+import { loadAllowlist } from './index.mjs'
 import noFixedSleep from './no-fixed-sleep.mjs'
 import noFlakeMasking from './no-flake-masking.mjs'
 import { REPO_ROOT } from './ratchet.mjs'
@@ -79,14 +83,23 @@ tester.run('no-flake-masking', noFlakeMasking, {
     { filename: FILE, code: "it('x', { timeout: 1000 }, () => {})" },
     { filename: FILE, code: "it('x', () => {}, 5000)" },
     { filename: FILE, code: "it('x', { retry: 0 }, () => {})" },
-    { filename: FILE, code: "// FE-123: the upstream fix lands first\nit.skip('x', () => {})" },
-    { filename: FILE, code: "it.skip('x', () => {}) // BE-7" },
-    // Not the test API: a query's own retry, a context skip.
+    // A hook's default is 10000 ms: that is not a raise.
+    { filename: FILE, code: 'beforeAll(() => {}, 10000)' },
+    {
+      filename: FILE,
+      code: "// skip: FE-123 the upstream fix lands first\nit.skip('x', () => {})",
+    },
+    { filename: FILE, code: "it.skipIf(slow)('x', () => {}) // skip: BE-7 no runner" },
+    {
+      filename: FILE,
+      code: "it('x', (ctx) => {\n  // skip: DM-30 storage is off\n  ctx.skip()\n})",
+    },
+    // Not the test API: a query's own retry, a skip outside a test body.
     { filename: FILE, code: 'useQuery({ retry: 3 })' },
-    { filename: FILE, code: 'ctx.skip()' },
+    { filename: FILE, code: 'function later(ctx) { ctx.skip() }' },
     {
       filename: path.join(REPO_ROOT, 'frontend/vitest.config.ts'),
-      code: 'export default { test: { testTimeout: 5000 } }',
+      code: 'export default { test: { testTimeout: 5000, hookTimeout: 10000 } }',
     },
   ],
   invalid: [
@@ -117,8 +130,8 @@ tester.run('no-flake-masking', noFlakeMasking, {
     },
     {
       filename: FILE,
-      code: 'vi.setConfig({ testTimeout: 10000, retry: 1 })',
-      errors: [{ messageId: 'timeout' }, { messageId: 'retry' }],
+      code: 'vi.setConfig({ testTimeout: 10000, hookTimeout: 15000, retry: 1 })',
+      errors: [{ messageId: 'timeout' }, { messageId: 'timeout' }, { messageId: 'retry' }],
     },
     {
       filename: FILE,
@@ -131,9 +144,81 @@ tester.run('no-flake-masking', noFlakeMasking, {
       errors: [{ messageId: 'skip' }],
     },
     {
+      filename: FILE,
+      code: "it.runIf(flag)('x', () => {})",
+      errors: [{ messageId: 'skip' }],
+    },
+    {
+      // A bare task key is not a marker: `skip:` must name it.
+      filename: FILE,
+      code: "// FE-157 5C: a note\nit.skip('x', () => {})",
+      errors: [{ messageId: 'skip' }],
+    },
+    {
+      // Nor is a key of no team of ours.
+      filename: FILE,
+      code: "// skip: UTF-8 fixture\nit.skip('x', () => {})",
+      errors: [{ messageId: 'skip' }],
+    },
+    {
+      filename: FILE,
+      code: "it('x', (ctx) => { ctx.skip() })",
+      errors: [{ messageId: 'skip' }],
+    },
+    {
+      filename: FILE,
+      code: "test('x', ({ skip }) => { skip() })",
+      errors: [{ messageId: 'skip' }],
+    },
+    {
       filename: path.join(REPO_ROOT, 'frontend/vitest.config.ts'),
-      code: 'export default { test: { testTimeout: 10000, retry: 2 } }',
-      errors: [{ messageId: 'timeout' }, { messageId: 'retry' }],
+      code: 'export default { test: { testTimeout: 10000, hookTimeout: 20000, retry: 2 } }',
+      errors: [{ messageId: 'timeout' }, { messageId: 'timeout' }, { messageId: 'retry' }],
     },
   ],
+})
+
+describe('the exception list', () => {
+  /** Writes a list into a temp dir and returns its absolute path. */
+  function list(files) {
+    const file = path.join(mkdtempSync(path.join(tmpdir(), 'fe203-')), 'list.json')
+    writeFileSync(file, JSON.stringify({ files }))
+    return file
+  }
+  const REAL = 'frontend/src/router/guards.test.ts'
+
+  it('splits a valid list per rule', () => {
+    expect(loadAllowlist(list({ [REAL]: { 'no-fixed-sleep': 2 } }))).toEqual({
+      'no-fixed-sleep': { [REAL]: 2 },
+      'no-flake-masking': {},
+    })
+  })
+
+  it.each([
+    ['a missing file', { 'frontend/src/gone.test.ts': { 'no-fixed-sleep': 1 } }, /does not exist/],
+    ['an unknown rule', { [REAL]: { 'no-sleep': 1 } }, /unknown rule "no-sleep"/],
+    ['a file the rules do not lint', { 'frontend/src/router/guards.ts': {} }, /not a file/],
+  ])('rejects %s', (_name, files, message) => {
+    expect(() => loadAllowlist(list(files))).toThrow(message)
+  })
+})
+
+describe('directives that switch the rules off', () => {
+  it('finds a velo-tests disable, a blanket disable and a rule-config comment', () => {
+    const text = [
+      '// eslint-disable-next-line velo-tests/no-fixed-sleep',
+      'await new Promise((r) => setTimeout(r, 500)) // eslint-disable-line',
+      '/* eslint-disable no-console, velo-tests/no-flake-masking -- flaky */',
+      '/* eslint velo-tests/no-fixed-sleep: off */',
+    ].join('\n')
+    expect(findRuleDisables(text).map((d) => d.line)).toEqual([1, 2, 3, 4])
+  })
+
+  it('lets a disable of another rule and plain prose through', () => {
+    const text = [
+      '// eslint-disable-next-line @typescript-eslint/no-explicit-any',
+      '// eslint flat config refuses files outside its base path',
+    ].join('\n')
+    expect(findRuleDisables(text)).toEqual([])
+  })
 })
