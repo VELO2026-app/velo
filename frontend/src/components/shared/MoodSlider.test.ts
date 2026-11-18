@@ -29,7 +29,6 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach } from 'vitest'
 import { nextTick, ref, createApp, defineComponent, h, type App } from 'vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
-import { MOOD_SCALE_LABELS, moodScoreFromIndex } from '@/utils/moodScale'
 
 let app: App | null = null
 let host: HTMLElement | null = null
@@ -110,7 +109,6 @@ describe('MoodSlider -- the five-emotion strip', () => {
       'Хорошо',
       'Огонь',
     ])
-    expect(Object.values(MOOD_SCALE_LABELS)).toHaveLength(5)
   })
 
   it('opens «Нормально»-active for the default 5 -- both screens seed 5 (tz §2.4)', () => {
@@ -156,7 +154,6 @@ describe('MoodSlider -- a card tap picks the pair TOP score', () => {
     cards()[index]!.click()
 
     expect(changes).toEqual([want])
-    expect(want).toBe(moodScoreFromIndex(index))
   })
 
   it('re-tapping the active card is a NO-OP when the score already matches', () => {

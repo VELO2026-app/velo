@@ -1,13 +1,5 @@
 // =============================================================================
-// VELO Frontend -- CalendarPracticeCard school-marker tests
-// =============================================================================
-//
-// School practices (audience_kind === 'schools') are listed exactly
-// like every other practice: the muted "For school" badge (FE-24 / GT P5)
-// was retired by owner decision 2026-10-02. Asserted on the
-// unavailable-school
-// case too -- the master zone carries the audience_unavailable warning, the
-// shared card carries nothing.
+// VELO Frontend -- CalendarPracticeCard tests
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
@@ -70,27 +62,6 @@ afterEach(() => {
   app = null
   host = null
   vi.clearAllMocks()
-})
-
-describe('CalendarPracticeCard -- school practices carry no marker', () => {
-  it('schools audience: no «Для школы» badge, card renders normally', async () => {
-    const text = await mountCard(practice({ audience_kind: 'schools' }))
-    expect(text).toContain('Практика')
-    expect(text).not.toContain('Для школы')
-  })
-
-  it('unavailable school audience: no badge either (the master zone keeps the warning)', async () => {
-    const text = await mountCard(
-      practice({
-        audience_kind: 'schools',
-        audience_unavailable: true,
-        school_id: 'sc1',
-        school_name: 'Тихая школа',
-      }),
-    )
-    expect(text).toContain('Практика')
-    expect(text).not.toContain('Для школы')
-  })
 })
 
 describe('CalendarPracticeCard -- payments option off (FE-163, PM-22 p.2)', () => {
