@@ -429,6 +429,11 @@ beforeEach(() => {
   vi.mocked(practicesApi.updatePractice)
     .mockReset()
     .mockResolvedValue(practice({ id: 'p_new', status: 'scheduled' }))
+  // FE-202: the re-read after a failed publish PATCH. By default the PATCH
+  // really did not apply -- the practice is still the created draft.
+  vi.mocked(practicesApi.getPractice)
+    .mockReset()
+    .mockResolvedValue(practice({ id: 'p_new', status: 'draft' }))
   myPracticesChanged.mockReset().mockResolvedValue(undefined)
   vi.mocked(groupsApi.getGroups).mockReset().mockResolvedValue({ items: [] })
   vi.mocked(cgApi.getMySchools).mockReset().mockResolvedValue({ items: [] })
@@ -1230,35 +1235,117 @@ describe('CreatePracticeView', () => {
       expect(replace).not.toHaveBeenCalled()
     })
 
-    it('a create that succeeds but FAILS to publish leaves the master on the form', async () => {
-      // The two writes share one try/catch (:810-878), so a failed publish is
-      // reported with the CREATE's fallback
-      // (i18n:masterScreens.createPractice.toast.createFailed)
-      // -- even though the POST succeeded and a draft now exists server-side.
-      // This pins the behaviour as it is, and deliberately does NOT assert it
-      // is right: see the NOT COVERED note at the foot of this file.
+    it('a create that succeeds but FAILS to publish keeps the master on the form and retries the publish alone (FE-202)', async () => {
+      // The POST succeeded, so a draft exists server-side: the failure is the
+      // publish, not the create, and a second submit would POST a duplicate.
       // B8 (PROMPT №747): 'bad_state' is not a real backend code -- unmapped.
-      vi.mocked(practicesApi.updatePractice).mockRejectedValue(
+      vi.mocked(practicesApi.updatePractice).mockRejectedValueOnce(
         new ApiResponseError(409, 'Нельзя опубликовать', 'bad_state'),
       )
       mount()
       await flush()
       await fillMinimalForm()
-      // Stand in for the debounced autosave, which never fires inside a test
-      // (see NOT COVERED #2) -- without seeding, the survival assertion below
-      // would pass against a key that was never written, proving nothing.
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Утренняя практика' }))
+      expect(inputByPlaceholder('Название')?.closest('[inert]')).toBeNull()
 
       submitForm()
       await flush()
 
       expect(practicesApi.createPractice).toHaveBeenCalledTimes(1)
-      expect(toastError).toHaveBeenCalledWith('Не удалось создать практику')
+      expect(toastError).toHaveBeenCalledWith('Не удалось опубликовать практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
-      // clearDraft() runs only AFTER a successful publish (:859-860), so the
-      // draft survives -- the master's work is not thrown away on a half-failure.
-      expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
+      // The publish-failed banner replaces the submit button: no second POST.
+      expect(text()).toContain('Черновик сохранён, но не опубликован')
+      expect(button('Создать практику')).toBeUndefined()
+      // The retry publishes the draft as created, so the fields are locked:
+      // an edit made now would never reach it.
+      expect(inputByPlaceholder('Название')?.closest('[inert]')).not.toBeNull()
+
+      button('Опубликовать')?.click()
+      await flush()
+
+      expect(practicesApi.createPractice).toHaveBeenCalledTimes(1)
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(2)
+      expect(practicesApi.updatePractice).toHaveBeenLastCalledWith('p_new', {
+        status: 'scheduled',
+      })
+      expect(toastSuccess).toHaveBeenCalledWith('Практика создана!')
+      expect(replace).toHaveBeenCalledWith({ name: 'master-practices' })
+    })
+
+    it('a retry whose PATCH fails because an earlier one DID publish leaves for the list, no error (FE-202)', async () => {
+      // The first PATCH applied on the server but its response was lost; the
+      // retry then gets 400 for scheduled to scheduled. The re-read shows the
+      // practice is live, so the screen must not loop on the publish error.
+      vi.mocked(practicesApi.updatePractice)
+        .mockRejectedValueOnce(new TypeError('timeout'))
+        .mockRejectedValueOnce(
+          new ApiResponseError(400, 'Cannot transition from scheduled to scheduled'),
+        )
+      mount()
+      await flush()
+      await fillMinimalForm()
+
+      submitForm()
+      await flush()
+      expect(toastError).toHaveBeenCalledTimes(1)
+
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(
+        practice({ id: 'p_new', status: 'scheduled' }),
+      )
+      button('Опубликовать')?.click()
+      await flush()
+
+      expect(practicesApi.getPractice).toHaveBeenLastCalledWith('p_new')
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastSuccess).toHaveBeenCalledWith('Практика создана!')
+      expect(replace).toHaveBeenCalledWith({ name: 'master-practices' })
+      expect(practicesApi.createPractice).toHaveBeenCalledTimes(1)
+    })
+
+    it('after a failed publish, «Открыть черновик» opens the created draft without a second POST (FE-202)', async () => {
+      vi.mocked(practicesApi.updatePractice).mockRejectedValue(new TypeError('boom'))
+      mount()
+      await flush()
+      await fillMinimalForm()
+
+      submitForm()
+      await flush()
+      button('Открыть черновик')?.click()
+      await flush()
+
+      expect(practicesApi.createPractice).toHaveBeenCalledTimes(1)
+      expect(replace).toHaveBeenCalledWith({
+        name: 'master-practice-detail',
+        params: { id: 'p_new' },
+      })
+    })
+
+    it('after a failed publish the local draft is gone: the next visit opens an empty form (FE-202)', async () => {
+      // The content already lives in the server-side draft; a restored local
+      // copy would offer the same create -- a second POST -- again.
+      vi.mocked(practicesApi.updatePractice).mockRejectedValue(new TypeError('boom'))
+      mount()
+      await flush()
+      await fillMinimalForm()
+      // Stand in for the debounced autosave, which never fires inside a test
+      // (see NOT COVERED #2) -- without seeding, the assertions below would
+      // pass against a key that was never written, proving nothing.
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Утренняя практика' }))
+
+      submitForm()
+      await flush()
+
+      expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+
+      app?.unmount()
+      host?.remove()
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Продолжить черновик?')
+      expect(inputByPlaceholder('Название')?.value).toBe('')
+      expect(button('Создать практику')).toBeDefined()
     })
 
     it('does NOT create twice when the button is hit twice in flight (FP-04)', async () => {
@@ -1705,15 +1792,6 @@ describe('CreatePracticeView', () => {
   //    boundary the screen reads -- and cover the whole READ side (offer, restore,
   //    discard, per-user scoping, malformed, cleared-on-success). The WRITE side's
   //    500ms debounce is unproven here.
-  //
-  // 3. THE «create succeeded, publish failed» MESSAGE. The test above pins what
-  //    the screen does; it does NOT assert that what it does is right. Both writes
-  //    share one try/catch (:810-878), so a failed PATCH is reported as the
-  //    create-failed copy (i18n:masterScreens.createPractice.toast.createFailed)
-  //    while a draft DOES exist server-side, and a
-  //    master who retries makes a second one. Whether that should be a distinct
-  //    message, a retry of the PATCH alone, or a rollback is a product decision,
-  //    not a defect this file may invent an assertion for. Flagged, not fixed.
   // ==========================================================================
 })
 
