@@ -162,8 +162,10 @@ function mount(): void {
 async function flush(): Promise<void> {
   for (let i = 0; i < 5; i++) await nextTick()
   // setShift() schedules via requestAnimationFrame -- happy-dom runs rAF
-  // callbacks on a macrotask, so give it one.
-  await new Promise((r) => setTimeout(r, 0))
+  // callbacks on a macrotask, so give it one. Under fake timers a real
+  // macrotask never comes: advance the clock by one frame instead.
+  if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(16)
+  else await new Promise((r) => setTimeout(r, 0))
 }
 
 describe('useViewportGeometry() integration', () => {
@@ -177,6 +179,7 @@ describe('useViewportGeometry() integration', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     app?.unmount()
     host?.remove()
     app = null
@@ -246,6 +249,8 @@ describe('useViewportGeometry() integration', () => {
   // focused field) resets the state SYNCHRONOUSLY when focus leaves every
   // editable, with a delayed recheck as the backstop.
   it('[FE-44] focusout heals a stale keyboard-open state even when NO resize event fires', async () => {
+    // The settle timer (700ms) is run out on the fake clock below.
+    vi.useFakeTimers()
     const root = document.documentElement
     // At rest: baseline seeds, keyboard closed.
     setBrowserViewport(828, 828, 0)
@@ -283,12 +288,12 @@ describe('useViewportGeometry() integration', () => {
     Object.defineProperty(window, 'scrollY', { value: 154, configurable: true })
     window.scrollTo = scrollTo
     window.dispatchEvent(new FocusEvent('focusout'))
-    await new Promise((r) => setTimeout(r, 0)) // rAF lands on a macrotask
+    await vi.advanceTimersByTimeAsync(16) // one animation frame
     expect(scrollTo).toHaveBeenCalledWith(0, 0)
 
     // The settle timer (700ms) must not resurrect the open state either --
     // its re-check publishes at-rest truth.
-    await new Promise((r) => setTimeout(r, 800))
+    await vi.advanceTimersByTimeAsync(800)
     await flush()
     expect(keyboardOpen.value).toBe(false)
     expect(root.classList.contains('is-keyboard-open')).toBe(false)
@@ -323,6 +328,8 @@ describe('useViewportGeometry() integration', () => {
   // animation -- the iOS keyboard is an overlay, a full-height app is simply
   // revealed, never white.
   it('[FE-44] intermediate close-resizes (rising heights) never re-cap the app', async () => {
+    // The close window is run out on the fake clock below.
+    vi.useFakeTimers()
     const root = document.documentElement
     setBrowserViewport(828, 500, 0)
     mount()
@@ -345,7 +352,7 @@ describe('useViewportGeometry() integration', () => {
 
     setBrowserViewport(828, 828, 0)
     vvListeners.resize?.()
-    await new Promise((r) => setTimeout(r, 400)) // window expires
+    await vi.advanceTimersByTimeAsync(400) // the close window expires
     await flush()
     expect(root.classList.contains('is-keyboard-open')).toBe(false)
   })

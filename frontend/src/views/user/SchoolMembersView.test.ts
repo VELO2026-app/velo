@@ -165,6 +165,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // A test that fails on fake timers must not leave them to the next one.
+  vi.useRealTimers()
   app?.unmount()
   host?.remove()
   app = null
@@ -269,13 +271,17 @@ describe('SchoolMembersView', () => {
     await flush()
     expect(text()).toContain('В школе пока нет мастеров')
 
-    // A search that returns nothing is a DIFFERENT sentence. The debounce is
-    // 300ms real -- wait it out, then let the re-query land.
+    // A search that returns nothing is a DIFFERENT sentence. It follows the
+    // typed text at once (the trimmed search, not the answer); the 300ms
+    // debounce is run out on the fake clock only so the empty answer of the
+    // re-query is in before the check and cannot flip the sentence back.
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page([]))
+    vi.useFakeTimers()
     const input = inputEl()
     input!.value = 'гриб'
     input!.dispatchEvent(new Event('input'))
-    await new Promise((resolve) => setTimeout(resolve, 350))
+    await vi.advanceTimersByTimeAsync(300)
+    vi.useRealTimers()
     await flush()
     expect(text()).toContain('Никого не найдено')
     expect(text()).not.toContain('В школе пока нет мастеров')

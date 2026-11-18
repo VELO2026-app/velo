@@ -10,9 +10,36 @@
 // app's law -- and this script runs it from the package directory under
 // the SAME budget.
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { findRuleDisables } from '../eslint-rules/directives.mjs'
 
 const budget = JSON.parse(readFileSync(new URL('../lint-budget.json', import.meta.url), 'utf8'))
+
+// FE-203: no inline directive may switch the test rules off (see
+// eslint-rules/directives.mjs for why ESLint cannot check this itself).
+// Scans the files the rules lint: the tests and vitest configs of both
+// packages.
+const testRoots = ['.', '../packages/velo-ui']
+const disables = []
+for (const root of testRoots) {
+  const files = readdirSync(path.join(root, 'src'), { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('.test.ts'))
+    .map((f) => path.join(root, 'src', f))
+  for (const file of [...files, path.join(root, 'vitest.config.ts')]) {
+    for (const hit of findRuleDisables(readFileSync(file, 'utf8'))) {
+      disables.push(`${file}:${hit.line}  ${hit.text}`)
+    }
+  }
+}
+if (disables.length > 0) {
+  console.error(
+    'FE-203: these directives switch the velo-tests rules off. Fix the test instead, ' +
+      'or count a known debt in eslint-rules/test-lint-allowlist.json:',
+  )
+  for (const d of disables) console.error(`  ${d}`)
+  process.exit(1)
+}
 // Content-hash cache (CI: restored by actions/cache). `content`, not the
 // default `metadata`: a fresh checkout has new mtimes on every file, which
 // would invalidate a metadata cache on each run. The cache lives under
@@ -31,9 +58,11 @@ const cacheArgs = (name) => [
 ]
 const args = ['src/', '--max-warnings', String(budget.maxWarnings)]
 // FE-157 5C: the app run also covers its build tooling (scripts/*.mjs, the
-// Vite/Vitest configs, and the Playwright suite); the kit package has no such files.
+// local ESLint plugin in eslint-rules/, the Vite/Vitest configs, and the
+// Playwright suite); the kit package has no such files.
 const appArgs = [
   'scripts/',
+  'eslint-rules/',
   'e2e/',
   'playwright.config.ts',
   'vite.config.ts',
@@ -47,9 +76,14 @@ const fe = spawnSync('node_modules/.bin/eslint', [...appArgs, ...cacheArgs('app'
 if (fe.error) throw fe.error
 if (fe.status !== 0) process.exit(fe.status ?? 1)
 
-const ui = spawnSync('node_modules/.bin/eslint', [...args, ...cacheArgs('ui')], {
-  stdio: 'inherit',
-  cwd: '../packages/velo-ui',
-})
+// The kit's vitest.config.ts carries the FE-203 timeout/retry check.
+const ui = spawnSync(
+  'node_modules/.bin/eslint',
+  ['vitest.config.ts', ...args, ...cacheArgs('ui')],
+  {
+    stdio: 'inherit',
+    cwd: '../packages/velo-ui',
+  },
+)
 if (ui.error) throw ui.error
 process.exit(ui.status ?? 1)

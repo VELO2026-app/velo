@@ -1,5 +1,6 @@
 {
-  // Build scripts outside src/: the .mjs files (plain JS, checked via checkJs).
+  // Build scripts outside src/: the .mjs files (plain JS, checked via checkJs),
+  // and the local ESLint plugin in eslint-rules/ (FE-203).
   // The TypeScript Vite/Vitest configs live in tsconfig.configs.json, where
   // noImplicitAny stays on. Separate from tsconfig.json because the app config
   // targets the browser and has no Node types.
@@ -24,5 +25,5 @@
       "@velo/ui": ["../packages/velo-ui/src/index.ts"]
     }
   },
-  "include": ["scripts/**/*.mjs", "env.d.ts"]
+  "include": ["scripts/**/*.mjs", "eslint-rules/**/*.mjs", "env.d.ts"]
 }
