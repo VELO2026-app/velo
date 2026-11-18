@@ -34,7 +34,6 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.modules.mcp.models import SCOPE_ACTIONS, McpScope, scope_label
 from tests.helpers import (
     delete_oauth_test_clients,
@@ -228,15 +227,9 @@ async def test_the_list_carries_the_labels_in_canonical_order(
     ]
 
 
-@pytest.mark.parametrize("configured", [True, False])
-async def test_the_list_says_whether_the_button_works_here(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch, configured: bool
-) -> None:
-    monkeypatch.setattr(
-        settings, "mcp_oauth_issuer_url", "https://api.velo.test" if configured else ""
-    )
-    monkeypatch.setattr(settings, "telegram_login_client_id", "7700000001")
-    monkeypatch.setattr(settings, "telegram_login_client_secret", "s")
-    _, headers, _ = await _student(client, 74036 + int(configured))
+async def test_the_list_says_the_button_works_here(client: AsyncClient) -> None:
+    """Always true since BE-192: the OAuth keys are required at start, so
+    every instance offers the button (schemas.py: why the field stays)."""
+    _, headers, _ = await _student(client, 74036)
     body = (await client.get(TOKENS_URL, headers=headers)).json()
-    assert body["oauth_connect_available"] is configured
+    assert body["oauth_connect_available"] is True

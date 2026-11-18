@@ -12,15 +12,26 @@
 #     helper stays safe to apply blindly to any URL.
 #
 # The last two tests are the ones that matter operationally: they prove that
-# swapping settings.telegram_link_domain is genuinely enough, so the next
-# domain death costs one line of .env rather than a hunt through the codebase.
+# swapping TELEGRAM_LINK_DOMAIN (core/telegram_links.py) is genuinely enough,
+# so the next domain death costs one line of code rather than a hunt through
+# the codebase.
 # =============================================================================
 
 import pytest
 
-from app.core.telegram_links import TELEGRAM_LINK_HOSTS, normalize_telegram_url
+from app.core.telegram_links import (
+    TELEGRAM_LINK_DOMAIN,
+    TELEGRAM_LINK_HOSTS,
+    normalize_telegram_url,
+)
 
 LIVE = "telegram.me"
+
+
+def test_the_live_host_is_telegram_me() -> None:
+    """BE-192: a constant of the code, one of the known aliases."""
+    assert TELEGRAM_LINK_DOMAIN == LIVE
+    assert TELEGRAM_LINK_DOMAIN in TELEGRAM_LINK_HOSTS
 
 
 # ---------------------------------------------------------------------------
@@ -58,8 +69,9 @@ def test_deep_link_query_survives() -> None:
 def test_every_known_alias_is_rewritten(host: str) -> None:
     """Any known Telegram alias lands on the live host, including telegram.dog.
 
-    This is what makes the escape hatch real: if telegram.me dies too, setting
-    TELEGRAM_LINK_DOMAIN=telegram.dog rewrites everything, in either direction.
+    This is what makes the escape hatch real: if telegram.me dies too,
+    TELEGRAM_LINK_DOMAIN = "telegram.dog" rewrites everything, in either
+    direction.
     """
     assert (
         normalize_telegram_url(f"https://{host}/veloappbot", LIVE)
@@ -68,10 +80,10 @@ def test_every_known_alias_is_rewritten(host: str) -> None:
 
 
 def test_live_host_is_configurable_not_hardcoded() -> None:
-    """The target host comes from config -- the helper hardcodes nothing.
+    """The target host is the caller's -- the helper hardcodes nothing.
 
-    Proves a future domain swap is a one-line .env change: point
-    telegram_link_domain elsewhere and every URL follows.
+    Proves a future domain swap is a one-line change: point
+    TELEGRAM_LINK_DOMAIN elsewhere and every URL follows.
     """
     assert (
         normalize_telegram_url("https://t.me/veloappbot", "telegram.dog")

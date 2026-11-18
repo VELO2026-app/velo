@@ -1,52 +1,76 @@
-name: velo
-# The compose PROJECT name, declared rather than inferred.
-#
-# Unset, compose derives it from the directory holding this file, which is an
-# accident of the checkout layout: two stacks whose files both sit in `deploy/`
-# resolve to ONE project, and one whose file sits in a repository root becomes
-# `repo`. Same project means one label namespace -- `ps` from either directory
-# lists the other's containers, every `up -d` reports the other's as orphans,
-# and `down --remove-orphans` from either destroys the other.
-#
-# CONVENTION for every service on these servers: declare it here, first line,
-# equal to the service name. A stack that does not is one directory rename away
-# from colliding with a stack it has never heard of.
-#
-# Nothing observes this except a live docker daemon, so no test covers it.
-
 # =============================================================================
-# VELO Platform -- Docker Compose (root, CRITICAL-4: Redis auth)
+# VELO -- the stack `velo` of primer.yaml (deploy machine pridem)
 # =============================================================================
 #
-# Single compose file for the entire stack:
-#   - app:       FastAPI backend (Python)
-#   - frontend:  Vue SPA served by Nginx (static files)
-#   - postgres:  Database
-#   - redis:     Cache / sessions (password-protected)
+# The machine names the compose project (-p), the volumes and networks, labels
+# the containers, routes the internet in through its own nginx and keeps the
+# logs: none of that is written here (protocol 3.1, 3.5). Every value comes
+# from the machine through `--env-file`, written as ${VAR:?} -- no defaults,
+# no env_file, no build.args (protocol 3.4, contract 3 rule 18).
 #
-# Usage:
-#   velo update   -- pull, build, migrate, test, restart
-#   velo test     -- run tests inside container
-#   velo status   -- health check
-#
-# Note: docker-compose.yml lives in repo root because it manages
-# both backend/ and frontend/ build contexts.
+# Services: app (FastAPI), frontend (the SPA behind nginx), postgres, redis.
+# Object storage is the stack `velo-storage` (docker-compose.storage.yml).
 # =============================================================================
-
-x-logging: &default-logging
-  driver: "json-file"
-  options:
-    max-size: "10m"
-    max-file: "3"
 
 services:
   app:
-    build: ./backend
-    container_name: velo-app
-    ports:
-      - "127.0.0.1:8000:8000"
-    env_file:
-      - ./backend/.env
+    build:
+      # The repository root (backend/Dockerfile says why); what the context
+      # carries is backend/Dockerfile.dockerignore. The stage `test` of the
+      # same Dockerfile is primer.yaml's test.target.
+      context: .
+      dockerfile: backend/Dockerfile
+      target: runtime
+    # Every key here is a field of the backend's Settings, and every field
+    # without a default is a key here
+    # (backend/tests/test_primer_env.py): a key Settings does not read would
+    # be ignored without a word.
+    environment:
+      # The role of the server (test | preview | prod); the backend decides
+      # from it whether payments run on the stub.
+      SERVER_ROLE: ${SERVER_ROLE:?}
+      EDITION: ${EDITION:?}
+      DATABASE_URL: postgresql+asyncpg://velo:${POSTGRES_PASSWORD:?}@postgres:5432/velo
+      REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
+      # Hosts of the instance's domains, not origins: the backend adds https://
+      # (contract 3 rule 18).
+      DOMAIN_FRONTEND: ${DOMAIN_FRONTEND:?}
+      DOMAIN_API: ${DOMAIN_API:?}
+      # The instance's languages and its default among them (protocol
+      # 5.2.2, BE-196): LANGUAGES is codes joined by commas, `en,ru,uk`.
+      LANGUAGES: ${LANGUAGES:?}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:?}
+      SUPPORT_LANGUAGE: ${SUPPORT_LANGUAGE:?}
+      # Instance options of the passport (BE-182): `true` or `false`.
+      OPTION_PAYMENTS: ${OPTION_PAYMENTS:?}
+      OPTION_SCHOOLS: ${OPTION_SCHOOLS:?}
+      OPTION_MCP: ${OPTION_MCP:?}
+      OPTION_ZOOM: ${OPTION_ZOOM:?}
+      OPTION_TELEGRAM: ${OPTION_TELEGRAM:?}
+      OPTION_LLM: ${OPTION_LLM:?}
+      # Channels in transition: they leave with their hosts in egress.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?}
+      ZOOM_ACCOUNT_ID: ${ZOOM_ACCOUNT_ID:?}
+      ZOOM_CLIENT_ID: ${ZOOM_CLIENT_ID:?}
+      ZOOM_CLIENT_SECRET: ${ZOOM_CLIENT_SECRET:?}
+      ZOOM_SDK_CLIENT_ID: ${ZOOM_SDK_CLIENT_ID:?}
+      ZOOM_SDK_CLIENT_SECRET: ${ZOOM_SDK_CLIENT_SECRET:?}
+      TELEGRAM_LOGIN_CLIENT_ID: ${TELEGRAM_LOGIN_CLIENT_ID:?}
+      TELEGRAM_LOGIN_CLIENT_SECRET: ${TELEGRAM_LOGIN_CLIENT_SECRET:?}
+      # Seams of comms.
+      COMMS_API_URL: ${COMMS_API_URL:?}
+      COMMS_SERVICE_TOKEN: ${COMMS_SERVICE_TOKEN:?}
+      TELEGRAM_BOT_URL: ${TELEGRAM_BOT_URL:?}
+      # The point of comms: address <alias>:<port> and password by seam, the
+      # URL is put together here (protocol 4.4).
+      COMMS_REDIS_URL: redis://:${COMMS_EVENTS_PASSWORD:?}@${COMMS_EVENTS_ADDRESS:?}/0
+      # The point of velo-storage: its address <alias>:<port> from the
+      # machine, the URL put together here (protocol 4.4). The reference
+      # ${STORAGE_ADDRESS:?} is also what puts this service on the point's
+      # network.
+      STORAGE_ENDPOINT: http://${STORAGE_ADDRESS:?}
+      # The backend's own key to velo-storage.
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:?}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -57,32 +81,6 @@ services:
       retries: 3
       start_period: 15s
     restart: unless-stopped
-    logging: *default-logging
-    # BE-33: the comms product profile, READ-ONLY, so the suite that runs
-    # inside this container can machine-check it.
-    #
-    # It cannot be COPYed in instead: the image's build context is
-    # ./backend and comms-profile/ sits in the repository ROOT, outside
-    # it. Widening the context to the root to reach three YAML files would
-    # drag the whole frontend tree through every backend build.
-    #
-    # The mount point is /comms-profile and not /app/comms-profile on
-    # purpose: it makes the path <repo>/comms-profile relative to
-    # backend/tests/ resolve identically in a developer checkout and in
-    # here, so the test has one expression rather than two and a branch.
-    #
-    # ro because this container is a reader. The profile's writer is the
-    # repository; its consumer is the comms stack, which mounts the same
-    # directory separately.
-    volumes:
-      - ./comms-profile:/comms-profile:ro
-    # The backend is the ONLY velo service that talks to comms (the comms
-    # API is internal, reachable by service name on aivis-shared only).
-    # `default` is listed explicitly: once a service carries a `networks:`
-    # key, compose stops attaching it to the default network implicitly.
-    networks:
-      - default        # intra-velo traffic, unchanged
-      - aivis-shared   # reach comms-app / comms-redis by name
 
   frontend:
     build:
@@ -92,42 +90,25 @@ services:
       # The Dockerfile itself stays in frontend/.
       context: .
       dockerfile: frontend/Dockerfile
-      # PRIMER_* are the machine's mandatory build identity (contract 3 rule
-      # 19); the interim shell deploy passes neutral defaults -- the machine
-      # passes the real tag and commit. VITE_* build args are GONE (FE-129):
-      # instance values reach the container through `environment` ->
-      # /config.json, from the same vite.env the deploy scripts export
-      # before compose commands.
-      args:
-        - PRIMER_RELEASE=${PRIMER_RELEASE:-dev}
-        - PRIMER_COMMIT=${PRIMER_COMMIT:-unknown}
-    container_name: velo-frontend
+      target: runtime
+    # Instance values at the start of the container, not at the build
+    # (contract 3 rule 19): one image for every instance of a commit.
+    # API_BASE_URL, TELEGRAM_BOT_URL, LANGUAGES, DEFAULT_LANGUAGE ->
+    # /config.json (FE-129); DEFAULT_LANGUAGE also -> the manifest (FE-155);
+    # the option flags OPTION_<O> -> /config.json `options` (FE-151). Every
+    # option of primer.yaml reaches this service
+    # (backend/tests/test_primer_env.py).
     environment:
-      # FE-129 transition: the instance values that used to bake into the
-      # build now ride the runtime /config.json (frontend/nginx/
-      # config.json.template, envsubst at container start). Same source as
-      # before (vite.env, exported by velo-manage.sh); under pridem the same
-      # keys arrive from primer.yaml env -- keys without the VITE_ prefix --
-      # and this mapping switches to `${VAR:?}` per the machine's compose
-      # rules. Empty values are the golden defaults. The names are
-      # primer.yaml's (DEFAULT_LANGUAGE / LANGUAGES); the brand is a skin
-      # property, not a start value (owner 09.11).
-      API_BASE_URL: ${VITE_API_BASE_URL:-}
-      TELEGRAM_BOT_URL: ${VITE_TELEGRAM_BOT_URL:-}
-      DEFAULT_LANGUAGE: ${VITE_DEFAULT_LOCALE:-}
-      LANGUAGES: ${VITE_LOCALES:-}
-      # Instance options (FE-151): /config.json `options`. The interim stand
-      # keeps every option on, as it ran before options existed; the
-      # machine's compose (deploy-machine) requires each flag (${VAR:?}).
-      # The image itself reads an unset flag as off.
-      OPTION_PAYMENTS: ${OPTION_PAYMENTS:-true}
-      OPTION_SCHOOLS: ${OPTION_SCHOOLS:-true}
-      OPTION_MCP: ${OPTION_MCP:-true}
-      OPTION_ZOOM: ${OPTION_ZOOM:-true}
-      OPTION_TELEGRAM: ${OPTION_TELEGRAM:-true}
-      OPTION_LLM: ${OPTION_LLM:-true}
-    ports:
-      - "127.0.0.1:3000:3000"
+      API_BASE_URL: ${API_BASE_URL:?}
+      TELEGRAM_BOT_URL: ${TELEGRAM_BOT_URL:?}
+      LANGUAGES: ${LANGUAGES:?}
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:?}
+      OPTION_PAYMENTS: ${OPTION_PAYMENTS:?}
+      OPTION_SCHOOLS: ${OPTION_SCHOOLS:?}
+      OPTION_MCP: ${OPTION_MCP:?}
+      OPTION_ZOOM: ${OPTION_ZOOM:?}
+      OPTION_TELEGRAM: ${OPTION_TELEGRAM:?}
+      OPTION_LLM: ${OPTION_LLM:?}
     depends_on:
       app: { condition: service_healthy }
     healthcheck:
@@ -137,94 +118,49 @@ services:
       retries: 3
       start_period: 30s
     restart: unless-stopped
-    logging: *default-logging
 
   postgres:
-    # Locale is NOT pinned here on purpose, and that is worth knowing before
-    # anyone pins it. The cluster inherits the image default (en_US.utf8 on the
-    # stand, measured -- not assumed). Case folding for Cyrillic depends on it:
-    # the custom-activity-name suggestions group 'Йога' and 'йога' into one row
-    # via lower(), and under a C locale lower() leaves Cyrillic untouched, so
-    # that grouping would silently split. POSTGRES_INITDB_ARGS only applies when
-    # the cluster is first created -- setting it on an existing volume changes
-    # nothing and makes this file promise what the database does not do.
-    # If the cluster is ever recreated, re-check: the guard that catches a
-    # locale change is test_three_spellings_are_one_name_in_its_freshest_form.
-    # BE-157: pinned by the INDEX digest; the tag names what is inside
-    # (PostgreSQL 16.15, Debian 13 trixie, glibc 2.41, system tzdata 2026c).
-    # The image's glibc is the collation provider of the live volume: moving
-    # to an image on another glibc needs datcollversion compared with
-    # pg_database_collation_actual_version() before the rollout.
+    # Locale is NOT pinned on purpose: the cluster inherits the image default
+    # (en_US.utf8), and lower() of Cyrillic depends on it -- the guard is
+    # test_three_spellings_are_one_name_in_its_freshest_form. BE-157: pinned
+    # by the INDEX digest (PostgreSQL 16.15, Debian 13 trixie, glibc 2.41);
+    # another glibc needs datcollversion compared before the rollout.
     image: postgres:16.15-trixie@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
-    container_name: velo-postgres
-    # NARROW env (T-32 item 9): the four keys this container actually
-    # consumes, projected out of backend/.env by scripts/env-render.sh
-    # (install_velo.sh on install, velo-manage.sh on update). It used to
-    # read ./backend/.env -- the WHOLE product env -- so `docker compose
-    # exec postgres env` printed Stripe keys, the bot token, SECRET_KEY
-    # and COMMS_SERVICE_TOKEN. backend/.env stays the single source of
-    # these passwords; .env.db is derived, never edited.
-    env_file:
-      - ./backend/.env.db
-    ports:
-      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_USER: velo
+      POSTGRES_DB: velo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     volumes:
       - velo_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U velo -d velo"]
+      # Over TCP, not the socket: on a fresh volume the image first runs a
+      # temporary initdb server that listens on the socket only, and a
+      # socket probe would call the stack ready before the real server is
+      # up (finding of BE-197; the CI job of backend-tests.yml asks the same
+      # way).
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U velo -d velo"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
-    logging: *default-logging
 
   redis:
     # BE-157: pinned by the INDEX digest (Redis 7.4.11, Alpine 3.21).
     image: redis:7.4.11-alpine3.21@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
-    container_name: velo-redis
-    # NARROW env (T-32 item 9), same file as postgres above. redis needs
-    # exactly REDIS_PASSWORD -- for `command` and for the healthcheck --
-    # and nothing else. Compromising redis is no longer compromising
-    # every application secret on the box.
-    env_file:
-      - ./backend/.env.db
-    # CRITICAL-4: Start Redis with password from .env.
-    # In development (REDIS_PASSWORD=change-me or empty), still works --
-    # clients must include password in REDIS_URL.
-    command: >
-      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
-        redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes;
-      else
-        redis-server --appendonly yes;
-      fi'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+    # The password reaches redis-server and redis-cli from the environment,
+    # never from a file of the host.
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes"]
     volumes:
       - velo_redis_data:/data
     healthcheck:
-      # CRITICAL-4: Use REDISCLI_AUTH env var for authenticated ping.
-      # Docker passes REDIS_PASSWORD from env_file; redis-cli reads
-      # REDISCLI_AUTH automatically (no password in CLI args).
       test: ["CMD-SHELL", "export REDISCLI_AUTH=$$REDIS_PASSWORD; redis-cli ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: unless-stopped
-    logging: *default-logging
 
 volumes:
-  # Physical names pinned, so that they do NOT carry the project name as a
-  # prefix. Unpinned, `velo_postgres_data` under project `velo` would land on disk as
-  # `velo_velo_postgres_data` -- the service name twice -- and would move again the day
-  # the project name did. Pinned, the name on disk is the name written here.
-  velo_postgres_data:
-    name: velo_postgres_data
-  velo_redis_data:
-    name: velo_redis_data
-
-networks:
-  # Shared bus between the velo stack and the comms stack. EXTERNAL: it is
-  # created idempotently by install_velo.sh (ensure_shared_network) and/or
-  # by comms-deploy.sh install -- either side may create it first, the
-  # result is identical. Compose requires it to exist before `up`.
-  # frontend/postgres/redis stay on the implicit default network only.
-  aivis-shared:
-    external: true
+  velo_postgres_data: {}
+  velo_redis_data: {}
