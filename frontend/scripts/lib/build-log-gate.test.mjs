@@ -1,9 +1,9 @@
 // =============================================================================
 // FE-153 -- unit tests for the build-log gate engine
-// (node:test; run by `pnpm test` -- vitest globs src/** only).
+// (Vitest, the `scripts` project of vitest.config.ts).
 // The fixture lines are verbatim from the pre-FE-153 `pnpm build` output.
 // =============================================================================
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { findBuildLogWarnings } from './build-log-gate.mjs'
 

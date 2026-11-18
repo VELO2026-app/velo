@@ -1,8 +1,8 @@
 // =============================================================================
 // FE-183 -- unit tests for the bundle budget rules
-// (node:test; run by `pnpm test` -- vitest globs src/** only).
+// (Vitest, the `scripts` project of vitest.config.ts).
 // =============================================================================
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   assertBudgetShape,

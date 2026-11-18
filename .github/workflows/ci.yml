@@ -16,7 +16,7 @@
 #                  duration, each with v8 coverage (FE-204).
 #   test-report  — merges the shards: one verdict, one coverage map, the
 #                  coverage ratchet.
-#   test-other   — the node:test suite of frontend/scripts + @velo/ui.
+#   test-other   — @velo/ui (its own package and vitest config).
 #   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
 #                  vue-tsc + vite build with the FE-153 build-log gate.
 #   e2e          — Playwright smoke scenarios on the golden build served by
@@ -323,7 +323,7 @@ jobs:
         run: pnpm -C frontend coverage:budget
 
   test-other:
-    name: test — scripts + @velo/ui
+    name: test — @velo/ui
     needs: scope
     if: needs.scope.outputs.frontend == 'full'
     runs-on: ubuntu-latest
@@ -343,9 +343,6 @@ jobs:
 
       - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
-
-      - name: Tests (frontend/scripts, node:test)
-        run: cd frontend && node --test scripts/lib/*.test.mjs
 
       - name: Tests (@velo/ui)
         run: pnpm -C packages/velo-ui test

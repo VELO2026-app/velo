@@ -24,7 +24,7 @@
 // re-capture the fixtures in build-log-gate.test.mjs then, or this gate
 // silently goes blind.
 //
-// Pure (string in, findings out) so node:test pins it; the CLI wrapper is
+// Pure (string in, findings out) so a unit test pins it; the CLI wrapper is
 // scripts/build-log-gate.mjs. Other build notices (the locale catalogs'
 // dynamic+static import note) are out of scope on purpose.
 // =============================================================================

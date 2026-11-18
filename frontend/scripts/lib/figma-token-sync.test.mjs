@@ -1,10 +1,10 @@
 // =============================================================================
 // FE-124 stage 2 -- unit tests for the Figma <-> registry equivalence engine
-// (node:test; run via `pnpm test:tokens` -- vitest globs src/** only).
+// (Vitest, the `scripts` project; part of `pnpm test`).
 // Every branch of parseCssValue / resolveColor / compareValues /
 // reconstructCss is pinned, including the lossless-apply refusals.
 // =============================================================================
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   collectLeaves,

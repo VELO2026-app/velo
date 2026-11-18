@@ -7,7 +7,7 @@
 //   smoke   e2e/*.spec.ts -- scenarios and the crash-detector self-checks on
 //           the golden build under `vite preview`, the API mocked at the
 //           network layer (e2e/support/api.ts). No backend.
-//             pnpm e2e:smoke        (pnpm test:e2e builds first)
+//             pnpm e2e:smoke        (on a built dist: pnpm build first)
 //
 //   sweep   e2e/sweep/ -- every route of the router under every role that may
 //           open it, against a REAL backend with the `e2e` seed profile. The

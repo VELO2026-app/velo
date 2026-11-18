@@ -1,8 +1,8 @@
 // =============================================================================
 // FE-150 -- token usage audit: unit tests on a miniature registry, plus the
-// standing guard on the real tree (node:test; part of `pnpm test`).
+// standing guard on the real tree (Vitest, the `scripts` project; part of `pnpm test`).
 // =============================================================================
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'

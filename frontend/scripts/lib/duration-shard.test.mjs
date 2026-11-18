@@ -1,8 +1,8 @@
 // =============================================================================
 // FE-204 -- unit tests for the duration-balanced shard engine
-// (node:test; run by `pnpm test` -- vitest globs src/** only).
+// (Vitest, the `scripts` project of vitest.config.ts).
 // =============================================================================
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { partitionByDuration, FILE_OVERHEAD_MS } from './duration-shard.mjs'
 
