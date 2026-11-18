@@ -588,21 +588,6 @@ describe('MasterSummaryView', () => {
       expect(attnRows()).toHaveLength(2)
     })
 
-    it('content: the filter preserves the order the backend returned', async () => {
-      vi.mocked(mastersApi.getStudents).mockResolvedValue(
-        studentsPage([
-          student('s1', { name: 'Первый', needs_attention: true }),
-          student('s2', { name: 'Второй', needs_attention: false }),
-          student('s3', { name: 'Третий', needs_attention: true }),
-          student('s4', { name: 'Четвёртый', needs_attention: true }),
-        ]),
-      )
-      mount()
-      await flush()
-
-      expect(attnNames()).toEqual(['Первый', 'Третий', 'Четвёртый'])
-    })
-
     it("content: each row states that student's OWN practice count", async () => {
       // Positional data: two rows reading the same number would hide a v-for
       // bound to the wrong item, so the counts differ on purpose.

@@ -58,6 +58,10 @@ def get_engine() -> AsyncEngine:
         _engine = create_async_engine(
             settings.database_url,
             echo=False,
+            # BE-190: the values of a statement are kept out of the text of
+            # its errors, and so out of every traceback in the journal --
+            # they are people's data (protocol 9.4).
+            hide_parameters=True,
             pool_size=10,
             max_overflow=20,
             pool_pre_ping=True,

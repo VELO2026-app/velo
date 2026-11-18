@@ -51,6 +51,12 @@ export function offWindowEvent<K extends keyof WindowEventMap>(
   window.removeEventListener(type, listener as EventListener, options)
 }
 
+/** Whether there is a document at all -- false once a test environment has
+ *  taken it away under a timer that outlived its test (FE-186). */
+export function hasDocument(): boolean {
+  return typeof document !== 'undefined'
+}
+
 /** document.hidden. */
 export function isDocumentHidden(): boolean {
   return document.hidden

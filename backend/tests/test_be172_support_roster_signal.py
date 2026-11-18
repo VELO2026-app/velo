@@ -60,6 +60,7 @@ from tests.helpers import (
     fresh_get,
     full_cleanup_range,
     login_user,
+    sent_data,
 )
 from tests.test_master_notifications import _profile_dir
 
@@ -105,6 +106,19 @@ async def _clean(db_session: AsyncSession):
     await _drain()
 
 
+# BE-202: a drop of the admin capability is refused for its last holder
+# (409 last_admin). A test that drops its own admin keeps this one in the
+# band as an explicit precondition, rather than leaning on whatever holders
+# other files left in the shared database.
+_KEEPER_TID = BAND_MIN + 9
+
+
+async def _keep_another_admin(client: AsyncClient, db_session: AsyncSession) -> None:
+    keeper = await _user(client, db_session, _KEEPER_TID)
+    keeper.role = "admin"
+    await db_session.commit()
+
+
 async def _user(client: AsyncClient, db_session: AsyncSession, tid: int, **kw) -> User:
     return (await _login(client, db_session, tid, **kw))[0]
 
@@ -140,7 +154,7 @@ async def _events(uid: UUID) -> list[OutboxEvent]:
 
 async def _sections(uid: UUID) -> list[dict]:
     return [
-        e.payload
+        sent_data(e)
         for e in await _events(uid)
         if e.event_type == EVENT_SECTION_MEMBERSHIP_CHANGED
     ]
@@ -182,7 +196,7 @@ class TestRoster:
             EVENT_GROUP_CHANGED,
             EVENT_SECTION_MEMBERSHIP_CHANGED,
         ]
-        section = events[-1].payload
+        section = sent_data(events[-1])
         assert set(section) == _COMMS_SECTION_FIELDS
         assert section == {**_SECTION_ADD, "operator_id": str(user.id)}
 
@@ -203,7 +217,7 @@ class TestRoster:
             EVENT_SECTION_MEMBERSHIP_CHANGED,
         ]
         assert events[0].payload["member"] is False
-        assert events[1].payload == {
+        assert sent_data(events[1]) == {
             **_SECTION_ADD, "member": False, "operator_id": str(user.id),
         }
 
@@ -263,7 +277,12 @@ class TestPaths:
         M drops the admin capability (role master, marker cleared) and
         leaves the profile as it was; A gives the capability back. The
         roster sees member False, then True.
+
+        BE-202: another admin is kept in the band -- M on the last holder
+        is refused now (test_be202_last_admin.py), and before BE-202 this
+        test passed on a lone admin because nothing counted the others.
         """
+        await _keep_another_admin(client, db_session)
         user = await _user(client, db_session, BAND_MIN + 4)
         assert await set_role.to_master(db_session, user, assume_yes=True)
         assert await set_role.to_admin(db_session, user, assume_yes=True)
@@ -289,7 +308,13 @@ class TestPaths:
     ) -> None:
         """scripts/seed.py ensure_master on a reused account that is an
         admin: the flip to master is the admin drop, projected like every
-        other path's -- group:admins and the roster both say False."""
+        other path's -- group:admins and the roster both say False.
+
+        BE-202: another admin is kept in the band -- the flip of the last
+        holder is refused now (test_be202_last_admin.py), and before
+        BE-202 this test passed on a lone admin because nothing counted
+        the others."""
+        await _keep_another_admin(client, db_session)
         user = await _user(client, db_session, BAND_MIN + 5)
         user.role = "admin"
         await db_session.commit()
@@ -412,7 +437,7 @@ async def _signals(thread_id: UUID) -> list[dict]:
     button opens (the fix moved the button from the user to the thread)."""
     p = OutboxEvent.payload
     return [
-        e.payload
+        sent_data(e)
         for e in (
             await fresh_execute(
                 select(OutboxEvent)

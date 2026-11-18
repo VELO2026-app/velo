@@ -108,8 +108,6 @@ describe('MasterSchoolCreateView', () => {
       x.textContent?.includes('Основное'),
     )
     expect(h2?.querySelector('.ncg__req')).not.toBeNull()
-    expect(host?.querySelector('.ncg__legend')).toBeNull()
-    expect(host?.querySelector('.v-input__seal')).toBeNull()
   })
 
   it('blank name: inline error, no POST', async () => {

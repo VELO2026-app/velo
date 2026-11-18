@@ -26,7 +26,13 @@
 #     the outbox row id);
 #   - all data values must be JSON scalars / JSON trees -- checked
 #     here so a producer bug dies in a velo test, not in the comms
-#     DLQ.
+#     DLQ;
+#   - BE-190: the row also keeps the request id the event was made in
+#     (REQUEST_ID_KEY in the payload -- a key of OURS, not of `data`);
+#     the relay takes it out of `data` and sends it as the envelope's
+#     `request_id` field (protocol 9.6). Kept in the payload because the
+#     table has no column for it and deploy-machine carries no migrations
+#     (par0 §14).
 # The constants are a MIRROR, not an import: velo must not import
 # comms code across the service boundary. Divergence found -> ASK,
 # do not silently fix either side (T0 handoff rule).
@@ -38,12 +44,16 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.events.models import OutboxEvent
+from app.core.middleware import current_request_id, new_request_id
 
 logger = structlog.get_logger()
 
 # -- Contract mirror (comms transport/events.py, frozen 3c) -------------------
 
 SCHEMA_VERSION = 1
+
+# The payload key the request id is kept under (BE-190, header above).
+REQUEST_ID_KEY = "_request_id"
 
 EVENT_NOTIFICATION_REQUEST = "notification_request"
 EVENT_USER_UPSERTED = "user_upserted"
@@ -161,11 +171,22 @@ async def emit_event(
             "outbox event data must not carry 'v' -- the schema "
             "version is stamped by emit_event"
         )
+    if REQUEST_ID_KEY in data:
+        raise ValueError(
+            f"outbox event data must not carry {REQUEST_ID_KEY!r} -- the "
+            "request id is stamped by emit_event"
+        )
     _validate_json_tree(data, path="data")
 
+    # The request being served, or -- outside one (a worker) -- a fresh
+    # id: every event of the stream carries one (protocol 9.6).
     event = OutboxEvent(
         event_type=event_type,
-        payload={"v": SCHEMA_VERSION, **data},
+        payload={
+            "v": SCHEMA_VERSION,
+            **data,
+            REQUEST_ID_KEY: current_request_id() or new_request_id(),
+        },
     )
     session.add(event)
     # Assign the BIGSERIAL id now so events emitted later in the same

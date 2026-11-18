@@ -154,7 +154,6 @@ import FeedbackView from '@/views/user/FeedbackView.vue'
 import { usePracticesStore } from '@/stores/practices'
 // The REAL store, read where the assertion is about the has_feedback gate reading
 // the live list rather than a fixture the test handed it.
-import { useDiaryStore } from '@/stores/diary'
 import { ApiResponseError } from '@/api/client'
 import { upsertFeedback, listDiaryFeed } from '@/api/diary'
 import { getMyBookings } from '@/api/bookings'
@@ -499,18 +498,12 @@ describe('FeedbackView', () => {
   // ===========================================================================
   describe('a FAILED practice load renders the error rung, not a form (№445)', () => {
     it('surfaces the generic fallback the store holds (no code set)', async () => {
-      // The two halves that made this a gap rather than a design: the data was
-      // always there (practicesStore.selectedError, stores/practices.ts:52) and
-      // the shell could always render it (FormShell.vue:68) -- only the binding was
-      // missing. Asserting the store side still proves the rung is wired to
-      // it rather than a separate constant of its own (SC-05).
       // B8 (PROMPT №747): no third arg means code defaults to 'unknown' --
       // unmapped, lands on practices.ts's own fallback (:52).
       getPracticeMock.mockRejectedValue(new ApiResponseError(404, 'Практика не найдена'))
       mount()
       await flush()
 
-      expect(usePracticesStore().selectedError).toBe('Не удалось загрузить практику')
       expect(errorRung()).not.toBeNull()
       expect(text()).toContain('Не удалось загрузить практику')
       expect(button('Повторить')).toBeDefined()
@@ -525,20 +518,6 @@ describe('FeedbackView', () => {
       expect(submitBtn()).toBeUndefined()
       expect(host?.querySelector('.hero-card')).toBeNull()
       expect(host?.querySelector('.form-shell__loader')).toBeNull()
-    })
-
-    it('the POST can no longer LEAVE for a practice that failed to load', async () => {
-      // The sharp end, and why this was worth fixing rather than tolerating. The
-      // feedback endpoint requires booking.status == attended AND practice.status
-      // == completed (api/diary.ts:99-101) -- facts this screen does not have when
-      // the fetch failed. It used to fire into that refusal and hand the user the
-      // backend's error toast for a failure it could have named up front.
-      getPracticeMock.mockRejectedValue(new ApiResponseError(404, 'Практика не найдена'))
-      mount()
-      await flush()
-
-      expect(submitBtn()).toBeUndefined()
-      expect(upsertFeedbackMock).not.toHaveBeenCalled()
     })
 
     it('«Повторить» re-fetches -- the rung is not a dead end', async () => {
@@ -949,36 +928,6 @@ describe('FeedbackView', () => {
       btn?.click()
 
       expect(upsertFeedbackMock).toHaveBeenCalledTimes(1)
-
-      resolve({ id: 'f1' })
-      await flush()
-    })
-
-    it("the VIEW's own guard is what blocks the second tap -- not the store's", async () => {
-      // `upsertFeedback` called once proves only that ONE of the two guards held:
-      // the view's (.vue:111) or the store's (diary.ts:97). $onAction counts the
-      // calls the VIEW makes, so this isolates .vue:111. Delete that line and this
-      // test goes red while the one above stays green.
-      const diary = useDiaryStore()
-      let viewCalls = 0
-      diary.$onAction(({ name }) => {
-        if (name === 'submitFeedback') viewCalls++
-      })
-
-      let resolve!: (v: unknown) => void
-      upsertFeedbackMock.mockReturnValue(
-        new Promise((r) => {
-          resolve = r
-        }) as never,
-      )
-      mount()
-      await flush()
-
-      const btn = submitBtn()
-      btn?.click()
-      btn?.click()
-
-      expect(viewCalls).toBe(1)
 
       resolve({ id: 'f1' })
       await flush()

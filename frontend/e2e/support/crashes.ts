@@ -18,6 +18,9 @@
 import type { Page } from '@playwright/test'
 import { GLOBAL_ALLOWLIST } from './allowlist'
 
+/** A Playwright engine, as `browserType().name()` names it. */
+export type BrowserName = 'chromium' | 'firefox' | 'webkit'
+
 /** What kind of breakage a signal reports. */
 export type SignalKind = 'exception' | 'reported' | 'console' | 'api' | 'asset' | 'screen' | 'blank'
 
@@ -44,6 +47,14 @@ export interface AllowedApi {
  */
 export interface CrashAllowance {
   reason: string
+  /**
+   * FE-188: the engines this allowance applies in; absent -- every engine.
+   * For what one engine prints and the others never do (a browser warning
+   * about our own markup): the same text from another engine stays a signal.
+   * A page whose engine cannot be read (no browser object) gets no
+   * engine-scoped allowance.
+   */
+  browsers?: BrowserName[]
   /** console.error texts to ignore. */
   console?: RegExp[]
   /** 4xx/5xx API answers to ignore. */
@@ -95,6 +106,8 @@ export interface CrashWatch {
 export async function watchCrashes(page: Page): Promise<CrashWatch> {
   const raw: CrashSignal[] = []
   const allowances: CrashAllowance[] = [...GLOBAL_ALLOWLIST]
+  // FE-188: the engine is the page's own, not the project's name.
+  const browser = page.context().browser()?.browserType().name() as BrowserName | undefined
   let screenCheck = true
   const origin = (): string | null => {
     try {
@@ -184,7 +197,7 @@ export async function watchCrashes(page: Page): Promise<CrashWatch> {
       if (!allowance.reason?.trim()) throw new Error('crashes.allow: a reason is required')
       allowances.push(allowance)
     },
-    signals: () => collapse(raw.filter((s) => !isAllowed(s, allowances))),
+    signals: () => collapse(raw.filter((s) => !isAllowed(s, allowances, browser))),
     skipScreenCheck(reason) {
       if (!reason.trim()) throw new Error('crashes.skipScreenCheck: a reason is required')
       screenCheck = false
@@ -246,8 +259,18 @@ export async function inspectScreen(page: Page): Promise<CrashSignal[]> {
   return found
 }
 
-function isAllowed(signal: CrashSignal, allowances: CrashAllowance[]): boolean {
+/**
+ * Whether one of `allowances` accepts `signal` on `browser` (exported for the
+ * detector's self-checks). An allowance scoped to engines (`browsers`)
+ * applies only on those, and never when the engine is unknown.
+ */
+export function isAllowed(
+  signal: CrashSignal,
+  allowances: CrashAllowance[],
+  browser: BrowserName | undefined,
+): boolean {
   return allowances.some((a) => {
+    if (a.browsers && (browser === undefined || !a.browsers.includes(browser))) return false
     switch (signal.kind) {
       case 'console':
         return a.console?.some((re) => re.test(signal.message)) ?? false

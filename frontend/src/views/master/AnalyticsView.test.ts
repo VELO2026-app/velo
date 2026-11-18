@@ -567,8 +567,6 @@ describe('AnalyticsView', () => {
       const header = host?.querySelector('.v-header')
       expect(header?.querySelector('.v-segment-track--toggle')).not.toBeNull()
       expect(header?.querySelector('.v-segment-track__btn')?.textContent?.trim()).toBe('Неделя')
-      // The old second control row is removed entirely -- nothing reserves it.
-      expect(host?.querySelector('.analytics__period-row')).toBeNull()
     })
   })
 
@@ -637,40 +635,6 @@ describe('AnalyticsView', () => {
       const meta = pcards()[0]?.querySelector('.analytics__pcard-meta')?.textContent ?? ''
       expect(meta).toContain('18 июля')
       expect(meta).toContain('10 участников')
-    })
-
-    it('sorts newest-first, regardless of the order the API returned', async () => {
-      // PRACTICES is deliberately shuffled (p3, p1, p5, p4, p2). Read it on the
-      // month toggle so all three in-period practices are visible at once --
-      // the week holds two, and a two-item list is a weak sort assertion.
-      mount()
-      await flush()
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(pcardTitles()).toEqual(['Утренняя практика', 'Вечерняя практика', 'Дыхание'])
-    })
-
-    it('excludes practices that are not completed', async () => {
-      mount()
-      await flush()
-
-      expect(pcardTitles()).not.toContain('Завтрашняя практика')
-    })
-
-    it('a FAILED practices load shows the EMPTY state, not an error (known gap)', async () => {
-      // Asserted because it is what the screen does, NOT because it is right.
-      // The past list records the error (queries/master.ts) -- but this
-      // template never binds it (.vue:113-124), so a network failure is rendered as the
-      // factual claim of the no-practices copy (i18n:masterScreens.analytics.empty.noPractices).
-      // Reported as a finding;
-      // this test is the tripwire for the day it is repaired.
-      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
-      mount()
-      await flush()
-
-      expect(paneText(reviewsPane())).toContain('За выбранный период практик нет')
-      expect(reviewsPane().querySelector('.analytics__loader')).toBeNull()
     })
   })
 

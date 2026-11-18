@@ -1,0 +1,79 @@
+# =============================================================================
+# VELO CI -- `pridem check`: the repository checked by the deploy machine
+# itself (BE-194, DM-57; protocol 10.1)
+#
+# WHY. backend/tests/test_primer_env.py checks primer.yaml and compose as WE
+# read them. `pridem check` runs the machine's own loaders and lists on them:
+# contract 3 for primer.yaml and primer.lock, the agreed egress list, the
+# compose of every stack against what the machine allows, every compose
+# variable ${VAR:?} and a key of env. Its complaints show up on every push,
+# not on the day velo-test is rolled out.
+#
+# The step's result IS the check's exit code: 0 green; 1 a violation; 2 the
+# check could not run in full (no `docker compose`) -- red too. No pipe and
+# no `|| true` after it.
+#
+# WHAT IT DOES NOT SAY.
+#   - primer.lock: only its form and the range are checked; the tag and the
+#     commit are checked by the box over the network. A placeholder commit of
+#     seven hex digits passes here.
+#   - packages: no package directory is given, so the skin slot is reported
+#     as not checked -- the step stays green.
+#
+# No `paths` filter: what the check reads is named by primer.yaml itself
+# (compose files of the stacks, build contexts, bind sources), so a static
+# list would go stale. The check needs no value and no secret.
+# =============================================================================
+name: Primer check
+
+on:
+  push:
+    branches: [deploy-machine]
+  pull_request:
+    branches: [deploy-machine]
+
+concurrency:
+  group: primer-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: pridem check -- the repository as the deploy machine reads it
+    # The runner image the machine's README names: it has `docker compose`
+    # (the binary is enough; the check starts no daemon).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # The machine pinned by its release, as its README has it: the tag, the
+      # sha256 of its wheel and of requirements.lock at the tag (BE-194, the
+      # machine's first release v0.1.0, DM-103). Not the final pin: the
+      # release velo-test is installed with is named by Primer separately.
+      PRIDEM_TAG: v0.1.0
+      PRIDEM_WHEEL_SHA256: "daf26ee4b85b4d6ca253b8691bd0efa29b8f0cdf3508a10af032f19c0e4c2e0e"
+      PRIDEM_LOCK_SHA256: "8c3a137cab01cdff7044b3caa1af3ad0d82b45e7df2917993a2d4338f243b85e"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: velo
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: pridem, pinned by its release
+        run: |
+          base=https://github.com/inzoddwetrust/primer
+          wheel="pridem-${PRIDEM_TAG#v}-py3-none-any.whl"
+          curl -fsSLO "$base/releases/download/$PRIDEM_TAG/$wheel"
+          curl -fsSL -o requirements.lock "https://raw.githubusercontent.com/inzoddwetrust/primer/$PRIDEM_TAG/requirements.lock"
+          echo "$PRIDEM_WHEEL_SHA256  $wheel" | sha256sum -c --strict
+          echo "$PRIDEM_LOCK_SHA256  requirements.lock" | sha256sum -c --strict
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install --no-deps "$wheel"
+          pridem version
+
+      - name: pridem check
+        run: pridem check velo
