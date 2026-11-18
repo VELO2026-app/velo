@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "stream",
+  "globalDependencies": ["pnpm-lock.yaml", "pnpm-workspace.yaml"],
+  "tasks": {
+    "lint": {},
+    "format:check": {},
+    "typecheck": {},
+    "test": {},
+    "build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}

@@ -23,6 +23,7 @@
     "test:watch": "vitest",
     "tokens:sync": "node scripts/sync-figma-variables.mjs --rest",
     "test:coverage": "vitest run --coverage",
+    "test:shard": "VITEST_SHARD=1 vitest run --coverage --reporter=blob --reporter=default",
     "coverage:budget": "node scripts/coverage-budget.mjs",
     "e2e:smoke": "playwright test --project=smoke",
     "e2e:sweep": "playwright test --project=sweep",

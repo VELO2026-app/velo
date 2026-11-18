@@ -1,0 +1,49 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    // The frontend resolves @velo/ui to the kit's SOURCES (vite/vitest/tsconfig
+    // aliases), and the lint scripts walk packages/velo-ui/src themselves, so
+    // those files are inputs of every frontend task even though the package
+    // graph would not hash them. spec-coverage reads the root tz-*.md.
+    "lint": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/velo-ui/**",
+        "!$TURBO_ROOT$/packages/velo-ui/dist/**",
+        "!$TURBO_ROOT$/packages/velo-ui/node_modules/**",
+        "!$TURBO_ROOT$/packages/velo-ui/.turbo/**",
+        "!$TURBO_ROOT$/packages/velo-ui/**/*.tsbuildinfo",
+        "$TURBO_ROOT$/tz-*.md"
+      ]
+    },
+    "typecheck": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/velo-ui/src/**"]
+    },
+    // build-matrix.test.ts reads the root editions.json.
+    "test": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/velo-ui/src/**",
+        "$TURBO_ROOT$/editions.json"
+      ]
+    },
+    // One vitest shard (FE-204): CI runs `turbo run test:shard -- --shard=N/3`;
+    // the shard argument is part of the hash. The blob in .vitest-reports
+    // carries the shard's tests and coverage to the test-report merge job, so a
+    // cache hit restores exactly what the artifact upload needs.
+    "test:shard": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/velo-ui/src/**",
+        "$TURBO_ROOT$/editions.json"
+      ],
+      "outputs": [".vitest-reports/**"]
+    },
+    // Not cached: the app build reads VITE_* env, the deploy skin and .env
+    // files (validate-skin, build-matrix) -- inputs not worth guessing yet.
+    "build": {
+      "cache": false
+    }
+  }
+}
