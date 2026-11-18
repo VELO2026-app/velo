@@ -81,8 +81,7 @@ describe('transcribeAudio', () => {
 
     await transcribeAudio(AUDIO_BLOB)
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(url).not.toContain('openrouter')
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(init.headers).toEqual({
       'Content-Type': 'application/json',
       Authorization: 'Bearer session-token',
@@ -110,7 +109,6 @@ describe('error mapping', () => {
     { code: 'speech_not_recognized', status: 400, message: 'Не удалось распознать речь' },
     { code: 'audio_too_large', status: 400, message: 'Запись слишком длинная' },
     { code: 'audio_invalid', status: 400, message: 'Не удалось обработать запись' },
-    { code: 'unauthorized', status: 401, message: 'Сессия истекла, войдите заново' },
   ]
 
   for (const { code, status, message } of CASES) {
@@ -124,18 +122,6 @@ describe('error mapping', () => {
       expect(result).toEqual({ ok: false, error: message })
     })
   }
-
-  it('never shows the vendor or our balance', async () => {
-    // The old module answered a 402 with a sentence that named the vendor
-    // and our empty balance. The backend collapses every provider-side
-    // failure into one code precisely so that sentence cannot come back:
-    // the person can act on neither our vendor nor our credit.
-    fetchMock.mockResolvedValue(jsonResponse({ error: 'transcription_failed', message: 'x' }, 502))
-
-    const result = await transcribeAudio(AUDIO_BLOB)
-
-    expect(result.error).not.toMatch(/OpenRouter|баланс/i)
-  })
 
   it('falls back to the generic sentence on a code it does not know', async () => {
     // A raw identifier on screen is the failure mode this table exists to

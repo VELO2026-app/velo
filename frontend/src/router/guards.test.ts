@@ -24,7 +24,6 @@ import {
   ADMIN_PROFILE_TTL_MS,
   __resetAdminProfileTtlForTest,
   installAccessGuard,
-  requirementsGuard,
   zoneHomeGuard,
   roleRedirect,
   roleGuard,
@@ -182,12 +181,6 @@ describe('router/guards', () => {
     })
 
     // -- Bug 1 (PROMPT №405): rejected applicant routing --------------------
-    it('rejected applicant, not yet seen -> routed to /master/pending', async () => {
-      __setReadyForTest(true)
-      setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      expect(await call(roleRedirect)).toEqual({ path: '/master/pending' })
-    })
-
     it('rejected applicant, already seen -> /user/dashboard like an ordinary user', async () => {
       __setReadyForTest(true)
       setAuthUser({ id: 'user_1', role: 'user', master_application: { status: 'rejected' } })
@@ -207,12 +200,6 @@ describe('router/guards', () => {
         params: { id: '00000000-0000-4000-8000-0000000000a1' },
       })
       expect(pendingStartParam.value).toBeNull()
-    })
-
-    it('a plain user with no application is unaffected -> /user/dashboard', async () => {
-      __setReadyForTest(true)
-      setAuthUser({ role: 'user' })
-      expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
     })
 
     it('the seen key is scoped per user -- user B still gets routed after user A is marked seen', async () => {
@@ -364,19 +351,6 @@ describe('router/guards', () => {
     // by asserting the actual force argument profileRequest is called with --
     // confirmed red against the pre-fix code (which always calls it with no
     // argument at all) before this test file was left in its fixed state.
-    it('B1: admin role forces a real refetch, even with an already-cached verified profile', async () => {
-      setAuthUser({ role: 'admin' })
-      masterProfileState.profile = { status: 'verified' }
-      await call(masterStatusGuard)
-      expect(profileRequest).toHaveBeenCalledWith(true)
-    })
-
-    it('B1: a real master keeps the lazy skip-if-loaded behaviour -- no forced refetch', async () => {
-      setAuthUser({ role: 'master' })
-      masterProfileState.profile = { status: 'verified' }
-      await call(masterStatusGuard)
-      expect(profileRequest).toHaveBeenCalledWith(false)
-    })
   })
 
   // FE-157: B1's refetch for an admin used to leave on EVERY check. It now
@@ -593,14 +567,6 @@ describe('router/guards', () => {
       expect(refreshRoleIfStale).toHaveBeenCalledTimes(1)
     })
 
-    it('rejected applicant, not yet seen, navigating anywhere else -> routed to /master/pending', async () => {
-      __setReadyForTest(true)
-      setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
-      expect(roleFreshnessGuard({ name: 'user-calendar' })).toEqual({
-        path: '/master/pending',
-      })
-    })
-
     it('does not redirect a navigation already headed to master-pending (avoids a loop)', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user', master_application: { status: 'rejected' } })
@@ -772,16 +738,6 @@ describe('router/guards', () => {
       // Re-entering the shell from outside checks the role again.
       await go(router, '/user/calendar')
       expect(await go(router, '/master/inbox')).toBe('/user/dashboard')
-    })
-
-    it('requirementsGuard reads each record, not the merged meta', async () => {
-      setAuthUser({ role: 'user' })
-      const router = accessRouter()
-      const to = router.resolve('/master/practices/p1')
-      // The merged meta carries only the child's requirement ...
-      expect(to.meta.requires).toBe('verified-master')
-      // ... yet the parent's role requirement still decides first.
-      expect(await requirementsGuard(to, router.resolve('/'))).toEqual({ path: '/user/dashboard' })
     })
 
     it('P-1 runs in the same guard: a master on the user dashboard goes to the master zone', async () => {

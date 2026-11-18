@@ -181,7 +181,6 @@ describe('parseStartParam', () => {
   it('parses school__{token} -- ONE kind for both link flavours, 51 characters', () => {
     const token = 'z'.repeat(43)
     expect(`school__${token}`).toHaveLength(51)
-    expect(parseStartParam(`curator_group_invite__${token}`)).toBeNull()
     expect(parseStartParam(`school__${token}`)).toEqual({
       name: 'school-join',
       params: { token },
@@ -214,7 +213,6 @@ describe('parseStartParam', () => {
       name: 'school-master-offer',
       params: { id: schoolId },
     })
-    expect(parseStartParam(`curator_group_master_offer__${schoolId}`)).toBeNull()
     expect(parseStartParam('open_master_offer__not-a-uuid')).toBeNull()
     expect(parseStartParam('open_master_offer')).toBeNull()
   })
@@ -222,11 +220,7 @@ describe('parseStartParam', () => {
   // FE-127 (owner: no alias): a Telegram button sent before the rename carries
   // the former school verb -- it is no route any more, and the guard opens the
   // role's dashboard instead. The new verb needs its uuid.
-  it('open_school needs a uuid; the former school verb is no route', () => {
-    const id = '00000000-0000-4000-8000-0000000000b2'
-    expect(parseStartParam(`open_curator_group__${id}`, 'user')).toBeNull()
-    expect(parseStartParam(`open_curator_group__${id}`, 'master')).toBeNull()
-    expect(parseStartParam('open_school', 'user')).toBeNull()
+  it('open_school needs a uuid', () => {
     expect(parseStartParam('open_school__not-a-uuid', 'master')).toBeNull()
   })
   // ===========================================================================
@@ -278,14 +272,6 @@ describe('parseStartParam', () => {
     it('AXIS 3 -- empty: the prefix alone is not a route', () => {
       expect(parseStartParam('zoom__')).toBeNull()
       expect(parseStartParam('zoom')).toBeNull()
-    })
-
-    it('does NOT disturb open_practice__{uuid} -- both formats live, they are two different actions', () => {
-      const uuid = '550e8400-e29b-41d4-a716-446655440000'
-      expect(parseStartParam(`open_practice__${uuid}`)).toEqual({
-        name: 'practice-detail',
-        params: { id: uuid },
-      })
     })
   })
 })

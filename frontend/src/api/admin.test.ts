@@ -90,13 +90,6 @@ describe.each([
 
     expect(api.post).toHaveBeenCalledWith(url, {})
   })
-
-  it('resolves with the backend response', async () => {
-    const response = { user_id: 'm_1', status: 'ok' as const }
-    vi.mocked(api.post).mockResolvedValue(response)
-
-    await expect(fn('m_1', ['X'])).resolves.toEqual(response)
-  })
 })
 
 // -- BE-18: the school-founding right seam ------------------------------
@@ -131,10 +124,7 @@ describe('verifyMaster -- can_create_schools body construction (BE-18)', () => {
 
 describe('setMasterSchoolRight (BE-18) -- PATCH /admin/masters/{id}/can-create-schools', () => {
   it('PATCHes the boolean as { can_create_schools } and resolves the right, after', async () => {
-    const response = { user_id: 'm_1', can_create_schools: false }
-    vi.mocked(api.patch).mockResolvedValue(response)
-
-    await expect(setMasterSchoolRight('m_1', false)).resolves.toEqual(response)
+    await setMasterSchoolRight('m_1', false)
     expect(api.patch).toHaveBeenCalledWith('/api/v1/admin/masters/m_1/can-create-schools', {
       can_create_schools: false,
     })

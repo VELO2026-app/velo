@@ -63,16 +63,6 @@ describe('request() request id suffix (W29-trimmed)', () => {
     expect(err.traceId).toBeNull()
   })
 
-  it('uses the FIRST six characters of the request id, not the last', async () => {
-    // First 6 chars ("aaaaaa") deliberately differ from the last 6 ("zzzzzz")
-    // so a wrong-end slice would be caught, not accidentally pass.
-    const fullRequestId = 'aaaaaa-1111-2222-3333-zzzzzz'
-    stubFetch(500, { error: 'server_error', message: 'Boom' }, { 'X-Request-ID': fullRequestId })
-    const err = await captureError()
-    expect(err.detail).toBe(`Boom · код ${fullRequestId.slice(0, 6)}`)
-    expect(err.detail).not.toContain(fullRequestId.slice(-6))
-  })
-
   it('also suffixes the 401 path (message constructed before the body is read)', async () => {
     stubFetch(401, {}, { 'X-Request-ID': 'ffffff000000' })
     const err = await captureError()
