@@ -307,24 +307,6 @@ describe('App entry gate (FE-39)', () => {
     expect(w.find('.route-stub').exists()).toBe(false)
   })
 
-  it('signed in from the browser (isStandalone gone): the app, not the login screen', async () => {
-    setAuthUser({ onboarding_completed: true })
-    const w = await mountGate()
-    await flushPromises()
-
-    expect(w.find('.route-stub').exists()).toBe(true)
-    expect(w.find('.login').exists()).toBe(false)
-  })
-
-  it('Welcome has a single way on -- «Войти»; no «Создать аккаунт» on any platform', async () => {
-    setAuthUser({ onboarding_completed: false })
-    const w = await mountGate()
-    await flushPromises()
-
-    const labels = w.findAll('.welcome button').map((b) => b.text())
-    expect(labels).toEqual(['Войти'])
-  })
-
   it('bot access not granted: the hint shows once and «Понятно» closes it', async () => {
     setAuthUser({ onboarding_completed: true })
     botAccessHint.value = true

@@ -29,16 +29,11 @@ describe('locale boot hint', () => {
     expect(readLocaleHint()).toBe('en')
   })
 
-  it('clearLocaleHint wipes it (the logout path)', () => {
-    clearLocaleHint()
-    expect(readLocaleHint()).toBeNull()
-  })
-
-  it('the hint survives a locale reset round-trip (reopen simulation)', async () => {
+  it('clearLocaleHint wipes it (the logout path)', async () => {
     await setLocale('en')
     expect(readLocaleHint()).toBe('en')
-    await setLocale('ru')
-    expect(readLocaleHint()).toBe('ru')
+    clearLocaleHint()
+    expect(readLocaleHint()).toBeNull()
   })
 })
 

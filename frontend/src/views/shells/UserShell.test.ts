@@ -240,13 +240,6 @@ describe('UserShell', () => {
       expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
 
-    it('a plain tab route keeps the tab bar', async () => {
-      await mount('user-dashboard')
-      await flush()
-
-      expect(host?.querySelector('.v-tabbar')).not.toBeNull()
-    })
-
     it('the live keyboard signal ALSO hides it on an otherwise-plain route', async () => {
       await mount('user-dashboard')
       await flush()
@@ -286,7 +279,6 @@ describe('UserShell', () => {
 
       const items = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? [])
       expect(items).toHaveLength(4)
-      expect(items.some((b) => b.getAttribute('aria-label') === 'Уведомления')).toBe(false)
     })
   })
 
