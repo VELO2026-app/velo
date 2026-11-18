@@ -99,6 +99,17 @@ export default defineConfig({
     // Two projects (FE-157 5C): the happy-dom environment cost 77 of 99 s.
     // Pure utils/platform tests need no DOM and run under plain node.
     projects: [
+      // FE-204: the build tooling's own tests (scripts/lib), formerly
+      // node:test -- one runner for every test without a browser.
+      {
+        extends: true,
+        test: {
+          name: 'scripts',
+          environment: 'node',
+          include: ['scripts/**/*.test.mjs'],
+          testTimeout: 5000,
+        },
+      },
       {
         extends: true,
         test: {

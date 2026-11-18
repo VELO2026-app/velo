@@ -1,5 +1,5 @@
-// FE-133 -- texts package check (node:test; part of `pnpm test`).
-import { test } from 'node:test'
+// FE-133 -- texts package check (Vitest, the `scripts` project; part of `pnpm test`).
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
