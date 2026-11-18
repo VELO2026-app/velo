@@ -35,6 +35,16 @@ export type Tokens = Partial<Record<Person, string>>
 /** Route-parameter values by key (PARAM_KEYS, e2e/sweep/routes.ts). */
 export type Params = Partial<Record<ParamKey, string>>
 
+/**
+ * params.json: the values every project shares, and (FE-188) the values that
+ * belong to ONE project -- a single-use token two projects of one run cannot
+ * both spend (PROJECT_PARAM_KEYS, e2e/sweep/routes.ts) -- by project name.
+ */
+export interface ParamsFile {
+  common: Params
+  byProject: Record<string, Params>
+}
+
 function read<T>(file: string, fallback: T): T {
   if (!existsSync(file)) return fallback
   try {
@@ -51,8 +61,16 @@ function write(file: string, value: unknown): void {
 
 export const readTokens = (): Tokens => read<Tokens>(TOKENS, {})
 export const writeTokens = (tokens: Tokens): void => write(TOKENS, tokens)
-export const readParams = (): Params => read<Params>(PARAMS, {})
-export const writeParams = (params: Params): void => write(PARAMS, params)
+/**
+ * The route parameters `project` sees: the shared values with its own laid
+ * over them. Without a project -- the shared values only; a per-project key
+ * is then absent, and a route that needs it fails as "no value".
+ */
+export function readParams(project?: string): Params {
+  const file = read<Partial<ParamsFile>>(PARAMS, {})
+  return { ...file.common, ...(project ? file.byProject?.[project] : undefined) }
+}
+export const writeParams = (params: ParamsFile): void => write(PARAMS, params)
 
 /** The token of a sweep role; throws when the setup has not run. */
 export function tokenOf(role: SweepRole): string {

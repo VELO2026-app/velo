@@ -49,6 +49,7 @@ import { ADMIN_TABS, MASTER_TABS, USER_TABS } from '@/router/tabs'
 import {
   addRootClass,
   flushRootStyle,
+  hasDocument,
   isWebKitEngine,
   removeRootClass,
   rootDurationMs,
@@ -133,7 +134,9 @@ function endLeave(): void {
   leaveTimer = null
   if (!leaving) return
   leaving = false
-  removeRootClass('vt-leave')
+  // A safety timer can outlive the document it was set for (a test's
+  // environment torn down under it, FE-186): then there is no class to take.
+  if (hasDocument()) removeRootClass('vt-leave')
 }
 
 /** Fade the current screen + header out; resolves when they are invisible.
@@ -157,7 +160,23 @@ let fallbackTimer: ReturnType<typeof setTimeout> | null = null
 function clearFallback(): void {
   if (fallbackTimer !== null) clearTimeout(fallbackTimer)
   fallbackTimer = null
-  for (const cls of fallbackClasses) removeRootClass(cls)
+  // As endLeave: the timer may fire after its document is gone (FE-186).
+  if (hasDocument()) {
+    for (const cls of fallbackClasses) removeRootClass(cls)
+  }
+  fallbackClasses = []
+}
+
+/** TEST-ONLY. Stop the two timers of a screen change and forget their state,
+ *  so none outlives its test (FE-186): the fade-out's safety timer and the
+ *  fade-in's. Touches no document -- the classes are the test's to remove. */
+export function __resetViewTransitionsForTest(): void {
+  if (leaveTimer !== null) clearTimeout(leaveTimer)
+  leaveTimer = null
+  leaving = false
+  leaveUntil = 0
+  if (fallbackTimer !== null) clearTimeout(fallbackTimer)
+  fallbackTimer = null
   fallbackClasses = []
 }
 

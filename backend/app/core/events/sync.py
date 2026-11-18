@@ -41,15 +41,16 @@
 # THE ROSTER IS A GATE IN comms, NOT ONLY AN ADDRESS LIST. comms reads a
 # section's roster in three places (messaging/membership.py): who sees the
 # section's unclaimed pool, who may claim a thread or change its status,
-# and whom the pool push pings. A section with members is served by its
-# members only -- an admin missing from the roster cannot claim a support
-# thread. A section with NO members is served by ANY operator: that is
-# comms' definition, not a fallback, and it is what velo had before the
-# roster existed. It is reachable again when the last admin loses the
-# capability; the support pool is then kept from masters only by the
-# chats proxy's own filter (chats/router.py, _keep_only_user_form_threads),
-# and no velo route lets a master claim or change the status of a support
-# thread (the one claim proxy is support/router.py, admin-only).
+# and whom the pool push pings. comms 3.14 tells two states apart: a
+# section whose roster was NEVER declared is served by any operator; once
+# a `member: true` has declared it, the section is served by its members
+# only -- an admin missing from the roster cannot claim a support thread
+# -- and, once they are all removed, by NOBODY: the pool is seen by no
+# one, no thread can be claimed, no new message wakes anybody. The first
+# admin velo projects declares `support`; from then on the support queue
+# lives only while at least one admin capability does. So velo never lets
+# the last one go: every path that drops the capability refuses its last
+# holder with 409 last_admin (LOCK ORDER in app/modules/users/service.py).
 #
 # Call sites pass capability BEFORE/AFTER around their status/role
 # write and this module emits ONLY on the delta -- so a no-op write

@@ -59,7 +59,8 @@ def telegram(monkeypatch: pytest.MonkeyPatch) -> FakeTelegram:
 
 @pytest.fixture(autouse=True)
 def configured(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "cors_origins", FRONT)
+    # BE-192: the frontend origin is https://<domains.frontend>.
+    monkeypatch.setattr(settings, "domain_frontend", FRONT.removeprefix("https://"))
     monkeypatch.setattr(settings, "telegram_login_client_id", TG_CLIENT_ID)
     monkeypatch.setattr(settings, "telegram_login_client_secret", TG_SECRET)
 
@@ -107,70 +108,22 @@ async def _user(db_session: AsyncSession, tid: int) -> User | None:
 
 
 # ---------------------------------------------------------------------------
-# The return address: the ONE https origin in CORS_ORIGINS
+# The return address: the frontend's own origin (BE-192)
 # ---------------------------------------------------------------------------
+#
+# The ways the return address used to be missing -- an empty, wildcard,
+# two-address or http CORS_ORIGINS, no Telegram login keys -- are gone with
+# BE-192: the frontend host and both keys are required at start, so browser
+# sign-in is always configured and has no 404 login_not_configured.
 
 
-@pytest.mark.parametrize(
-    ("cors", "expected"),
-    [
-        (FRONT, RETURN),
-        (f"{FRONT}, ", RETURN),  # an empty entry is not an address
-        (
-            "https://app.velo.test:8443",
-            "https://app.velo.test:8443/auth/telegram/return",
-        ),
-        ("", None),  # emptiness
-        ("https://a.velo.test,https://b.velo.test", None),  # two addresses
-        ("http://app.velo.test", None),  # not https
-        ("*", None),  # the development wildcard
-        (f"{FRONT}/", None),  # a path -- not an origin
-        (f"{FRONT}?x=1", None),
-        ("https://user:pw@app.velo.test", None),
-    ],
-)
-def test_the_return_address_is_the_single_https_origin(
-    monkeypatch: pytest.MonkeyPatch, cors: str, expected: str | None
-) -> None:
-    monkeypatch.setattr(settings, "cors_origins", cors)
-    assert browser_login.return_url() == expected
-
-
-@pytest.mark.parametrize(
-    "cors",
-    ["", "https://a.velo.test,https://b.velo.test", "http://app.velo.test"],
-    ids=["empty", "two-addresses", "http"],
-)
-async def test_not_exactly_one_https_origin_is_not_configured(
-    client: AsyncClient,
+def test_the_return_address_is_the_frontend_origin(
     monkeypatch: pytest.MonkeyPatch,
-    telegram: FakeTelegram,
-    cors: str,
 ) -> None:
-    started = await _start(client)  # while configured
-    monkeypatch.setattr(settings, "cors_origins", cors)
-
-    start = await client.post(START, json={"mark": MARK})
-    assert start.status_code == 404
-    assert start.json()["error"] == "login_not_configured"
-
-    complete = await _complete(client, started["state"], 74100)
-    assert complete.status_code == 404
-    assert complete.json()["error"] == "login_not_configured"
-
-    # The 404 took nothing: configured again, the sign-in still completes.
-    monkeypatch.setattr(settings, "cors_origins", FRONT)
-    ok = await _complete(client, started["state"], 74100)
-    assert ok.status_code == 200, ok.text
-
-
-async def test_no_telegram_login_keys_is_not_configured(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(settings, "telegram_login_client_secret", "")
-    resp = await client.post(START, json={"mark": MARK})
-    assert resp.status_code == 404
-    assert resp.json()["error"] == "login_not_configured"
+    assert browser_login.return_url() == RETURN
+    # It follows the instance's host, not a literal.
+    monkeypatch.setattr(settings, "domain_frontend", "other.velo.test")
+    assert browser_login.return_url() == "https://other.velo.test/auth/telegram/return"
 
 
 # ---------------------------------------------------------------------------
