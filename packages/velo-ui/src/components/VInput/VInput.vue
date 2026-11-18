@@ -18,9 +18,13 @@
          placeholder is not a substitute -- it disappears on typing and is not
          announced the way a label is) but visually hides it, for a screen that
          wants the placeholder alone to carry the visible hint. Off by default —
-         every existing caller keeps the visible label, byte-identical. -->
+         every existing caller keeps the visible label, byte-identical.
+         FE-205: keyed on the floating path ACTUALLY rendering (isFloating()), not
+         on the prop -- floatingLabel + a prefix/suffix slot falls back to the
+         affix path, which has no label of its own, so the external one stays
+         and the field keeps its accessible name. -->
     <label
-      v-if="label && !floatingLabel"
+      v-if="label && !isFloating()"
       class="v-input__label"
       :class="{ 'v-input__label--visually-hidden': hideLabel }"
       :for="fieldId"
@@ -33,7 +37,7 @@
            J1a). Additive — only when `floatingLabel`; every other caller is
            untouched. Not combined with the affix slots. -->
       <div
-        v-if="floatingLabel && !$slots.prefix && !$slots.suffix"
+        v-if="isFloating()"
         class="v-input__float"
         :class="{ 'v-input__float--filled': !!modelValue }"
       >
@@ -108,7 +112,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, useId } from 'vue'
+import { ref, nextTick, useId, useSlots } from 'vue'
 import { IconRequired, IconRequiredDone } from '../../icons'
 import VFieldError from '../VFieldError'
 import { useKeyboardFieldScroll } from '../../keyboardFieldScroll'
@@ -153,12 +157,15 @@ const props = withDefaults(
     required?: boolean
     /** Floating-label variant (batch J): render `label` inside the field; it
      *  floats up small on focus/fill. Default OFF — all existing callers keep the
-     *  external-label layout. Ignored when prefix/suffix slots are used. */
+     *  external-label layout. With prefix/suffix slots the label renders
+     *  outside the field as usual (the affix box has no inner label). */
     floatingLabel?: boolean
     /** T24-6 (PROMPT №639): keep `label` as the field's accessible name but hide
      *  it visually — the placeholder alone carries the visible hint. Default OFF
-     *  — every existing caller keeps the visible label. Ignored with `floatingLabel`
-     *  (that variant already has no external label to hide). */
+     *  — every existing caller keeps the visible label. Ignored while the
+     *  floating-label path renders (that path has no external label to hide);
+     *  applies again when an affix slot sends `floatingLabel` to the external
+     *  label. */
     hideLabel?: boolean
   }>(),
   {
@@ -173,6 +180,16 @@ const props = withDefaults(
     hideLabel: false,
   },
 )
+
+// The floating-label path renders only WITHOUT affix slots (the affix box has
+// no room for a label inside); with an affix the external label takes over.
+// A plain function called from the template, NOT a computed: the slots
+// object is not reactive, so a computed would miss a slot that appears or
+// disappears after mount (e.g. a `v-if` on the #prefix template).
+const slots = useSlots()
+function isFloating(): boolean {
+  return props.floatingLabel && !slots.prefix && !slots.suffix
+}
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]

@@ -315,9 +315,9 @@ describe('VModal (body scroll lock -- useBodyScrollLock mocked, calls only)', ()
   })
 
   it('unmounting while open releases the lock (no leak into the next screen)', async () => {
-    // Mounted CLOSED first: only the false→true transition takes the lock
-    // (the watch is not immediate -- see the finding case below), so this is
-    // the path where an unmount actually has a lock to release.
+    // Mounted closed, then opened: the open flip takes exactly one lock, so
+    // the unmount below has exactly one lock to release. The mounted-open
+    // path is covered with the real lock in overlayScrollLock.test.ts.
     mountApp()
     await flush()
     open.value = true

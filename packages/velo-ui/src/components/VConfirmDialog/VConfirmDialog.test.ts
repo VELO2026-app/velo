@@ -17,9 +17,10 @@
 // Markup + events ONLY (happy-dom, tz-ui-package §4 P6: no var() token
 // assertions). The dialog teleports to body (SC-07), so every query goes to
 // document.body; a closed dialog PARKS mid-leave in happy-dom (SC-13b),
-// hence the live-overlay filter. The body-scroll lock never engages here:
-// the harness mounts :open="true" and VModal's lock watch is not immediate
-// (the FE-142 pinned finding), so no mock is needed.
+// hence the live-overlay filter. The harness mounts :open="true", so VModal
+// takes the real body-scroll lock on mount and the afterEach unmount releases
+// it; nothing here asserts the lock (overlayScrollLock.test.ts does), so no
+// mock is needed.
 // =============================================================================
 
 import { describe, it, expect, afterEach } from 'vitest'
