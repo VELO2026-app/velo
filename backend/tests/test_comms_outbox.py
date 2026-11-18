@@ -56,12 +56,14 @@ from app.core.events.relay import (
     create_relay_redis,
     relay_pending_batch,
 )
+from app.core.middleware import REQUEST_ID_FORM
 from app.modules.users.models import User
 from scripts.comms_outbox import _event_id
 from tests.helpers import (
     auth_headers,
     cleanup_range,
     login_user,
+    sent_data,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -79,6 +81,7 @@ TID_SWITCH_ADMIN = 89421
 TID_BACKFILL_A = 89430
 TID_BACKFILL_B = 89431
 TID_CLI = 89440
+TID_CLI_KEEPER = 89414  # BE-202: the admin kept while TID_CLI drops its own
 
 BAND_MIN, BAND_MAX = 89400, 89499
 
@@ -351,9 +354,13 @@ class TestRelay:
             },
         )
         envelope = build_envelope(e)
-        assert set(envelope) == {"event", "data"}
+        # BE-190: the request id is the envelope's third field (protocol
+        # 9.6), next to event and data, and is not inside data.
+        assert set(envelope) == {"event", "data", "request_id"}
+        assert REQUEST_ID_FORM.fullmatch(envelope["request_id"])
         data = json.loads(envelope["data"])
         assert data["v"] == 1
+        assert "_request_id" not in data
         # Snapshot discipline: every contract key present, explicit nulls.
         assert set(data) == {
             "v", "recipient_id", "telegram_id", "email", "locale",
@@ -944,9 +951,16 @@ class TestGroupSync:
         )
 
     async def test_cli_set_role_round_trip(self, client, db_session):
-        """scripts/set_role.py: to_admin emits +admins, to_user drops all."""
+        """scripts/set_role.py: to_admin emits +admins, to_user drops all.
+
+        BE-202: another admin is kept in the band -- to_master on the last
+        holder is refused now (test_be202_last_admin.py), and before
+        BE-202 this test passed on a lone admin because nothing counted
+        the others."""
         from scripts.set_role import to_admin, to_master, to_user
 
+        await login_user(client, telegram_id=TID_CLI_KEEPER)
+        await _make_admin(db_session, TID_CLI_KEEPER)
         login = await login_user(client, telegram_id=TID_CLI)
         result = await db_session.execute(
             select(User).where(User.telegram_id == TID_CLI)
@@ -1004,7 +1018,7 @@ class TestBackfill:
         assert (users2, masters2, admins2) == (users, masters, admins)
         events_a2 = await _events_for(db_session, a["user"]["id"])
         assert len(events_a2) == base_a + 2
-        assert events_a2[-1].payload == events_a2[-2].payload
+        assert sent_data(events_a2[-1]) == sent_data(events_a2[-2])
 
 
 class TestOneActiveRelay:

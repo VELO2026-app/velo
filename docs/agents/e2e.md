@@ -44,9 +44,12 @@ pnpm -C frontend e2e:sweep
 
 Чтобы гнать sweep по дев-серверу вместо сборки: `E2E_BASE_URL=http://localhost:5173 pnpm -C frontend e2e:sweep`.
 
-**Отдельный стек** (как в CI) — своя база, свои env (`DATABASE_URL`, `REDIS_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_URL`, `COMMS_API_URL`, `COMMS_SERVICE_TOKEN`, `APP_ENV=development`, `ALLOW_ZOOM_STUB=true`, `ALLOW_STRIPE_STUB=true`, `VELO_ROLE=test`; список — в `env:` job'а):
+**Отдельный стек** (как в CI) — своя база, свои env (`DATABASE_URL`, `REDIS_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_URL`, `COMMS_API_URL`, `COMMS_SERVICE_TOKEN`, `STORAGE_ENDPOINT`, `STORAGE_SECRET_KEY`, `PRIMER_RELEASE`, `PRIMER_COMMIT`, `ZOOM_RETRY_ENABLED=false`, `ZOOM_REPORT_ENABLED=false` поверх `backend/ci.env` (`SERVER_ROLE=test` и остальные обязательные ключи, BE-192); список — в `env:` job'а):
 
 ```sh
+# ci.env первым, токен после него: у ci.env свой, и тогда логин в sweep получит 401
+set -a; . backend/ci.env; set +a
+export TELEGRAM_BOT_TOKEN='e2e:fake'
 PYTHON=backend/.venv/bin/python sh frontend/e2e/stack/up.sh   # миграции, сид, админ, заглушка, uvicorn
 pnpm -C frontend build && pnpm -C frontend e2e:sweep
 ```

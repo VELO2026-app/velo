@@ -340,7 +340,12 @@ async def test_views_over_the_limit_show_no_name_and_write_nothing(
     assert await _row_count(db_session, practice_id) == 2
     hit = [e for e in logs if e["event"] == "guest_rate_limited"]
     assert hit and hit[0]["limit"] == "view"
-    assert hit[0]["source"] == "93.184.216.34"
+    # BE-190: the line names the practice, not the address -- a person's
+    # data has no place in the journal (protocol 9.4). It used to carry the
+    # address as `source`; the limit still counts per address (Redis).
+    assert "source" not in hit[0]
+    assert "93.184.216.34" not in repr(hit[0])
+    assert hit[0]["practice_id"]
     assert hit[0]["log_level"] == "warning"
 
 

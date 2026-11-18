@@ -499,7 +499,7 @@ async def test_the_master_editing_their_own_practice_tells_nobody(
 
 @pytest.mark.asyncio
 async def test_the_killswitch_takes_the_curators_right_away(client, s: _S) -> None:
-    with patch.object(settings, "schools_enabled", False):
+    with patch.object(settings, "option_schools", False):
         read = await client.get(
             DETAIL_URL.format(practice_id=s.draft),
             headers=auth_headers(s.token("curator")),

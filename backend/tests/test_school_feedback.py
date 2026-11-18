@@ -85,7 +85,7 @@ _TID_STUDENT_B = 65811
 _TID_STUDENT_C = 65812
 _TID_OUTSIDER = 65830
 
-_FLAG = "schools_enabled"
+_FLAG = "option_schools"
 
 
 # ===========================================================================
