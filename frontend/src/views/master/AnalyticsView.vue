@@ -134,6 +134,18 @@
           <VLoader />
         </div>
 
+        <!-- A failed load is not an empty period (FE-201). -->
+        <VEmptyState
+          v-else-if="past.failed.value"
+          icon="warning"
+          :title="t('common.loadFailed')"
+          :description="pastErrorText"
+        >
+          <VButton size="sm" variant="outline" @click="retryPast">
+            {{ t('common.retry') }}
+          </VButton>
+        </VEmptyState>
+
         <VEmptyState
           v-else-if="periodPractices.length === 0"
           variant="note"
@@ -280,6 +292,7 @@ import { MOOD_SCALE_KEYS, zonePercents, zoneTotal, type MoodScaleKey } from '@/u
 import { formatMoney, formatShortDate } from '@/utils/format'
 import { getIncome, getTransactions, getMasterReviews } from '@/api/masters'
 import { extractApiError } from '@/composables/useApiError'
+import { PAYMENTS_TAB_ENABLED } from '@/views/master/analyticsFlags'
 import type {
   IncomeResponse,
   MasterTransactionItem,
@@ -296,12 +309,7 @@ const insightsCache = usePracticeInsights()
 // Tabs (track+thumb segment) + period toggle (visual-only)
 // =========================================================================
 
-// Owner 2026-10-01: payments are not live yet -- the Reviews/Payments slider is
-// parked and the screen renders the Reviews tab only. Flip to true to restore
-// the slider, the Payments pane and its data loads (everything below is kept).
-// Annotation is deliberate: a literal-false const would let TS narrow every
-// `if (PAYMENTS_TAB_ENABLED)` into provably-dead code.
-const PAYMENTS_TAB_ENABLED: boolean = false
+// The payments flag lives in ./analyticsFlags.ts (one copy, shared with the tests).
 
 const activeTab = ref<'reviews' | 'payments'>('reviews')
 const TAB_OPTIONS: Array<{ value: 'reviews' | 'payments'; label: string }> = [
@@ -327,6 +335,10 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> 
 // asked for here.
 const past = useMyPractices('past')
 const pastPractices = computed(() => past.practices.value)
+const pastErrorText = computed(() => extractApiError(past.error.value, t('common.checkConnection')))
+function retryPast(): void {
+  void past.refetch()
+}
 
 // Period scoping (#1, fork V): until a period-scoped reviews API exists, filter
 // the loaded past practices client-side (week = 7 days, month = 30) so the

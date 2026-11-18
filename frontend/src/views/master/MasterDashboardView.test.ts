@@ -513,6 +513,13 @@ function createCta(): HTMLButtonElement | undefined {
   )
 }
 
+/** The error states' retry buttons (i18n:common.retry). */
+function retryButtons(): HTMLButtonElement[] {
+  return Array.from(host?.querySelectorAll('button') ?? []).filter((b) =>
+    (b.textContent ?? '').includes('Повторить'),
+  )
+}
+
 function onboardingOverlay(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>('.master-onboarding-overlay')
 }
@@ -718,6 +725,59 @@ describe('MasterDashboardView', () => {
         'Осталось 5 из 8 занятий',
       ])
       expect(blocks()[0]?.querySelector('.master-dashboard__practice-meta--row2')).not.toBeNull()
+    })
+
+    it('a FAILED profile load shows an error with «Повторить», not a normal dashboard (FE-200)', async () => {
+      vi.mocked(mastersApi.getMyMasterProfile).mockRejectedValue(
+        new ApiResponseError(503, 'Профиль недоступен', 'profile_down'),
+      )
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.master-dashboard__skeleton')).toBeNull()
+      expect(host?.querySelector('.master-dashboard__bell')).toBeNull()
+      expect(text()).toContain('Не удалось загрузить')
+      expect(text()).toContain('Проверьте соединение')
+
+      vi.mocked(mastersApi.getMyMasterProfile).mockReset().mockResolvedValue(PROFILE)
+      expect(retryButtons()).toHaveLength(1)
+      retryButtons()[0]?.click()
+      await flush()
+
+      expect(text()).not.toContain('Не удалось загрузить')
+      expect(host?.querySelector('.master-dashboard__bell')).not.toBeNull()
+    })
+
+    it('a FAILED practices load shows an error with «Повторить», not «no practices» and no create CTA (FE-200)', async () => {
+      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
+      mount()
+      await flush()
+
+      expect(blocks()).toHaveLength(0)
+      expect(text()).toContain('Не удалось загрузить')
+      expect(nearestEmptyCard()).toBeFalsy()
+      expect(createCta()).toBeUndefined()
+      expect(host?.querySelector('.master-dashboard__loading-row')).toBeNull()
+      expect(retryButtons()).toHaveLength(1)
+
+      mockBucketedPractices([P_SOON])
+      retryButtons()[0]?.click()
+      await flush()
+
+      expect(text()).not.toContain('Не удалось загрузить')
+      expect(titles()).toEqual(['Утренняя практика'])
+    })
+
+    it('a 403 on the profile keeps the screen as before: retrying cannot change it (FE-200)', async () => {
+      vi.mocked(mastersApi.getMyMasterProfile).mockRejectedValue(
+        new ApiResponseError(403, 'Master access required', 'forbidden'),
+      )
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Не удалось загрузить')
+      expect(retryButtons()).toHaveLength(0)
+      expect(host?.querySelector('.master-dashboard__bell')).not.toBeNull()
     })
   })
 
