@@ -103,6 +103,9 @@ jobs:
   # (header). GitHub does not evaluate the name of a skipped job and shows the
   # template as is -- already a different name; were it ever evaluated, the
   # expression gives "(not run)" -- different again.
+  # So NEVER make `visual — base vs head` a required check: a PR that touches
+  # no visual path and carries no visual label never gets a check of that
+  # name, and the merge would wait for it forever.
   visual:
     name: visual — base vs head${{ needs.visual-scope.outputs.run != 'true' && ' (not run)' || '' }}
     needs: visual-scope
