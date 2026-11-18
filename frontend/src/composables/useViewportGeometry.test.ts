@@ -2,14 +2,10 @@
 // VELO Frontend -- useViewportGeometry.ts Unit Tests (PROMPT №657, rebuild)
 // =============================================================================
 //
-// Pure-function tests (isKeyboardOpenFrom / computeKeyboardBottomOffset) --
-// no DOM/SDK dependency, ported/extended from the retired
-// utils/keyboardDetection.test.ts. computeKeyboardBottomOffset's pan case is
-// the RED-THEN-GREEN case for this rebuild: run against the OLD formula
-// (frozenVh - visibleHeight, no offset term -- literally what
-// DiaryFeedView.vue:891 computed before this prompt) it returns 400 where
-// truth is 300 (quoted in the PROMPT №657 DONE report). This file tests the
-// NEW formula, which is expected to be green throughout.
+// Pure-function tests (isKeyboardOpenFrom) -- no DOM/SDK dependency, ported
+// from the retired utils/keyboardDetection.test.ts -- then the live
+// composable driven through a real visualViewport model. The positioning
+// formula itself lives in CSS (global.css, --velo-vv-offset).
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
@@ -17,7 +13,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import {
   isKeyboardOpenFrom,
-  computeKeyboardBottomOffset,
   restBaselineDelta,
   useViewportGeometry,
   keyboardOpen,
@@ -101,30 +96,6 @@ describe('restBaselineDelta (PROMPT №663)', () => {
   it('at rest (current close to the baseline) is NOT open', () => {
     const delta = restBaselineDelta(828.235, 828.235)
     expect(isKeyboardOpenFrom(delta, 828, 828.235, 150)).toBe(false)
-  })
-})
-
-describe('computeKeyboardBottomOffset', () => {
-  it('overlay model, no pan -- matches what the old (pre-rebuild) formula already got right', () => {
-    // frozenVh - visibleHeight, same as the retired calc(frozen - vvh).
-    expect(computeKeyboardBottomOffset(800, 400, 0)).toBe(400)
-  })
-
-  it('shrink model, no pan -- matches what the old formula already got right', () => {
-    expect(computeKeyboardBottomOffset(800, 400, 0)).toBe(400)
-  })
-
-  it('pan present (offsetTop=100) -- THE case the old formula could not handle: 300, not 400', () => {
-    // The old formula (frozenVh - visibleHeight = 800 - 400 = 400) was PROVEN
-    // wrong here before this file existed -- quoted in the №657 DONE report.
-    // The composer's true bottom edge must land at offsetTop + visibleHeight
-    // (=500) measured from the top, i.e. frozenVh - 500 = 300 from the
-    // bottom.
-    expect(computeKeyboardBottomOffset(800, 400, 100)).toBe(300)
-  })
-
-  it('larger pan than the remaining visible height still resolves algebraically (no clamping here -- CSS bottom can go negative, which is a real signal, not a bug to hide)', () => {
-    expect(computeKeyboardBottomOffset(800, 400, 500)).toBe(-100)
   })
 })
 
@@ -265,17 +236,6 @@ describe('useViewportGeometry() integration', () => {
 
     expect(viewportOffsetTop.value).toBe(300)
     expect(document.documentElement.style.getPropertyValue('--velo-vv-offset')).toBe('300px')
-  })
-
-  it('reflects the SAME ref through the useKeyboardOpen() wrapper (single source, not a second copy)', async () => {
-    setBrowserViewport(800, 500, 0)
-    mount()
-    await flush()
-
-    const { useKeyboardOpen } = await import('@/composables/useKeyboardOpen')
-    const { keyboardOpen: fromWrapper } = useKeyboardOpen()
-    expect(fromWrapper.value).toBe(keyboardOpen.value)
-    expect(fromWrapper).toBe(keyboardOpen) // literally the same object, not a copy
   })
 
   // [FE-44] The owner's device screenshot: keyboard closed, yet the diary
