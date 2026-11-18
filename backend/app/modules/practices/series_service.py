@@ -295,12 +295,15 @@ async def generate_series_occurrences(
                     group_id=group_id,
                 )
             )
-        session.add(
-            ZoomMeeting(
-                practice_id=child.id,
-                status=ZoomMeetingStatus.PENDING_CREATION.value,
+        # BE-182: with the option `zoom` off a child gets no meeting row,
+        # as a published practice gets none (practices/service.py).
+        if settings.option_zoom:
+            session.add(
+                ZoomMeeting(
+                    practice_id=child.id,
+                    status=ZoomMeetingStatus.PENDING_CREATION.value,
+                )
             )
-        )
         # BE-33: the master's own one-hour reminder, per OCCURRENCE. It is
         # scheduled here for the same reason the ZoomMeeting row above is:
         # children are born SCHEDULED and never pass update_practice()'s

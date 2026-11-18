@@ -38,6 +38,26 @@
 #              balance, or a pending withdrawal. When allowed: flip the role and
 #              soft-freeze the profile (account.status=suspended,
 #              availability.is_accepting=false) -- nothing is deleted.
+#
+# THE LAST ADMIN (BE-202): -> master and -> user clear the switched-away
+# marker and leave a non-admin role, so on an admin-capability holder they
+# are the drop. The last holder is refused -- message, exit 1, nothing
+# committed. _find_user takes the admin roster lock before the row (LOCK
+# ORDER in app/modules/users/service.py).
+#
+# EXIT CODES (BE-219) -- the operator, and the machine's `setrole` verb,
+# read the result from them:
+#   0 -- the change was committed, or there was nothing to do (already
+#        admin / already a verified master / already a plain user), or the
+#        list was printed;
+#   1 -- refused, nothing committed: the user does not exist, the downgrade
+#        guard found a live master side, the confirmation was answered "n",
+#        or the last admin would lose the role (last_admin);
+#   2 -- the arguments are wrong (argparse): no role after the id, a role
+#        letter that is not A/M/U, an id that is not a number.
+# A handler returns True (commit) or False (nothing to do) and RAISES on a
+# refusal -- RoleChangeRefused here, ConflictError from the service layer;
+# main turns both into 1.
 # =============================================================================
 
 from __future__ import annotations
@@ -67,6 +87,7 @@ from app.core.events import (  # noqa: E402  # Phase 6 / T0
     GROUP_MASTERS,
     sync_membership_delta,
 )
+from app.core.exceptions import ConflictError  # noqa: E402  # BE-202
 from app.modules.masters.models import MasterProfile  # noqa: E402
 from app.modules.practices.models import Practice, PracticeStatus  # noqa: E402
 from app.modules.schools.service import (  # noqa: E402  # BE-59
@@ -76,6 +97,10 @@ from app.modules.users.models import User, UserRole  # noqa: E402
 from app.modules.users.schemas import (  # noqa: E402
     credentials_without_admin_home,
     has_admin_home,
+)
+from app.modules.users.service import (  # noqa: E402  # BE-202
+    refuse_last_admin_drop,
+    take_admin_roster_lock,
 )
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus  # noqa: E402
 
@@ -151,7 +176,12 @@ async def _find_user(session: AsyncSession, telegram_id: int) -> User | None:
     the CLI's single commit -- the users -> master_profiles order written in
     app/modules/users/service.py (ROW LOCK ON users). This is the row's
     first load in the session, so the lock reads its committed values.
+
+    BE-202: the admin roster lock comes first, before the row -- every
+    handler but to_admin can drop an admin capability (LOCK ORDER in
+    app/modules/users/service.py).
     """
+    await take_admin_roster_lock(session)
     stmt = (
         select(User)
         .where(User.telegram_id == telegram_id)
@@ -351,7 +381,15 @@ def _set_role(user: User, role: UserRole) -> None:
         user.set_jsonb("credentials", cleared)
 
 
-# -- Transition handlers (each returns True if a change needs committing) -----
+# -- Transition handlers -------------------------------------------------------
+#
+# Each returns True when a change needs committing, False when there is
+# nothing to do, and raises RoleChangeRefused (or ConflictError) when it
+# refuses -- the three answers main maps to exit codes (header, EXIT CODES).
+
+
+class RoleChangeRefused(Exception):  # noqa: N818 -- the name agreed at the BE-219 gate
+    """The handler refused the change; the message says why (exit 1)."""
 
 # Phase 6 / T0: every authoritative role change here projects its
 # CAPABILITY delta into the comms contact book (group:masters keys on a
@@ -379,8 +417,7 @@ async def to_admin(session: AsyncSession, user: User, assume_yes: bool) -> bool:
         warn("Already admin — nothing to do.")
         return False
     if not _confirm("Set role to admin?", assume_yes):
-        warn("Cancelled.")
-        return False
+        raise RoleChangeRefused("Cancelled.")
     had_admin = _admin_capability(user)
     _set_role(user, UserRole.ADMIN)
     # Master capability is untouched (profile not written) -- only the
@@ -404,6 +441,15 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
     had_master = _master_capability(profile)
     had_admin = _admin_capability(user)
 
+    if had_master and user.role == UserRole.MASTER:
+        warn("Already a verified master — nothing to do.")
+        return False
+
+    # BE-202: every path below sets role=master and clears the marker --
+    # the drop, for a holder. The last one is refused before any write.
+    if had_admin:
+        await refuse_last_admin_drop(session, user)
+
     async def _emit_deltas() -> None:
         await sync_membership_delta(
             session, user, group_key=GROUP_MASTERS, had=had_master, has=True
@@ -425,14 +471,9 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
     if profile is not None:
         status = (profile.data or {}).get("account", {}).get("status")
 
-        if status == "verified" and user.role == UserRole.MASTER:
-            warn("Already a verified master — nothing to do.")
-            return False
-
         if status == "verified":
             if not _confirm("Set role to master?", assume_yes):
-                warn("Cancelled.")
-                return False
+                raise RoleChangeRefused("Cancelled.")
             _set_role(user, UserRole.MASTER)
             await _emit_deltas()
             ok("Role set to master.")
@@ -444,8 +485,7 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
             f"Re-verify existing profile (status='{status}') and set role master?",
             assume_yes,
         ):
-            warn("Cancelled.")
-            return False
+            raise RoleChangeRefused("Cancelled.")
         data = copy.deepcopy(profile.data or {})
         acct = data.setdefault("account", {})
         acct["status"] = "verified"
@@ -473,8 +513,7 @@ async def to_master(session: AsyncSession, user: User, assume_yes: bool) -> bool
         f"(display_name='{fields['display_name']}') and set role master?",
         assume_yes,
     ):
-        warn("Cancelled.")
-        return False
+        raise RoleChangeRefused("Cancelled.")
     session.add(MasterProfile(user_id=user.id, data=_build_verified_data(fields)))
     _set_role(user, UserRole.MASTER)
     await _emit_deltas()
@@ -500,18 +539,22 @@ async def to_user(session: AsyncSession, user: User, assume_yes: bool) -> bool:
         if pend > 0:
             blocks.append(f"{pend} pending withdrawal(s)")
         if blocks:
-            err("Cannot downgrade to user — resolve these first:")
-            for b in blocks:
-                err(f"  - {b}")
-            return False
+            raise RoleChangeRefused(
+                "Cannot downgrade to user — resolve these first:\n"
+                + "\n".join(f"  - {b}" for b in blocks)
+            )
 
     if user.role == UserRole.USER and profile is None:
         warn("Already a plain user — nothing to do.")
         return False
 
+    # BE-202: the flip below clears the marker and leaves role=user -- the
+    # drop, for a holder. The last one is refused before any write.
+    if _admin_capability(user):
+        await refuse_last_admin_drop(session, user)
+
     if not _confirm("Set role to user?", assume_yes):
-        warn("Cancelled.")
-        return False
+        raise RoleChangeRefused("Cancelled.")
 
     # Phase 6 / T0: capabilities before the writes (see to_admin block).
     had_master = _master_capability(profile)
@@ -553,7 +596,7 @@ _HANDLERS = {
 
 # -- CLI ---------------------------------------------------------------------
 
-def _parse_args() -> argparse.Namespace:
+def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="velo setrole",
         description=(
@@ -578,27 +621,29 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip the y/n confirmation (and skip profile prompts: stub them).",
     )
-    return p.parse_args()
+    return p
 
 
 async def main() -> int:
-    args = _parse_args()
+    parser = _parser()
+    args = parser.parse_args()
+    # BE-219: wrong arguments exit 2, before any database work (header,
+    # EXIT CODES) -- parser.error prints the usage and raises SystemExit(2).
+    role: UserRole | None = None
+    if args.telegram_id is not None:
+        if args.role is None:
+            parser.error("a role is required after the telegram_id: A, M or U")
+        try:
+            role = normalize_role(args.role)
+        except ValueError as exc:
+            parser.error(str(exc))
     session_factory = get_session_factory()
     try:
         async with session_factory() as session:
             # No telegram_id -> list mode (read-only, no commit).
-            if args.telegram_id is None:
+            if role is None:
                 await list_privileged(session)
                 return 0
-
-            if args.role is None:
-                err("Usage: velo setrole <telegram_id> <A|M|U>")
-                return 1
-            try:
-                role = normalize_role(args.role)
-            except ValueError as exc:
-                err(str(exc))
-                return 1
 
             user = await _find_user(session, args.telegram_id)
             if user is None:
@@ -613,7 +658,17 @@ async def main() -> int:
             await _print_summary(session, user)
             print(f"{C}Change:{N} role {user.role} -> {role.value}")
 
-            applied = await _HANDLERS[role](session, user, args.yes)
+            try:
+                applied = await _HANDLERS[role](session, user, args.yes)
+            except ConflictError as exc:
+                # BE-202: last_admin. Nothing is committed: the session
+                # closes without a commit and rolls the transaction back.
+                err(f"Refused ({exc.code}): {exc.message}.")
+                return 1
+            except RoleChangeRefused as exc:
+                # BE-219: the handler's own refusal -- the same rollback.
+                err(str(exc))
+                return 1
             if applied:
                 await session.commit()
                 ok("Committed.")

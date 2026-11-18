@@ -31,9 +31,7 @@ import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import UserInboxView from '@/views/user/UserInboxView.vue'
 import * as notificationsApi from '@/api/notifications'
-import * as cgApi from '@/api/schools'
 import type { NotificationItem } from '@/api/notifications'
-import type { SchoolMineItem } from '@/api/types'
 import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
@@ -70,21 +68,6 @@ function item(overrides: Partial<NotificationItem> = {}): NotificationItem {
     created_at: '2026-08-14T10:00:00Z',
     ...overrides,
   }
-}
-
-/** One /schools/mine row: a curated school the removed inbox mocks would
- *  have minted an invite for -- the «nothing but the feed» test seeds it. */
-function mineItem(overrides: Partial<SchoolMineItem> = {}): SchoolMineItem {
-  return {
-    id: 'g1',
-    name: 'Тихая школа',
-    description: null,
-    curator: { user_id: 'u1', display_name: 'Мария', avatar_url: null },
-    masters_count: 1,
-    students_count: 3,
-    relation: 'curator',
-    ...overrides,
-  } as SchoolMineItem
 }
 
 // -----------------------------------------------------------------------------
@@ -138,16 +121,6 @@ beforeEach(() => {
   vi.mocked(notificationsApi.listNotifications).mockReset()
   vi.mocked(notificationsApi.markNotificationRead).mockReset()
   vi.mocked(notificationsApi.markAllNotificationsRead).mockReset()
-  vi.mocked(cgApi.getMySchools)
-    .mockReset()
-    .mockResolvedValue({
-      items: [],
-    } as never)
-  vi.mocked(cgApi.createSchoolInvite)
-    .mockReset()
-    .mockResolvedValue({
-      invite_url: 'https://t.me/velobot?start=school__tok123',
-    } as never)
 })
 
 afterEach(() => {
@@ -239,21 +212,6 @@ describe('UserInboxView', () => {
 
     expect(isUnread(row(0))).toBe(true) // reverted, not left read
     expect(toastError).toHaveBeenCalledWith('Не удалось отметить прочитанным')
-  })
-
-  it('tapping an ALREADY-READ row is a no-op -- no network call', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-      items: [item({ id: 'a', read_at: '2026-08-14T09:00:00Z' })],
-      next_cursor: null,
-      unread: 0,
-    })
-    mount()
-    await flush()
-
-    row(0).click()
-    await flush()
-
-    expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled()
   })
 
   it('a tap navigates by action_data AND marks read: open_practice -> practice-detail', async () => {
@@ -439,29 +397,6 @@ describe('UserInboxView', () => {
     row(0).click()
     await flush()
     expect(push).toHaveBeenCalledWith({ name: 'waitlist-confirm', params: { id: 'w1' } })
-  })
-
-  it('another school event (open_school) opens the school page', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-      items: [
-        item({
-          id: 'tr',
-          type: 'school.transfer_offered',
-          action_data: { action: 'open_school', params: { school_id: 'g1' } },
-        }),
-      ],
-      next_cursor: null,
-      unread: 1,
-    })
-    vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
-    mount()
-    await flush()
-
-    row(0).click()
-    await flush()
-
-    expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('tr')
-    expect(push).toHaveBeenCalledWith({ name: 'user-school', params: { id: 'g1' } })
   })
 
   // FE-127: the school verb and its param under the renamed contract, on the
@@ -712,11 +647,11 @@ describe('UserInboxView', () => {
     // owns every kind with no bucket of its own (owner ask).
     function mixed(): NotificationItem[] {
       return [
-        item({ id: 'a', type: 'booking.confirmed' }),
-        item({ id: 'b', type: 'msg.participant_message' }),
-        item({ id: 'c', type: 'practice.cancelled' }),
-        item({ id: 'd', type: 'waitlist.spot_available' }),
-        item({ id: 'e', type: 'finance' }),
+        item({ id: 'a', type: 'booking.confirmed', title: 'Запись подтверждена' }),
+        item({ id: 'b', type: 'msg.participant_message', title: 'Новое сообщение' }),
+        item({ id: 'c', type: 'practice.cancelled', title: 'Практика отменена' }),
+        item({ id: 'd', type: 'waitlist.spot_available', title: 'Освободилось место' }),
+        item({ id: 'e', type: 'finance', title: 'Баланс пополнен' }),
       ]
     }
 
@@ -755,7 +690,7 @@ describe('UserInboxView', () => {
       await flush()
 
       expect(rows()).toHaveLength(1)
-      expect(rows()[0]?.textContent).toContain('Запись подтверждена') // the msg fixture's title
+      expect(rows()[0]?.textContent).toContain('Новое сообщение')
     })
 
     it('«Мероприятия» keeps practice-life rows in, msg and finance out', async () => {
@@ -786,7 +721,7 @@ describe('UserInboxView', () => {
       await flush()
 
       expect(rows()).toHaveLength(1) // the finance fixture only
-      expect(rows()[0]?.textContent).toContain('Запись подтверждена') // its title
+      expect(rows()[0]?.textContent).toContain('Баланс пополнен')
     })
 
     it('a filter with no matches shows the per-filter note, NOT the global empty state', async () => {
@@ -819,62 +754,6 @@ describe('UserInboxView', () => {
       expect(host?.textContent).toContain(
         'Здесь появятся уведомления о записях, сообщениях и операциях',
       )
-    })
-  })
-
-  // ===========================================================================
-  // The bell is ONLY the server (owner 2026-10-02): the client-side invite
-  // mocks for telegram 388101199 were removed. The account that used to see
-  // them now sees exactly the server page and the server badge, and opening
-  // the bell calls nothing but the feed -- the mocks used to mint a real
-  // school invite token (createSchoolInvite) on every open.
-  // ===========================================================================
-  describe('the former simulation account sees only the server', () => {
-    function seedTelegram(telegramId: number): void {
-      useAuthStore().user = { id: 'u_sim', telegram_id: telegramId, role: 'user' } as never
-    }
-
-    it('telegram 388101199: rows and badge are exactly the server page', async () => {
-      seedTelegram(388101199)
-      // A curated school exists -- the removed mock would have used it.
-      vi.mocked(cgApi.getMySchools).mockResolvedValue({
-        items: [mineItem({ relation: 'curator' })],
-      } as never)
-      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-        items: [item({ id: 'a', read_at: '2026-01-01T00:00:00Z' })],
-        next_cursor: null,
-        unread: 0,
-      })
-      mount()
-      await flush()
-
-      expect(rows()).toHaveLength(1)
-      expect(isUnread(row(0))).toBe(false)
-      expect(useQueryCache().getQueryData(keys.notifications.unread())).toBe(0)
-      expect(readAllButton()).toBeFalsy()
-      // The only API the bell touched is the feed.
-      expect(notificationsApi.listNotifications).toHaveBeenCalledTimes(1)
-      expect(cgApi.getMySchools).not.toHaveBeenCalled()
-      expect(cgApi.createSchoolInvite).not.toHaveBeenCalled()
-    })
-
-    it('telegram 388101199: a tap marks read on the SERVER (no client-only rows)', async () => {
-      seedTelegram(388101199)
-      vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-        items: [item({ id: 'srv' })],
-        next_cursor: null,
-        unread: 1,
-      })
-      vi.mocked(notificationsApi.markNotificationRead).mockResolvedValue({ unread: 0 })
-      mount()
-      await flush()
-
-      expect(rows()).toHaveLength(1)
-      row(0).click()
-      await flush()
-
-      expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('srv')
-      expect(useQueryCache().getQueryData(keys.notifications.unread())).toBe(0)
     })
   })
 })

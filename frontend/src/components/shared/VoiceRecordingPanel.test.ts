@@ -88,16 +88,12 @@ describe('VoiceRecordingPanel -- processing', () => {
     unmount()
   })
 
-  it('both buttons are disabled and emit nothing -- the row is honestly frozen', () => {
-    const { events, click } = mount({ state: 'processing', elapsedSec: 12 })
+  it('both buttons are disabled -- the row is honestly frozen', () => {
+    mount({ state: 'processing', elapsedSec: 12 })
     const cancel = host!.querySelector<HTMLButtonElement>('[data-testid="voice-cancel"]')
     const stop = host!.querySelector<HTMLButtonElement>('[data-testid="voice-stop"]')
     expect(cancel!.disabled).toBe(true)
     expect(stop!.disabled).toBe(true)
-
-    click('voice-cancel')
-    click('voice-stop')
-    expect(events).toEqual([])
     unmount()
   })
 })

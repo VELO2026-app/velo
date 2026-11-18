@@ -77,12 +77,12 @@ _TID_PARTICIPANT = 65910
 _TID_PARTICIPANT_B = 65911
 
 # The profile lives in the repository ROOT, which is two levels up from
-# backend/tests/ in a checkout and is bind-mounted at /comms-profile inside
-# velo-app (docker-compose.yml) -- the image's build context is ./backend,
-# so the files cannot be COPYed in and the mount is how they arrive. Both
-# layouts answer to the same expression; the candidate list exists so that a
-# third one fails HERE, by name, instead of surfacing as FileNotFoundError
-# inside seven assertions.
+# backend/tests/ in a checkout; in the backend test image (stage `test` of
+# backend/Dockerfile, built from the repository root) it is COPYed to
+# /comms-profile, which is where the same expression lands from /app/tests.
+# Both layouts answer to the same expression; the candidate list exists so
+# that a third one fails HERE, by name, instead of surfacing as
+# FileNotFoundError inside seven assertions.
 _PROFILE_CANDIDATES = (
     Path(__file__).resolve().parents[2] / "comms-profile",
     Path("/comms-profile"),
@@ -96,10 +96,11 @@ def _profile_dir() -> Path:
     raise AssertionError(
         "comms-profile/types.yaml found in none of: "
         + ", ".join(str(c) for c in _PROFILE_CANDIDATES)
-        + " -- in a container this means the read-only mount declared for "
-          "the app service in docker-compose.yml is missing. NOT skipped on "
-          "purpose: a profile check that goes quiet where the suite actually "
-          "runs is a green test that verifies nothing."
+        + " -- in the backend test image this means the stage `test` of "
+          "backend/Dockerfile no longer copies comms-profile/ to "
+          "/comms-profile. NOT skipped on purpose: a profile check that goes "
+          "quiet where the suite actually runs is a green test that verifies "
+          "nothing."
     )
 
 _CHECKIN_TYPE = "practice.checkin_received"
@@ -320,19 +321,27 @@ class TestProfile:
     def test_every_template_sheet_names_a_declared_type(self) -> None:
         """A sheet for a type nobody declares renders for nothing.
 
-        Templates are a SUBSET, not an equal set: the llm types
-        support.translate_for_support and support.translate_for_user (BE-166)
-        carry no sheet because comms refuses one on an llm type -- a letter
-        goes to a model, not to a person -- so the assertion is containment
-        and the known exceptions are named here rather than silently allowed
-        by a weaker check.
+        Templates are a SUBSET, not an equal set: an llm type (channels
+        exactly [llm]) carries no sheet, because comms refuses one on it --
+        the letter is written by the product and goes to a model, not to a
+        person (comms deploy/INTEGRATION.md section 11). So the assertion is
+        containment, and the types without a sheet must be EXACTLY the llm
+        types: a type for people without a sheet fails, and so does an llm
+        type with one.
+
+        Until BE-184 the exceptions were named here by hand -- the two
+        translations of BE-166 -- and that list was right while they were
+        the only llm types. BE-184 added voice.transcribe and the hand list
+        broke on it; the set is now read off the profile, with the pair that
+        keeps it honest: the llm set is not empty and holds voice.transcribe.
 
         The set used to hold a third member, support.thread_created, declared
         with no sheet because it went to group:admins with its Russian stored
         text. BE-172 removed that type; its successor support.message_received
         has sheets in both locales, so the exceptions are the llm types alone.
         """
-        types = set(_load_profile())
+        records = _load_profile()
+        types = set(records)
         for locale in ("ru", "en"):
             sheets = set(
                 yaml.safe_load(
@@ -346,10 +355,13 @@ class TestProfile:
                 (_profile_dir() / "templates" / "ru.yaml").read_text()
             )
         )
-        assert types - ru == {
-            "support.translate_for_support",
-            "support.translate_for_user",
+        llm = {
+            key
+            for key, record in records.items()
+            if record is not None and record.get("channels") == ["llm"]
         }
+        assert "voice.transcribe" in llm
+        assert types - ru == llm
 
     def test_the_two_locales_carry_the_same_sheets(self) -> None:
         """A type translated into one locale and not the other is how a

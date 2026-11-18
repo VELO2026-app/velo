@@ -6,7 +6,7 @@ e2e contour, so the profile lives in ./seed/e2e.json. backend/scripts/seed.py
 looks profiles up in its module-level PROFILES_DIR on every call; this wrapper
 points that at ./seed and runs the stock `main()` with `--profile e2e`.
 
-Usage (same environment as the backend: DATABASE_URL, VELO_ROLE=test, ...):
+Usage (same environment as the backend: backend/ci.env + DATABASE_URL, ...):
     python frontend/e2e/stack/seed_e2e.py [--reset] [--dry-run] ...
 Extra arguments pass through to seed.py.
 

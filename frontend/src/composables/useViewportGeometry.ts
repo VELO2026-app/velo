@@ -165,24 +165,6 @@ export function isKeyboardOpenFrom(
   return delta > threshold
 }
 
-/**
- * The composer/header positioning formula (PROMPT №657, the documented gap):
- * an element pinned to the live visible area's bottom edge, inside a box
- * whose own height is the FROZEN (pre-keyboard) height, needs its `bottom`
- * offset shifted by (frozenVh - visibleBottom), where visibleBottom is the
- * true bottom of what's actually on screen -- offsetTop + visibleHeight, NOT
- * visibleHeight alone. Pure, exported for unit tests; mirrored 1:1 by the CSS
- * calc() in DiaryFeedView.vue (calc(frozen - vvh - offset) is algebraically
- * `frozenVh - (offsetTop + vvh)`, the same expression re-associated).
- */
-export function computeKeyboardBottomOffset(
-  frozenVh: number,
-  visibleHeight: number,
-  offsetTop: number,
-): number {
-  return frozenVh - (offsetTop + visibleHeight)
-}
-
 const _visibleHeight = ref(0)
 const _offsetTop = ref(0)
 const _keyboardOpen = ref(false)
