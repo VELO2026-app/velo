@@ -368,6 +368,32 @@ describe('VInput', () => {
       },
     )
 
+    // FE-205 review: the slots object is not reactive, so the floating/affix
+    // choice must be re-read on every render, not cached.
+    it('an affix slot that appears AFTER mount switches to the affix path with the external label', async () => {
+      const currency = ref(false)
+      host = document.createElement('div')
+      document.body.appendChild(host)
+      app = createApp({
+        render: () =>
+          h(
+            VInput,
+            { floatingLabel: true, label: 'Сумма', modelValue: '' },
+            currency.value ? { prefix: () => h('span', '€') } : {},
+          ),
+      })
+      app.mount(host)
+      expect(host.querySelector('.v-input__float')).not.toBeNull()
+
+      currency.value = true
+      await nextTick()
+      expect(host.querySelector('.v-input__float')).toBeNull()
+      expect(host.querySelector('.v-input__affix')?.textContent).toBe('€')
+      const label = host.querySelector('label.v-input__label')
+      expect(label?.textContent).toBe('Сумма')
+      expect(label?.getAttribute('for')).toBe(host.querySelector('input')?.id)
+    })
+
     it('affix path: the external label binds the inner bare input id too', () => {
       mountWith(passThrough, '', { label: 'Сумма' }, 'prefix')
 

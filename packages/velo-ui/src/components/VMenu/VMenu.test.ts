@@ -347,7 +347,6 @@ describe('VMenu (menu-button semantics + keyboard, FE-205)', () => {
 
     expect(panel()?.getAttribute('role')).toBe('menu')
     expect(panel()?.getAttribute('aria-labelledby')).toBe(trigger()?.id)
-    expect(trigger()?.id).toBeTruthy()
     expect(items().map((b) => b.getAttribute('role'))).toEqual(['menuitem', 'menuitem', 'menuitem'])
   })
 
@@ -396,6 +395,39 @@ describe('VMenu (menu-button semantics + keyboard, FE-205)', () => {
     await flush()
     expect(panel()).toBeNull()
     expect(document.activeElement).toBe(trigger())
+  })
+
+  it('Tab on an item closes the menu with focus handed to the trigger (the browser moves on from it)', async () => {
+    mountApp({ slot: threeItems })
+    await flush()
+    trigger()!.focus()
+    press('ArrowDown')
+    await flush()
+    expect(focusedLabel()).toBe('Первый')
+
+    press('Tab')
+    await flush()
+    expect(panel()).toBeNull()
+    expect(document.activeElement).toBe(trigger())
+  })
+
+  it('focus moving to an element outside the menu closes it; moving between items does not', async () => {
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    mountApp({ slot: threeItems })
+    await flush()
+    trigger()!.click()
+    await flush()
+
+    items()[0]!.focus()
+    items()[1]!.focus()
+    await flush()
+    expect(panel()).not.toBeNull()
+
+    outside.focus()
+    await flush()
+    expect(panel()).toBeNull()
+    outside.remove()
   })
 
   it.each([

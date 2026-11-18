@@ -29,10 +29,12 @@
   on the trigger open the menu on the first/last item; a keyboard
   Enter/Space opens it on the first item (a pointer tap leaves focus where it
   was). Inside the panel: ArrowDown/ArrowUp wrap, Home/End jump, Escape
-  closes and returns focus to the trigger, Tab closes and moves on.
+  closes and returns focus to the trigger, Tab closes and moves on from the
+  trigger. Focus leaving the menu for another element (Tab after a pointer
+  open, screen-reader swipe navigation) closes it too.
 -->
 <template>
-  <div ref="rootEl" class="v-menu">
+  <div ref="rootEl" class="v-menu" @focusout="onRootFocusout">
     <button
       :id="triggerId"
       ref="triggerEl"
@@ -98,13 +100,29 @@ function dismiss(): void {
   open.value = false
 }
 
+/** Focus the trigger without scrolling it into view (Android would jump the
+ *  screen back to the trigger after a tap on an item). */
+function focusTrigger(): void {
+  triggerEl.value?.focus({ preventScroll: true })
+}
+
 /** Close; focus that sat on an item goes back to the trigger instead of
  *  falling to <body> when the panel unmounts. Synchronous, so an action
  *  that focuses its own target on nextTick (the diary search bar) wins. */
 function close(): void {
   const restore = focusInPanel()
   dismiss()
-  if (restore) triggerEl.value?.focus()
+  if (restore) focusTrigger()
+}
+
+// Focus moved to an element OUTSIDE the menu: close. A null relatedTarget
+// (focus fell to <body>, e.g. a tap on a non-focusable spot, or Safari not
+// focusing a tapped button) is ignored on purpose -- outside taps are the
+// document pointerdown's job, and closing here would unmount the panel
+// between pointerdown and click, swallowing a tap on an item or the trigger.
+function onRootFocusout(event: FocusEvent): void {
+  const next = event.relatedTarget as Node | null
+  if (open.value && next && !rootEl.value?.contains(next)) dismiss()
 }
 
 function menuItems(): HTMLElement[] {
@@ -166,6 +184,10 @@ function onPanelKeydown(event: KeyboardEvent): void {
       focusItem(-1)
       break
     case 'Tab':
+      // Hand focus to the trigger first and let the browser's own Tab move
+      // on from there: the panel is about to unmount, and moving on from a
+      // removed item can send focus to the top of the document (WebKit).
+      focusTrigger()
       dismiss()
       break
   }
