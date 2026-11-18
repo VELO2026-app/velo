@@ -10,8 +10,10 @@
 #          period-over-period delta. Bounds are UTC.
 #   GET /api/v1/masters/me/analytics?period=week|month|quarter
 #       -- the analytics screen in one request: practices, bookings,
-#          check-ins, feedbacks, their two rates and their distributions.
-#          Bounds are the MASTER'S OWN calendar, not UTC (BE-34).
+#          check-ins, feedbacks, their two rates and their distributions,
+#          and the period's conducted practices with each one's own
+#          analytics (BE-222). Bounds are the MASTER'S OWN calendar, not
+#          UTC (BE-34).
 #
 # AUTH: get_current_master (verified master only).
 # SESSION: get_db_reader -- read-only.

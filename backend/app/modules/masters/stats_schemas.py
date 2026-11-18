@@ -13,7 +13,7 @@
 
 from pydantic import BaseModel
 
-from app.modules.diary.schemas import ScoreZoneCounts
+from app.modules.diary.schemas import PracticeAnalyticsSummary, ScoreZoneCounts
 
 
 class MasterStatsResponse(BaseModel):
@@ -67,6 +67,12 @@ class MasterAnalyticsResponse(BaseModel):
 
     rate fields are 0 when the period has no bookings -- an honest empty, the
     same answer the admin dashboards give.
+
+    conducted_practices (BE-222) is the current period's practices -- the
+    same ones practices_count counts -- newest first, each with the summary
+    the practice's own analytics screen shows. The sum of the rows' `after`
+    is `feedbacks`; their `reviews_total` counts reviews with text only. An
+    empty period is an empty list.
     """
 
     practices_count: int
@@ -90,3 +96,5 @@ class MasterAnalyticsResponse(BaseModel):
     # Five-zone counts (BE-77): the one shared distribution shape.
     checkins: ScoreZoneCounts
     feedbacks: ScoreZoneCounts
+
+    conducted_practices: list[PracticeAnalyticsSummary]

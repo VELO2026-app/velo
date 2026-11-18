@@ -32,6 +32,13 @@
 #     and carried by the master's screen until this delivery.
 #   - THE WHOLE PERIOD IS COUNTED, not the 20 most recent practices.
 #
+# THE CONDUCTED-PRACTICES LIST (BE-222), pinned at the bottom of this file:
+# it is the period's completed practices and nothing else, newest first; a
+# row equals GET /practices/{id}/analytics for the same practice; the rows'
+# `after` sums to `feedbacks`; and the cost does not grow with the number of
+# practices. That sum holds through the write-side rule "a review exists only
+# on an ATTENDED booking" -- see "WHAT IS DELIBERATELY NOT TESTED" below.
+#
 # Every test asserts a CONCRETE number, and "not counted" is always paired
 # with a "counted" assertion on the same data, so a query returning zero for
 # the wrong reason cannot pass as correct behaviour.
@@ -52,7 +59,8 @@ from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import event, select
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.periods import (
@@ -62,6 +70,7 @@ from app.core.periods import (
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.models import Checkin, CheckType, Feedback
 from app.modules.masters.models import MasterProfile
+from app.modules.masters.stats_service import get_master_analytics
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, full_cleanup_range, login_user
@@ -219,6 +228,7 @@ async def _leave_feedback(
     db_session: AsyncSession,
     booking: Booking,
     rating: int,
+    comment: str | None = None,
 ) -> None:
     """Add one feedback on the booking at an exact rating score."""
     db_session.add(
@@ -227,6 +237,7 @@ async def _leave_feedback(
             user_id=booking.user_id,
             booking_id=booking.id,
             rating=rating,
+            comment=comment,
         ),
     )
     await db_session.commit()
@@ -783,3 +794,295 @@ async def test_summary_requires_a_verified_master(
     )
 
     assert response.status_code == 403
+
+
+# ===================================================================
+# The conducted-practices list (BE-222)
+# ===================================================================
+
+PRACTICE_ANALYTICS_URL = "/api/v1/practices/{pid}/analytics"
+
+# The row's contract: PracticeAnalyticsSummary, nothing about its reader.
+_ROW_KEYS = {
+    "practice_id", "title", "direction", "scheduled_at", "timezone",
+    "attended", "before", "after", "pairs_total", "reviews_total",
+}
+
+
+def _ids(body: dict) -> list[str]:
+    return [row["practice_id"] for row in body["conducted_practices"]]
+
+
+def _later_inside(period: str) -> datetime:
+    """An instant strictly after the period start and not in the future."""
+    cur_start = _inside(period)
+    return cur_start + (datetime.now(UTC) - cur_start) / 2
+
+
+async def test_the_list_is_the_periods_completed_practices_newest_first(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Every completed practice of the window, newest first -- and only them.
+
+    On one dataset: three completed practices inside the window (one exactly
+    on its inclusive start, two sharing a later slot), one completed practice
+    at the last instant of the previous window, one practice in the window
+    for every other status, and another master's completed practice. The
+    two on one slot are ordered by id, newest-first being scheduled_at.
+    practices_count reads the same predicate, so it must equal the list's
+    length.
+    """
+    master = await _make_verified_master(client, db_session)
+    other = await _make_verified_master(client, db_session, telegram_id=69102)
+    master_id = master["user"]["id"]
+    start = _inside("week")
+    later = _later_inside("week")
+
+    first = await _create_practice(db_session, master_id, scheduled_at=start)
+    twin_a = await _create_practice(db_session, master_id, scheduled_at=later)
+    twin_b = await _create_practice(db_session, master_id, scheduled_at=later)
+    await _create_practice(
+        db_session, master_id, scheduled_at=start - timedelta(microseconds=1),
+    )
+    for status in PracticeStatus:
+        if status is not PracticeStatus.COMPLETED:
+            await _create_practice(
+                db_session, master_id, scheduled_at=start, status=status.value,
+            )
+    await _create_practice(db_session, other["user"]["id"], scheduled_at=start)
+
+    body = await _analytics(client, master)
+
+    twins = sorted((twin_a.id, twin_b.id), reverse=True)
+    assert _ids(body) == [str(twins[0]), str(twins[1]), str(first.id)]
+    assert body["practices_count"] == 3
+
+
+async def test_a_row_is_the_practices_own_analytics(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """Each row equals GET /practices/{id}/analytics on the shared fields.
+
+    One practice carries every booking state the five figures distinguish:
+    attended with a PRE check-in and a review with text (a pair), attended
+    with a PRE check-in only, attended with a blank review, attended with a
+    review without text, and a PRE check-in on a no-show, on a booking Zoom
+    has not judged yet and on a cancelled one -- none of those last three is
+    «до». A second practice has different numbers, so a batch that mixed
+    practices up would show; a third has nobody, so a practice missing from
+    every grouped result still reads zeroes with all five zones.
+    """
+    master = await _make_verified_master(client, db_session)
+    master_id = master["user"]["id"]
+    start = _inside("week")
+    busy = await _create_practice(db_session, master_id, scheduled_at=start)
+    small = await _create_practice(
+        db_session, master_id, scheduled_at=_later_inside("week"),
+    )
+    empty = await _create_practice(db_session, master_id, scheduled_at=start)
+
+    attended = BookingStatus.ATTENDED.value
+    pair = await _book(db_session, busy.id, await _participant(client), attended)
+    await _check_in(db_session, pair, mood=2)
+    await _leave_feedback(db_session, pair, rating=9, comment="Глубоко")
+    pre_only = await _book(
+        db_session, busy.id, await _participant(client), attended,
+    )
+    await _check_in(db_session, pre_only, mood=9)
+    blank = await _book(db_session, busy.id, await _participant(client), attended)
+    await _leave_feedback(db_session, blank, rating=5, comment="   ")
+    silent = await _book(
+        db_session, busy.id, await _participant(client), attended,
+    )
+    await _leave_feedback(db_session, silent, rating=7)
+    for status in (
+        BookingStatus.NO_SHOW.value,
+        BookingStatus.CONFIRMED.value,
+        BookingStatus.CANCELLED.value,
+    ):
+        outsider = await _book(
+            db_session, busy.id, await _participant(client), status,
+        )
+        await _check_in(db_session, outsider, mood=4)
+
+    lone = await _book(db_session, small.id, await _participant(client), attended)
+    await _check_in(db_session, lone, mood=6)
+    await _leave_feedback(db_session, lone, rating=10, comment="Спасибо")
+
+    body = await _analytics(client, master)
+    rows = {row["practice_id"]: row for row in body["conducted_practices"]}
+    assert set(rows) == {str(busy.id), str(small.id), str(empty.id)}
+    assert all(set(row) == _ROW_KEYS for row in rows.values())
+
+    for practice in (busy, small, empty):
+        response = await client.get(
+            PRACTICE_ANALYTICS_URL.format(pid=practice.id),
+            headers=auth_headers(master["session_token"]),
+        )
+        assert response.status_code == 200, response.text
+        screen = response.json()
+        assert rows[str(practice.id)] == {key: screen[key] for key in _ROW_KEYS}
+
+    # The concrete numbers, so "equal" cannot mean "equally wrong".
+    zero = {"bad": 0, "low": 0, "neutral": 0, "good": 0, "fire": 0}
+    busy_row = rows[str(busy.id)]
+    assert busy_row["attended"] == 4
+    assert busy_row["before"] == {**zero, "bad": 1, "fire": 1}
+    assert busy_row["after"] == {**zero, "fire": 1, "neutral": 1, "good": 1}
+    assert busy_row["pairs_total"] == 1
+    assert busy_row["reviews_total"] == 1
+    small_row = rows[str(small.id)]
+    assert small_row["attended"] == 1
+    assert small_row["before"] == {**zero, "neutral": 1}
+    assert small_row["after"] == {**zero, "fire": 1}
+    assert small_row["pairs_total"] == 1
+    assert small_row["reviews_total"] == 1
+    empty_row = rows[str(empty.id)]
+    assert empty_row["attended"] == 0
+    assert empty_row["before"] == zero
+    assert empty_row["after"] == zero
+    assert empty_row["pairs_total"] == 0
+    assert empty_row["reviews_total"] == 0
+
+
+async def test_the_rows_reviews_sum_to_feedbacks(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """The rows' `after`, zone by zone, adds up to the response's `feedbacks`.
+
+    Reviews sit on a practice exactly on the window's inclusive start, on a
+    later one, and on a practice of the previous window that neither side
+    may count. The totals are asserted as numbers too: a list and a total
+    shrinking together would still agree with each other.
+    `reviews_total` is deliberately not in the sum -- it counts reviews with
+    text, and one review here has none.
+    """
+    master = await _make_verified_master(client, db_session)
+    master_id = master["user"]["id"]
+    start = _inside("week")
+    on_edge = await _create_practice(db_session, master_id, scheduled_at=start)
+    later = await _create_practice(
+        db_session, master_id, scheduled_at=_later_inside("week"),
+    )
+    before = await _create_practice(
+        db_session, master_id, scheduled_at=_inside_previous("week"),
+    )
+    for practice, rating, comment in (
+        (on_edge, 1, "Тяжело"),
+        (on_edge, 8, None),
+        (later, 9, "Огонь"),
+        (before, 5, "Прошлая неделя"),
+    ):
+        booking = await _book(db_session, practice.id, await _participant(client))
+        await _leave_feedback(db_session, booking, rating=rating, comment=comment)
+
+    body = await _analytics(client, master)
+
+    summed = {zone: 0 for zone in body["feedbacks"]}
+    for row in body["conducted_practices"]:
+        for zone, count in row["after"].items():
+            summed[zone] += count
+    assert summed == body["feedbacks"]
+    assert body["feedbacks_count"] == 3
+    assert body["feedbacks"] == {
+        "bad": 1, "low": 0, "neutral": 0, "good": 1, "fire": 1,
+    }
+    assert sum(row["reviews_total"] for row in body["conducted_practices"]) == 2
+
+
+async def test_an_empty_period_lists_nothing(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """No practice this period: an empty list, while the previous one counts.
+
+    The previous period holds a completed practice with a review, and the
+    -100% practices delta proves that period was read -- the list is empty
+    because it is the current period's alone, not because nothing was found.
+    """
+    master = await _make_verified_master(client, db_session)
+    previous = await _create_practice(
+        db_session, master["user"]["id"], scheduled_at=_inside_previous("week"),
+    )
+    booking = await _book(db_session, previous.id, await _participant(client))
+    await _leave_feedback(db_session, booking, rating=8, comment="Было")
+
+    body = await _analytics(client, master)
+
+    assert body["conducted_practices"] == []
+    assert body["practices_count"] == 0
+    assert body["practices_delta_pct"] == -100
+
+
+async def test_the_list_follows_the_masters_calendar(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """A practice at the start of the master's month is in his list.
+
+    The list's window is the one the totals use -- the master's calendar
+    (Pacific/Auckland here), not UTC. For most of the month that instant is
+    outside UTC's month, so a UTC-bounded list would drop it.
+    """
+    master = await _make_verified_master(
+        client, db_session, timezone="Pacific/Auckland",
+    )
+    local_start, _local_end, _prev = calendar_period_bounds_in_tz(
+        "month", datetime.now(UTC), "Pacific/Auckland",
+    )
+    practice = await _create_practice(
+        db_session, master["user"]["id"], scheduled_at=local_start,
+    )
+
+    body = await _analytics(client, master, period="month")
+    assert _ids(body) == [str(practice.id)]
+    assert body["practices_count"] == 1
+
+
+async def _statements_for(
+    client: AsyncClient, db_session: AsyncSession, practices: int,
+) -> tuple[int, int]:
+    """SELECTs one get_master_analytics call makes, and the rows it lists.
+
+    Each practice is given a pair (PRE check-in + review with text), so every
+    one of the five figures has a row to group for every practice.
+    """
+    master = await _make_verified_master(client, db_session)
+    master_id = master["user"]["id"]
+    for _ in range(practices):
+        practice = await _create_practice(
+            db_session, master_id, scheduled_at=_inside("week"),
+        )
+        booking = await _book(db_session, practice.id, await _participant(client))
+        await _check_in(db_session, booking, mood=7)
+        await _leave_feedback(db_session, booking, rating=8, comment="Да")
+    user = (
+        await db_session.execute(select(User).where(User.id == UUID(master_id)))
+    ).scalar_one()
+
+    selects: list[str] = []
+
+    def _count(conn, cursor, statement, *args, **kwargs) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", _count)
+    try:
+        data = await get_master_analytics(user, "week", db_session)
+    finally:
+        event.remove(Engine, "before_cursor_execute", _count)
+    return len(selects), len(data["conducted_practices"])
+
+
+async def test_the_list_costs_the_same_for_one_practice_and_for_four(
+    client: AsyncClient, db_session: AsyncSession,
+) -> None:
+    """No statement per practice: one practice and four cost the same.
+
+    Both runs list what they were given, so the equality is not two empty
+    lists agreeing.
+    """
+    one, listed_one = await _statements_for(client, db_session, 1)
+    await _do_cleanup(db_session)
+    four, listed_four = await _statements_for(client, db_session, 4)
+
+    assert (listed_one, listed_four) == (1, 4)
+    assert one == four

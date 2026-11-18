@@ -76,11 +76,36 @@ from app.core.periods import (
 from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.diary.insights_service import zone_counts
 from app.modules.diary.models import Checkin, CheckType, Feedback
+from app.modules.diary.practice_analytics_service import (
+    practice_analytics_counts,
+)
 from app.modules.masters.finance_service import get_master_income
 from app.modules.practices.models import Practice, PracticeStatus
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
+
+
+def _completed_in_window(user_id: UUID, start: datetime, end: datetime):
+    """Where-clause pieces: the master's COMPLETED practices in [start, end).
+
+    THE PERIOD'S PRACTICES, written once. Every figure that is "about the
+    period's sessions" -- the practices tile, the analytics counts and
+    distributions, the conducted-practices list (BE-222) -- reads this one
+    predicate, so the list's rows and the totals beside them are about the
+    same practices by construction, not by two copies agreeing.
+
+    COMPLETED and nothing else: draft, scheduled, live, cancelled and deleted
+    are all "not a session that happened". The window is anchored on
+    scheduled_at, not on the finalization time: a completed practice belongs
+    to the period it ran in.
+    """
+    return (
+        Practice.master_id == user_id,
+        Practice.status == PracticeStatus.COMPLETED.value,
+        Practice.scheduled_at >= start,
+        Practice.scheduled_at < end,
+    )
 
 
 async def _count_practices(
@@ -91,19 +116,12 @@ async def _count_practices(
 ) -> int:
     """Count the master's COMPLETED practices scheduled in [start, end).
 
-    COMPLETED and nothing else: draft, scheduled, live, cancelled and deleted
-    are all "not a session that happened", and the tile this feeds is labelled
-    "Практик". A practice scheduled inside the window but still ahead is
-    deliberately absent -- see the module header for why that zero is honest.
-
-    The window is anchored on scheduled_at, not on the finalization time: a
-    completed practice belongs to the period it ran in.
+    The tile this feeds is labelled "Практик". A practice scheduled inside
+    the window but still ahead is deliberately absent -- see the module
+    header for why that zero is honest; _completed_in_window for the rule.
     """
     stmt = select(func.count(Practice.id)).where(
-        Practice.master_id == user_id,
-        Practice.status == PracticeStatus.COMPLETED.value,
-        Practice.scheduled_at >= start,
-        Practice.scheduled_at < end,
+        *_completed_in_window(user_id, start, end),
     )
     return (await session.execute(stmt)).scalar_one()
 
@@ -204,6 +222,26 @@ async def get_master_stats(
 # same helpers the per-practice insights and the curator feeds use. The
 # zone boundaries are NOT restated here: a second copy is how screens
 # start disagreeing about what "good" means.
+#
+# THE CONDUCTED-PRACTICES LIST (BE-222). The current period's practices, by
+# _completed_in_window -- the predicate every total of this response reads
+# -- newest first. A row is the practice's own analytics summary
+# (PracticeAnalyticsSummary), computed by the same function the practice's
+# screen uses (practice_analytics_counts), for all rows at once: a row and
+# that screen cannot disagree, and the cost is a fixed number of statements
+# whatever the number of practices. Only the current period has a list;
+# no delta is taken over it.
+#
+# WHY THE ROWS' REVIEWS SUM TO `feedbacks`. The rows are the same practices
+# the total counts (one predicate). Per practice the row counts reviews of
+# ATTENDED bookings (`after`), while `feedbacks` counts every Feedback row
+# of the practice. These are the same rows because a review is written only
+# on an ATTENDED booking (diary/service.py upsert_feedback) and nothing
+# moves a booking off ATTENDED once the practice completed -- see the
+# header of diary/practice_analytics_service.py. The match rests on that
+# write-side rule, not on one statement; tests/test_master_analytics.py
+# pins it. `reviews_total` is NOT part of that sum: it counts the reviews
+# that carry text.
 
 # THE DENOMINATOR -- which bookings count as "записавшиеся".
 #
@@ -273,10 +311,7 @@ async def _count_bookings(
         .select_from(Booking)
         .join(Practice, Booking.practice_id == Practice.id)
         .where(
-            Practice.master_id == user_id,
-            Practice.status == PracticeStatus.COMPLETED.value,
-            Practice.scheduled_at >= start,
-            Practice.scheduled_at < end,
+            *_completed_in_window(user_id, start, end),
             Booking.status.in_(_BOOKED_STATUSES),
         )
     )
@@ -308,10 +343,7 @@ async def _mood_distribution(
         .select_from(Checkin)
         .join(Practice, Checkin.practice_id == Practice.id)
         .where(
-            Practice.master_id == user_id,
-            Practice.status == PracticeStatus.COMPLETED.value,
-            Practice.scheduled_at >= start,
-            Practice.scheduled_at < end,
+            *_completed_in_window(user_id, start, end),
             Checkin.check_type == CheckType.PRE.value,
         )
         .group_by(Checkin.mood)
@@ -333,12 +365,7 @@ async def _rating_distribution(
         select(Feedback.rating, func.count(Feedback.id))
         .select_from(Feedback)
         .join(Practice, Feedback.practice_id == Practice.id)
-        .where(
-            Practice.master_id == user_id,
-            Practice.status == PracticeStatus.COMPLETED.value,
-            Practice.scheduled_at >= start,
-            Practice.scheduled_at < end,
-        )
+        .where(*_completed_in_window(user_id, start, end))
         .group_by(Feedback.rating)
     )
     return zone_counts((await session.execute(stmt)).all())
@@ -376,6 +403,46 @@ async def _analytics_window(
     }
 
 
+async def _conducted_practices(
+    user_id: UUID,
+    start: datetime,
+    end: datetime,
+    session: AsyncSession,
+) -> list[dict]:
+    """The window's practices, newest first, each with its own analytics.
+
+    -> rows for PracticeAnalyticsSummary. Ordered by scheduled_at, then by
+    id: one master can hold two practices on one slot (the title tells them
+    apart in the unique index), and without the second key their order
+    would change from one request to the next. One statement for the list
+    plus practice_analytics_counts' five, for any number of practices; an
+    empty window stops after the first.
+    """
+    practices = (
+        await session.execute(
+            select(Practice)
+            .where(*_completed_in_window(user_id, start, end))
+            .order_by(Practice.scheduled_at.desc(), Practice.id.desc())
+        )
+    ).scalars().all()
+    if not practices:
+        return []
+    counts = await practice_analytics_counts(
+        [practice.id for practice in practices], session,
+    )
+    return [
+        {
+            "practice_id": practice.id,
+            "title": practice.title,
+            "direction": practice.direction,
+            "scheduled_at": practice.scheduled_at,
+            "timezone": practice.timezone,
+            **counts[practice.id],
+        }
+        for practice in practices
+    ]
+
+
 async def get_master_analytics(
     user: User,
     period: str,
@@ -400,6 +467,9 @@ async def get_master_analytics(
 
     current = await _analytics_window(user.id, cur_start, _cur_end, session)
     previous = await _analytics_window(user.id, prev_start, cur_start, session)
+    conducted = await _conducted_practices(
+        user.id, cur_start, _cur_end, session,
+    )
 
     return {
         "practices_count": current["practices_count"],
@@ -437,4 +507,5 @@ async def get_master_analytics(
         ),
         "checkins": current["checkins"],
         "feedbacks": current["feedbacks"],
+        "conducted_practices": conducted,
     }

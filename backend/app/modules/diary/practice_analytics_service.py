@@ -18,8 +18,22 @@
 #
 # ONE POPULATION: the practice's ATTENDED bookings. Every block counts only
 # them, so every "X of N" uses N = attended and they reconcile. A PRE
-# check-in of a no-show is not «до»; a booking corrected away from ATTENDED
-# after its review drops out of every block at once.
+# check-in of a no-show, of a booking Zoom has not judged yet (CONFIRMED) or
+# of a cancelled booking is not «до». Reviews need no such filtering in
+# practice: one is written only on an ATTENDED booking (diary/service.py
+# upsert_feedback), and no writer moves a booking off ATTENDED -- every
+# status writer starts from PENDING or CONFIRMED, and cancelling is refused
+# once the practice completed (bookings/service.py). So `after` holds every
+# review the practice has; the filter is there because it is the one
+# population, not because it drops anything.
+#
+# ONE COMPUTATION FOR ANY NUMBER OF PRACTICES (BE-222):
+# practice_analytics_counts answers the five figures for a set of
+# practices, one grouped statement per figure whatever the set's size. The
+# practice's own screen asks it for one id; the master's analytics list
+# (masters/stats_service.py) asks it for the period's ids. The pairs and
+# reviews totals are counted over the same FROM/WHERE the two lists page
+# (_pairs_from, _reviews_from), so a total always matches its list.
 #
 # ZONES ONLY (BE-24, schools/feedback_service.py): a curator must not
 # see a stranger's stored 1..10, so the scores leave as ScoreZone -- for the
@@ -36,9 +50,10 @@
 # SESSION RULES: read-only -- callers pass get_db_reader. No commit (P-01).
 # =============================================================================
 
+from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, NotFoundError
@@ -125,12 +140,127 @@ def _school_student_clause(practice_id: UUID):
     )
 
 
-def _attended(practice_id: UUID):
-    """Join condition pieces: the ATTENDED bookings of this practice."""
+def _attended_in(practice_ids: Sequence[UUID]):
+    """Where-clause pieces: the ATTENDED bookings of these practices."""
     return (
-        Booking.practice_id == practice_id,
+        Booking.practice_id.in_(practice_ids),
         Booking.status == BookingStatus.ATTENDED.value,
     )
+
+
+def _pairs_from(stmt: Select, practice_ids: Sequence[UUID]) -> Select:
+    """«Пришёл -> ушёл» rows: an attended booking with BOTH its PRE check-in
+    and its review. The one FROM/WHERE behind the pairs list and pairs_total.
+    """
+    return (
+        stmt.select_from(Booking)
+        .join(
+            Checkin,
+            (Checkin.booking_id == Booking.id)
+            & (Checkin.check_type == CheckType.PRE.value),
+        )
+        .join(Feedback, Feedback.booking_id == Booking.id)
+        .join(User, User.id == Booking.user_id)
+        .where(*_attended_in(practice_ids))
+    )
+
+
+def _reviews_from(stmt: Select, practice_ids: Sequence[UUID]) -> Select:
+    """Reviews WITH text of attended bookings. The one FROM/WHERE behind the
+    reviews list and reviews_total; a rating with no or blank text is in
+    `after` but not here.
+    """
+    return (
+        stmt.select_from(Feedback)
+        .join(Booking, Booking.id == Feedback.booking_id)
+        .join(User, User.id == Booking.user_id)
+        .where(
+            *_attended_in(practice_ids),
+            Feedback.comment.is_not(None),
+            func.btrim(Feedback.comment) != "",
+        )
+    )
+
+
+async def practice_analytics_counts(
+    practice_ids: Sequence[UUID],
+    session: AsyncSession,
+) -> dict[UUID, dict]:
+    """attended / before / after / pairs_total / reviews_total per practice.
+
+    Five grouped statements whatever the number of practices -- no statement
+    per practice. Every id passed gets an entry: a practice nobody came to
+    reads 0 with all five zones present (zone_counts), not a missing key.
+    No rights check and no status check here: callers decide which
+    practices may be read (_load_readable_practice, or the master's own
+    completed practices in masters/stats_service.py).
+    """
+    attended = dict(
+        (
+            await session.execute(
+                select(Booking.practice_id, func.count(Booking.id))
+                .where(*_attended_in(practice_ids))
+                .group_by(Booking.practice_id)
+            )
+        ).all()
+    )
+    before_rows = (
+        await session.execute(
+            select(Booking.practice_id, Checkin.mood, func.count())
+            .select_from(Checkin)
+            .join(Booking, Booking.id == Checkin.booking_id)
+            .where(
+                *_attended_in(practice_ids),
+                Checkin.check_type == CheckType.PRE.value,
+            )
+            .group_by(Booking.practice_id, Checkin.mood)
+        )
+    ).all()
+    after_rows = (
+        await session.execute(
+            select(Booking.practice_id, Feedback.rating, func.count())
+            .select_from(Feedback)
+            .join(Booking, Booking.id == Feedback.booking_id)
+            .where(*_attended_in(practice_ids))
+            .group_by(Booking.practice_id, Feedback.rating)
+        )
+    ).all()
+    pairs = dict(
+        (
+            await session.execute(
+                _pairs_from(
+                    select(Booking.practice_id, func.count()), practice_ids,
+                ).group_by(Booking.practice_id)
+            )
+        ).all()
+    )
+    reviews = dict(
+        (
+            await session.execute(
+                _reviews_from(
+                    select(Booking.practice_id, func.count()), practice_ids,
+                ).group_by(Booking.practice_id)
+            )
+        ).all()
+    )
+
+    before: dict[UUID, list[tuple[int, int]]] = {pid: [] for pid in practice_ids}
+    for pid, mood, count in before_rows:
+        before[pid].append((mood, count))
+    after: dict[UUID, list[tuple[int, int]]] = {pid: [] for pid in practice_ids}
+    for pid, rating, count in after_rows:
+        after[pid].append((rating, count))
+
+    return {
+        pid: {
+            "attended": attended.get(pid, 0),
+            "before": zone_counts(before[pid]),
+            "after": zone_counts(after[pid]),
+            "pairs_total": pairs.get(pid, 0),
+            "reviews_total": reviews.get(pid, 0),
+        }
+        for pid in practice_ids
+    }
 
 
 async def get_practice_analytics(
@@ -141,29 +271,7 @@ async def get_practice_analytics(
     """Header, both zone distributions and the two list totals."""
     practice, role = await _load_readable_practice(user, practice_id, session)
     master = await session.get(User, practice.master_id)
-
-    attended = await session.scalar(
-        select(func.count(Booking.id)).where(*_attended(practice_id))
-    )
-    before_rows = (
-        await session.execute(
-            select(Checkin.mood, func.count())
-            .join(Booking, Booking.id == Checkin.booking_id)
-            .where(
-                *_attended(practice_id),
-                Checkin.check_type == CheckType.PRE.value,
-            )
-            .group_by(Checkin.mood)
-        )
-    ).all()
-    after_rows = (
-        await session.execute(
-            select(Feedback.rating, func.count())
-            .join(Booking, Booking.id == Feedback.booking_id)
-            .where(*_attended(practice_id))
-            .group_by(Feedback.rating)
-        )
-    ).all()
+    counts = (await practice_analytics_counts([practice.id], session))[practice.id]
 
     return {
         "practice_id": practice.id,
@@ -184,52 +292,30 @@ async def get_practice_analytics(
             master.last_name if master else None,
         ),
         "master_avatar_url": master.avatar_url if master else None,
-        "attended": attended or 0,
-        "before": zone_counts(before_rows),
-        "after": zone_counts(after_rows),
-        "pairs_total": await session.scalar(
-            select(func.count()).select_from(_pairs_query(practice_id).subquery())
-        ),
-        "reviews_total": await session.scalar(
-            select(func.count()).select_from(_reviews_query(practice_id).subquery())
-        ),
+        **counts,
     }
 
 
 def _pairs_query(practice_id: UUID):
-    return (
+    return _pairs_from(
         select(
             Checkin.mood,
             Feedback.rating,
             User,
             _school_student_clause(practice_id).label("is_school_student"),
-        )
-        .select_from(Booking)
-        .join(
-            Checkin,
-            (Checkin.booking_id == Booking.id)
-            & (Checkin.check_type == CheckType.PRE.value),
-        )
-        .join(Feedback, Feedback.booking_id == Booking.id)
-        .join(User, User.id == Booking.user_id)
-        .where(*_attended(practice_id))
+        ),
+        [practice_id],
     )
 
 
 def _reviews_query(practice_id: UUID):
-    return (
+    return _reviews_from(
         select(
             Feedback,
             User,
             _school_student_clause(practice_id).label("is_school_student"),
-        )
-        .join(Booking, Booking.id == Feedback.booking_id)
-        .join(User, User.id == Booking.user_id)
-        .where(
-            *_attended(practice_id),
-            Feedback.comment.is_not(None),
-            func.btrim(Feedback.comment) != "",
-        )
+        ),
+        [practice_id],
     )
 
 

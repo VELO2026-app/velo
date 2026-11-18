@@ -635,30 +635,48 @@ class PracticeAnalyticsViewerRole(enum.StrEnum):
     SCHOOL_MASTER = "school_master"
 
 
-class PracticeAnalyticsResponse(BaseModel):
-    """GET /practices/{id}/analytics -- the header and both distributions.
+class PracticeAnalyticsSummary(BaseModel):
+    """One completed practice's analytics, without anything about its reader.
 
-    `attended` is the denominator of every "X of N" on the screen; the
-    "check-ins before" figure is the sum of `before` (PRE check-ins of the
-    attended), so the blocks reconcile.
+    The part of /practices/{id}/analytics that does not depend on who reads
+    it, and so also the row of the master's conducted-practices list (BE-222,
+    MasterAnalyticsResponse.conducted_practices): one class, one computation
+    (practice_analytics_service.practice_analytics_counts), so a row of the
+    list and the practice's own screen cannot disagree.
+
+    `attended` is the denominator of every "X of N"; the "check-ins before"
+    figure is the sum of `before` (PRE check-ins of the attended), so the
+    blocks reconcile. `after` holds every review of the attended -- its sum
+    is the number of reviews left. `reviews_total` is NOT that number: it is
+    how many of those reviews carry text, the total of the /analytics/reviews
+    list. `pairs_total` is the total of /analytics/pairs.
     """
 
     practice_id: UUID
-    viewer_role: PracticeAnalyticsViewerRole
-    school_id: UUID | None = Field(
-        description="The practice's school -- for viewer_role=curator only.",
-    )
     title: str
     direction: str | None
     scheduled_at: datetime
     timezone: str
-    master_name: str
-    master_avatar_url: str | None
     attended: int
     before: ScoreZoneCounts
     after: ScoreZoneCounts
     pairs_total: int
     reviews_total: int
+
+
+class PracticeAnalyticsResponse(PracticeAnalyticsSummary):
+    """GET /practices/{id}/analytics -- the summary plus how it is read.
+
+    Adds what depends on the reader or names the leading master: the reader's
+    role, the school for a curator, the master's name and avatar.
+    """
+
+    viewer_role: PracticeAnalyticsViewerRole
+    school_id: UUID | None = Field(
+        description="The practice's school -- for viewer_role=curator only.",
+    )
+    master_name: str
+    master_avatar_url: str | None
 
 
 class PracticeAnalyticsPair(BaseModel):
