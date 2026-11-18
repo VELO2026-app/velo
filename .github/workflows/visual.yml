@@ -1,0 +1,172 @@
+# =============================================================================
+# VELO CI -- visual comparison of base and head (FE-162; its own workflow
+# since FE-206)
+#
+# Key screens of the head and the base build from recorded API answers,
+# pixel-compared; informational, red only for a PR labeled `no-visual-change`
+# (docs/agents/e2e.md). A `visual` / `no-visual-change` label put on or taken
+# off an open PR re-runs it without the rest of CI.
+#
+# Why a workflow of its own (FE-206): in ci.yml a label event produced a run
+# where every other job was "skipped" under the same names as the real
+# checks -- `gh pr checks` and the merge box then showed a red build as
+# skipped. ci.yml no longer listens to labels; this workflow and
+# bundle-budget.yml do.
+#
+# Any label reaches this workflow, the bundle ones (`bundle-growth`,
+# `bundle-ceiling`) included. Such an "other label" run must leave the
+# visual verdict alone:
+#   - concurrency: it gets a group of its own (the run id), so it neither
+#     cancels a visual run in progress nor is cancelled by one -- put
+#     `no-visual-change` and then `bundle-growth`, and the comparison the
+#     first label started still finishes;
+#   - check names: the merge box and `gh pr checks` show the LATEST check of
+#     each name on the head commit, so a skipped `visual — base vs head`
+#     would shadow the real one. visual-scope therefore always runs (seconds,
+#     always green: shadowing it changes nothing) and only the visual job is
+#     skipped -- under a name of its own, see the job.
+# Every other event (opened / synchronize / reopened, a visual label) shares
+# one group per PR, the newest event wins.
+# =============================================================================
+name: Visual
+
+on:
+  pull_request:
+    branches: [test, deploy-machine]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+# The `-other-label-` suffix: a label event for a label that is not `visual`
+# / `no-visual-change` (the same test as OTHER_LABEL in visual-scope).
+concurrency:
+  group: visual-${{ github.ref }}${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && !contains(fromJSON('["visual","no-visual-change"]'), github.event.label.name) && format('-other-label-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
+jobs:
+  # FE-162: visual-scope decides whether the visual job runs.
+  #   another label (OTHER_LABEL)       -> no, see the header
+  #   a `visual` / `no-visual-change`
+  #   label put on or taken off         -> yes
+  #   opened / synchronize / reopened   -> the `visual` or `no-visual-change`
+  #                                        label, or a PR that touches styles,
+  #                                        tokens, velo-ui, public/, the lockfile
+  # `strict` = the PR carries `no-visual-change`: a non-empty report fails.
+  visual-scope:
+    name: visual — scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OTHER_LABEL: ${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && !contains(fromJSON('["visual","no-visual-change"]'), github.event.label.name) }}
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+      strict: ${{ steps.decide.outputs.strict }}
+    steps:
+      - uses: actions/checkout@v7
+        if: env.OTHER_LABEL != 'true'
+        with:
+          fetch-depth: 2
+
+      - name: Classify the PR diff
+        id: scope
+        if: env.OTHER_LABEL != 'true'
+        run: node .github/scripts/ci-scope.mjs HEAD^1 HEAD
+
+      - name: Decide
+        id: decide
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          ACTION: ${{ github.event.action }}
+          PATHS: ${{ steps.scope.outputs.visual }}
+        run: |
+          has() { echo "$LABELS" | grep -q "\"$1\""; }
+          strict=false; has no-visual-change && strict=true
+          run=false
+          case "$ACTION" in
+            labeled|unlabeled) [ "$OTHER_LABEL" = true ] || run=true ;;
+            *)
+              if [ "$PATHS" = true ] || has visual || [ "$strict" = true ]; then run=true; fi ;;
+          esac
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "strict=$strict" >> "$GITHUB_OUTPUT"
+
+  # FE-162: what did a refactor PR change on screen? The head build and the
+  # base build, each shot on 19 key screens from recorded API answers
+  # (frontend/e2e/visual/har, no backend), compared pixel by pixel.
+  # Informational by default; with `no-visual-change` a non-empty report fails
+  # the job. The container is Playwright's own image so fonts render the same
+  # every run -- its tag MUST equal @playwright/test (checked below).
+  #
+  # The name (FE-206): a job that runs is named `visual — base vs head`. A
+  # skipped one must not carry that name, or it shadows the last real result
+  # (header). GitHub does not evaluate the name of a skipped job and shows the
+  # template as is -- already a different name; were it ever evaluated, the
+  # expression gives "(not run)" -- different again.
+  visual:
+    name: visual — base vs head${{ needs.visual-scope.outputs.run != 'true' && ' (not run)' || '' }}
+    needs: visual-scope
+    if: needs.visual-scope.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    continue-on-error: ${{ needs.visual-scope.outputs.strict != 'true' }}
+    container: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The PR merge commit and its first parent (the base tip).
+          fetch-depth: 2
+
+      - name: Mark the workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Base checkout (the PR's base tip)
+        run: git worktree add --detach "$RUNNER_TEMP/base" HEAD^1
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install head (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # The base has its own lockfile: a dependency upgrade is exactly what
+      # this job is for.
+      - name: Install base (frozen lockfile)
+        working-directory: ${{ runner.temp }}/base
+        run: pnpm install --frozen-lockfile
+
+      - name: The image matches @playwright/test
+        working-directory: frontend
+        run: |
+          v=$(pnpm exec playwright --version | awk '{print $2}')
+          [ "$v" = "1.64.1" ] || { echo "playwright $v does not match the image tag v1.64.1 -- update container: above"; exit 1; }
+
+      # FE-204: vite only (types are the typecheck job's).
+      - name: Build head
+        run: pnpm -C frontend exec vite build
+
+      - name: Build base
+        working-directory: ${{ runner.temp }}/base
+        run: pnpm -C frontend exec vite build
+
+      - name: Shoot both builds and compare
+        working-directory: frontend
+        env:
+          VISUAL_STRICT: ${{ needs.visual-scope.outputs.strict == 'true' && '1' || '0' }}
+        run: sh e2e/visual/run.sh "$RUNNER_TEMP/base/frontend/dist" dist
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: visual-out
+          path: |
+            frontend/visual-out
+            frontend/test-results
+          retention-days: 7
