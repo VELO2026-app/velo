@@ -352,11 +352,46 @@ describe('VInput', () => {
       ).toBe(true)
     })
 
-    it('floatingLabel is IGNORED when an affix slot is present: the affix path wins', () => {
-      mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма' }, 'prefix')
+    // FE-205: the affix path has no label of its own, so floatingLabel + an
+    // affix used to render NO label at all -- a field without an accessible
+    // name. The external label must take over there.
+    it.each(['prefix', 'suffix'] as const)(
+      'floatingLabel + a %s slot: the affix path renders with the EXTERNAL label bound to its input',
+      (affix) => {
+        mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма' }, affix)
 
-      expect(host?.querySelector('.v-input__float')).toBeNull()
-      expect(host?.querySelector('.v-input__box')).not.toBeNull()
+        expect(host?.querySelector('.v-input__float')).toBeNull()
+        const label = host?.querySelector('label.v-input__label')
+        const input = host?.querySelector('input.v-input__field--bare')
+        expect(label?.textContent).toBe('Сумма')
+        expect(label?.getAttribute('for')).toBe(input?.id)
+      },
+    )
+
+    // FE-205 review: the slots object is not reactive, so the floating/affix
+    // choice must be re-read on every render, not cached.
+    it('an affix slot that appears AFTER mount switches to the affix path with the external label', async () => {
+      const currency = ref(false)
+      host = document.createElement('div')
+      document.body.appendChild(host)
+      app = createApp({
+        render: () =>
+          h(
+            VInput,
+            { floatingLabel: true, label: 'Сумма', modelValue: '' },
+            currency.value ? { prefix: () => h('span', '€') } : {},
+          ),
+      })
+      app.mount(host)
+      expect(host.querySelector('.v-input__float')).not.toBeNull()
+
+      currency.value = true
+      await nextTick()
+      expect(host.querySelector('.v-input__float')).toBeNull()
+      expect(host.querySelector('.v-input__affix')?.textContent).toBe('€')
+      const label = host.querySelector('label.v-input__label')
+      expect(label?.textContent).toBe('Сумма')
+      expect(label?.getAttribute('for')).toBe(host.querySelector('input')?.id)
     })
 
     it('affix path: the external label binds the inner bare input id too', () => {

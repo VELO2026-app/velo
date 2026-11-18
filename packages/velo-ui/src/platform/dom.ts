@@ -34,6 +34,11 @@ export function offDocumentEvent<K extends keyof DocumentEventMap>(
   document.removeEventListener(type, listener as EventListener, options)
 }
 
+/** document.activeElement -- the focused element (VMenu's focus return). */
+export function activeElement(): Element | null {
+  return document.activeElement
+}
+
 /** document.body.style.overflow = value (the body-scroll lock's on/off). */
 export function setBodyOverflow(value: string): void {
   document.body.style.overflow = value
