@@ -1,0 +1,58 @@
+# =============================================================================
+# VELO CI -- bundle budget guard (FE-183; its own workflow since FE-206)
+#
+# The label rule of frontend/bundle-budget.json: a raised budget needs the
+# `bundle-growth` label, a raised ceiling `bundle-ceiling` (policy:
+# docs/agents/bundle.md). The size itself is checked by the build job of
+# ci.yml; this guard only compares the budget FILE of the base branch with
+# the head and reads the PR labels. No install, no build, ~10 s.
+#
+# Why a workflow of its own (FE-206): a label must re-run this check, and in
+# ci.yml a label event produced a run where every other job was "skipped"
+# under the same names as the real checks -- `gh pr checks` and the merge box
+# then showed a red build as skipped. Here every event, a label one included,
+# runs the one job in full, so its latest result is always a real verdict.
+# Visual labels re-run it too: harmless (it is cheap) and it never skips.
+#
+# Concurrency: per PR, the newest event wins -- it carries the current label
+# set. Its own group, so it never cancels CI or Visual.
+# =============================================================================
+name: Bundle budget
+
+on:
+  pull_request:
+    branches: [test, deploy-machine]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bundle-budget-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The base file is the first parent of the merge ref (HEAD^1, as in the
+  # scope job of ci.yml), the very base this PR was merged onto: a budget
+  # lowered on the base branch since then must not look like a raise made by
+  # this PR. The labels come from the event payload (passed through env,
+  # never interpolated into the script).
+  bundle-budget-guard:
+    name: bundle budget guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Budget file of the base branch
+        run: |
+          if git cat-file -e "HEAD^1:frontend/bundle-budget.json" 2>/dev/null; then
+            git show "HEAD^1:frontend/bundle-budget.json" > "$RUNNER_TEMP/base-budget.json"
+          fi
+
+      - name: Budget or ceiling raised without its label
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node frontend/scripts/bundle-budget-guard.mjs --base "$RUNNER_TEMP/base-budget.json" --labels "$LABELS"

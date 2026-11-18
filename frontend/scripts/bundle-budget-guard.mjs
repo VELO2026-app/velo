@@ -1,6 +1,7 @@
 // Bundle budget guard (FE-183): the label rule of bundle-budget.json.
 //
-// Runs in the `bundle-budget-guard` CI job: no install, no build. Compares
+// Runs in the `bundle-budget-guard` job of .github/workflows/bundle-budget.yml
+// (FE-206): no install, no build. Compares
 // bundle-budget.json of the base branch with the head and fails when a budget
 // value was raised without the `bundle-growth` label, or a ceiling value
 // without `bundle-ceiling`. Rules: scripts/lib/bundle-budget.mjs, policy:

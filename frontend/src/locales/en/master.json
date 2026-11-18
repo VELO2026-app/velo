@@ -127,7 +127,14 @@
         "duplicate": "The master already has such a practice",
         "published": "The practice has been published — the master will be notified",
         "openExisting": "You have already created this practice — opening the existing one",
-        "createFailed": "Failed to create the practice"
+        "createFailed": "Failed to create the practice",
+        "publishFailed": "Failed to publish the practice"
+      },
+      "publishFailed": {
+        "title": "Draft saved but not published",
+        "text": "The practice is already created. Publish it again or open the draft — no need to create it again.",
+        "publish": "Publish",
+        "openDraft": "Open draft"
       },
       "title": "New practice",
       "titlePlaceholder": "Title",
