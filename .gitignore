@@ -43,3 +43,6 @@ dump.rdb
 
 # ZCode local config (may contain MCP secrets)
 .zcode/
+
+# Turborepo cache
+.turbo/

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "ui": "stream",
+  "globalDependencies": ["pnpm-lock.yaml", "pnpm-workspace.yaml"],
+  // Strict env mode: a task sees only the variables named here. Output-only
+  // variables are passed through WITHOUT entering the hash: the CI step
+  // summary file (nothing run by turbo writes it today -- coverage-budget and
+  // bundle-report run as plain CI steps -- but a gate that starts to must keep
+  // working), the GitHub reporter switch and colour switches. Variables that
+  // can change a result are per task, in `env`, so they enter the hash.
+  "globalPassThroughEnv": [
+    "GITHUB_ACTIONS",
+    "GITHUB_STEP_SUMMARY",
+    "FORCE_COLOR",
+    "NO_COLOR"
+  ],
+  "tasks": {
+    "lint": {},
+    "format:check": {},
+    "typecheck": {},
+    // TZ: tests that do not stub it run in the process zone. CI: vitest turns
+    // `allowOnly` off when CI is set, so a committed `.only` fails in CI only.
+    // NODE_ENV: vitest/vite pick the mode from it. VITE_*: the instance
+    // passport values (instance.ts, passport-html.ts) read from the env.
+    "test": {
+      "env": ["TZ", "CI", "NODE_ENV", "VITE_*"]
+    },
+    "test:shard": {
+      "env": ["TZ", "CI", "NODE_ENV", "VITE_*"]
+    },
+    "build": {
+      "env": ["NODE_ENV", "VITE_*"],
+      "outputs": ["dist/**"]
+    }
+  }
+}

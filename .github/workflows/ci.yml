@@ -104,6 +104,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Turborepo sends anonymous usage telemetry by default; keep CI quiet.
+  TURBO_TELEMETRY_DISABLED: '1'
+
 concurrency:
   group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -181,8 +185,23 @@ jobs:
             packages/velo-ui/node_modules/.cache/eslint
           key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'frontend/eslint.config.js', 'packages/velo-ui/eslint.config.js', 'frontend/tsconfig*.json', 'packages/velo-ui/tsconfig*.json', 'frontend/src/**', 'frontend/scripts/**', 'frontend/e2e/**', 'frontend/playwright.config.ts', 'frontend/vite.config.ts', 'frontend/vitest.config.ts', 'frontend/eslint-rules/**', 'packages/velo-ui/src/**', 'packages/velo-ui/vitest.config.ts') }}
 
+      # Turborepo task cache (turbo.json). Entries are addressed by the hash of
+      # every task input, so a stale restore can only miss, never serve a wrong
+      # result: restore-keys is safe here. Entries a week old are dropped before
+      # the run adds its own, since restore-keys carries the archive forward and
+      # turbo never evicts.
+      - name: Restore Turborepo cache
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-lint-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-lint-
+
+      - name: Prune old Turborepo cache entries
+        run: find .turbo/cache -type f -mtime +7 -delete 2>/dev/null || true
+
       - name: Lint (zero-warning budget; covers packages/ via lint-budget)
-        run: pnpm -C frontend lint
+        run: pnpm turbo run lint --filter=velo-frontend
 
   format:
     name: format — prettier
@@ -206,8 +225,23 @@ jobs:
       - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # Turborepo task cache (turbo.json). Entries are addressed by the hash of
+      # every task input, so a stale restore can only miss, never serve a wrong
+      # result: restore-keys is safe here. Entries a week old are dropped before
+      # the run adds its own, since restore-keys carries the archive forward and
+      # turbo never evicts.
+      - name: Restore Turborepo cache
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-format-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-format-
+
+      - name: Prune old Turborepo cache entries
+        run: find .turbo/cache -type f -mtime +7 -delete 2>/dev/null || true
+
       - name: Format check
-        run: pnpm -C frontend format:check && pnpm -C packages/velo-ui format:check
+        run: pnpm turbo run format:check
 
   typecheck:
     name: typecheck — vue-tsc
@@ -231,8 +265,23 @@ jobs:
       - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # Turborepo task cache (turbo.json). Entries are addressed by the hash of
+      # every task input, so a stale restore can only miss, never serve a wrong
+      # result: restore-keys is safe here. Entries a week old are dropped before
+      # the run adds its own, since restore-keys carries the archive forward and
+      # turbo never evicts.
+      - name: Restore Turborepo cache
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-typecheck-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-typecheck-
+
+      - name: Prune old Turborepo cache entries
+        run: find .turbo/cache -type f -mtime +7 -delete 2>/dev/null || true
+
       - name: Typecheck (vue-tsc)
-        run: pnpm -C frontend typecheck
+        run: pnpm turbo run typecheck --filter=velo-frontend
 
   # FE-204: the frontend suite in three shards cut by recorded duration
   # (frontend/vitest.sequencer.ts over test-durations.json), each with v8
@@ -264,10 +313,26 @@ jobs:
       - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # Turborepo task cache (turbo.json). Entries are addressed by the hash of
+      # every task input, so a stale restore can only miss, never serve a wrong
+      # result: restore-keys is safe here. Entries a week old are dropped before
+      # the run adds its own, since restore-keys carries the archive forward and
+      # turbo never evicts.
+      - name: Restore Turborepo cache
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-test-${{ matrix.shard }}-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-test-${{ matrix.shard }}-
+
+      - name: Prune old Turborepo cache entries
+        run: find .turbo/cache -type f -mtime +7 -delete 2>/dev/null || true
+
+      # The shard's command is the package script `test:shard` (VITEST_SHARD=1
+      # vitest run --coverage --reporter=blob --reporter=default); the shard
+      # argument is part of the turbo hash, the blob is its cached output.
       - name: Tests + coverage (frontend, one shard)
-        env:
-          VITEST_SHARD: "1"
-        run: pnpm -C frontend exec vitest run --coverage --shard=${{ matrix.shard }}/3 --reporter=blob --reporter=default
+        run: pnpm turbo run test:shard --filter=velo-frontend -- --shard=${{ matrix.shard }}/3
 
       - uses: actions/upload-artifact@v7
         with:
@@ -341,8 +406,23 @@ jobs:
       - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # Turborepo task cache (turbo.json). Entries are addressed by the hash of
+      # every task input, so a stale restore can only miss, never serve a wrong
+      # result: restore-keys is safe here. Entries a week old are dropped before
+      # the run adds its own, since restore-keys carries the archive forward and
+      # turbo never evicts.
+      - name: Restore Turborepo cache
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-test-other-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-test-other-
+
+      - name: Prune old Turborepo cache entries
+        run: find .turbo/cache -type f -mtime +7 -delete 2>/dev/null || true
+
       - name: Tests (@velo/ui)
-        run: pnpm -C packages/velo-ui test
+        run: pnpm turbo run test --filter=@velo/ui
 
   build:
     name: build — @velo/ui / app + build-log gate
@@ -366,8 +446,23 @@ jobs:
       - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # Turborepo task cache (turbo.json). Entries are addressed by the hash of
+      # every task input, so a stale restore can only miss, never serve a wrong
+      # result: restore-keys is safe here. Entries a week old are dropped before
+      # the run adds its own, since restore-keys carries the archive forward and
+      # turbo never evicts.
+      - name: Restore Turborepo cache
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-build-${{ github.sha }}
+          restore-keys: turbo-${{ runner.os }}-build-
+
+      - name: Prune old Turborepo cache entries
+        run: find .turbo/cache -type f -mtime +7 -delete 2>/dev/null || true
+
       - name: Build @velo/ui (vite lib + vue-tsc dts)
-        run: pnpm -C packages/velo-ui build
+        run: pnpm turbo run build --filter=@velo/ui
 
       # FE-153: the build log is gated too -- a cyclic cross-chunk re-export
       # (broken chunk execution order) or an undefined VITE_ html placeholder
