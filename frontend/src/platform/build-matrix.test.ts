@@ -70,7 +70,19 @@ const {
   tokenDecls(css: string): string[]
 }
 
-const EDITIONS = JSON.parse(readFileSync(join(process.cwd(), '..', 'editions.json'), 'utf8'))
+// The planner is tested against a fixed multi-edition fixture, not the repo's
+// editions.json: the file now holds one edition (`ai`, BE-182) and the matrix
+// logic -- cut editions, skins x full, invariant d -- must stay pinned.
+const EDITIONS = {
+  schema: 1,
+  editions: {
+    core: { modules: [] },
+    school: { modules: [] },
+    'school-payments': { modules: ['payments'] },
+    full: { modules: ['ai', 'payments'] },
+  },
+}
+const REPO_EDITIONS = JSON.parse(readFileSync(join(process.cwd(), '..', 'editions.json'), 'utf8'))
 const SKINS = [
   { label: 'acme', source: '/pkg/acme' },
   { label: 'nova', source: '/pkg/nova' },
@@ -125,6 +137,18 @@ describe('planCells (FE-152: golden x editions, skins x full)', () => {
     ])
   })
 
+  it("the repo's editions.json (one edition since BE-182) plans a single golden cell", () => {
+    expect(planCells(REPO_EDITIONS, []).map((c) => c.name)).toEqual(['golden/ai'])
+  })
+
+  it('with one edition in editions.json the skins ride that edition (CI passes --skin)', () => {
+    expect(planCells(REPO_EDITIONS, SKINS).map((c) => c.name)).toEqual([
+      'golden/ai',
+      'acme/ai',
+      'nova/ai',
+    ])
+  })
+
   it('with no --skin the matrix is golden x editions (the default and CI run)', () => {
     expect(planCells(EDITIONS, []).map((c) => c.name)).toEqual([
       'golden/core',
@@ -156,9 +180,9 @@ describe('planCells (FE-152: golden x editions, skins x full)', () => {
   })
 
   it('an edition missing from editions.json is a named error', () => {
-    expect(() => planCells({ schema: 1, editions: { core: { modules: [] } } }, SKINS)).toThrow(
-      /"full" is not in editions\.json/,
-    )
+    expect(() =>
+      planCells({ schema: 1, editions: { core: { modules: [] }, school: { modules: [] } } }, SKINS),
+    ).toThrow(/"full" is not in editions\.json/)
   })
 })
 
@@ -303,6 +327,15 @@ describe('per-cell CI mode: the fan-in (--check-assets)', () => {
     expect(fails[0]).toContain('goodo/full:393')
   })
 
+  it('invariant d holds per edition: the golden cell and the skin cells of `ai` must agree', () => {
+    expect(assetCountFails([entry('golden/ai', 'ai', 385), entry('acme/ai', 'ai', 385)])).toEqual(
+      [],
+    )
+    expect(
+      assetCountFails([entry('golden/ai', 'ai', 385), entry('acme/ai', 'ai', 386)]),
+    ).toHaveLength(1)
+  })
+
   it('a planned cell without a facts file fails -- never a silent green', () => {
     const fails = fanInFails(['golden/full', 'goodo/full'], [entry('golden/full', 'full', 392)])
     expect(fails).toEqual(['goodo/full: no facts file -- the cell never reported'])
@@ -317,14 +350,14 @@ describe('per-cell CI mode: the fan-in (--check-assets)', () => {
     const run = cli('--list')
     expect(run.status).toBe(0)
     const cells = JSON.parse(run.stdout) as string[]
-    expect(cells).toContain('golden/full')
-    expect(cells).toContain('golden/core')
+    // The repo's editions.json: one edition, `ai` (BE-182).
+    expect(cells).toEqual(['golden/ai'])
   })
 
   it('--cell with an unknown name fails and names the known cells', () => {
     const run = cli('--cell', 'nope/none')
     expect(run.status).toBe(1)
     expect(run.stderr).toContain('no cell "nope/none"')
-    expect(run.stderr).toContain('golden/full')
+    expect(run.stderr).toContain('golden/ai')
   })
 })

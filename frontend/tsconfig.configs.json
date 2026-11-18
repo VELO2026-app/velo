@@ -20,5 +20,5 @@
       "@velo/ui": ["../packages/velo-ui/src/index.ts"]
     }
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "env.d.ts"]
+  "include": ["vite.config.ts", "vitest.config.ts", "vitest.sequencer.ts", "env.d.ts"]
 }

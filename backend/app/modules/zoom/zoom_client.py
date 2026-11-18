@@ -28,14 +28,12 @@
 #   of the functions below need asyncio.to_thread; wrapping an already-async
 #   call in one would just add a needless thread hop.
 #
-# STUB MODE: there is no Zoom sandbox for local dev. settings.is_zoom_stub
-#   (true whenever credentials are blank, or ZOOM_CLIENT_SECRET="TEST",
-#   mirroring the Stripe "TEST" sentinel) short-circuits every call below
-#   with deterministic fake data, so callers can exercise their control flow
-#   (success handling, failure handling, retry wiring) without real
-#   credentials. UNLIKE the Stripe stub, there is no startup-blocking guard
-#   here -- see the settings.is_zoom_stub docstring in core/config.py for
-#   why, and do not add one without re-reading that reasoning first.
+# STUB MODE: there is no Zoom sandbox. settings.is_zoom_stub short-circuits
+#   every call below with deterministic fake data, so callers can exercise
+#   their control flow (success handling, failure handling, retry wiring)
+#   without reaching Zoom. It is on for the test suite only (tests/conftest.py)
+#   -- never on an instance: every role runs on real Zoom keys (BE-192,
+#   owner ruling; see _zoom_stub in core/config.py).
 #
 # FAILURE SHAPE: every call raises ZoomAPIError (status_code, body) on a
 #   non-2xx response or a network failure. This module never swallows
@@ -179,7 +177,17 @@ async def _request(
     json_body: dict | None = None,
     params: dict | None = None,
 ) -> Any:
-    """Make one authenticated Zoom API call. Raises ZoomAPIError on failure."""
+    """Make one authenticated Zoom API call. Raises ZoomAPIError on failure.
+
+    BE-182, a backstop: with the option `zoom` off nothing should get here
+    -- no meeting row is made, the pollers do not start, the master's retry
+    and the SDK entry answer 404 (app/core/options.py; tests/test_options.py
+    holds it). If something does, it fails like an unreachable Zoom, which
+    every caller already handles, and never reads the keys -- with the
+    option off they hold the machine's literal (protocol 5.2.3).
+    """
+    if not settings.option_zoom:
+        raise ZoomAPIError("Zoom is off on this instance (option zoom)")
     if settings.is_zoom_stub:
         return _stub_response(method, path, json_body)
 

@@ -1,41 +1,49 @@
 # =============================================================================
-# VELO Backend -- ASGI Middleware
+# VELO Backend -- ASGI Middleware: the request's context
 # =============================================================================
 #
-# Pure ASGI middleware -- no BaseHTTPMiddleware wrapper. This guarantees
-# that structlog contextvars work reliably without TaskGroup isolation
-# issues that BaseHTTPMiddleware can introduce.
+# Pure ASGI middleware -- no BaseHTTPMiddleware wrapper, so the context
+# variables below are set in the task that runs the endpoint.
 #
-# TRACE ID (Pre-6.1):
-#   Every HTTP request gets a trace_id:
-#     - From X-Trace-ID header (if provided by client/load balancer)
-#     - Or auto-generated uuid4
-#   The trace_id is:
-#     1. Bound to structlog contextvars -> appears in every log line
-#     2. Returned in X-Trace-ID response header -> client can correlate
-#   In Phase 6 (Payments), trace_id will link AuditLog entries to
-#   application logs for financial operation tracing.
+# REQUEST ID (protocol 9.6, BE-190):
+#   Every HTTP request gets a request_id:
+#     - the LAST X-Request-ID header, when it has the form
+#       [A-Za-z0-9._-]{1,128} (the one the nearest proxy wrote; an earlier
+#       one is never used instead of a malformed last one);
+#     - otherwise a fresh uuid4 (36 characters).
+#   It is put in REQUEST_ID for the request, echoed in the X-Request-ID
+#   response header, written into every log line (core/logging.py), sent to
+#   comms on every call (core/comms.py) and carried by every event of the
+#   comms stream (core/events). The form keeps it from breaking or forging a
+#   log line or a header.
 #
-# SECURITY (SEC-01):
-#   Client-provided trace_id is validated against a safe character set
-#   (alphanumeric + dots, hyphens, underscores). This prevents log
-#   injection, header injection, and JSONB pollution via crafted
-#   X-Trace-ID values that end up in AuditLog.trace_id (String(36)).
+# CLIENT ADDRESS AND USER AGENT:
+#   kept in their own context variables for the audit trail (core/audit.py)
+#   and the per-source limiters -- never in a log line (protocol 9.4: a
+#   person's data has no place there).
 # =============================================================================
 
 import ipaddress
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from uuid import uuid4
 
-import structlog
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-# SEC-01: Safe character set for client-provided trace IDs.
-# Allows UUIDs (hex + hyphens), custom IDs like "my-custom-trace-42",
-# and dotted formats like "svc.req.123". Rejects spaces, newlines,
-# unicode, quotes, slashes, and other injection vectors.
-_TRACE_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+REQUEST_ID_HEADER = "X-Request-ID"
+_REQUEST_ID_HEADER_KEY = REQUEST_ID_HEADER.lower().encode()
+
+# Protocol 9.6: the form an incoming id must have to be kept.
+REQUEST_ID_FORM = re.compile(r"[A-Za-z0-9._-]{1,128}")
+
+REQUEST_ID: ContextVar[str | None] = ContextVar("velo_request_id", default=None)
+_CLIENT_IP: ContextVar[str | None] = ContextVar("velo_client_ip", default=None)
+_CLIENT_USER_AGENT: ContextVar[str | None] = ContextVar(
+    "velo_client_user_agent", default=None
+)
 
 # T-47 / BE-40: hard cap applied to X-Real-IP BEFORE it is parsed. Equal to
 # the width of AuditLog.ip_address (String(45)) on purpose, and tied to it by
@@ -47,11 +55,59 @@ _TRACE_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 _MAX_CLIENT_IP_LEN = 45
 
 
-class TraceIdMiddleware:
-    """Attach a trace_id to every HTTP request.
+def new_request_id() -> str:
+    """A fresh request id: a uuid4, 36 characters."""
+    return str(uuid4())
 
-    Pure ASGI implementation -- operates directly on scope/receive/send
-    without intermediate abstractions.
+
+def current_request_id() -> str | None:
+    """The id of the request being served, or None outside a request."""
+    return REQUEST_ID.get()
+
+
+@contextmanager
+def request_id_scope() -> Iterator[str]:
+    """The current request id, or a fresh one bound for the block.
+
+    For work outside an HTTP request (a background loop calling comms): the
+    log lines of the block and the call it makes carry the same id.
+    """
+    current = REQUEST_ID.get()
+    if current is not None:
+        yield current
+        return
+    token = REQUEST_ID.set(new_request_id())
+    try:
+        yield REQUEST_ID.get()  # type: ignore[misc]
+    finally:
+        REQUEST_ID.reset(token)
+
+
+def client_ip() -> str | None:
+    """The client address of the request being served (see
+    _extract_client_ip), or None outside a request."""
+    return _CLIENT_IP.get()
+
+
+def client_user_agent() -> str | None:
+    """The User-Agent of the request being served, or None."""
+    return _CLIENT_USER_AGENT.get()
+
+
+def _request_id_from(scope: Scope) -> str:
+    """Protocol 9.6: the last X-Request-ID if well-formed, else a fresh id."""
+    incoming = None
+    for name, value in scope.get("headers", []):
+        if name == _REQUEST_ID_HEADER_KEY:
+            incoming = value.decode("latin-1")
+    if incoming is not None and REQUEST_ID_FORM.fullmatch(incoming):
+        return incoming
+    return new_request_id()
+
+
+class RequestContextMiddleware:
+    """Bind the request id, the client address and the User-Agent for the
+    request, and echo the id in the X-Request-ID response header.
 
     Non-HTTP scopes (lifespan, websocket) are passed through unchanged.
     """
@@ -69,44 +125,24 @@ class TraceIdMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Extract request context from ASGI scope headers.
-        # Guard: AuditLog.trace_id is String(36). If client sends
-        # a longer value, discard it and generate a fresh uuid4
-        # to prevent DataError in financial transactions (Phase 6+).
-        #
-        # SEC-01: additionally validate character set to prevent
-        # log injection and JSONB pollution via crafted trace IDs.
-        raw_trace = _extract_header(scope, b"x-trace-id") or ""
-        if (
-            0 < len(raw_trace) <= 36
-            and _TRACE_ID_RE.match(raw_trace)
-        ):
-            trace_id = raw_trace
-        else:
-            trace_id = str(uuid4())
+        request_id = _request_id_from(scope)
 
-        ip_address = _extract_client_ip(scope)
-        user_agent = _extract_header(scope, b"user-agent")
-
-        # Bind to structlog contextvars -- every log call in this
-        # request will include trace_id automatically via
-        # merge_contextvars processor. ip_address and user_agent
-        # are consumed by record_audit() (Pre-6.2).
-        structlog.contextvars.clear_contextvars()
-        structlog.contextvars.bind_contextvars(
-            trace_id=trace_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
-
-        async def send_with_trace_id(message: dict) -> None:
-            """Inject X-Trace-ID into response headers."""
+        async def send_with_request_id(message: dict) -> None:
             if message["type"] == "http.response.start":
-                headers = MutableHeaders(scope=message)
-                headers.append("X-Trace-ID", trace_id)
+                MutableHeaders(scope=message)[REQUEST_ID_HEADER] = request_id
             await send(message)
 
-        await self.app(scope, receive, send_with_trace_id)
+        tokens = (
+            REQUEST_ID.set(request_id),
+            _CLIENT_IP.set(_extract_client_ip(scope)),
+            _CLIENT_USER_AGENT.set(_extract_header(scope, b"user-agent")),
+        )
+        try:
+            await self.app(scope, receive, send_with_request_id)
+        finally:
+            _CLIENT_USER_AGENT.reset(tokens[2])
+            _CLIENT_IP.reset(tokens[1])
+            REQUEST_ID.reset(tokens[0])
 
 
 def _extract_header(scope: Scope, name: bytes) -> str | None:
