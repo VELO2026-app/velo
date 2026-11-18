@@ -49,6 +49,19 @@
       </div>
     </template>
 
+    <!-- A failed profile load is an error, not a dashboard that looks normal
+         (FE-200). Only when no profile is held: a failed refetch keeps it. -->
+    <VEmptyState
+      v-else-if="profileRetryable"
+      icon="warning"
+      :title="t('common.loadFailed')"
+      :description="profileErrorText"
+    >
+      <VButton size="sm" variant="outline" @click="retryProfile">
+        {{ t('common.retry') }}
+      </VButton>
+    </VEmptyState>
+
     <template v-else>
       <!-- ================================================================
            TOP ROW (owner ask 2026-09-08): the period slider (week/month/quarter)
@@ -111,7 +124,7 @@
       <!-- Shown whenever there is no upcoming practice (not only brand-new
            masters) — operator tester-fix 2026-06-17; the "first" wording dropped. -->
       <VButton
-        v-if="nearestPractices.length === 0"
+        v-if="nearestPractices.length === 0 && !upcomingRetryable"
         variant="primary"
         block
         @click="router.push({ name: 'master-practice-new' })"
@@ -135,6 +148,19 @@
           <VLoader size="sm" />
         </div>
       </template>
+
+      <!-- A failed list is not "no practices" (FE-200): offering "create" here
+           would invite a duplicate of what exists. -->
+      <VEmptyState
+        v-else-if="upcomingRetryable"
+        icon="warning"
+        :title="t('common.loadFailed')"
+        :description="upcomingErrorText"
+      >
+        <VButton size="sm" variant="outline" @click="retryUpcoming">
+          {{ t('common.retry') }}
+        </VButton>
+      </VEmptyState>
 
       <template v-else-if="nearestPractices.length > 0">
         <div
@@ -282,6 +308,7 @@ import {
   VMenuRow,
   VSegmentTrack,
   VBadge,
+  VEmptyState,
 } from '@/components/ui'
 import {
   IconBellPlain,
@@ -298,6 +325,7 @@ import { useSafeArea } from '@/composables/useSafeArea'
 import MasterOnboardingView from '@/views/master/MasterOnboardingView.vue'
 import { isMasterOnboardingCompleted, shouldShowMasterOnboarding } from '@/utils/masterOnboarding'
 import { useToast } from '@/composables/useToast'
+import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort, formatTime, formatDuration, formatParticipants } from '@/utils/format'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { checkinLabel, recurrenceLabel, remainingSessionsLabel } from '@/utils/practiceCardMeta'
@@ -312,7 +340,24 @@ import type { PracticeResponse, MasterStatsResponse } from '@/api/types'
 const router = useRouter()
 const masterStore = useMasterStore()
 // Skipped when the guard already loaded it this session.
-const { profile: masterProfile, loading: profileLoading } = useMasterProfile()
+const {
+  profile: masterProfile,
+  loading: profileLoading,
+  failed: profileFailed,
+  error: profileError,
+  reload: reloadProfile,
+} = useMasterProfile()
+const profileErrorText = computed(() =>
+  extractApiError(profileError.value, t('common.checkConnection')),
+)
+// A 403 is an answer, not a failure of the road (an admin walking /master/*, a
+// master whose profile is not verified): asking again returns the same 403 and
+// the screen keeps its pre-FE-200 look. Only a retryable failure gets the error.
+const isForbidden = (e: unknown): boolean => e instanceof ApiResponseError && e.status === 403
+const profileRetryable = computed(() => profileFailed.value && !isForbidden(profileError.value))
+function retryProfile(): void {
+  void reloadProfile()
+}
 const authStore = useAuthStore()
 const { contentSafeTopCss } = useSafeArea()
 const toast = useToast()
@@ -340,6 +385,15 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label
 const queryCache = useQueryCache()
 const upcoming = useMyPractices('upcoming', { refetchOnMount: 'always' })
 const past = useMyPractices('past')
+const upcomingErrorText = computed(() =>
+  extractApiError(upcoming.error.value, t('common.checkConnection')),
+)
+const upcomingRetryable = computed(
+  () => upcoming.failed.value && !isForbidden(upcoming.error.value),
+)
+function retryUpcoming(): void {
+  void upcoming.refetch()
+}
 
 // True for a brand-new master with no practices at all (zero state).
 const isNewMaster = computed((): boolean => upcoming.total.value + past.total.value === 0)

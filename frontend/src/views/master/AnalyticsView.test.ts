@@ -69,6 +69,7 @@ import AnalyticsView from '@/views/master/AnalyticsView.vue'
 import * as mastersApi from '@/api/masters'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
+import { PAYMENTS_TAB_ENABLED } from '@/views/master/analyticsFlags'
 import type {
   PracticeResponse,
   PracticeInsightsResponse,
@@ -97,11 +98,9 @@ const NOW = new Date('2026-07-20T12:00:00Z')
 // -----------------------------------------------------------------------------
 // Payments are PARKED (owner 2026-10-01): the Reviews/Payments slider and the
 // Payments pane are hidden until payments go live, their data loads gated with
-// them. This mirror flips TOGETHER with PAYMENTS_TAB_ENABLED in
-// AnalyticsView.vue -- the describes exercising the parked UI skip themselves
-// while it is false.
+// them. The flag is the screen's own (./analyticsFlags.ts) -- the describes
+// exercising the parked UI skip themselves while it is false.
 // -----------------------------------------------------------------------------
-const PAYMENTS_TAB_ENABLED = false
 /** Runs the describe body only when the parked payments UI is restored. */
 const whenPaymentsLive = describe.skipIf(!PAYMENTS_TAB_ENABLED)
 
@@ -635,6 +634,30 @@ describe('AnalyticsView', () => {
       const meta = pcards()[0]?.querySelector('.analytics__pcard-meta')?.textContent ?? ''
       expect(meta).toContain('18 июля')
       expect(meta).toContain('10 участников')
+    })
+
+    it('a FAILED practices load shows an error with «Повторить», not the empty period (FE-201)', async () => {
+      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
+      mount()
+      await flush()
+
+      const pane = paneText(reviewsPane())
+      expect(pane).not.toContain('За выбранный период практик нет')
+      expect(pane).toContain('Не удалось загрузить')
+      expect(reviewsPane().querySelector('.analytics__loader')).toBeNull()
+
+      // The retry button (i18n:common.retry) asks again, and a recovered list replaces the error.
+      vi.mocked(mastersApi.getMyPractices).mockReset()
+      mockBucketedPractices([P_NEW])
+      const retry = Array.from(reviewsPane().querySelectorAll('button')).find((b) =>
+        b.textContent?.includes('Повторить'),
+      )
+      expect(retry).toBeDefined()
+      retry?.click()
+      await flush()
+
+      expect(paneText(reviewsPane())).not.toContain('Не удалось загрузить')
+      expect(pcardTitles()).toContain('Утренняя практика')
     })
   })
 
