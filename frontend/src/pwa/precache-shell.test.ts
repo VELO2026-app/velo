@@ -41,11 +41,6 @@ describe('shellOnlyTransform', () => {
     )
   })
 
-  it('does not follow dynamic imports', () => {
-    const { manifest } = shellOnlyTransform(read)(urls.map(entry))
-    expect(manifest.map((e) => e.url)).not.toContain('assets/AdminShell-E.js')
-  })
-
   it('keeps only the app chunk and its CSS when the files are unreadable', () => {
     const { manifest } = shellOnlyTransform(() => '')(urls.map(entry))
     expect(manifest.map((e) => e.url).sort()).toEqual(

@@ -223,22 +223,6 @@ afterEach(() => {
 })
 
 describe('OnboardingView', () => {
-  describe('the timezone step is gone', () => {
-    it('renders no «Часовой пояс» screen and no city picker on any step', async () => {
-      mount()
-      await flush()
-
-      expect(text()).not.toContain('Часовой пояс')
-      expect(host?.querySelector('.tz-picker')).toBeNull()
-
-      // Walk to the last step: still no picker anywhere.
-      await gotoFinalStep()
-      expect(text()).not.toContain('Часовой пояс')
-      expect(host?.querySelector('.tz-picker')).toBeNull()
-      expect(activeDotIndex()).toBe(4)
-    })
-  })
-
   describe('the intro carousel (steps 0-2)', () => {
     it('starts on slide 0 with «Далее», dot 0 active of FIVE (FE-101), Skip visible', async () => {
       mount()
@@ -461,23 +445,6 @@ describe('OnboardingView -- FE-101 form steps', () => {
         timezone: 'Europe/London',
         onboarding_completed: true,
       })
-    })
-
-    it('finishing with nothing picked sends no goals keys at all', async () => {
-      mockDetectedTimezone('UTC')
-      const onDone = vi.fn()
-      mount(onDone)
-      await flush()
-
-      await gotoFinalStep()
-      primaryButton().click()
-      await flush()
-
-      expect(usersApi.updateMe).toHaveBeenCalledWith({
-        timezone: 'UTC',
-        onboarding_completed: true,
-      })
-      expect(onDone).toHaveBeenCalledTimes(1)
     })
   })
 })

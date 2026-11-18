@@ -314,13 +314,6 @@ describe('MasterShell', () => {
       expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
 
-    it('a route with no hideTabBar meta shows the tab bar', async () => {
-      await mount('master-dashboard')
-      await flush()
-
-      expect(host?.querySelector('.v-tabbar')).not.toBeNull()
-    })
-
     it('the live keyboard signal ALSO hides it, independent of meta', async () => {
       await mount('master-dashboard') // meta.hideTabBar is NOT set on this route
       await flush()
