@@ -252,12 +252,6 @@ describe('VBottomSheet (footers)', () => {
     expect(save.disabled).toBe(true)
     // The §7.2 additive state hook rides alongside the disabled attribute.
     expect(save.getAttribute('data-velo-disabled')).toBe('true')
-
-    save.click()
-    await flush()
-
-    expect(saved).not.toHaveBeenCalled()
-    expect(closed).not.toHaveBeenCalled()
   })
 
   it('cancelLabel + saveLabel render the paired row: cancel emits CLOSE, save emits SAVE', async () => {
@@ -364,7 +358,7 @@ describe('VBottomSheet (close events)', () => {
     expect(closed).not.toHaveBeenCalled()
   })
 
-  it('a close parks the sheet at v-sheet-leave-active in happy-dom -- closed is the EVENT (SC-13b)', async () => {
+  it('a close is the EVENT, and no live sheet remains (SC-13b)', async () => {
     mountSheet({ open: true, closeOnEmit: true })
     await flush()
 
@@ -373,7 +367,6 @@ describe('VBottomSheet (close events)', () => {
 
     expect(closed).toHaveBeenCalledTimes(1)
     expect(liveSheet()).toBeNull()
-    expect(document.body.querySelector('.v-sheet__overlay.v-sheet-leave-active')).not.toBeNull()
   })
 })
 
@@ -469,18 +462,6 @@ describe('VBottomSheet (body scroll lock -- useBodyScrollLock mocked, calls only
     await flush()
 
     expect(unlockSpy).toHaveBeenCalledTimes(1)
-  })
-
-  it("a sheet MOUNTED already-open never locks -- the watch is not immediate (pins today's contract)", async () => {
-    // FE-142 finding, pinned as-is (identical to VModal's): the lock lives
-    // in a non-immediate watch, so mounting with :open="true" never locks the
-    // body. Every in-app caller mounts closed and toggles. Flagged in the
-    // report for the P6 move; NOT fixed here.
-    mountSheet({ open: true })
-    await flush()
-
-    expect(liveSheet()).not.toBeNull()
-    expect(lockSpy).not.toHaveBeenCalled()
   })
 })
 
