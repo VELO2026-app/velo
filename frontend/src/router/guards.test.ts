@@ -639,26 +639,21 @@ describe('router/guards', () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user' })
 
-      // A refresh that is still pending 50ms after this guard is awaited --
-      // if roleFreshnessGuard still `await`ed refreshRoleIfStale (the
-      // reverted behavior), its own returned promise could not settle before
-      // this slow mock does, and `refreshSettled` would already be true by
-      // the time `result` is assigned below.
-      let refreshSettled = false
+      // A refresh that stays pending until the test releases it -- if
+      // roleFreshnessGuard still `await`ed refreshRoleIfStale (the reverted
+      // behavior), `result` would be a pending promise instead of `true`.
+      let release!: () => void
       refreshRoleIfStale.mockImplementation(
         () =>
           new Promise<void>((resolve) => {
-            setTimeout(() => {
-              refreshSettled = true
-              resolve()
-            }, 50)
+            release = resolve
           }),
       )
 
       const result = roleFreshnessGuard({ name: 'user-dashboard' })
 
       expect(result).toBe(true)
-      expect(refreshSettled).toBe(false)
+      release()
     })
   })
 

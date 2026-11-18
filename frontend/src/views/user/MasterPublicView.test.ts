@@ -237,6 +237,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // A test that fails on fake timers must not leave them to the next one.
+  vi.useRealTimers()
   app?.unmount()
   host?.remove()
   app = null
@@ -459,13 +461,14 @@ describe('MasterPublicView', () => {
       await flush()
       modalButton('Заблокировать')?.click()
       await flush()
+      // The report form opened for the blocked master; the popup's report
+      // button unmounts only when its leave transition ends: Vue waits two
+      // animation frames plus the computed duration (--transition-slow, 0.3s).
+      // Fake timers run all of it at once.
+      vi.useFakeTimers()
       bodyButton('В поддержку')?.click()
-      await flush()
-
-      // The report form opened for the blocked master; the leave transition
-      // (--transition-slow, 0.3s) must finish before the popup's report button
-      // unmounts -- the same wait the student-profile tests use.
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await vi.advanceTimersByTimeAsync(500)
+      vi.useRealTimers()
       await flush()
 
       expect(document.body.textContent).toContain('Сообщить о пользователе')

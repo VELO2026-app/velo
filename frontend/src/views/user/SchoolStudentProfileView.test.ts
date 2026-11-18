@@ -156,6 +156,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // A test that fails on fake timers must not leave them to the next one.
+  vi.useRealTimers()
   app?.unmount()
   host?.remove()
   app = null
@@ -222,10 +224,13 @@ describe('SchoolStudentProfileView', () => {
     expect(text()).toContain('Пётр Сидоров')
     expect(text()).toContain('переместится в группу «Удалённые»')
 
+    // The teleported modal unmounts only when its leave transition ends:
+    // Vue waits two animation frames plus the computed duration
+    // (--transition-slow, 0.3s). Fake timers run all of it at once.
+    vi.useFakeTimers()
     exactButton('Отмена')?.click()
-    // The leave transition (--transition-slow, 0.3s) must finish before the
-    // teleported modal unmounts -- a bare nextTick flush is too early.
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await vi.advanceTimersByTimeAsync(500)
+    vi.useRealTimers()
     await flush()
 
     expect(text()).not.toContain('Заблокировать ученика?')

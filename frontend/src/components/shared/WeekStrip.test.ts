@@ -19,7 +19,7 @@
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import WeekStrip from './WeekStrip.vue'
 
@@ -70,12 +70,20 @@ function ptr(type: string, x: number, y = 10): void {
 }
 
 async function settle(): Promise<void> {
-  // Snap animation (220) + margin.
-  await new Promise((r) => setTimeout(r, 700))
+  // The snap animation (220ms) commits on a timer; fake timers run it out.
+  await vi.advanceTimersByTimeAsync(300)
   await nextTick()
 }
 
 describe('WeekStrip -- day ribbon', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('a one-day drag (-60px) commits shift-days(1) -- ONE day, not a week', async () => {
     mount()
     ptr('pointerdown', 200)

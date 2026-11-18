@@ -62,8 +62,10 @@ describe('transitionKind', () => {
   })
 })
 
-async function waitMs(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms))
+/** One macrotask; on the fake clock, the timers due now. */
+async function macrotask(): Promise<void> {
+  if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0)
+  else await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 describe('tab switches: CSS fade-through on every host', () => {
@@ -225,8 +227,10 @@ describe('hosts with View Transitions', () => {
   })
 
   afterEach(() => {
-    // Real timers here: WebKit's fallback fade arms one (FE-186).
+    // Real timers here: WebKit's fallback fade arms one (FE-186). The cap
+    // test runs on the fake clock and hands the real one back.
     __resetViewTransitionsForTest()
+    vi.useRealTimers()
     Reflect.deleteProperty(doc, 'startViewTransition')
     Reflect.deleteProperty(win, 'GestureEvent')
     vi.unstubAllGlobals()
@@ -236,7 +240,7 @@ describe('hosts with View Transitions', () => {
   async function flushAll(): Promise<void> {
     for (let i = 0; i < 4; i++) {
       await settle()
-      await waitMs(0)
+      await macrotask()
     }
   }
 
@@ -301,6 +305,9 @@ describe('hosts with View Transitions', () => {
   })
 
   it('a screen that does not settle within the cap: the transition is skipped, nothing stays pending', async () => {
+    // The cap is run out on the fake clock; requestAnimationFrame keeps the
+    // stub above (no frame arrives inside the update callback).
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const router = makeRouter()
     await router.push('/user/dashboard')
     // A later guard that never answers: the navigation never reaches afterEach.
@@ -315,14 +322,13 @@ describe('hosts with View Transitions', () => {
     await flushAll()
     expect(started).toHaveLength(1)
 
-    await waitMs(UPDATE_TIMEOUT_MS + 50)
     let settled = false
-    await Promise.race([
-      updates[0]?.then(() => {
-        settled = true
-      }),
-      waitMs(10),
-    ])
+    void updates[0]?.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(UPDATE_TIMEOUT_MS - 1)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
     expect(settled).toBe(true)
     expect(started[0]?.skipTransition).toHaveBeenCalled()
     release()
