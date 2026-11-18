@@ -201,7 +201,9 @@ const router = useRouter()
 const practiceId = route.params.id as string
 
 const practice = ref<AdminPracticeDetailResponse | null>(null)
-const loading = ref(false)
+// true from the start: load() runs in onMounted, i.e. AFTER the first render,
+// and false here would paint the "unavailable" rung for one frame (FE-199).
+const loading = ref(true)
 const error = ref<string | null>(null)
 // T21-1: best-effort, separate from the main loading/error state above -- a
 // failure here must never block the rest of the (already-working) page.
