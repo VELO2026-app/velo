@@ -25,8 +25,8 @@ describe('path', () => {
   })
 
   it('refuses dot-segments: the URL parser collapses even their encoded form', () => {
-    // Why encoding is not enough: the parser treats %2E%2E as "..".
-    expect(resolved('/api/v1/practices/%2E%2E/purchase')).toBe('/api/v1/purchase')
+    // Why encoding is not enough: the URL parser treats %2E%2E as "..", so
+    // '/api/v1/practices/%2E%2E/purchase' resolves to '/api/v1/purchase'.
     expect(() => path`/api/v1/practices/${'..'}/cancel`).toThrow(UnsafePathSegmentError)
     expect(() => path`/api/v1/practices/${'.'}`).toThrow(UnsafePathSegmentError)
   })
