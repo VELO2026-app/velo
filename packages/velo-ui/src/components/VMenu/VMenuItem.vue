@@ -8,12 +8,17 @@
 
   The parent wires @click and, after running the action, calls the `close`
   slot-prop that VMenu exposes so the popover dismisses.
+
+  role="menuitem" + tabindex=-1 (FE-205): VMenu moves focus between items
+  with the arrow keys, so an item is reached by arrows, not by Tab.
 -->
 <template>
   <button
     type="button"
     class="v-menu-item"
     :class="{ 'v-menu-item--danger': danger }"
+    role="menuitem"
+    tabindex="-1"
     :aria-label="ariaLabel"
   >
     <component :is="icon" v-if="icon" :size="iconSize" />

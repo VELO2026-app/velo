@@ -25,9 +25,9 @@
 //     document dispatch still reaches the component, so the dismissal cases
 //     fire through the exact seam the lifecycle cases count.
 //
-// Findings pinned as-is (NOT fixed here, see the FE-144 report): the panel is
-// role=menu but the items are plain buttons with no role=menuitem, and there
-// is no arrow-key navigation or focus management at all.
+//   - the menu-button keyboard (FE-205): role=menu labelled by the trigger,
+//     role=menuitem items, arrows/Home/End move focus, Escape returns focus
+//     to the trigger, a keyboard Enter opens on the first item.
 //
 // Dependency-free SFC mount (createApp + happy-dom), per velo-idiom §1 (no
 // @vue/test-utils). The parent is a MINIMAL harness, so every case exercises
@@ -84,7 +84,7 @@ interface MountOpts {
   /** Extra props forwarded onto VMenu (ariaLabel, ...). */
   props?: Record<string, unknown>
   /** Default-slot factory receiving VMenu's `{ close }` scope. */
-  slot?: (scope: { close: () => void }) => VNode
+  slot?: (scope: { close: () => void }) => VNode | VNode[]
   /** #trigger slot factory receiving the `{ open }` scope. */
   trigger?: (scope: { open: boolean }) => VNode
 }
@@ -153,6 +153,27 @@ function pointerDownOutside(): void {
 /** A pointerdown INSIDE the panel that bubbles up to the document. */
 function pointerDownInside(): void {
   item()!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+}
+
+function items(): HTMLButtonElement[] {
+  return Array.from(host?.querySelectorAll<HTMLButtonElement>('button.v-menu-item') ?? [])
+}
+
+/** A keydown on the focused element, bubbling like a real key press. */
+function press(key: string): void {
+  const target = document.activeElement ?? document.body
+  target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+}
+
+/** Three distinct items, so "focus moved to the right one" is observable. */
+const threeItems = () => [
+  h(VMenuItem, { ariaLabel: 'Первый', icon: DummyIcon }),
+  h(VMenuItem, { ariaLabel: 'Второй', icon: DummyIcon }),
+  h(VMenuItem, { ariaLabel: 'Третий', icon: DummyIcon }),
+]
+
+function focusedLabel(): string | null | undefined {
+  return document.activeElement?.getAttribute('aria-label')
 }
 
 function pressEscape(): void {
@@ -314,6 +335,81 @@ describe('VMenu (dismissal -- document listeners via the mocked platform/dom sea
     pressEscape()
     await flush()
     expect(panel()).toBeNull()
+  })
+})
+
+describe('VMenu (menu-button semantics + keyboard, FE-205)', () => {
+  it('the open panel is a role=menu labelled by the trigger; items are role=menuitem', async () => {
+    mountApp({ slot: threeItems })
+    await flush()
+    trigger()!.click()
+    await flush()
+
+    expect(panel()?.getAttribute('role')).toBe('menu')
+    expect(panel()?.getAttribute('aria-labelledby')).toBe(trigger()?.id)
+    expect(trigger()?.id).toBeTruthy()
+    expect(items().map((b) => b.getAttribute('role'))).toEqual(['menuitem', 'menuitem', 'menuitem'])
+  })
+
+  it('ArrowDown on the trigger opens on the first item; arrows wrap, Home/End jump', async () => {
+    mountApp({ slot: threeItems })
+    await flush()
+    trigger()!.focus()
+
+    press('ArrowDown')
+    await flush()
+    expect(panel()).not.toBeNull()
+    expect(focusedLabel()).toBe('Первый')
+
+    press('ArrowDown')
+    expect(focusedLabel()).toBe('Второй')
+    press('ArrowUp')
+    press('ArrowUp')
+    expect(focusedLabel()).toBe('Третий') // wrapped from the first to the last
+    press('ArrowDown')
+    expect(focusedLabel()).toBe('Первый') // wrapped from the last to the first
+    press('End')
+    expect(focusedLabel()).toBe('Третий')
+    press('Home')
+    expect(focusedLabel()).toBe('Первый')
+  })
+
+  it('ArrowUp on the trigger opens on the last item', async () => {
+    mountApp({ slot: threeItems })
+    await flush()
+    trigger()!.focus()
+
+    press('ArrowUp')
+    await flush()
+    expect(focusedLabel()).toBe('Третий')
+  })
+
+  it('Escape on an item closes the menu and returns focus to the trigger', async () => {
+    mountApp({ slot: threeItems })
+    await flush()
+    trigger()!.focus()
+    press('ArrowDown')
+    await flush()
+    expect(focusedLabel()).toBe('Первый')
+
+    press('Escape')
+    await flush()
+    expect(panel()).toBeNull()
+    expect(document.activeElement).toBe(trigger())
+  })
+
+  it.each([
+    ['a keyboard Enter/Space (click detail 0) opens on the first item', 0, 'Первый'],
+    ['a pointer tap (click detail 1) opens and leaves focus on the trigger', 1, 'Меню'],
+  ])('%s', async (_name, detail, expected) => {
+    mountApp({ slot: threeItems })
+    await flush()
+    trigger()!.focus()
+
+    trigger()!.dispatchEvent(new MouseEvent('click', { bubbles: true, detail }))
+    await flush()
+    expect(panel()).not.toBeNull()
+    expect(focusedLabel()).toBe(expected)
   })
 })
 

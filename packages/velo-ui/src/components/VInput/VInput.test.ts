@@ -352,12 +352,21 @@ describe('VInput', () => {
       ).toBe(true)
     })
 
-    it('floatingLabel is IGNORED when an affix slot is present: the affix path wins', () => {
-      mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма' }, 'prefix')
+    // FE-205: the affix path has no label of its own, so floatingLabel + an
+    // affix used to render NO label at all -- a field without an accessible
+    // name. The external label must take over there.
+    it.each(['prefix', 'suffix'] as const)(
+      'floatingLabel + a %s slot: the affix path renders with the EXTERNAL label bound to its input',
+      (affix) => {
+        mountWith(passThrough, '', { floatingLabel: true, label: 'Сумма' }, affix)
 
-      expect(host?.querySelector('.v-input__float')).toBeNull()
-      expect(host?.querySelector('.v-input__box')).not.toBeNull()
-    })
+        expect(host?.querySelector('.v-input__float')).toBeNull()
+        const label = host?.querySelector('label.v-input__label')
+        const input = host?.querySelector('input.v-input__field--bare')
+        expect(label?.textContent).toBe('Сумма')
+        expect(label?.getAttribute('for')).toBe(input?.id)
+      },
+    )
 
     it('affix path: the external label binds the inner bare input id too', () => {
       mountWith(passThrough, '', { label: 'Сумма' }, 'prefix')
