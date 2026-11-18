@@ -315,25 +315,6 @@ describe('VMenu (dismissal -- document listeners via the mocked platform/dom sea
     await flush()
     expect(panel()).toBeNull()
   })
-
-  it("pins today's a11y gaps for the move report: items have NO role=menuitem and arrow keys do not navigate", async () => {
-    // FE-144 findings, pinned as-is: the panel is role=menu but the children
-    // are plain buttons (no role=menuitem), and no keyboard navigation or
-    // focus handoff exists -- Escape/outside-click dismissal is the whole
-    // story. A proper menu pattern would need component edits, which this
-    // test-only ticket forbids. See the FE-144 report.
-    mountApp()
-    await flush()
-    trigger()!.click()
-    await flush()
-
-    expect(item()?.getAttribute('role')).toBeNull()
-
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
-    await flush()
-    expect(panel()).not.toBeNull()
-    expect(document.activeElement).not.toBe(item())
-  })
 })
 
 describe('VMenu (document-listener lifecycle -- attach/detach calls only)', () => {

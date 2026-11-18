@@ -195,6 +195,7 @@ describe('VTextarea (autogrow drives an INLINE height -- happy-dom: scrollHeight
     // the contract (CSS caps it in a real browser, never asserted here).
     expect(field.style.height).toBe('0px')
 
+    field.style.height = '' // so the input's own resize is what sets it again
     await type(field, 'первая строка')
     expect(field.style.height).toBe('0px')
   })

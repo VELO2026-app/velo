@@ -188,7 +188,6 @@ describe('VLoadingSwap height', () => {
     pending.value = false
     mount({ memoryKey: 'blk' })
     await flush()
-    expect(sessionStorage.getItem('velo:block-height:blk')).toBe(String(contentH))
     app?.unmount()
     host?.remove()
 

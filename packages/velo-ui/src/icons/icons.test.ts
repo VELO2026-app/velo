@@ -70,7 +70,7 @@ describe('kit icons (FE-119 P4)', () => {
     expect(svg).not.toBeNull()
     // The glyph IS the root: no wrapper element, no class hook to maintain.
     expect(svg).toBe(el.firstElementChild)
-    expect(svg?.getAttribute('viewBox')).not.toBe('')
+    expect(svg?.getAttribute('viewBox')).toBeTruthy()
   })
 
   it.each(Object.keys(ICONS))('%s defaults to 24 and the size prop wins', (name) => {

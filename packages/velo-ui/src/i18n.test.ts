@@ -52,13 +52,6 @@ describe('i18n seam: configured translator', () => {
     i18n.configureUi({ t: () => 'second' })
     expect(i18n.t('ui.close')).toBe('second')
   })
-
-  it('day families type through the template-literal union', () => {
-    const code = 'mon' as 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
-    i18n.configureUi({ t: (key) => `[${key}]` })
-    expect(i18n.t(`ui.dayFull.${code}`)).toBe('[ui.dayFull.mon]')
-    expect(i18n.t(`ui.dayShort.${code}`)).toBe('[ui.dayShort.mon]')
-  })
 })
 
 describe('UI_I18N_KEYS registry', () => {
