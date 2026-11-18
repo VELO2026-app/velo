@@ -1240,10 +1240,7 @@ describe('CreatePracticeView', () => {
       mount()
       await flush()
       await fillMinimalForm()
-      // Stand in for the debounced autosave, which never fires inside a test
-      // (see NOT COVERED #2) -- without seeding, the survival assertion below
-      // would pass against a key that was never written, proving nothing.
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Утренняя практика' }))
+      expect(inputByPlaceholder('Название')?.closest('[inert]')).toBeNull()
 
       submitForm()
       await flush()
@@ -1253,12 +1250,12 @@ describe('CreatePracticeView', () => {
       expect(toastError).not.toHaveBeenCalledWith('Не удалось создать практику')
       expect(toastSuccess).not.toHaveBeenCalled()
       expect(replace).not.toHaveBeenCalled()
-      // The local draft is dropped only AFTER a successful publish, so it
-      // survives -- the master's work is not thrown away on a half-failure.
-      expect(localStorage.getItem(DRAFT_KEY)).not.toBeNull()
       // The publish-failed banner replaces the submit button: no second POST.
       expect(text()).toContain('Черновик сохранён, но не опубликован')
       expect(button('Создать практику')).toBeUndefined()
+      // The retry publishes the draft as created, so the fields are locked:
+      // an edit made now would never reach it.
+      expect(inputByPlaceholder('Название')?.closest('[inert]')).not.toBeNull()
 
       button('Опубликовать')?.click()
       await flush()
@@ -1270,7 +1267,6 @@ describe('CreatePracticeView', () => {
       })
       expect(toastSuccess).toHaveBeenCalledWith('Практика создана!')
       expect(replace).toHaveBeenCalledWith({ name: 'master-practices' })
-      expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     })
 
     it('after a failed publish, «Открыть черновик» opens the created draft without a second POST (FE-202)', async () => {
@@ -1278,7 +1274,6 @@ describe('CreatePracticeView', () => {
       mount()
       await flush()
       await fillMinimalForm()
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Утренняя практика' }))
 
       submitForm()
       await flush()
@@ -1290,9 +1285,33 @@ describe('CreatePracticeView', () => {
         name: 'master-practice-detail',
         params: { id: 'p_new' },
       })
-      // The draft now lives on the server; a local copy would offer to create
-      // it again on the next visit.
+    })
+
+    it('after a failed publish the local draft is gone: the next visit opens an empty form (FE-202)', async () => {
+      // The content already lives in the server-side draft; a restored local
+      // copy would offer the same create -- a second POST -- again.
+      vi.mocked(practicesApi.updatePractice).mockRejectedValue(new TypeError('boom'))
+      mount()
+      await flush()
+      await fillMinimalForm()
+      // Stand in for the debounced autosave, which never fires inside a test
+      // (see NOT COVERED #2) -- without seeding, the assertions below would
+      // pass against a key that was never written, proving nothing.
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: 'Утренняя практика' }))
+
+      submitForm()
+      await flush()
+
       expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
+
+      app?.unmount()
+      host?.remove()
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Продолжить черновик?')
+      expect(inputByPlaceholder('Название')?.value).toBe('')
+      expect(button('Создать практику')).toBeDefined()
     })
 
     it('does NOT create twice when the button is hit twice in flight (FP-04)', async () => {

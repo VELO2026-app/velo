@@ -23,7 +23,9 @@
   On success -> show toast + navigate to master-practices + myPracticesChanged().
   FE-202: a failed publish after a successful POST is NOT a create failure.
   The draft exists, so the form stops offering submit and shows a banner that
-  retries the publish alone or opens the draft -- never a second POST.
+  retries the publish alone or opens the draft -- never a second POST. The
+  fields go inert (an edit would not reach the draft) and the local autosaved
+  copy is dropped (it would offer the same create again on the next visit).
 
   Fixes:
     W-2: DURATION_OPTIONS / TIMEZONE_OPTIONS imported from @/utils/practiceOptions
@@ -72,17 +74,21 @@
         </template>
       </Banner>
 
-      <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
+      <!-- FE-202: after a failed publish the form is inert -- the banner below
+           publishes the draft ALREADY created, so an edit made here would never
+           reach it. -->
+      <div class="create-practice__fields" :inert="!!unpublishedId">
+        <!-- Required-fields legend: HIDDEN for now (owner 2026-10-01) -- the
            section-title asterisk reads without an explanation. Restore the
            block below when an explanation is needed again. -->
-      <!--
+        <!--
       <div class="create-practice__legend">
         <span class="cp-req">*</span>
         <span>— {{ t('masterScreens.createPractice.legendSections') }}</span>
       </div>
       -->
 
-      <!-- ================================================================
+        <!-- ================================================================
            Master (§1.6 delegation, FE-92): whose practice this is. The
            master-card entry preselects one master; the school-page entry
            picks among that school's visible masters, the self option
@@ -91,19 +97,19 @@
            only IN a school, for a master of that school (BE-102). No school
            -> the caller owns the practice and this section does not render.
            ================================================================ -->
-      <div v-if="delegatedMaster || masterOptions.length > 1" class="create-practice__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.createPractice.fields.master') }}</h2>
-        <div>
-          <VCard class="create-practice__repeat" padding="none">
-            <div v-if="delegatedMaster" class="create-practice__repeat-title">
-              {{ delegatedMaster.name }}
-            </div>
-            <VRadioGroup v-else v-model="selectedMasterId" :options="masterOptions" />
-          </VCard>
+        <div v-if="delegatedMaster || masterOptions.length > 1" class="create-practice__section">
+          <h2 class="velo-section-title">{{ t('masterScreens.createPractice.fields.master') }}</h2>
+          <div>
+            <VCard class="create-practice__repeat" padding="none">
+              <div v-if="delegatedMaster" class="create-practice__repeat-title">
+                {{ delegatedMaster.name }}
+              </div>
+              <VRadioGroup v-else v-model="selectedMasterId" :options="masterOptions" />
+            </VCard>
+          </div>
         </div>
-      </div>
 
-      <!-- ================================================================
+        <!-- ================================================================
            FE-92 follow-up: hidden while a curator targets ANOTHER master --
            the templates are the CALLER's practices (useMyPractices),
            and the curator has no list of the master's. Fields a template
@@ -113,96 +119,96 @@
            Reuses PracticeListCard rows. Date/time
            are NOT copied (a template must not schedule in the past).
            ================================================================ -->
-      <div v-if="!targetsForeignMaster" class="create-practice__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.createPractice.useTemplate') }}</h2>
-        <!-- Full-width block: no required-seal of its own, so it spans the
+        <div v-if="!targetsForeignMaster" class="create-practice__section">
+          <h2 class="velo-section-title">{{ t('masterScreens.createPractice.useTemplate') }}</h2>
+          <!-- Full-width block: no required-seal of its own, so it spans the
              whole rail like every field (owner 2026-10-01 seal canon). -->
-        <UseTemplateBlock :practices="templatePractices" @select="applyTemplate" />
-      </div>
+          <UseTemplateBlock :practices="templatePractices" @select="applyTemplate" />
+        </div>
 
-      <!-- ================================================================
+        <!-- ================================================================
            Basics (Q2=A: 3 fields — direction / style / difficulty;
            practice_type is not shown, it is derived from the recurrence
            toggle)
            ================================================================ -->
-      <div class="create-practice__section">
-        <h2 class="velo-section-title">
-          {{ t('masterScreens.createPractice.sections.basics') }}<span class="cp-req">*</span>
-        </h2>
+        <div class="create-practice__section">
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.createPractice.sections.basics') }}<span class="cp-req">*</span>
+          </h2>
 
-        <VInput
-          v-model="form.title"
-          :placeholder="t('masterScreens.createPractice.titlePlaceholder')"
-          :error="errors.title"
-        />
+          <VInput
+            v-model="form.title"
+            :placeholder="t('masterScreens.createPractice.titlePlaceholder')"
+            :error="errors.title"
+          />
 
-        <!-- Direction = discipline (meditation/yoga/…). The field label is
+          <!-- Direction = discipline (meditation/yoga/…). The field label is
              the in-field placeholder.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
-        <VSelect
-          v-model="form.direction"
-          :placeholder="t('masterScreens.createPractice.fields.direction')"
-          :options="directionOptions"
-          :error="errors.direction"
-          @update:modelValue="onDirectionChange"
-        />
-
-        <!-- Practice style = style. Shown only when the direction has styles
-             (Q4=A: no explicit "no style" option, unselected = null, optional). -->
-        <div v-if="styleOptions.length > 0">
           <VSelect
-            v-model="form.style"
-            :placeholder="t('masterScreens.createPractice.stylePlaceholder')"
-            :options="styleOptions"
+            v-model="form.direction"
+            :placeholder="t('masterScreens.createPractice.fields.direction')"
+            :options="directionOptions"
+            :error="errors.direction"
+            @update:modelValue="onDirectionChange"
+          />
+
+          <!-- Practice style = style. Shown only when the direction has styles
+             (Q4=A: no explicit "no style" option, unselected = null, optional). -->
+          <div v-if="styleOptions.length > 0">
+            <VSelect
+              v-model="form.style"
+              :placeholder="t('masterScreens.createPractice.stylePlaceholder')"
+              :options="styleOptions"
+            />
+          </div>
+
+          <!-- Difficulty = difficulty (local masculine-gender labels, Q1=B). -->
+          <VSelect
+            v-model="form.difficulty"
+            :placeholder="t('masterScreens.createPractice.fields.difficulty')"
+            :options="DIFFICULTY_OPTIONS_CREATE"
+            :error="errors.difficulty"
           />
         </div>
 
-        <!-- Difficulty = difficulty (local masculine-gender labels, Q1=B). -->
-        <VSelect
-          v-model="form.difficulty"
-          :placeholder="t('masterScreens.createPractice.fields.difficulty')"
-          :options="DIFFICULTY_OPTIONS_CREATE"
-          :error="errors.difficulty"
-        />
-      </div>
-
-      <!-- ================================================================
+        <!-- ================================================================
            Schedule
            ================================================================ -->
-      <div class="create-practice__section">
-        <h2 class="velo-section-title">
-          {{ t('masterScreens.createPractice.sections.schedule') }}<span class="cp-req">*</span>
-        </h2>
+        <div class="create-practice__section">
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.createPractice.sections.schedule') }}<span class="cp-req">*</span>
+          </h2>
 
-        <!-- Date (i18n:ui.pickerDate) and time (i18n:ui.pickerTime, 24h):
+          <!-- Date (i18n:ui.pickerDate) and time (i18n:ui.pickerTime, 24h):
              the field name is the in-field placeholder. -->
-        <PracticeSchedulePicker
-          v-model="form.date"
-          kind="date"
-          :placeholder="t('ui.pickerDate')"
-          :error="errors.date"
-          error-id="err-date"
-        />
-        <PracticeSchedulePicker
-          v-model="form.time"
-          kind="time"
-          :placeholder="t('ui.pickerTime')"
-          :error="errors.time"
-          error-id="err-time"
-        />
+          <PracticeSchedulePicker
+            v-model="form.date"
+            kind="date"
+            :placeholder="t('ui.pickerDate')"
+            :error="errors.date"
+            error-id="err-date"
+          />
+          <PracticeSchedulePicker
+            v-model="form.time"
+            kind="time"
+            :placeholder="t('ui.pickerTime')"
+            :error="errors.time"
+            error-id="err-time"
+          />
 
-        <VSelect
-          v-model="form.duration_minutes"
-          :placeholder="t('masterScreens.createPractice.fields.duration')"
-          :options="DURATION_OPTIONS"
-          :error="errors.duration_minutes"
-        />
-        <!-- Timezone removed: taken from the master's profile (form.timezone),
+          <VSelect
+            v-model="form.duration_minutes"
+            :placeholder="t('masterScreens.createPractice.fields.duration')"
+            :options="DURATION_OPTIONS"
+            :error="errors.duration_minutes"
+          />
+          <!-- Timezone removed: taken from the master's profile (form.timezone),
              the schedule is set in the master's own timezone (operator
              2026-06-18). -->
-      </div>
+        </div>
 
-      <!-- ================================================================
+        <!-- ================================================================
            Recurrence (Q1=A: the full section — period + weekdays + finish
            + count. Only the series/live checkbox gate is REAL; period/days/
            end-condition/count are captured-only (no backend yet), see
@@ -210,181 +216,186 @@
            fields while the recurring toggle (i18n:masterScreens.createPractice.recurring.toggle)
            is on.)
            ================================================================ -->
-      <div class="create-practice__section">
-        <h2 class="velo-section-title">
-          {{ t('masterScreens.createPractice.sections.recurrence') }}
-        </h2>
+        <div class="create-practice__section">
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.createPractice.sections.recurrence') }}
+          </h2>
 
-        <div>
-          <VCard class="create-practice__repeat" padding="none">
-            <VCheckbox
-              v-model="form.is_recurring"
-              :label="t('masterScreens.createPractice.recurring.toggle')"
-            />
-          </VCard>
-        </div>
-
-        <template v-if="form.is_recurring">
-          <!-- Repeat period (always selected → no required seal). -->
-          <div class="create-practice__seal-row">
-            <VCard class="create-practice__repeat create-practice__grow" padding="none">
-              <div class="create-practice__repeat-title">
-                {{ t('masterScreens.createPractice.labels.repeat') }}
-              </div>
-              <VRadioGroup v-model="form.recurrence" :options="RECURRENCE_OPTIONS" />
+          <div>
+            <VCard class="create-practice__repeat" padding="none">
+              <VCheckbox
+                v-model="form.is_recurring"
+                :label="t('masterScreens.createPractice.recurring.toggle')"
+              />
             </VCard>
           </div>
 
-          <!-- Weekdays — ONLY for weekly/biweekly. The every-day (daily)
+          <template v-if="form.is_recurring">
+            <!-- Repeat period (always selected → no required seal). -->
+            <div class="create-practice__seal-row">
+              <VCard class="create-practice__repeat create-practice__grow" padding="none">
+                <div class="create-practice__repeat-title">
+                  {{ t('masterScreens.createPractice.labels.repeat') }}
+                </div>
+                <VRadioGroup v-model="form.recurrence" :options="RECURRENCE_OPTIONS" />
+              </VCard>
+            </div>
+
+            <!-- Weekdays — ONLY for weekly/biweekly. The every-day (daily)
                option uses no weekdays, so the picker is not rendered at all
                (operator NP-10). Validation already lets daily through. -->
-          <template v-if="form.recurrence !== 'daily'">
+            <template v-if="form.recurrence !== 'daily'">
+              <div class="create-practice__seal-row">
+                <div class="create-practice__days create-practice__grow">
+                  <VDayPicker
+                    v-model="form.recurrence_days"
+                    :aria-label="t('masterScreens.createPractice.recurring.daysAria')"
+                  />
+                </div>
+              </div>
+              <VFieldError id="err-days" :message="errors.recurrence_days" />
+            </template>
+
+            <!-- Finish -->
             <div class="create-practice__seal-row">
-              <div class="create-practice__days create-practice__grow">
-                <VDayPicker
-                  v-model="form.recurrence_days"
-                  :aria-label="t('masterScreens.createPractice.recurring.daysAria')"
-                />
-              </div>
-            </div>
-            <VFieldError id="err-days" :message="errors.recurrence_days" />
-          </template>
+              <VCard class="create-practice__repeat create-practice__grow" padding="none">
+                <div class="create-practice__repeat-title">
+                  {{ t('masterScreens.createPractice.labels.finish') }}
+                </div>
+                <VRadioGroup v-model="form.recurrence_end" :options="RECURRENCE_END_OPTIONS" />
 
-          <!-- Finish -->
-          <div class="create-practice__seal-row">
-            <VCard class="create-practice__repeat create-practice__grow" padding="none">
-              <div class="create-practice__repeat-title">
-                {{ t('masterScreens.createPractice.labels.finish') }}
-              </div>
-              <VRadioGroup v-model="form.recurrence_end" :options="RECURRENCE_END_OPTIONS" />
-
-              <!-- Pick a date: the series end date (#10), never before the
+                <!-- Pick a date: the series end date (#10), never before the
                    start date (today while no start is picked). -->
-              <PracticeSchedulePicker
-                v-if="form.recurrence_end === 'until_date'"
-                v-model="form.recurrence_end_date"
-                kind="date"
-                class="create-practice__end-control"
-                outlined
-                :min="form.date"
-                :placeholder="t('masterScreens.createPractice.pickers.endDate')"
-                :title="t('masterScreens.createPractice.fields.endDate')"
-              />
+                <PracticeSchedulePicker
+                  v-if="form.recurrence_end === 'until_date'"
+                  v-model="form.recurrence_end_date"
+                  kind="date"
+                  class="create-practice__end-control"
+                  outlined
+                  :min="form.date"
+                  :placeholder="t('masterScreens.createPractice.pickers.endDate')"
+                  :title="t('masterScreens.createPractice.fields.endDate')"
+                />
 
-              <!-- After N repeats: manual count input (#11). -->
-              <input
-                v-else-if="form.recurrence_end === 'after_count'"
-                v-model.number="form.recurrence_count"
-                type="number"
-                inputmode="numeric"
-                min="1"
-                class="create-practice__end-control create-practice__count-input"
-                :placeholder="t('masterScreens.createPractice.fields.repeatCount')"
-                :aria-label="t('masterScreens.createPractice.fields.repeatCount')"
-                @focus="onFieldFocus"
-              />
-            </VCard>
-          </div>
-          <!-- Both completion modes keep a (0px-closed) VFieldError row: the
+                <!-- After N repeats: manual count input (#11). -->
+                <input
+                  v-else-if="form.recurrence_end === 'after_count'"
+                  v-model.number="form.recurrence_count"
+                  type="number"
+                  inputmode="numeric"
+                  min="1"
+                  class="create-practice__end-control create-practice__count-input"
+                  :placeholder="t('masterScreens.createPractice.fields.repeatCount')"
+                  :aria-label="t('masterScreens.createPractice.fields.repeatCount')"
+                  @focus="onFieldFocus"
+                />
+              </VCard>
+            </div>
+            <!-- Both completion modes keep a (0px-closed) VFieldError row: the
                inactive one simply never opens (owner TZ 2026-11-01). -->
-          <VFieldError id="err-end-date" :message="errors.recurrence_end_date" />
-          <VFieldError id="err-count" :message="errors.recurrence_count" />
-        </template>
-      </div>
+            <VFieldError id="err-end-date" :message="errors.recurrence_end_date" />
+            <VFieldError id="err-count" :message="errors.recurrence_count" />
+          </template>
+        </div>
 
-      <!-- ================================================================
+        <!-- ================================================================
            Participants (optional → no seal; the field name is the placeholder)
            ================================================================ -->
-      <div class="create-practice__section">
-        <h2 class="velo-section-title">
-          {{ t('masterScreens.createPractice.sections.participants') }}
-        </h2>
+        <div class="create-practice__section">
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.createPractice.sections.participants') }}
+          </h2>
 
-        <div>
-          <VInput
-            v-model="form.max_participants_raw"
-            type="number"
-            :placeholder="t('masterScreens.createPractice.fields.maxParticipants')"
-            :error="errors.max_participants"
-          />
+          <div>
+            <VInput
+              v-model="form.max_participants_raw"
+              type="number"
+              :placeholder="t('masterScreens.createPractice.fields.maxParticipants')"
+              :error="errors.max_participants"
+            />
+          </div>
         </div>
-      </div>
 
-      <!-- ================================================================
+        <!-- ================================================================
            Audience (P5, PROMPT №594; FE-24: the shared
            PracticeAudiencePicker -- kinds radio + target chips for BOTH
            targeted kinds): student groups and schools. No SVG mock exists --
            MINIMAL DS-language design.
            ================================================================ -->
-      <div class="create-practice__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.createPractice.fields.audience') }}</h2>
+        <div class="create-practice__section">
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.createPractice.fields.audience') }}
+          </h2>
 
-        <div>
-          <VCard class="create-practice__repeat" padding="none">
-            <PracticeAudiencePicker
-              v-model:kind="form.audience_kind"
-              v-model:group-ids="form.audience_group_ids"
-              v-model:school-id="form.audience_school_id"
-              :groups="customGroups"
-              :schools="audienceSchools"
-              :allowed-kinds="contextSchoolId ? SCHOOL_AUDIENCE_KINDS : undefined"
-              :error="errors.audience_group_ids"
-              :students-label="t('masterScreens.createPractice.audience.allMyStudents')"
-            />
-          </VCard>
+          <div>
+            <VCard class="create-practice__repeat" padding="none">
+              <PracticeAudiencePicker
+                v-model:kind="form.audience_kind"
+                v-model:group-ids="form.audience_group_ids"
+                v-model:school-id="form.audience_school_id"
+                :groups="customGroups"
+                :schools="audienceSchools"
+                :allowed-kinds="contextSchoolId ? SCHOOL_AUDIENCE_KINDS : undefined"
+                :error="errors.audience_group_ids"
+                :students-label="t('masterScreens.createPractice.audience.allMyStudents')"
+              />
+            </VCard>
+          </div>
         </div>
-      </div>
 
-      <!-- ================================================================
+        <!-- ================================================================
            Payment (the paid option was removed — free only
            (i18n:common.free) for now, operator 2026-06-18 Q2=A; the paid
            option + price return as one line if ever needed)
            ================================================================ -->
-      <div class="create-practice__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.createPractice.sections.payment') }}</h2>
+        <div class="create-practice__section">
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.createPractice.sections.payment') }}
+          </h2>
 
-        <div>
-          <VCard class="create-practice__repeat" padding="none">
-            <VRadioGroup :model-value="'free'" :options="PAYMENT_OPTIONS" />
-          </VCard>
+          <div>
+            <VCard class="create-practice__repeat" padding="none">
+              <VRadioGroup :model-value="'free'" :options="PAYMENT_OPTIONS" />
+            </VCard>
+          </div>
         </div>
-      </div>
 
-      <!-- ================================================================
+        <!-- ================================================================
            Description (textarea + 2 single-line ones; optional → no seal)
            ================================================================ -->
-      <div class="create-practice__section create-practice__section--desc">
-        <h2 class="velo-section-title">
-          {{ t('masterScreens.createPractice.fields.description') }}
-        </h2>
+        <div class="create-practice__section create-practice__section--desc">
+          <h2 class="velo-section-title">
+            {{ t('masterScreens.createPractice.fields.description') }}
+          </h2>
 
-        <div>
-          <VTextarea
-            v-model="form.description"
-            :placeholder="t('masterScreens.createPractice.fields.about')"
-            :rows="4"
-            autogrow
-          />
-        </div>
+          <div>
+            <VTextarea
+              v-model="form.description"
+              :placeholder="t('masterScreens.createPractice.fields.about')"
+              :rows="4"
+              autogrow
+            />
+          </div>
 
-        <!-- 1-row start (rows=1) = the VInput height these were before; auto-grow
+          <!-- 1-row start (rows=1) = the VInput height these were before; auto-grow
              past one line per the create-screen SVG (operator Q1=A). -->
-        <div>
-          <VTextarea
-            v-model="form.contraindications"
-            :placeholder="t('masterScreens.createPractice.fields.contraindications')"
-            :rows="1"
-            autogrow
-          />
-        </div>
+          <div>
+            <VTextarea
+              v-model="form.contraindications"
+              :placeholder="t('masterScreens.createPractice.fields.contraindications')"
+              :rows="1"
+              autogrow
+            />
+          </div>
 
-        <div>
-          <VTextarea
-            v-model="form.what_to_prepare"
-            :placeholder="t('masterScreens.createPractice.fields.whatToBring')"
-            :rows="1"
-            autogrow
-          />
+          <div>
+            <VTextarea
+              v-model="form.what_to_prepare"
+              :placeholder="t('masterScreens.createPractice.fields.whatToBring')"
+              :rows="1"
+              autogrow
+            />
+          </div>
         </div>
       </div>
 
@@ -923,8 +934,9 @@ async function submit(): Promise<void> {
  * Publish the created practice: draft to scheduled.
  *
  * @returns Whether the PATCH succeeded. On failure the id is kept in
- * unpublishedId and the error is toasted; the lists are refreshed, since
- * they now hold the draft.
+ * unpublishedId (which makes the form inert), the local draft is dropped,
+ * the error is toasted and the lists are refreshed, since they now hold the
+ * server-side draft.
  */
 async function publishCreated(id: string): Promise<boolean> {
   try {
@@ -933,6 +945,10 @@ async function publishCreated(id: string): Promise<boolean> {
     return true
   } catch (e) {
     unpublishedId.value = id
+    // The form's content now lives in the server-side draft: drop the local
+    // copy (and block a late autosave), or the next visit would restore it
+    // and offer to create the practice a second time.
+    finishDraft()
     toast.error(practiceSaveErrorText(e, t('masterScreens.createPractice.toast.publishFailed')))
     void myPracticesChanged(queryCache)
     return false
@@ -942,8 +958,8 @@ async function publishCreated(id: string): Promise<boolean> {
 /** The success exit, once the practice is created AND published. */
 function leaveAfterPublish(): void {
   // Draft fulfilled — drop it (and block any late debounced save) so it can't
-  // resurrect on the next create. Runs only AFTER a successful publish: while
-  // the publish is still failing the local draft survives.
+  // resurrect on the next create. A failed publish has already dropped it
+  // (publishCreated); a second finish is a no-op.
   finishDraft()
 
   toast.success(t('masterScreens.createPractice.toast.created'))
@@ -978,9 +994,6 @@ async function retryPublish(): Promise<void> {
 function openUnpublishedDraft(): void {
   const id = unpublishedId.value
   if (!id) return
-  // The form's content now lives in the server-side draft; a local copy
-  // would offer to create it a second time on the next visit.
-  finishDraft()
   void router.replace({ name: 'master-practice-detail', params: { id } })
 }
 </script>
@@ -1038,6 +1051,19 @@ html.is-keyboard-open .create-practice {
   /* Minimal acceptable section rhythm (owner 2026-10-01: the gaps were
      huge) -- 16px between sections. */
   gap: var(--space-4);
+}
+
+/* The field sections, wrapped so a failed publish can make them inert
+   (FE-202); same 16px rhythm as the content column. Dimmed like a disabled
+   field while inert. */
+.create-practice__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.create-practice__fields[inert] {
+  opacity: 0.5;
 }
 
 /* -- Section -- */
