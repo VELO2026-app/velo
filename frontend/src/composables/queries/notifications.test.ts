@@ -98,12 +98,15 @@ describe('the unread badge', () => {
     expect(badge.unread.value).toBe(0)
   })
 
-  it('applyUnread with no bell mounted still creates a real entry (options: collectable)', () => {
+  it('applyUnread with no bell mounted still creates a real entry: a later fetch asks the server', async () => {
     applyUnread(useQueryCache(), 4)
+    const entry = useQueryCache().get(keys.notifications.unread())!
+    expect(entry.state.value.data).toBe(4)
 
-    const entry = useQueryCache().get(keys.notifications.unread())
-    expect(entry?.state.value.data).toBe(4)
-    expect(entry?.options).not.toBeNull()
+    vi.mocked(notificationsApi.listNotifications).mockResolvedValue(feed(6))
+    await useQueryCache().fetch(entry)
+
+    expect(entry.state.value.data).toBe(6)
   })
 
   it('a resume within UNREAD_STALE_MS asks nothing; the poll asks always', async () => {

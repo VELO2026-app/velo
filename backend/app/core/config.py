@@ -1,71 +1,156 @@
 # =============================================================================
-# VELO Backend -- Application Configuration (updated Phase 8.1, WARNING-5, NO-LITERALS)
+# VELO Backend -- Application Configuration (BE-192: values of the deploy machine)
 # =============================================================================
 #
 # HOW IT WORKS:
-#   1. pydantic-settings reads your .env file
-#   2. Each field here maps to an environment variable (case-insensitive)
-#   3. Pydantic validates types: if DATABASE_URL is missing or malformed,
-#      the app crashes at startup with a clear error -- not at runtime
-#      when a user triggers a database query.
+#   1. pydantic-settings reads the PROCESS ENVIRONMENT -- nothing else: there
+#      is no .env file (PRIMER-PROTOCOL 5.1, values come only from the
+#      instance's passport and from the machine, through compose).
+#   2. Each field here maps to an environment variable (case-insensitive).
+#   3. Pydantic validates types: a missing or malformed required value
+#      crashes the app at startup with a clear error -- not at runtime when
+#      a user triggers it.
 #
-# EXAMPLE:
-#   .env contains:       DATABASE_URL=postgresql+asyncpg://...
-#   Python code uses:    settings.database_url  (typed as str, validated)
+# TWO KINDS OF FIELD:
+#   - Instance values: no default. Each is a key of `app.environment` in
+#     docker-compose.yml, which takes it from primer.yaml's `env` -- the
+#     passport (server.role, domains.*), the machine (minted), a secret of
+#     the passport (asked) or a seam of comms. test_primer_env.py holds the
+#     three of them together.
+#   - Code knobs: a default, and no key in compose -- on the machine they are
+#     the code's values. A knob that has an owner's number and nothing else
+#     is not even a field: TRANSCRIPTION_DAILY_LIMIT (modules/ai/quota.py),
+#     SUPPORT_SPAM_RETENTION_DAYS (modules/support/purge.py),
+#     TELEGRAM_LINK_DOMAIN (core/telegram_links.py),
+#     MCP_OAUTH_CIMD_ALLOWED_HOSTS (modules/mcp/oauth.py).
 #
-# WHY NOT just os.getenv()?
-#   os.getenv("DATABSE_URL")  <- typo, returns None, crashes later
-#   settings.databse_url      <- typo, IDE catches it immediately
+# AN EXTRA KEY IS NOT REFUSED HERE. pydantic-settings looks up each field in
+# the environment and ignores every other variable (extra='forbid' guards only
+# a .env file, which no longer exists). A key that compose passes and this
+# class does not read is caught before the process exists: by
+# test_primer_env.py (every key of app.environment is a field) and by the
+# machine (${VAR:?}, `pridem check`).
 #
-# SECURITY (TD-001, TD-006):
-#   In production (APP_ENV != development), SECRET_KEY and DATABASE_URL
-#   have no defaults -- the app refuses to start without a proper .env.
-#   In development, safe defaults are provided for convenience.
-#
-# WARNING-5 / W6: STRIPE_STUB is disallowed unless explicitly opted in.
-#   If STRIPE_SECRET_KEY="TEST", webhook signature verification is skipped.
-#   lifespan() in main.py raises at startup if is_stripe_stub_blocked is
-#   True (not here -- this module is imported by Alembic before app
-#   startup). The gate is NOT app_env: the TEST server's own .env sets
-#   APP_ENV=production, so an env-name check can't tell TEST from prod.
-#   See allow_stripe_stub / is_stripe_stub_blocked below for the real gate.
+# ROLE (BE-192): SERVER_ROLE is the passport's server.role -- test, preview or
+# prod. It alone decides the Stripe stub (test and preview). There is no
+# development mode: a local run, CI and drift-check run as `test`.
 # =============================================================================
 
+import re
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BeforeValidator, Field, PrivateAttr, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.core.editions import EDITIONS
 from app.core.i18n import SUPPORTED_LANGUAGES
-from app.core.telegram_links import normalize_telegram_url
+from app.core.telegram_links import TELEGRAM_LINK_DOMAIN, normalize_telegram_url
 
-# T-14. Literal placeholders shipped in backend/.env.example -- copying
-# that file verbatim instead of running the installer (which generates
-# real secrets via openssl) leaves a box running on these forever,
-# silently: every one of them is non-empty, so no "key present" check
-# (velo doctor included) ever catches it.
-#
-# THESE VALUES ARE DUPLICATED, NOT DERIVED: config.py cannot read
-# .env.example at runtime (it is imported by Alembic before the app's
-# working directory is guaranteed, and coupling a security gate to a
-# documentation file's parse-ability is its own hazard). The values here
-# and the values in .env.example are two copies of the same fact -- change
-# one, change the other, or this gate goes quietly blind. Kept honest by
-# test_config.py's sync test, which reads .env.example and asserts every
-# literal below is still present in it -- the mismatch fails a test run
-# instead of aging silently for years (same defect class as T-35's
-# two-language codec and T-13's three-place predicate).
-_PLACEHOLDER_SECRET_KEY = "change-me-in-production"
-_PLACEHOLDER_POSTGRES_PASSWORD = "change-me"
-# DATABASE_URL / REDIS_URL embed the same placeholder INSIDE a templated
-# connection string (postgresql+asyncpg://velo:change-me@postgres:5432/velo),
-# so this is a substring check, not equality -- but the boundary is exact
-# (colon before, at-sign after), not a bare "change-me" search: a real
-# generated password merely starting with those letters renders as
-# ":change-me1AbcXyz...@", which does not contain ":change-me@", and a
-# host/db name that happens to contain "change-me" elsewhere in the URL is
-# not a boundary match either.
-_PLACEHOLDER_URL_FRAGMENT = ":change-me@"
+# A host of the passport's domains.* (BE-192): a DNS name and nothing else --
+# no scheme, port, path, query or userinfo. Labels of letters, digits and
+# inner hyphens, 1-63 characters each, 253 at most in all.
+_HOST_RE = re.compile(
+    r"(?=.{1,253}\Z)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+    r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\Z"
+)
+
+# Roles of the passport (server.role) on which payments run on the Stripe
+# stub: velo-test and previews. Never prod.
+_STRIPE_STUB_ROLES = frozenset({"test", "preview"})
+
+# The instance options velo declares (BE-182, protocol 5.2.3): primer.yaml
+# `options`, one passport flag each -- OPTION_<NAME>, field option_<name>.
+OPTIONS = ("payments", "schools", "mcp", "zoom", "telegram", "llm")
+
+# The variables that exist only with an option (`when: <option>` in
+# primer.yaml). With the option off the machine passes the literal it
+# writes for a switched-off option; the code never reads it (protocol
+# 5.2.3) -- these are neither checked at start nor read while the option is
+# off. telegram's own variables are not here: telegram is in
+# options_required, so the machine never starts velo with it off.
+_OPTION_VARS: dict[str, tuple[str, ...]] = {
+    "zoom": (
+        "zoom_account_id",
+        "zoom_client_id",
+        "zoom_client_secret",
+        "zoom_sdk_client_id",
+        "zoom_sdk_client_secret",
+    ),
+}
+
+
+def _flag(value: object) -> object:
+    """A passport flag is the string `true` or `false` (protocol 5.2) --
+    nothing else. pydantic's bool would also take yes/no, on/off, 1/0 and
+    any case; a passport that says anything but the two words is refused at
+    start, not guessed. A bool passes through (Settings built in code)."""
+    if isinstance(value, bool) or value in ("true", "false"):
+        return value
+    raise ValueError("an option flag is `true` or `false`")
+
+
+OptionFlag = Annotated[bool, BeforeValidator(_flag)]
+
+
+def _language_list(value: object) -> object:
+    """The passport's languages (protocol 5.2.2) as the machine passes them:
+    codes joined by commas, `en,ru,uk` -- no spaces, no quotes. The one form
+    backend/ci.env can hold too (no quotes there), and the only one read: a
+    JSON list or a spaced list is not guessed, its items fail the checks of
+    Settings._validate and the start is refused. A list or tuple passes
+    through (Settings built in code)."""
+    if isinstance(value, str):
+        return tuple(value.split(","))
+    if isinstance(value, (list, tuple)):
+        return tuple(value)
+    raise ValueError("LANGUAGES: language codes joined by commas, e.g. 'en,ru,uk'")
+
+
+LanguageList = Annotated[tuple[str, ...], NoDecode, BeforeValidator(_language_list)]
+
+
+def _is_empty(value: object) -> bool:
+    """An instance value with nothing in it: a blank string, or a language
+    list whose every item is blank (LANGUAGES='' or '   ')."""
+    if isinstance(value, tuple):
+        return all(not item.strip() for item in value)
+    return not str(value).strip()
+
+# The instance values that must not be empty, by environment name. pydantic
+# refuses a missing one by itself; an empty string is a str and would pass.
+_REQUIRED_NON_EMPTY = (
+    "edition",
+    "languages",
+    "default_language",
+    "domain_frontend",
+    "domain_api",
+    "database_url",
+    "telegram_bot_token",
+    "telegram_login_client_id",
+    "telegram_login_client_secret",
+    "support_language",
+    "storage_endpoint",
+    "storage_secret_key",
+)
+
+
+def _is_storage_endpoint(value: str) -> bool:
+    """http or https, a host and a port, nothing else (BE-193)."""
+    parts = urlsplit(value)
+    try:
+        port = parts.port
+    except ValueError:  # a port that is not a number in range
+        return False
+    return (
+        parts.scheme in ("http", "https")
+        and bool(parts.hostname)
+        and port is not None
+        and parts.username is None
+        and parts.password is None
+        and not (parts.path or parts.query or parts.fragment)
+        and not value.endswith(("?", "#"))
+    )
 
 
 class Settings(BaseSettings):
@@ -78,19 +163,39 @@ class Settings(BaseSettings):
     """
 
     # -- Application --
-    app_env: str = "development"
+    # The passport's server.role (BE-192). Anything else: refused at start.
+    server_role: Literal["test", "preview", "prod"]
+    # The passport's edition (BE-190): a key of the editions table
+    # (editions.json at the repository root, read by app/core/editions.py),
+    # reported in /health with its modules. Anything else: refused at start.
+    edition: str
+
+    # -- Instance options (BE-182, protocol 5.2.3) --
+    # The passport's options.<name>, one flag each, no default. What each
+    # one closes when false: app/core/options.py (require_option) and the
+    # places it names. telegram is in options_required: the machine never
+    # starts velo with it false, and velo writes no refusal of its own.
+    option_payments: OptionFlag
+    option_schools: OptionFlag
+    option_mcp: OptionFlag
+    option_zoom: OptionFlag
+    option_telegram: OptionFlag
+    option_llm: OptionFlag
+
+    # -- Languages (BE-196, protocol 5.2.2) --
+    # The passport's languages: the subset of the product's languages
+    # (core/i18n.py SUPPORTED_LANGUAGES) this instance turns on, and its
+    # default among them. No default here: an instance names its own. What
+    # anything outside the subset becomes: language_of() below. A list with
+    # a language velo cannot do, a repeat or an empty item, or a default
+    # outside the list: refused at start.
+    languages: LanguageList
+    default_language: str
 
     # -- Database --
-    # Full async connection string for SQLAlchemy.
-    # Port 5433: Docker dev setup (5432 reserved for native postgres).
-    # Default provided for development only. (TD-006)
-    database_url: str = ""
-
-    # Docker Compose uses these to create the database on first run.
-    # Must match the user/pass/db in DATABASE_URL above.
-    postgres_db: str = "velo"
-    postgres_user: str = "velo"
-    postgres_password: str = "velo"
+    # Full async connection string for SQLAlchemy, put together by compose
+    # from the minted POSTGRES_PASSWORD.
+    database_url: str
 
     # -- Redis --
     redis_url: str = "redis://localhost:6379/0"
@@ -106,50 +211,26 @@ class Settings(BaseSettings):
     redis_socket_connect_timeout_seconds: float = 2.0
     redis_socket_timeout_seconds: float = 2.0
 
-    # -- CORS --
-    # Comma-separated list of allowed origins.
-    # "*" for development, specific domains for production.
-    cors_origins: str = "*"
-
-    # -- Public links (T-35) --
-    # Origin for links that must survive OUTSIDE Telegram -- today exactly
-    # one consumer: the /z/{code} Zoom entry point (practices/router.py).
-    # install_velo.sh writes it as the optional short domain if one was given
-    # at install, the API domain otherwise; either way nginx proxies "/" on
-    # that host straight to this backend, so a root-level route publishes
-    # itself.
-    #
-    # Empty default + a production gate below, NOT a localhost fallback: a
-    # silently-wrong base is not a broken page, it is links already sitting
-    # in other people's Telegram channels pointing at nothing. Fail at
-    # startup, where somebody is watching.
-    public_link_base: str = ""
-
-    # -- Security --
-    # No default in production -- app won't start without it. (TD-001)
-    secret_key: str = ""
+    # -- Domains (BE-192) --
+    # The passport's domains.frontend and domains.api: HOSTS, not URLs. The
+    # backend builds every origin from them itself (frontend_origin,
+    # api_origin below): CORS, the return address of the browser sign-in,
+    # the /z/{code} public links and the OAuth issuer. A value with a scheme,
+    # port, path or anything but a DNS name is refused at start.
+    domain_frontend: str
+    domain_api: str
 
     # -- Telegram --
-    # Bot token from BotFather. Required for initData validation.
-    # Dev default is a fake token -- HMAC won't match real Telegram data,
-    # but tests mock validation anyway. (P-4)
-    telegram_bot_token: str = ""
+    # Bot token from BotFather -- verifies the Mini App's initData. A channel
+    # in transition (protocol 11.2): required on every instance.
+    telegram_bot_token: str
     # Bot URL for deep link buttons in notifications (Phase 7.3).
     # Example: "https://telegram.me/veloappbot"
     #
     # The host of this URL is normalized at startup (see the validator below):
-    # a stale .env still carrying the dead t.me host is repaired in memory, so
-    # a domain swap does NOT require touching every server's .env by hand.
+    # a value still carrying the dead t.me host is repaired in memory, so a
+    # domain swap does NOT require a new value from comms.
     telegram_bot_url: str = ""
-    # Host currently serving Telegram links (t.me died at the registry level on
-    # 2026-07-13 -- see app/core/telegram_links.py for the full story).
-    #
-    # THIS IS THE ONLY PLACE IN THE BACKEND THAT NAMES A TELEGRAM DOMAIN.
-    # Every Telegram URL -- the bot URL from .env and every avatar URL arriving
-    # from initData -- is rewritten onto this host. If telegram.me ever dies
-    # too, set TELEGRAM_LINK_DOMAIN=telegram.dog in .env (different TLD, not
-    # subject to the Montenegrin .me registry) and restart. Nothing else changes.
-    telegram_link_domain: str = "telegram.me"
 
     # -- Sessions --
     # How long a session token lives in Redis (days).
@@ -181,8 +262,7 @@ class Settings(BaseSettings):
     auth_rate_limit_window_seconds: int = 60  # rolling window duration
 
     # -- Logging --
-    # CQ-06: default INFO (not DEBUG) -- DEBUG is too noisy for production
-    # and even dev. Override with LOG_LEVEL=DEBUG in .env if needed.
+    # CQ-06: INFO. DEBUG is refused at start on every instance (below).
     log_level: str = "INFO"
 
     # -- Practices (Phase 4.1/4.2/4.3) --
@@ -299,41 +379,15 @@ class Settings(BaseSettings):
     practice_duplicate_submit_window_minutes: int = 10
 
     # -- Stripe (Phase 6.3) --
+    # Not instance values on the deploy machine: neither primer.yaml nor
+    # compose carries them. On test and preview payments run on the stub
+    # (is_stripe_stub, from SERVER_ROLE); on prod the payments module is
+    # off: the option `payments` (BE-182) is refused there until the external
+    # Payments module, and Stripe is being cut out of velo.
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_success_url: str = ""
     stripe_cancel_url: str = ""
-    # W6 hotfix: explicit opt-in for running with the Stripe stub outside a
-    # dev laptop. Defaults to False on purpose -- forget to set it and the
-    # app refuses to start, never the other way around. app_env cannot be
-    # used for this decision: the TEST server's own .env sets
-    # APP_ENV=production (it calls itself "production"), so a check keyed
-    # off the env name blocks TEST as if it were prod. Set
-    # ALLOW_STRIPE_STUB=true only on servers where the stub is genuinely
-    # intentional (TEST).
-    #
-    # is_stripe_stub_blocked (below) refuses startup when ALL THREE hold:
-    # not dev, is_stripe_stub (STRIPE_SECRET_KEY upper() == "TEST"), and
-    # allow_stripe_stub is NOT set. The guard is correct and deliberate --
-    # do not weaken it.
-    #
-    # PROMPT №509 (owner read both servers' env, 2026-07-17): PROD currently
-    # has STRIPE_SECRET_KEY=TEST and NO ALLOW_STRIPE_STUB at all -- i.e. prod
-    # is, right now, in exactly the state this guard exists to refuse. It
-    # has not crashed only because the currently-running prod build predates
-    # this guard. The moment a build containing this guard is released to
-    # prod, startup raises RuntimeError (main.py's lifespan()) and prod does
-    # not come up. Before that release: set a real Stripe secret key on
-    # prod, OR set ALLOW_STRIPE_STUB=true there if the stub is genuinely
-    # intended for longer -- do not let this guard reach prod silently.
-    allow_stripe_stub: bool = False
-
-    # Zoom's twin of the flag above, added by T-35. Same shape on purpose:
-    # a server that genuinely has no Zoom app says so ONCE, explicitly, and
-    # then boots. What it buys is that nobody boots on a fake Zoom by
-    # accident -- see is_zoom_stub_blocked below for why that stopped being
-    # acceptable.
-    allow_zoom_stub: bool = False
 
     # -- Topup limits (Phase 6.3) --
     # All amounts in EUR cents.
@@ -419,62 +473,26 @@ class Settings(BaseSettings):
     # the bell, never crash velo (T1 handoff constraint).
     comms_http_timeout_seconds: float = 5.0
 
-    # -- Object storage (BE-133) --
+    # -- Object storage (BE-133, BE-193) --
+    # The storage's URL, put together by compose from the point the machine
+    # gives the app: STORAGE_ENDPOINT: http://${STORAGE_ADDRESS:?} (protocol
+    # 4.4). Every client and every signed link is made against it, and comms
+    # opens a link by the same name -- so its form is checked at start.
+    storage_endpoint: str
     # The secret of the backend's own key to velo-storage. The key's NAME is
-    # fixed in app/core/storage_registry.yaml; only the secret lives in the
-    # environment. Nobody types it: `velo update` (and the installer) write
-    # it into backend/.env when it is absent, and the storage init sets the
-    # storage to it on every run -- so `velo env set STORAGE_SECRET_KEY`
-    # followed by `velo update` is a rotation. Empty by default, with no
-    # validator, on purpose: the first deploy of BE-133 runs the OLD update
-    # script, which writes no key, and the app must still start. The
-    # storage module refuses on an empty secret when it is called.
-    storage_secret_key: str = ""
-
-    # -- Voice transcription (GT-41) --
-    # The key lives HERE, on the server, and nowhere else. Voice input used
-    # to call OpenRouter straight from the browser with a VITE_ key compiled
-    # into the bundle: anyone who opened the page could read it and spend our
-    # budget on any model, and per-person limits, audit and revocation were
-    # all impossible by construction. Empty key = the feature is off and says
-    # so with a machine code; it is never a 500 and never a silent nothing.
-    openrouter_api_key: str = ""
-    # OpenRouter RENAMED the OpenAI audio models in 2026 -- the old
-    # openai/gpt-4o-audio-preview slug 400s. Overridable without a redeploy
-    # precisely because that can happen again.
-    openrouter_transcribe_model: str = "openai/gpt-audio-mini"
-    # Shorter than the browser's own 30s abort on purpose: if the browser
-    # gave up first, the completion would keep running and we would pay for
-    # an answer nobody receives.
-    openrouter_http_timeout_seconds: float = 25.0
-    # BE-67: transcriptions one person may make per UTC day (owner decision:
-    # 60). Counted before the provider is called, failed calls included --
-    # see modules/ai/quota.py. 0 turns voice input off for everyone. To see
-    # the refusal on a stand without 60 recordings: `velo env set
-    # TRANSCRIPTION_DAILY_LIMIT` with 2, then `velo restart`, and back with
-    # 60 (an empty value also means 60).
-    transcription_daily_limit: int = Field(default=60, ge=0)
-
-    @field_validator("transcription_daily_limit", mode="before")
-    @classmethod
-    def _empty_daily_limit_is_unset(cls, value: object) -> object:
-        """`velo env set TRANSCRIPTION_DAILY_LIMIT` with an empty value
-        writes the key empty -- the script's "empty clears it". An empty
-        string is not an integer and the backend would refuse to start
-        (measured: int_parsing at import); empty means unset here: the
-        owner's 60."""
-        if isinstance(value, str) and not value.strip():
-            return 60
-        return value
+    # fixed in app/core/storage_registry.yaml; the secret is minted by the
+    # machine (primer.yaml), and velo-storage-init sets the key to it on
+    # every rollout.
+    storage_secret_key: str
 
     # -- Support translation (BE-166, owner ruling 2026-10-22) --
     # The ONE language every support admin writes in. A user's message is
     # translated INTO it, an admin's reply is translated FROM it into the
     # user's language (users.language) -- unless the two are the same, when
     # the reply goes as it is. An admin's own interface language plays no
-    # part. One of the backend's languages (core/i18n.py
-    # SUPPORTED_LANGUAGES), or the start is refused below.
-    support_language: str = "en"
+    # part. A param of the passport with no default (protocol 5.2, BE-196),
+    # one of the instance's languages, or the start is refused below.
+    support_language: str
 
     # -- Comms integration: reminder orchestration (Phase 6 / T1) --
     # Booking reminders (ID-6): velo schedules the series product-side
@@ -627,9 +645,13 @@ class Settings(BaseSettings):
     }
 
     # -- Zoom (E21) --
-    zoom_account_id: str = ""
-    zoom_client_id: str = ""
-    zoom_client_secret: str = ""
+    # The Server-to-Server app. A channel in transition (protocol 11.2, until
+    # velo-meet), under the option `zoom` (BE-182): required while it is on,
+    # neither checked nor read while it is off (_OPTION_VARS). There is no
+    # Zoom stub on any role (owner ruling, BE-192).
+    zoom_account_id: str
+    zoom_client_id: str
+    zoom_client_secret: str
     # Meeting-creation retry poller (mirrors practice_autofinalize_* above).
     # Background worker toggle -- same rationale as
     # practice_autofinalize_enabled and the other worker toggles: tests
@@ -637,27 +659,13 @@ class Settings(BaseSettings):
     zoom_retry_enabled: bool = True
     zoom_retry_poll_interval_seconds: int = 30
     # BE-162 delivery 2: the spam bin. A spam ticket older than
-    # support_spam_retention_days (owner ruling: 30) is deleted with its
-    # conversation by the purge loop (support/purge.py), which runs every
-    # support_spam_purge_interval_seconds. The worker toggle has the same
-    # rationale as the others: tests disable it so the loop cannot race
-    # manual calls. The retention is a setting so the owner can watch the
-    # bin empty on the stand without waiting a month (set it to 0, restart,
-    # set it back to 30) -- see the BE-162 delivery 2 report.
+    # SUPPORT_SPAM_RETENTION_DAYS (owner ruling: 30, a constant in
+    # support/purge.py) is deleted with its conversation by the purge loop,
+    # which runs every support_spam_purge_interval_seconds. The worker toggle
+    # has the same rationale as the others: tests disable it so the loop
+    # cannot race manual calls.
     support_spam_purge_enabled: bool = True
     support_spam_purge_interval_seconds: int = Field(default=3600, ge=60)
-    support_spam_retention_days: int = Field(default=30, ge=0)
-
-    @field_validator("support_spam_retention_days", mode="before")
-    @classmethod
-    def _empty_retention_is_unset(cls, value: object) -> object:
-        """`velo env set SUPPORT_SPAM_RETENTION_DAYS` with an empty value
-        writes the key empty -- the script's "empty clears it". An empty
-        string is not an integer, and the backend would refuse to start;
-        empty means unset here: the owner's 30 days."""
-        if isinstance(value, str) and not value.strip():
-            return 30
-        return value
     zoom_retry_max_backoff_seconds: int = 600
     # Cap on ZoomMeeting.retry_count for a create_failed row. Past this many
     # attempts the poller stops retrying that row -- it stays VISIBLY
@@ -682,12 +690,10 @@ class Settings(BaseSettings):
     # SDK feature on (Development credentials). NOT the Server-to-Server app
     # above: an S2S app has no Meeting SDK, so these are a second key pair.
     # They sign the SDK JWT and nothing else; the secret never leaves the
-    # server and is never logged. Optional in .env.example on purpose: a
-    # server without them still deploys, and says so out loud --
-    # POST /practices/{id}/zoom/sdk-join answers 409 zoom_sdk_not_configured
-    # and the practice screen shows that line instead of a dead button.
-    zoom_sdk_client_id: str = ""
-    zoom_sdk_client_secret: str = ""
+    # server and is never logged. A channel in transition like the S2S keys
+    # above: under the option `zoom` (BE-182, _OPTION_VARS).
+    zoom_sdk_client_id: str
+    zoom_sdk_client_secret: str
     # Per-user fixed window on sdk-join: every call reaches Zoom (meeting
     # details, plus a ZAK for the host), so a stuck button or a script must
     # cost a counter, not Zoom API quota. Six a minute leaves a person
@@ -749,7 +755,8 @@ class Settings(BaseSettings):
     guest_enter_rate_limit: int = 20
     guest_rate_limit_window_seconds: int = 600
 
-    # -- Schools killswitch (GT-19) --
+    # -- Schools: what option_schools = false means (GT-19; the passport's
+    # option since BE-182, the killswitch before it) --
     # AN EMERGENCY BRAKE, NOT A ROLLOUT TOGGLE. Default True: the feature
     # ships on, and this exists so it can be taken off the air without a
     # revert. The opposite default ("off until switched on") would make it a
@@ -793,19 +800,16 @@ class Settings(BaseSettings):
     # brake exists to stop. Forbidding creation would be the third candidate
     # meaning ("new schools only"), which was considered and not chosen.
     #
-    # Flipping this back to True restores everything with no rows touched:
+    # Flipping this back to true restores everything with no rows touched:
     # the flag writes nothing and no journal event records it (the fact that
     # it was pulled lives in the deployment, not in a school's history).
-    schools_enabled: bool = True
 
     # -- MCP (BE-138, phase 0: personal access tokens) --
-    # Killswitch. False -> every endpoint of the token router answers 404,
-    # unauthenticated callers included (a router-level dependency in
-    # app/modules/mcp/router.py, the same shape as schools_enabled and
-    # for the same reasons: no 503, no machine code). Token verification
-    # does not read it; the /mcp gate and the OAuth door (BE-141) do, in one
-    # place: door_closed in app/modules/mcp/server.py.
-    mcp_enabled: bool = True
+    # option_mcp = false (BE-182; mcp_enabled before it) -> every endpoint of
+    # the token router answers 404, unauthenticated callers included
+    # (require_option, app/core/options.py: no 503, no machine code). Token
+    # verification does not read it; the /mcp gate and the OAuth door
+    # (BE-141) do, in one place: door_closed in app/modules/mcp/server.py.
     # Live (not revoked) tokens one student may hold. Revoked tokens do not
     # count. The 11th create answers 409 mcp_token_limit_reached.
     mcp_tokens_max_active_per_user: int = 10
@@ -826,26 +830,17 @@ class Settings(BaseSettings):
     mcp_action_calls_per_hour: int = 10
     mcp_diary_writes_per_hour: int = 30
     # -- MCP phase 3 (BE-141): OAuth for claude.ai, sign-in through Telegram --
-    # The three keys below are OPTIONAL (owner ruling): all three set -> the
-    # OAuth door is open; any of them empty -> every OAuth route answers 404
-    # and /mcp keeps working with personal tokens only. They are declared in
-    # .env.example as "# (optional) KEY=" lines -- the drift gate of
-    # `velo update` reads only uncommented keys, so their absence never
-    # blocks an update. A fresh install writes them (issuer derived from the
-    # API domain, the two Telegram keys asked, both or neither); a live
-    # server sets them with `velo env set <KEY>`; `velo doctor` reports.
+    # The OAuth issuer is api_origin (BE-192): the public origin of THIS API,
+    # and with /mcp appended the protected resource.
     #
-    # Public origin of THIS API, e.g. https://api.velotony.com: the OAuth
-    # issuer, and with /mcp appended the protected resource. Nothing else
-    # tells the backend its own address (CORS_ORIGINS is the frontend,
-    # PUBLIC_LINK_BASE may be the short domain). https, no path, no query --
-    # checked at startup, normalized without a trailing slash.
-    mcp_oauth_issuer_url: str = ""
     # "Log In With Telegram" (OpenID Connect) credentials from BotFather's
     # Login Widget section. The client id is the bot's id; the secret is
     # read by the server only, for the code exchange with oauth.telegram.org.
-    telegram_login_client_id: str = ""
-    telegram_login_client_secret: str = ""
+    # A channel in transition (protocol 11.2, until sign-in moves to comms
+    # v4.x): required on every instance -- the OAuth door and the browser
+    # sign-in are always configured.
+    telegram_login_client_id: str
+    telegram_login_client_secret: str
     # Lifetimes: the access token (the refresh token lives until the student
     # revokes the connection), the one-time authorization code, and an
     # authorization in progress (from /authorize to the consent decision).
@@ -858,18 +853,11 @@ class Settings(BaseSettings):
     mcp_oauth_register_window_seconds: int = 3600
     # Code exchange and key fetch at oauth.telegram.org.
     telegram_login_http_timeout_seconds: float = 10.0
-    # Client ID Metadata Documents (CIMD, owner ruling): a client whose
-    # client_id is an https URL on one of these hosts (comma-separated,
-    # exact host match, case-insensitive) is known by fetching that URL --
-    # the way claude.ai recommends and ChatGPT prefers (BE-170). By default
-    # the two of them: claude.ai and chatgpt.com. Any other host: refused
-    # (the server would otherwise fetch a URL a stranger names). Set to an
-    # empty value, the list is empty and every CIMD client is refused --
-    # claude.ai's included, since the metadata still offers CIMD. The
-    # document is kept this long, then fetched again; it may be at most
-    # this many bytes and must arrive within this many seconds -- claude.ai
-    # gives the whole token request 10.
-    mcp_oauth_cimd_allowed_hosts: str = "claude.ai,chatgpt.com"
+    # Client ID Metadata Documents (CIMD): the hosts are the constant
+    # MCP_OAUTH_CIMD_ALLOWED_HOSTS in modules/mcp/oauth.py. The document is
+    # kept this long, then fetched again; it may be at most this many bytes
+    # and must arrive within this many seconds -- claude.ai gives the whole
+    # token request 10.
     mcp_oauth_cimd_cache_seconds: int = 86400
     mcp_oauth_cimd_max_bytes: int = 16384
     mcp_oauth_cimd_timeout_seconds: float = 5.0
@@ -882,146 +870,114 @@ class Settings(BaseSettings):
     admin_report_note_max_length: int = 2000
 
     @model_validator(mode="after")
-    def _apply_env_defaults_and_validate(self) -> "Settings":
-        """Apply safe defaults for development, enforce secrets in production.
+    def _validate(self) -> "Settings":
+        """Refuse to start on a value no instance can run with."""
+        # BE-192: an empty instance value is refused, every empty key named
+        # at once -- the operator fixes the passport in one pass. A missing
+        # one pydantic has already refused, by field name.
+        # The variables of an option are checked only while it is on
+        # (BE-182, protocol 5.2.3): off, they hold the machine's literal,
+        # which the code never reads.
+        checked = [
+            *_REQUIRED_NON_EMPTY,
+            *(
+                name
+                for option, names in _OPTION_VARS.items()
+                if self.option_on(option)
+                for name in names
+            ),
+        ]
+        # Named in the order of the fields, the passport's order, whichever
+        # list a name comes from.
+        order = list(type(self).model_fields)
+        empty = [
+            name.upper()
+            for name in sorted(checked, key=order.index)
+            if _is_empty(getattr(self, name))
+        ]
+        if empty:
+            raise ValueError(f"empty: {', '.join(empty)}")
 
-        Development: provides working defaults so `make run` works without .env.
-        Production: crashes at startup if critical secrets are missing.
-        """
-        is_dev = self.app_env == "development"
+        # BE-182: no payments on prod. Owner ruling: velo's payments leave for
+        # the external Payments module, which is not ready; until it is,
+        # prod runs with the option off, and a prod passport that turns it
+        # on is refused -- Stripe is being cut out, and its keys are not
+        # instance values, so on prod the module would have nothing to pay
+        # with. A ruling, not a gap: it changes with the Payments module.
+        if self.option_payments and self.server_role == "prod":
+            raise ValueError(
+                "OPTION_PAYMENTS: there are no payments on prod until the "
+                "external Payments module"
+            )
 
-        # BE-166: a language the backend does not know cannot be anybody's
-        # users.language, so every reply would be translated into it and
-        # every message out of it -- refused at start, in every env.
-        if self.support_language not in SUPPORTED_LANGUAGES:
+        # BE-190: the edition is one the table knows (core/editions.py).
+        if self.edition not in EDITIONS:
+            raise ValueError(
+                f"EDITION {self.edition!r} is not an edition of velo "
+                f"(known: {', '.join(sorted(EDITIONS))})"
+            )
+
+        # BE-192: domains.* of the passport are hosts. A URL, a port or a
+        # path here would become a second, wrong origin in every link.
+        for name in ("domain_frontend", "domain_api"):
+            value = getattr(self, name)
+            if not _HOST_RE.match(value.lower()):
+                raise ValueError(
+                    f"{name.upper()}={value!r} is not a host name: no "
+                    "scheme, port, path or userinfo, e.g. 'app.example.com'"
+                )
+            setattr(self, name, value.lower())
+
+        # BE-193: the storage's URL is http(s)://host:port and nothing more.
+        # A bare host:port (compose without its scheme), a path or userinfo
+        # would sign every link for an address comms does not open.
+        if not _is_storage_endpoint(self.storage_endpoint):
+            raise ValueError(
+                f"STORAGE_ENDPOINT={self.storage_endpoint!r} is not "
+                "http(s)://host:port, e.g. 'http://velo-storage-velo-storage:9000'"
+            )
+
+        # BE-196: the passport's languages are a subset of the product's,
+        # each named once, and the default is one of them (protocol 5.2.2;
+        # the machine checks the same before a rollout).
+        if "" in (item.strip() for item in self.languages):
+            raise ValueError(
+                f"LANGUAGES={','.join(self.languages)!r} has an empty item: "
+                "codes joined by commas, e.g. 'en,ru,uk'"
+            )
+        repeated = sorted({c for c in self.languages if self.languages.count(c) > 1})
+        if repeated:
+            raise ValueError(f"LANGUAGES names {', '.join(repeated)} more than once")
+        unknown = [c for c in self.languages if c not in SUPPORTED_LANGUAGES]
+        if unknown:
+            raise ValueError(
+                f"LANGUAGES: {', '.join(map(repr, unknown))} not among the "
+                f"languages of velo: {', '.join(sorted(SUPPORTED_LANGUAGES))}"
+            )
+        if self.default_language not in self.languages:
+            raise ValueError(
+                f"DEFAULT_LANGUAGE={self.default_language!r} is not one of "
+                f"the instance's languages: {', '.join(self.languages)}"
+            )
+
+        # BE-166: support writes in a language every person of the instance
+        # may read, so the support language is one the instance has on
+        # (BE-196); anything else would translate every reply into a
+        # language nobody here can choose -- refused at start.
+        if self.support_language not in self.languages:
             raise ValueError(
                 f"SUPPORT_LANGUAGE={self.support_language!r} is not one of "
-                f"the backend's languages: "
-                f"{', '.join(sorted(SUPPORTED_LANGUAGES))}"
+                f"the instance's languages: {', '.join(self.languages)}"
             )
 
-        # DATABASE_URL: default only in dev (TD-006)
-        if not self.database_url:
-            if is_dev:
-                self.database_url = (
-                    "postgresql+asyncpg://velo:velo@localhost:5433/velo"
-                )
-            else:
-                raise ValueError(
-                    "DATABASE_URL is required in production. "
-                    "Set it in .env file."
-                )
-
-        # SECRET_KEY: default only in dev (TD-001)
-        if not self.secret_key:
-            if is_dev:
-                self.secret_key = (
-                    "dev-only-insecure-key-do-not-use-in-production"
-                )
-            else:
-                raise ValueError(
-                    "SECRET_KEY is required in production. "
-                    'Generate with: python -c "import secrets; '
-                    'print(secrets.token_urlsafe(64))"'
-                )
-
-        # TELEGRAM_BOT_TOKEN: required in production.
-        if not self.telegram_bot_token:
-            if is_dev:
-                self.telegram_bot_token = "dev-fake-bot-token"
-            else:
-                raise ValueError(
-                    "TELEGRAM_BOT_TOKEN is required in production. "
-                    "Get it from BotFather."
-                )
-
-        # TELEGRAM_BOT_URL: repair a stale host (2026-07-14).
-        # Servers provisioned before t.me died still carry
-        # TELEGRAM_BOT_URL=https://t.me/<bot> in their .env. Rewriting the host
-        # here means deep links and master invites keep working WITHOUT anyone
-        # editing .env on every box -- and it is the reason formatters.py and
-        # admin/masters/service.py need no changes at all: they read an already
-        # normalized settings.telegram_bot_url.
+        # TELEGRAM_BOT_URL: repair a stale host (2026-07-14). A value still
+        # carrying the dead t.me host is rewritten here, so deep links and
+        # master invites keep working -- and it is the reason formatters.py
+        # and admin/masters/service.py need no changes at all: they read an
+        # already normalized settings.telegram_bot_url.
         self.telegram_bot_url = normalize_telegram_url(
-            self.telegram_bot_url, self.telegram_link_domain
+            self.telegram_bot_url, TELEGRAM_LINK_DOMAIN
         ) or ""
-
-        # STRIPE_SUCCESS_URL: required in production. (Phase 6.3)
-        if not self.stripe_success_url:
-            if is_dev:
-                self.stripe_success_url = (
-                    "http://localhost:3000/topup/success"
-                )
-            else:
-                raise ValueError(
-                    "STRIPE_SUCCESS_URL is required in production. "
-                    "Set to 'TEST' to start without Stripe, or "
-                    "provide your Telegram WebApp success page URL."
-                )
-
-        # STRIPE_CANCEL_URL: required in production. (Phase 6.3)
-        if not self.stripe_cancel_url:
-            if is_dev:
-                self.stripe_cancel_url = (
-                    "http://localhost:3000/topup/cancel"
-                )
-            else:
-                raise ValueError(
-                    "STRIPE_CANCEL_URL is required in production. "
-                    "Set to 'TEST' to start without Stripe, or "
-                    "provide your Telegram WebApp cancel page URL."
-                )
-
-        # WARNING-5 / W6: STRIPE_STUB check is intentionally NOT here.
-        # config.py is imported by Alembic migrations before app startup,
-        # so a startup-only guard must live in main.py lifespan, not here.
-        # See: is_stripe_stub_blocked above, enforced in lifespan() in
-        # main.py. Two prior comments here claimed this guard existed
-        # when it never did (the W6 incident) -- it now actually does.
-
-        # CORS_ORIGINS: must not be wildcard in production (S-04).
-        if not is_dev and self.cors_origins == "*":
-            raise ValueError(
-                "CORS_ORIGINS must not be '*' in production. "
-                "Set to specific domain(s), e.g. "
-                "'https://app.example.com'."
-            )
-
-        # PUBLIC_LINK_BASE: required in production (T-35). Same shape as the
-        # CORS_ORIGINS gate above -- a misconfiguration that is invisible at
-        # runtime must be loud at startup instead. The value is the origin
-        # every /z/{code} link is built from; empty means every link a master
-        # copies into a channel is malformed, and nothing in the request path
-        # would ever say so.
-        if not is_dev and not self.public_link_base:
-            raise ValueError(
-                "PUBLIC_LINK_BASE is required in production. "
-                "Set to the public origin serving this API, e.g. "
-                "'https://api.example.com'."
-            )
-
-        # MCP_OAUTH_ISSUER_URL (BE-141): optional, but when set it must be
-        # an https origin -- it becomes the OAuth issuer that claude.ai
-        # compares and the base of every URL in the discovery documents. A
-        # typo is loud here, at startup, not a connector that silently never
-        # connects. Empty stays empty: OAuth is then simply off.
-        if self.mcp_oauth_issuer_url:
-            parts = urlsplit(self.mcp_oauth_issuer_url)
-            if (
-                parts.scheme != "https"
-                or not parts.hostname
-                or parts.path not in ("", "/")
-                or parts.query
-                or parts.fragment
-                or parts.username
-                or parts.password
-            ):
-                raise ValueError(
-                    "MCP_OAUTH_ISSUER_URL must be the https origin of this "
-                    "API, e.g. 'https://api.example.com' (no path, no "
-                    "query)."
-                )
-            self.mcp_oauth_issuer_url = self.mcp_oauth_issuer_url.rstrip("/")
 
         # CQ-02: commission_percent must be within valid range.
         # Prevents misconfiguration: negative commission or > 100%
@@ -1033,43 +989,34 @@ class Settings(BaseSettings):
                 f"got {self.commission_percent}"
             )
 
-        # CQ-06: log_level must be a valid Python logging level.
-        # In production, DEBUG is not allowed -- too noisy and may
-        # leak sensitive data (request bodies, SQL queries, etc.).
+        # CQ-06: log_level must be a valid Python logging level, and not
+        # DEBUG on any instance -- too noisy, and it may leak sensitive data
+        # (request bodies, SQL queries, etc.).
         _valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
         if self.log_level.upper() not in _valid_levels:
             raise ValueError(
                 f"log_level must be one of {_valid_levels}, "
                 f"got '{self.log_level}'"
             )
-        if not is_dev and self.log_level.upper() == "DEBUG":
+        if self.log_level.upper() == "DEBUG":
             raise ValueError(
-                "log_level DEBUG is not allowed in production. "
-                "Use INFO or higher."
+                "log_level DEBUG is not allowed. Use INFO or higher."
             )
 
-        # COMMS integration (Phase 6): paired-secret gate. comms may not
-        # be installed on a given box (empty url = feature off, degrades
-        # cleanly), so we do NOT force comms config everywhere. But a
-        # PARTIAL config is a silent failure the operator cannot see,
-        # which is exactly what happened to notifications before: a set
-        # api_url with an empty token ships "Authorization: Bearer " as
-        # a valid header (comms 401 -> the bell breaks for everyone), and
-        # a relay enabled by flag with an empty redis_url just never
-        # starts (INFO log, no error). Enforce the pairing in production,
-        # but ONLY when comms is actually INTENDED on this box: a box with
-        # no comms config at all (every field empty) is the "comms not
-        # installed" case, which must degrade cleanly -- the relay simply
-        # never starts on an empty redis_url. Gating on the default
-        # comms_relay_enabled=True alone would stop every comms-less prod
-        # box from starting, including in-place upgrades of existing boxes
-        # whose .env has no COMMS_* keys yet. (Dev stays fully optional.)
+        # COMMS integration (Phase 6): paired-secret gate. A PARTIAL config
+        # is a silent failure the operator cannot see: a set api_url with an
+        # empty token ships "Authorization: Bearer " as a valid header
+        # (comms 401 -> the bell breaks for everyone), and a relay enabled by
+        # flag with an empty redis_url just never starts (INFO log, no
+        # error). Enforced only when comms is INTENDED -- some COMMS_* value
+        # is set; with every one empty the relay never starts and the proxy
+        # answers 502.
         comms_intended = bool(
             self.comms_api_url
             or self.comms_service_token
             or self.comms_redis_url
         )
-        if not is_dev and comms_intended:
+        if comms_intended:
             if self.comms_api_url and not self.comms_service_token:
                 raise ValueError(
                     "COMMS_API_URL is set but COMMS_SERVICE_TOKEN is "
@@ -1111,167 +1058,85 @@ class Settings(BaseSettings):
         return self
 
     # -- Pydantic Settings Config --
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-    )
+    # No env_file (BE-192): values come only from the process environment.
+    model_config = SettingsConfigDict(case_sensitive=False)
+
+    # The Zoom stub (BE-192, owner ruling): on NO role. Every instance,
+    # velo-test included, runs on real Zoom keys. Only the test suite turns
+    # it on (tests/conftest.py), so that no test reaches Zoom and the E21
+    # control flow runs on deterministic fake data (zoom_client.py). A
+    # private attribute, not a field: no environment variable reaches it.
+    _zoom_stub: bool = PrivateAttr(default=False)
+
+    @property
+    def frontend_origin(self) -> str:
+        """https://<domains.frontend>: the one origin CORS admits and the
+        browser sign-in returns to."""
+        return f"https://{self.domain_frontend}"
+
+    @property
+    def api_origin(self) -> str:
+        """https://<domains.api>: the public origin of this API -- the base
+        of every /z/{code} link and the OAuth issuer."""
+        return f"https://{self.domain_api}"
+
+    def option_on(self, name: str) -> bool:
+        """Whether the instance option `name` (one of OPTIONS) is on."""
+        if name not in OPTIONS:
+            raise KeyError(f"not an option of velo: {name!r}")
+        return bool(getattr(self, f"option_{name}"))
+
+    def language_of(self, code: str | None) -> str:
+        """A person's language on this instance (BE-196, protocol 5.2.2):
+        the language `code` names if the instance has it on, else the
+        instance's default_language.
+
+        `code` is a stored users.language or the tag an entry brings
+        ("uk-UA", "RU", none at all); its first two characters, lower-cased,
+        name the language. Every place that shows or uses a person's
+        language goes through here. users.language itself is never
+        rewritten: a language the instance turns off and on again comes
+        back to the people who chose it. The one reader of the raw value is
+        the comms snapshot (core/events/sync.py): its content is a function
+        of the row and its version (comms refuses equal versions with other
+        content), and protocol 5.2.2 gives comms the instance's languages
+        to choose by itself.
+        """
+        if code:
+            short = code[:2].lower()
+            if short in self.languages:
+                return short
+        return self.default_language
+
+    @property
+    def enabled_options(self) -> list[str]:
+        """The options on, sorted -- /health details (BE-182)."""
+        return sorted(name for name in OPTIONS if self.option_on(name))
 
     @property
     def is_stripe_stub(self) -> bool:
-        """True when Stripe is not configured (keys set to 'TEST')."""
-        return self.stripe_secret_key.upper() == "TEST"
-
-    @property
-    def is_stripe_stub_blocked(self) -> bool:
-        """True when startup must refuse: stubbed Stripe, not a dev laptop,
-        and not explicitly allowed via ALLOW_STRIPE_STUB. See
-        allow_stripe_stub above for why app_env alone can't make this call.
-        """
-        is_dev = self.app_env == "development"
-        return not is_dev and self.is_stripe_stub and not self.allow_stripe_stub
+        """True on the roles where payments run on the stub: test and
+        preview (BE-192). The stub skips Stripe and credits at once."""
+        return self.server_role in _STRIPE_STUB_ROLES
 
     @property
     def is_zoom_stub(self) -> bool:
-        """True when Zoom credentials are not configured (any of the three
-        blank), or ZOOM_CLIENT_SECRET="TEST" (explicit sentinel, mirroring
-        the Stripe stub convention above).
-
-        NO SERVER'S ACTUAL ZOOM CREDENTIAL STATE HAS BEEN OBSERVED as of
-        this writing -- this differs from is_stripe_stub, whose comment can
-        reference a specific, owner-verified reading of prod's .env
-        (PROMPT №509). Do not add a claim here about what TEST or prod
-        currently has configured unless you have personally read that
-        server's env; the Stripe guard's comment once asserted "prod has a
-        real key" and that assertion was false (the W6 incident, see
-        allow_stripe_stub above) -- it stayed wrong in the comment for two
-        prior revisions before someone actually checked.
-        """
-        return (
-            not self.zoom_account_id
-            or not self.zoom_client_id
-            or not self.zoom_client_secret
-            or self.zoom_client_secret.upper() == "TEST"
-        )
+        """True only when the test suite turned the stub on (_zoom_stub)."""
+        return self._zoom_stub
 
     @property
     def is_zoom_sdk_configured(self) -> bool:
-        """True when the app can hand out Meeting SDK entry: the SDK key pair
-        is set AND Zoom itself is real.
+        """True when the app can hand out Meeting SDK entry: Zoom is real.
 
-        Both halves are needed. Without the key pair there is nothing to sign
-        with. Under the S2S stub (is_zoom_stub) every meeting number is
-        fabricated, so a correctly signed JWT would still open nothing -- the
-        same "plausible but fiction" failure is_zoom_stub_blocked's docstring
-        describes, and the reason this answers False there too rather than
-        handing the screen a meeting that does not exist.
+        The SDK key pair is set whenever the option `zoom` is on (required
+        at start then); with it off sdk-join answers 404 before this is
+        read (BE-182, require_option). Under the stub
+        every meeting number is fabricated, so a correctly signed JWT would
+        still open nothing -- and sdk-join answers 409
+        zoom_sdk_not_configured instead of handing the screen a meeting that
+        does not exist.
         """
-        return (
-            not self.is_zoom_stub
-            and bool(self.zoom_sdk_client_id)
-            and bool(self.zoom_sdk_client_secret)
-        )
-
-    @property
-    def is_zoom_stub_blocked(self) -> bool:
-        """True when startup must refuse: stubbed Zoom, not a dev laptop,
-        and not explicitly allowed via ALLOW_ZOOM_STUB.
-
-        THIS OVERRIDES AN EXPLICIT EARLIER DECISION, and the override is
-        the point of writing it down rather than quietly adding a guard.
-
-        What used to stand here said there must be NO gate, for two
-        reasons: (1) Zoom stub mode only means no real meeting is created,
-        and E21 treats every Zoom call as best-effort, so a hard guard
-        would contradict that design; (2) no server had real Zoom
-        credentials yet, so a guard would crash TEST and prod on the next
-        restart for a reason unrelated to that deploy. It closed with:
-        "if Zoom ever becomes launch-critical, add a real gate then -- do
-        not backfill one here without re-deciding this trade-off
-        explicitly."
-
-        T-35 is that moment, and this is that explicit re-decision.
-        The whole feature exists so attendance stops lying: a student who
-        attended must not be recorded NO_SHOW. Under the stub, meetings are
-        fabricated zoom.us URLs that open nothing, no registrant is ever
-        matched, and attendance is not merely degraded -- it can never be
-        written at all. Reason (1) no longer holds: best-effort meeting
-        CREATION is one thing, an entire attendance chain silently running
-        on fiction is another. Reason (2) is spent: it was a statement
-        about a moment in time, and that moment passed the day this
-        shipped.
-
-        The failure this closes was found in production, not in review: a
-        server ran for weeks with no ZOOM_* keys at all, every link looked
-        plausible in the UI, and NOTHING anywhere said so -- not the app,
-        not `velo doctor` (the keys were absent from .env.example too), not
-        the install. Silence was the defect.
-
-        Startup does not become fragile: the installer asks about Zoom and
-        writes ALLOW_ZOOM_STUB=true when the operator answers "no". A
-        server without a Zoom app still boots -- it just has to say out
-        loud that it is running on fiction.
-        """
-        is_dev = self.app_env == "development"
-        return not is_dev and self.is_zoom_stub and not self.allow_zoom_stub
-
-    @property
-    def placeholder_secret_keys(self) -> list[str]:
-        """Names of settings still holding their literal .env.example
-        placeholder value -- SECRET_KEY, POSTGRES_PASSWORD, DATABASE_URL,
-        REDIS_URL. Empty list means none of the four are placeholders.
-
-        CRITERION: exact match against the known literal for the atomic
-        secrets (SECRET_KEY, POSTGRES_PASSWORD) -- a real secret that
-        merely starts with the same characters does not equal the
-        literal, so it passes. For the URL-shaped fields the placeholder
-        is embedded inside a templated connection string, so this checks
-        for the exact ":change-me@" fragment (colon/at-sign boundaries)
-        instead of a bare substring -- a real password beginning
-        "change-me..." does not produce that exact fragment, and a
-        host/db name that happens to contain "change-me" elsewhere in the
-        URL is not a boundary match.
-
-        KNOWN GAP: REDIS_PASSWORD is NOT covered here -- it has no
-        Settings field at all. It exists only for docker-compose to start
-        the redis container with --requirepass; production never has
-        backend/.env as a physical file for THIS process (docker-compose's
-        env_file injects it as a bare OS env var into the container), and
-        pydantic-settings silently ignores an OS env var that matches no
-        field -- there is nothing on this class to check. The risk is
-        covered INDIRECTLY: by .env.example's own convention
-        REDIS_PASSWORD and the password embedded in REDIS_URL are the
-        same value, so a left-over "change-me" is still caught here via
-        REDIS_URL. If an operator ever sets the two to DIFFERENT values,
-        the app simply fails to connect to Redis -- a loud failure at
-        startup, not a silent one. A redis_password field is deliberately
-        NOT added to close this gap: it would be Settings surface with no
-        runtime consumer, a dead field.
-        """
-        offenders: list[str] = []
-        if self.secret_key == _PLACEHOLDER_SECRET_KEY:
-            offenders.append("SECRET_KEY")
-        if self.postgres_password == _PLACEHOLDER_POSTGRES_PASSWORD:
-            offenders.append("POSTGRES_PASSWORD")
-        if _PLACEHOLDER_URL_FRAGMENT in self.database_url:
-            offenders.append("DATABASE_URL")
-        if _PLACEHOLDER_URL_FRAGMENT in self.redis_url:
-            offenders.append("REDIS_URL")
-        return offenders
-
-    @property
-    def is_placeholder_secret_blocked(self) -> bool:
-        """True when startup must refuse: a literal .env.example
-        placeholder is still live in a non-dev environment.
-
-        No ALLOW_* opt-out exists for this one, unlike Stripe/Zoom stub
-        mode -- there is no server, including TEST, on which running
-        production secrets equal to "change-me" is a legitimate,
-        intended configuration. TEST is expected to generate its own
-        secrets via install_velo.sh, the same as prod.
-        """
-        is_dev = self.app_env == "development"
-        return not is_dev and bool(self.placeholder_secret_keys)
+        return not self.is_zoom_stub
 
 
 # Singleton: one Settings instance for the entire application.

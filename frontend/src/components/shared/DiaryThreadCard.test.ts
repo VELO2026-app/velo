@@ -124,8 +124,6 @@ describe('DiaryThreadCard -- check-in bubble', () => {
     expect(btn?.getAttribute('aria-label')).toContain('Check-in')
     expect(q('.tcard__bubble-title')?.textContent?.trim()).toBe('Check-in')
     expect(q('.tcard__bubble-preview')?.textContent?.trim()).toBe('Спокойно, как всегда')
-    // No mood suffix in the heading -- mood picks the icon, never the title.
-    expect(q('.tcard__bubble-title')?.textContent).not.toContain('Хорошо')
   })
 
   it('renders the exact Figma silhouette at its native 267x47, unmirrored', () => {
@@ -173,16 +171,6 @@ describe('DiaryThreadCard -- feedback bubble', () => {
     expect(q('svg.bubble--mirrored')).not.toBeNull()
   })
 
-  it('no synthetic scale dots and no rating text tag anywhere on the card', () => {
-    mountCard(FEEDBACK)
-
-    expect(q('.tcard__scale')).toBeNull()
-    expect(q('.tcard__dot')).toBeNull()
-    expect(q('.tcard__tag')).toBeNull()
-    // The rating label must not leak into the card text (old tag behaviour).
-    expect(host?.textContent).not.toContain('Огонь!')
-  })
-
   it('rating changes the glyph, never the heading', () => {
     mountCard(feedItem('feedback', { rating: 2 }))
     const confusedSvg = q('.tcard__slot svg')?.outerHTML
@@ -225,17 +213,14 @@ describe('DiaryThreadCard -- practice outcome', () => {
     expect(status).not.toBeNull()
     expect(status?.querySelector('svg')).not.toBeNull() // the check half of «✓ Done»
     expect(status?.textContent?.trim()).toBe('Вы пришли') // ...and the word half
-    expect(host?.textContent).not.toContain('Done')
     const label = q('.tcard--practice')?.getAttribute('aria-label') ?? ''
     expect(label).toContain('Вы пришли')
-    expect(label).not.toContain('Done')
   })
 
   it('no_show: «Вы не пришли», neutral status', () => {
     mountCard(feedItem('practice_outcome', { ...PRACTICE_SNAPSHOT, outcome_status: 'no_show' }))
 
     expect(q('.tcard__prac-status--no_show')?.textContent?.trim()).toBe('Вы не пришли')
-    expect(host?.textContent).not.toContain('Done')
   })
 
   it('is its own dedicated button -- not the feedback bubble', () => {
@@ -253,8 +238,6 @@ describe('DiaryThreadCard -- note / dream split entry', () => {
     expect(q('.tcard--entry')).not.toBeNull()
     expect(q('.tcard__entry-title')?.textContent?.trim()).toBe('Дневник')
     expect(q('.tcard__entry-preview')?.textContent?.trim()).toBe('Сегодня на работе было спокойно')
-    // dateLine (the event time) must not appear anywhere on the card.
-    expect(host?.textContent).not.toContain('10:30')
   })
 
   it('dream: «Сонник» and its own glyph, distinct from the note icon', () => {

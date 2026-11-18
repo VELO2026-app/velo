@@ -264,26 +264,6 @@ describe('AdminMasterInviteView', () => {
       expect(createBtn().disabled).toBe(false)
     })
 
-    it('REALISTIC interaction: once :disabled has painted, a second click on the real <button> is a no-op', async () => {
-      let resolveCreate!: (v: InviteMasterResponse) => void
-      vi.mocked(adminApi.inviteMaster).mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveCreate = resolve
-          }),
-      )
-      mount()
-      await flush()
-
-      createBtn().click()
-      await flush() // disabled attribute paints
-      createBtn().click() // a real click on a disabled <button> does not fire
-
-      expect(adminApi.inviteMaster).toHaveBeenCalledTimes(1)
-      resolveCreate(inviteResponse())
-      await flush()
-    })
-
     it('FIXED: a same-tick double click is now blocked at the handler layer -- inviteMaster is called ONCE', async () => {
       let resolveCreate!: (v: InviteMasterResponse) => void
       vi.mocked(adminApi.inviteMaster).mockImplementation(

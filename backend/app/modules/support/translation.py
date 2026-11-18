@@ -79,7 +79,6 @@ from app.core.config import settings
 from app.core.database import get_session_factory
 from app.core.events.notify import emit_notification
 from app.core.exceptions import ConflictError, NotFoundError
-from app.core.i18n import normalize_language
 from app.core.llm import LlmResult, enqueue_llm_job, read_llm_job
 from app.modules.support.models import (
     OUTCOME_DECLINED,
@@ -117,7 +116,8 @@ _BATCH = 200
 
 # The name of a TARGET language for the model's letter (_name, letter). A
 # target is always settings.support_language or reply_language() -- both
-# inside core/i18n.py SUPPORTED_LANGUAGES -- so this holds exactly those
+# among the instance's languages (BE-196), a subset of core/i18n.py
+# SUPPORTED_LANGUAGES -- so this holds exactly the product's languages
 # (BE-188; tests/test_product_languages.py pins the equality). The source
 # language comes from the model and never passes through here.
 LANGUAGE_NAMES = {
@@ -132,7 +132,27 @@ _PARAMS = {"temperature": 0}
 _LOCALE_TOKEN = re.compile(r"[a-z0-9]{1,8}")
 
 # support.translation_unavailable, in-app text (owner ruling: ru and en,
-# everyone else en -- the telegram sheets are ru and en too).
+# everyone else en -- the telegram sheets are ru and en too). Which one a
+# person gets: _emit_unavailable, from settings.language_of (BE-196).
+#
+# KNOWN CEILING -- the text follows the instance's languages only as far as
+# ru and en go.
+#   1. Mechanics: a person whose language on this instance is not ru gets
+#      the en text, whether or not the instance has en on. An instance
+#      without en (protocol 5.2.2 shows only languages turned on) shows
+#      its uk readers a language it does not offer; a uk reader on any
+#      instance gets en, as before BE-196.
+#   2. Status: acknowledged by design.
+#   3. Task: none -- the text set is the owner's ruling, and no card asks
+#      for a uk text yet.
+#   4. Unfreeze when: a passport turns en off (LANGUAGES without en), or
+#      the owner approves a uk text.
+#   5. Agreed fix: a uk entry here, with the choice keyed by the person's
+#      language from settings.language_of (en for en, ru for ru, uk for uk).
+#   6. Rejected: falling back to the instance's default_language instead of
+#      en -- the default may be uk, which has no text here, and a KeyError
+#      in the poller is worse than a text in en; inventing a uk text in a
+#      backend delivery -- person-facing words are the owner's.
 _UNAVAILABLE_TEXT = {
     "ru": (
         "Ответ поддержки не доставлен",
@@ -315,7 +335,7 @@ def parse_translation(result: LlmResult, target: str) -> TranslationOutcome:
 def reply_language(user: User) -> str | None:
     """The language an admin's reply to `user` is translated into -- or
     None: the user reads the support language, nothing is queued."""
-    target = normalize_language(user.language)
+    target = settings.language_of(user.language)
     return None if target == settings.support_language else target
 
 
@@ -334,7 +354,12 @@ async def enqueue(
     Idempotent on (message, language, attempt): a second call -- the feed's
     catch-up racing a send, two admins reading at once -- inserts nothing
     and queues nothing. Returns whether a job was queued.
+
+    BE-182: with the option `llm` off nothing is queued -- every caller
+    (a send, the feed's catch-up, the admin's retry) comes through here.
     """
+    if not settings.option_llm:
+        return False
     key = job_key(message_id, locale, attempt)
     inserted = (
         await session.execute(
@@ -484,7 +509,11 @@ async def sweep() -> None:
     at intake): the job is read by its key, and on_key acts if it is over
     (refused at intake is a transport failure); otherwise the next pass
     tries again.
+
+    BE-182: skipped with the option `llm` off -- no job can come back.
     """
+    if not settings.option_llm:
+        return
     async with get_session_factory()() as session:
         rows = (
             (
@@ -567,9 +596,10 @@ async def _emit_unavailable(session: AsyncSession, row: SupportTranslationJob) -
     if pointer is None:
         return
     user = await session.get(User, pointer.client_user_id)
-    lang = (
-        "ru" if user is not None and normalize_language(user.language) == "ru" else "en"
-    )
+    # The person's language on this instance (BE-196); the text set is ru
+    # and en only (KNOWN CEILING at _UNAVAILABLE_TEXT).
+    shown = settings.language_of(user.language if user is not None else None)
+    lang = "ru" if shown == "ru" else "en"
     title, body = _UNAVAILABLE_TEXT[lang]
     await emit_notification(
         session,

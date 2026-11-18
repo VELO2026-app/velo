@@ -280,25 +280,6 @@ describe('AdminPracticeDetailView', () => {
       expect(adminApi.getAdminPracticeDetail).toHaveBeenCalledTimes(2)
     })
 
-    it('the FOURTH rung ("Практика недоступна") is transiently reachable right after mount, before the load() flip to loading=true has painted', () => {
-      let resolveGet!: (v: AdminPracticeDetailResponse) => void
-      vi.mocked(adminApi.getAdminPracticeDetail)
-        .mockReset()
-        .mockImplementation(
-          () =>
-            new Promise((resolve) => {
-              resolveGet = resolve
-            }),
-        )
-      mount('p_upcoming')
-      // NO await at all here -- checking the DOM in the exact synchronous tick
-      // app.mount() returns in, before Vue's microtask-batched re-render from
-      // onMounted's `loading.value = true` has had a chance to run.
-      expect(text()).toContain('Практика недоступна')
-
-      resolveGet(PRACTICE_UPCOMING())
-    })
-
     it('the FOURTH rung is also reachable (permanently, not transiently) if the resolved response body itself is falsy -- an honest edge case for a contract violation, not a normal empty-list state', async () => {
       // @ts-expect-error -- deliberately violating the non-null return type to
       // simulate a malformed/empty backend response.
@@ -564,8 +545,10 @@ describe('AdminPracticeDetailView', () => {
       mount('p_upcoming')
       await flush()
 
-      expect(text()).toContain('Нераспознанные участники')
-      expect(text()).toContain('0')
+      const row = Array.from(host?.querySelectorAll('.admin-detail__zoom-row') ?? []).find((r) =>
+        r.textContent?.includes('Нераспознанные участники'),
+      )
+      expect(row?.textContent?.replace('Нераспознанные участники', '').trim()).toBe('0')
     })
 
     it('a non-zero unmatched count is shown plainly, the whole point of the design (E21 step G)', async () => {

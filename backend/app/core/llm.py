@@ -7,9 +7,11 @@
 #
 #   enqueue_llm_job -- a notification_request of an llm type through the
 #     OUTBOX, in the caller's transaction: the job exists exactly when the
-#     caller's change commits. The envelope is the key and the type; the
-#     letter is `llm` and nothing else (no address, no title/body -- comms
-#     rejects them on an llm type).
+#     caller's change commits. The envelope is the key and the type, and --
+#     for a job with an audio body (BE-184, voice) -- `llm_audio`, the signed
+#     link to the body BESIDE the letter, never inside it (section 11: comms
+#     does not read the letter). The letter is `llm` and nothing else (no
+#     address, no title/body -- comms rejects them on an llm type).
 #   read_llm_job -- the job read back by its key (section 8) and decided
 #     into ONE of four (LlmResult): the model's text, an answer that cannot
 #     be read, a job that ended without an answer, or still in work.
@@ -53,6 +55,20 @@ _ACTIVE_STATUSES = frozenset({"pending", "processing"})
 
 
 @dataclass(frozen=True)
+class LlmAudio:
+    """The audio body of an llm job, by link (comms section 11, `llm_audio`).
+
+    url: a signed GET link on the INTERNAL address of our store; comms
+        fetches it as it is, and appends the bytes to the END of the
+        letter's messages -- a prompt is written knowing the audio comes last.
+    format: the audio format the model is told (`wav`).
+    """
+
+    url: str
+    format: str
+
+
+@dataclass(frozen=True)
 class LlmResult:
     """What became of one llm job.
 
@@ -77,6 +93,7 @@ async def enqueue_llm_job(
     type: str,
     messages: list[dict[str, Any]],
     params: dict[str, Any] | None = None,
+    audio: LlmAudio | None = None,
 ) -> OutboxEvent:
     """Queue one llm job in the caller's transaction.
 
@@ -89,22 +106,23 @@ async def enqueue_llm_job(
         messages: The chat messages, handed to the model as they are.
         params: The model's parameters (temperature, ...); never a name
             the transport writes (comms rejects those at intake).
+        audio: The job's audio body by link, or None; it goes into the
+            envelope as `llm_audio`, beside the letter.
     """
     letter: dict[str, Any] = {"messages": messages}
     if params:
         letter["params"] = params
-    return await emit_event(
-        session,
-        EVENT_NOTIFICATION_REQUEST,
-        {
-            "idempotency_key": _envelope_string(
-                "idempotency_key",
-                idempotency_key,
-            ),
-            "type": type,
-            "llm": letter,
-        },
-    )
+    data: dict[str, Any] = {
+        "idempotency_key": _envelope_string(
+            "idempotency_key",
+            idempotency_key,
+        ),
+        "type": type,
+        "llm": letter,
+    }
+    if audio is not None:
+        data["llm_audio"] = {"url": audio.url, "format": audio.format}
+    return await emit_event(session, EVENT_NOTIFICATION_REQUEST, data)
 
 
 async def read_llm_job(idempotency_key: str) -> LlmResult:

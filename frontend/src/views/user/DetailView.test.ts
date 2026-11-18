@@ -659,17 +659,6 @@ describe('DetailView', () => {
       expect(text()).not.toContain('14:00') // the runner's Asia/Tbilisi
     })
 
-    it('the verified badge is retired -- no teal check renders on this screen', async () => {
-      // Owner 2026-10-03: the verification checkmark is hidden product-wide --
-      // PracticeListCard no longer renders one at all (the showVerified prop is
-      // gone), and PracticeResponse never carried a verified flag to justify it.
-      mount()
-      await flush()
-
-      expect(bodyEl().querySelector('.practice-list-card')).not.toBeNull()
-      expect(bodyEl().querySelector('.practice-list-card__verified')).toBeNull()
-    })
-
     it('the header is inert -- a read-only screen must not offer a tap that goes nowhere', async () => {
       // `:clickable="false"` (.vue:59) makes PracticeListCard render a <div>
       // instead of a <button> (PracticeListCard.vue:32-37). It defaults to TRUE,

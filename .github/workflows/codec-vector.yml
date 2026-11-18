@@ -1,0 +1,106 @@
+# =============================================================================
+# VELO CI -- the shared codec vector, T-44 (BE-197)
+#
+# The public practice code has two decoders, one per language
+# (backend/app/modules/zoom/service.py, frontend/src/composables/useAuth.ts),
+# and each side's suite checks its decoder against its OWN copy of the
+# vector. Both suites stay green when somebody edits one side's codec AND
+# that side's table; only comparing the two tables catches it. This job
+# compares them.
+#
+# The logic is the one of run_codec_vector_diff in scripts/velo-manage.sh
+# (the stand runs that on `test`), with ONE deliberate difference: a vector
+# with no cases is red here. Two empty tables agree and check nothing.
+#
+# The runner's own python3: the comparison is plain JSON, and the pinned
+# backend base image already lives in three places (backend/Dockerfile says
+# which) -- this job does not add a fourth.
+#
+# Its own file, not a job in ci.yml: a `paths` filter applies to a whole
+# workflow, and ci.yml is shared with open frontend pull requests.
+# =============================================================================
+name: Codec vector
+
+on:
+  push:
+    branches: [test, deploy-machine]
+    paths:
+      - backend/tests/test_zoom_public_link.py
+      - frontend/src/composables/useAuth.test.ts
+      - .github/workflows/codec-vector.yml
+  pull_request:
+    branches: [test, deploy-machine]
+    paths:
+      - backend/tests/test_zoom_public_link.py
+      - frontend/src/composables/useAuth.test.ts
+      - .github/workflows/codec-vector.yml
+
+concurrency:
+  group: codec-vector-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codec-vector:
+    name: codec vector -- both copies agree (T-44)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare the backend and frontend copies of the vector
+        run: |
+          python3 - <<'PY'
+          import json, sys
+
+          START = "T-44 CODEC VECTOR START"
+          END = "T-44 CODEC VECTOR END"
+          SIDES = {
+              "backend": "backend/tests/test_zoom_public_link.py",
+              "frontend": "frontend/src/composables/useAuth.test.ts",
+          }
+
+          parsed = {}
+          for side, path in SIDES.items():
+              try:
+                  text = open(path, encoding="utf-8").read()
+              except OSError as exc:
+                  sys.exit("cannot read %s side (%s): %s" % (side, path, exc))
+              if START not in text or END not in text:
+                  sys.exit("vector sentinels missing from the %s side (%s)" % (side, path))
+              body = text.split(START, 1)[1].split(END, 1)[0]
+              chunk = body[body.find("{"):body.rfind("}") + 1]
+              try:
+                  parsed[side] = json.loads(chunk)
+              except json.JSONDecodeError as exc:
+                  sys.exit("the %s side vector is not valid JSON: %s" % (side, exc))
+
+          # Parsed, not byte-compared: the two files quote the block
+          # differently (triple quotes vs a template literal) and that is
+          # allowed. The DATA is what must match.
+          if parsed["backend"] == parsed["frontend"]:
+              cases = parsed["backend"].get("cases")
+              if not cases:
+                  sys.exit(
+                      "the two copies agree, but the vector has no cases: "
+                      "an empty table checks nothing"
+                  )
+              print("the two copies agree (%d cases)" % len(cases))
+              sys.exit(0)
+
+          be = {c["input"]: c["expect"] for c in parsed["backend"]["cases"]}
+          fe = {c["input"]: c["expect"] for c in parsed["frontend"]["cases"]}
+          for key in sorted(set(be) | set(fe)):
+              b, f = be.get(key, "<absent>"), fe.get(key, "<absent>")
+              if b != f:
+                  print("DIVERGED on input %r: backend=%r frontend=%r" % (key, b, f))
+          if be == fe:
+              print("the case tables agree; the difference is elsewhere in the block")
+          print("The two copies of the codec vector have DRIFTED:")
+          for path in SIDES.values():
+              print("  " + path)
+          print("Both decoders and BOTH copies of the table change together.")
+          sys.exit(1)
+          PY
