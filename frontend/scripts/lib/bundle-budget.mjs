@@ -27,6 +27,12 @@ export const TOLERANCE_PCT = 2
 /** Headroom, in percent, kept above the real size when suggesting a lowered budget. */
 export const LOWER_HEADROOM_PCT = 1
 
+/**
+ * The FE-157 targets in bytes: what a base branch without a `ceiling` is
+ * taken to have, so introducing a higher ceiling is still a raise.
+ */
+export const DEFAULT_CEILING = { entryGzip: 150000, precacheBytes: 1000000 }
+
 /** Label that allows raising the floating budget. */
 export const GROWTH_LABEL = 'bundle-growth'
 
@@ -152,8 +158,8 @@ export function checkBudget(sizes, budget, base) {
  * @param headBudget - Parsed bundle-budget.json of the head.
  * @param labels - Names of the labels on the PR.
  * @returns The failures (empty = nothing raised without its label).
- * @remarks A ceiling the base does not have yet (this gate being introduced)
- * is not a raise. A ceiling value removed in the head counts as a raise to
+ * @remarks A base without a ceiling is taken to have DEFAULT_CEILING (the
+ * FE-157 targets): introducing exactly those is no raise, a higher one is. A ceiling value removed in the head counts as a raise to
  * infinity, so deleting it cannot bypass the label.
  */
 export function checkBudgetRaise(baseBudget, headBudget, labels) {
@@ -172,7 +178,7 @@ export function checkBudgetRaise(baseBudget, headBudget, labels) {
         `${key} raised ${Number.isFinite(after) ? `${before} -> ${after}` : `${before} -> (removed)`} without the \`${GROWTH_LABEL}\` label. Find what grew first (${MODULES_HINT}); the label is put by a human.`,
       )
     }
-    const ceilBefore = baseBudget.ceiling?.[key]
+    const ceilBefore = baseBudget.ceiling?.[key] ?? DEFAULT_CEILING[key]
     const ceilAfter = headBudget?.ceiling?.[key]
     if (
       Number.isFinite(ceilBefore) &&
