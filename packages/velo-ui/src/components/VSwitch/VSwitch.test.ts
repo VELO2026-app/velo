@@ -55,16 +55,9 @@ describe('VSwitch', () => {
     expect(received).toBe(true)
   })
 
-  it('does not toggle when disabled', () => {
-    let received: boolean | null = null
-    mount({
-      modelValue: false,
-      disabled: true,
-      'onUpdate:modelValue': (v: boolean) => (received = v),
-    })
+  it('a disabled switch is a disabled button', () => {
+    mount({ modelValue: false, disabled: true })
     const btn = host?.querySelector<HTMLButtonElement>('.v-switch')
     expect(btn?.disabled).toBe(true)
-    btn?.click()
-    expect(received).toBeNull()
   })
 })

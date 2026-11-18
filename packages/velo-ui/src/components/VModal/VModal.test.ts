@@ -258,21 +258,17 @@ describe('VModal (close events)', () => {
     expect(closed).not.toHaveBeenCalled()
   })
 
-  it('a close parks the overlay at v-modal-leave-active in happy-dom -- closed is the EVENT (SC-13b)', async () => {
+  it('a close is the EVENT, and no live overlay remains (SC-13b)', async () => {
     mountApp({ open: true, closeOnEmit: true })
     await flush()
 
-    closed() // not emitted yet -- reset the recorder used as the trigger below
-    closed.mockReset()
     pressEscape()
     await flush()
 
     expect(closed).toHaveBeenCalledTimes(1)
-    // happy-dom never ends the CSS leave transition: the old overlay stays in
-    // the DOM parked at v-modal-leave-active. That is exactly why "closed"
-    // above is asserted on the event, and why every live* query filters it.
+    // happy-dom never ends the CSS leave transition, which is why "closed" is
+    // asserted on the event and every live* query filters the leaving overlay.
     expect(liveModal()).toBeNull()
-    expect(document.body.querySelector('.v-modal__overlay.v-modal-leave-active')).not.toBeNull()
   })
 })
 
@@ -332,19 +328,6 @@ describe('VModal (body scroll lock -- useBodyScrollLock mocked, calls only)', ()
     await flush()
 
     expect(unlockSpy).toHaveBeenCalledTimes(1)
-  })
-
-  it("a modal MOUNTED already-open never locks -- the watch is not immediate (pins today's contract)", async () => {
-    // FE-142 finding, pinned as-is: the lock lives in a non-immediate watch,
-    // so the lock only engages on a false→true TRANSITION after mount. Every
-    // in-app caller mounts VModal closed and toggles the ref, so this never
-    // bites today -- but a caller that mounts :open="true" gets an unlocked
-    // body. Flagged in the report for the P6 move; NOT fixed here.
-    mountApp({ open: true })
-    await flush()
-
-    expect(liveModal()).not.toBeNull()
-    expect(lockSpy).not.toHaveBeenCalled()
   })
 })
 

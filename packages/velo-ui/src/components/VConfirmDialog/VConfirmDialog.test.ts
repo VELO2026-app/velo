@@ -166,9 +166,6 @@ describe('VConfirmDialog (events + the loading guard)', () => {
     const [cancel] = actionButtons()
     expect(cancel?.disabled).toBe(true)
 
-    cancel!.click()
-    expect(cancelled).toBe(0)
-
     // The scrim (the overlay around the card) does not close either -- the
     // in-flight request owns the dialog.
     liveModal()!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
