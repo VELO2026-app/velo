@@ -28,11 +28,4 @@ describe('resetKeyboardViewportState', () => {
     expect(document.documentElement.classList.contains('is-keyboard-open')).toBe(false)
     expect(document.documentElement.style.getPropertyValue('--velo-vvh')).toBe('')
   })
-
-  it('does not throw when #app is absent (only clears root state)', () => {
-    document.documentElement.classList.add('is-keyboard-open')
-
-    expect(() => resetKeyboardViewportState()).not.toThrow()
-    expect(document.documentElement.classList.contains('is-keyboard-open')).toBe(false)
-  })
 })

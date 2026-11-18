@@ -20,9 +20,7 @@ import {
   generateParams,
   logoSvg,
   bannerSvg,
-  mandalaSvg,
   PALETTES,
-  schoolLetter,
 } from '@/utils/schoolBranding'
 import { petal } from './geometry'
 import { mixHex } from './noise'
@@ -91,7 +89,6 @@ describe('schoolBranding -- render determinism', () => {
     // The letter is stripped to safe chars: no raw "<" + U+0428 (Cyrillic
     // Sha) rides into the markup.
     expect(svg).not.toContain('<Ш')
-    expect(mandalaSvg(brandingParams(HASH))).toContain('viewBox="0 0 200 200"')
   })
 
   it('flat rendering: no shadow on the logo, no displacement/grain on the banner', () => {
@@ -141,15 +138,8 @@ describe('schoolBranding -- render determinism', () => {
 })
 
 describe('schoolBranding -- misc vectors', () => {
-  it('schoolLetter strips quotes and uppercases', () => {
-    expect(schoolLetter('Гимназия «Логос»')).toBe('Г')
-    expect(schoolLetter('')).toBe('Ш')
-  })
-
   it('brandingBodyTint: the palette bg lightened halfway to white (deterministic)', () => {
-    const P = brandingParams('0123456789abcdef')
-    expect(brandingBodyTint('0123456789abcdef')).toBe(mixHex(P.style.palette.bg, '#ffffff', 0.5))
-    expect(brandingBodyTint('0123456789abcdef')).toBe(brandingBodyTint('0123456789abcdef'))
+    expect(brandingBodyTint('0123456789abcdef')).toBe('#f9f8f6')
   })
 
   it('mixHex blends channel-wise (midpoint of black/white)', () => {

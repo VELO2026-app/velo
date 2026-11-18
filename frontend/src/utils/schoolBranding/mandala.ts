@@ -73,9 +73,3 @@ export function mandalaGroup(P: SchoolBrandingParams): string {
 
   return s
 }
-
-/** The full mandala SVG, 200×200 (like the logo, but without the plate and
- *  the shadow). */
-export function mandalaSvg(P: SchoolBrandingParams): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><g transform="translate(100 100) scale(.8)">${mandalaGroup(P)}</g></svg>`
-}

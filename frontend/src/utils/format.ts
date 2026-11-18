@@ -282,49 +282,6 @@ export function formatTime(
 }
 
 /**
- * Sortable key for a practice's LOCAL wall-clock datetime in its OWN timezone.
- *
- * List order must match the times shown on screen. Cards that render each
- * practice in its own timezone (`formatTime(scheduled_at, timezone)`) can NOT
- * be ordered by the absolute UTC epoch (`new Date(scheduled_at).getTime()`):
- * that orders by the underlying instant, which disagrees with the displayed
- * local times once practices span different timezones — a card showing 10:00
- * can sit below a card showing 12:00.
- *
- * @returns A comparable `YYYYMMDDHHmmss` number built from the
- *  timezone-local parts, so an ascending / descending sort matches the
- *  visible order (CR-1).
- *
- * ONLY for DISPLAY-ORDER sorts of a per-practice-timezone list. Do NOT use it
- * for `scheduled_at`-vs-`now` comparisons (has-started / countdown / windows)
- * or for lists rendered in a single viewer timezone — those must stay on the
- * absolute epoch.
- */
-export function localSortKey(isoString: string, timezone = 'UTC'): number {
-  const parts = dateTimeFormat('en-CA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-    timeZone: timezone,
-  }).formatToParts(new Date(isoString))
-  const part = (type: string): number => Number(parts.find((p) => p.type === type)?.value ?? '0')
-  // hour12:false emits '24' at midnight in some engines — normalize to 0.
-  const hour = part('hour') % 24
-  return (
-    part('year') * 1e10 +
-    part('month') * 1e8 +
-    part('day') * 1e6 +
-    hour * 1e4 +
-    part('minute') * 1e2 +
-    part('second')
-  )
-}
-
-/**
  * Format an ISO datetime into the diary feed card date line:
  *   "23 <month> • <Weekday> • 14:35"
  * (day + month, weekday, time -- separated by bullets, matching the design).
