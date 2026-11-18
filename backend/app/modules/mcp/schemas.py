@@ -84,8 +84,9 @@ class McpTokenListResponse(BaseModel):
     plus what the "AI connections" screen needs around them (BE-150).
 
     oauth_connect_available: this server lets an AI client connect with the
-        button (OAuth configured). When false the screen does not promise
-        that way and points at a personal token.
+        button. Always true since BE-192: the OAuth keys are required at
+        start on every instance. The field stays for the screen, which still
+        reads it; it goes together with the screen's branch for false.
     scope_labels: every scope with its description, in the canonical order
         -- the screen's checkboxes and each row's summary.
     """

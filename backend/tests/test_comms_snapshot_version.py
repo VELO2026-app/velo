@@ -32,7 +32,7 @@ from app.core.events.models import OutboxEvent
 from app.core.events.service import EVENT_USER_UPSERTED
 from app.core.events.sync import emit_user_upserted
 from app.modules.users.models import User
-from tests.helpers import auth_headers, full_cleanup_range, login_user
+from tests.helpers import auth_headers, full_cleanup_range, login_user, sent_data
 
 _TID_MIN = 88100
 _TID_MAX = 88199
@@ -92,7 +92,7 @@ async def _snapshots(session: AsyncSession, user_id: str) -> list[dict]:
         )
         .order_by(OutboxEvent.id)
     )
-    return [row.payload for row in result.scalars().all()]
+    return [sent_data(row) for row in result.scalars().all()]
 
 
 async def _sql(session: AsyncSession, statement: str, **params) -> None:

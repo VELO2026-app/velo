@@ -65,7 +65,7 @@ _TID_CURATOR = 69401
 _TID_MASTER = 69402
 _TID_STUDENT = 69410
 
-_FLAG = "schools_enabled"
+_FLAG = "option_schools"
 _ANNOUNCE_TYPE = "school.practice_published"
 
 

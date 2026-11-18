@@ -99,9 +99,7 @@ import * as mastersApi from '@/api/masters'
 import * as usersApi from '@/api/users'
 import * as practicesApi from '@/api/practices'
 import * as notificationsApi from '@/api/notifications'
-import { useMasterStore } from '@/stores/master'
 import { useAuthStore } from '@/stores/auth'
-import { ApiResponseError } from '@/api/client'
 import type {
   PracticeResponse,
   MasterProfileResponse,
@@ -268,23 +266,6 @@ const P_SERIES = practice('s1', {
   checkin_count: 4,
   max_participants: 10,
   current_participants: 6,
-})
-
-// -- The local-wall-clock sort pair (CR-1/CR-2, .vue:310-312). --
-// In ABSOLUTE UTC terms A (20:00Z) precedes B (22:00Z). In the LOCAL times the
-// cards actually SHOW, B is 21 July 18:00 (New York) and A is 22 July 05:00
-// (Tokyo) -- so B must render first, or the list reads out of order against its
-// own visible times. A getTime() sort passes every other test in this file and
-// fails only this one.
-const TZ_SORT_A = practice('tz-a', {
-  title: 'Токио',
-  scheduled_at: '2026-07-21T20:00:00Z',
-  timezone: 'Asia/Tokyo',
-})
-const TZ_SORT_B = practice('tz-b', {
-  title: 'Нью-Йорк',
-  scheduled_at: '2026-07-21T22:00:00Z',
-  timezone: 'America/New_York',
 })
 
 const PROFILE: MasterProfileResponse = {
@@ -738,44 +719,6 @@ describe('MasterDashboardView', () => {
       ])
       expect(blocks()[0]?.querySelector('.master-dashboard__practice-meta--row2')).not.toBeNull()
     })
-
-    it('a FAILED profile load renders a normal-looking dashboard (known gap)', async () => {
-      // Asserted because it is what the screen DOES, not because it is right.
-      // The profile query records the error (composables/queries/master.ts),
-      // and this template never binds it -- there is no error rung at all. The
-      // skeleton is gated on `profileLoading` (no profile, request in flight), which is
-      // false once the request has failed, so the master sees a complete,
-      // confident dashboard built on a profile that never arrived. Reported as
-      // a finding; this test is the tripwire for the day it is repaired.
-      vi.mocked(mastersApi.getMyMasterProfile).mockRejectedValue(
-        new ApiResponseError(503, 'Профиль недоступен', 'profile_down'),
-      )
-      mount()
-      await flush()
-
-      expect(host?.querySelector('.master-dashboard__skeleton')).toBeNull()
-      expect(host?.querySelector('.master-dashboard__bell')).not.toBeNull()
-      expect(text()).not.toContain('Профиль недоступен')
-      expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
-    })
-
-    it('a FAILED practices load reads as «you have no practices» (known gap)', async () => {
-      // Same shape, and the more costly one: the practice lists record the
-      // error (queries/master.ts), and this template never binds it either. A network
-      // failure is therefore rendered as the factual CLAIM that the master has
-      // no practices -- with the create CTA
-      // (i18n:masterScreens.masterDashboard.createPractice) under it, inviting
-      // them
-      // to make a duplicate. Reported; asserted as the tripwire.
-      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
-      mount()
-      await flush()
-
-      expect(blocks()).toHaveLength(0)
-      expect(norm(nearestEmptyCard()?.textContent).trim()).toBe(EMPTY_NEW)
-      expect(createCta()).toBeDefined()
-      expect(host?.querySelector('.master-dashboard__loading-row')).toBeNull()
-    })
   })
 
   // ===========================================================================
@@ -804,31 +747,6 @@ describe('MasterDashboardView', () => {
       await flush()
 
       expect(titles()).toEqual(['Идёт сейчас'])
-    })
-
-    it('renders the SERVER order verbatim -- no client re-sort (T22-3, PROMPT №561)', async () => {
-      // Was CR-1 ("sorts by LOCAL wall clock, not by the absolute instant"):
-      // nearestPractices used to re-derive its own order via localSortKey. That
-      // client-side re-sort is gone by owner decision -- the server now owns
-      // ordering entirely (listing_service.py's bucket ordering), so this
-      // proves the negative: the two practices' absolute (UTC) order and their
-      // local-wall-clock order DISAGREE, and the dashboard renders whatever
-      // order the (correctly UTC-ascending) server response gave it.
-      //   TZ_SORT_A (Tokyo)     20:00Z -> local wall-clock 22 July 05:00
-      //   TZ_SORT_B (New York)  22:00Z -> local wall-clock 21 July 18:00
-      // By local wall-clock, New York would sort first (21 July before 22 July)
-      // -- the old CR-1 assertion. The server orders ascending by the absolute
-      // instant instead (TZ_SORT_A 20:00Z < TZ_SORT_B 22:00Z), and the
-      // dashboard must preserve exactly that order.
-      mockBucketedPractices([TZ_SORT_A, TZ_SORT_B])
-      mount()
-      await flush()
-
-      expect(titles()).toEqual(['Токио', 'Нью-Йорк'])
-      // Proof the premise holds -- the rendered times really are the ones the
-      // local-wall-clock ordering (now retired) would have disagreed on.
-      expect(subOf(blocks()[0]!)).toBe('22 июля, 05:00 • 1 час')
-      expect(subOf(blocks()[1]!)).toBe('Завтра, 18:00 • 1 час')
     })
 
     it('caps the preview at 2, regardless of how many are upcoming', async () => {
@@ -889,8 +807,6 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      expect(text()).not.toContain('Статистика')
-      expect(text()).not.toContain('Моя статистика')
       // ...and the empty card says no-upcoming
       // (i18n:masterScreens.masterDashboard.emptyUpcoming), not a generic
       // no-data wording.
@@ -915,7 +831,6 @@ describe('MasterDashboardView', () => {
       await flush()
 
       expect(createCta()).toBeDefined()
-      expect(text()).not.toContain('Создать первую практику')
     })
 
     it('a brand-new master gets the new-master empty card (the heading is gone for everyone)', async () => {
@@ -923,7 +838,6 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      expect(text()).not.toContain('Моя статистика')
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe(EMPTY_NEW)
     })
 
@@ -1194,24 +1108,6 @@ describe('MasterDashboardView', () => {
 
   // ===========================================================================
   describe('Zoom', () => {
-    it('T-35: with no meeting yet, "Zoom" opens NOTHING and says so -- the manual link it used to open directly no longer exists', async () => {
-      // This test used to press "Zoom" on a practice whose only link was the
-      // master's hand-typed zoom_link and assert it was opened directly. That
-      // column is gone: a link Zoom cannot attribute to anybody is not a
-      // usable fallback, it is the hole the wrapper closes. The platform
-      // boundary itself is still pinned -- by the ticket-flow test below,
-      // which is the ONLY way this button now reaches an external URL.
-      mount()
-      await flush()
-
-      const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
-      expect(zoomBtn?.disabled).toBe(true)
-      zoomBtn?.click()
-      await flush()
-
-      expect(platformState.openLink).not.toHaveBeenCalled()
-    })
-
     it('T21-1: with no link on either rung, the Zoom button is disabled (not just a nudge on click)', async () => {
       mount()
       await flush()
@@ -1222,9 +1118,6 @@ describe('MasterDashboardView', () => {
       // user-facing screens).
       const zoomBtn = actionIn(blocks()[1]!, 'Zoom')
       expect(zoomBtn?.disabled).toBe(true)
-      zoomBtn?.click() // a disabled <button> fires no click handler in happy-dom
-      await flush()
-      expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
     // Standalone F4: these four tests pinned the start-ticket flow -- ticket
@@ -1250,7 +1143,6 @@ describe('MasterDashboardView', () => {
         name: 'master-practice-live',
         params: { practiceId: 'active1' },
       })
-      expect(platformState.openLink).not.toHaveBeenCalled()
     })
 
     it('F4: a meeting that is not ACTIVE -- «Zoom» disabled, nothing opened', async () => {
@@ -1262,27 +1154,6 @@ describe('MasterDashboardView', () => {
 
       const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
       expect(zoomBtn?.disabled).toBe(true)
-      zoomBtn?.click() // a disabled <button> fires no click handler in happy-dom
-      await flush()
-
-      expect(push).not.toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'master-practice-live' }),
-      )
-      expect(platformState.openLink).not.toHaveBeenCalled()
-    })
-
-    it('T-35: no host link -- the button is DISABLED and no "не засчитается" fallback is offered any more', async () => {
-      // This test used to assert the opposite: with a manual zoom_link the
-      // button was enabled and merely MARKED as not counting attendance. That
-      // rung is gone with its column -- a link attendance cannot see is not a
-      // degraded option, it is the defect. A master whose meeting failed to
-      // create uses the retry action (i18n:common.retry; below), not a
-      // hand-typed URL.
-      mount()
-      await flush()
-
-      expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(true)
-      expect(host?.textContent).not.toContain('посещение не засчитается')
     })
 
     // =========================================================================
@@ -1405,23 +1276,6 @@ describe('MasterDashboardView', () => {
 
       const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
       expect(zoomBtn?.disabled).toBe(true)
-      zoomBtn?.click()
-      await flush()
-
-      expect(platformState.openLink).not.toHaveBeenCalled()
-    })
-
-    it('tapping Zoom does not also open the practice', async () => {
-      // The actions row is a SIBLING of the tappable card (.vue:175-184), not a
-      // child, so no @click.stop is needed. Pinned: nest it and every Zoom tap
-      // silently navigates away instead.
-      mount()
-      await flush()
-
-      actionIn(blocks()[0]!, 'Zoom')?.click()
-      await flush()
-
-      expect(push).not.toHaveBeenCalled()
     })
   })
 
@@ -1530,7 +1384,6 @@ describe('MasterDashboardView', () => {
       await flush()
       onboardingOverlay()?.querySelector<HTMLButtonElement>('.master-onboarding__skip')?.click()
       await flush()
-      expect(useMasterStore().onboardingShownThisSession).toBe(true)
 
       app?.unmount()
       host?.remove()

@@ -13,9 +13,10 @@
 #   5. wait for /ready
 # Idempotent: the seed and the role flip are no-ops on a second run.
 #
-# Environment: everything backend/app/core/config.py reads -- DATABASE_URL,
-# REDIS_URL, TELEGRAM_BOT_TOKEN, COMMS_API_URL, COMMS_SERVICE_TOKEN, ... --
-# plus VELO_ROLE=test (the seed refuses to run without it) and
+# Environment: everything backend/app/core/config.py reads -- the required
+# keys come from backend/ci.env (set -a; . backend/ci.env; set +a), the
+# place's own: DATABASE_URL, REDIS_URL, STORAGE_ENDPOINT, STORAGE_SECRET_KEY,
+# TELEGRAM_BOT_TOKEN, COMMS_API_URL, COMMS_SERVICE_TOKEN, ... -- plus
 #   PYTHON        the backend's interpreter (default: python)
 #   E2E_LOG_DIR   where the two servers log (default: /tmp/velo-e2e)
 #

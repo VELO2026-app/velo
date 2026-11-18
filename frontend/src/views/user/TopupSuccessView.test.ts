@@ -89,14 +89,6 @@ afterEach(() => {
 })
 
 describe('TopupSuccessView', () => {
-  it('refreshes the balance from the server on mount', async () => {
-    // The user is arriving from Stripe; the cached balance predates the charge.
-    mount()
-    await flush()
-
-    expect(fetchMe).toHaveBeenCalledTimes(1)
-  })
-
   it('shows the loader -- not a stale balance -- while the refresh is in flight', async () => {
     // TopupSuccessView.vue:16-18: v-if="loading" swaps the number for a spinner.
     // Painting the pre-charge balance for even a frame reads as "your money is

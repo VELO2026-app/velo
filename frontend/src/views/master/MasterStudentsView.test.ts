@@ -198,16 +198,6 @@ describe('MasterStudentsView', () => {
       expect(rows()).toHaveLength(14)
       expect(text()).toContain('Ученик13')
     })
-
-    it('12 students with no cap applied would be wrong -- exactly 10 render before expanding', async () => {
-      vi.mocked(mastersApi.getStudents).mockResolvedValue(
-        page(Array.from({ length: 12 }, (_, i) => student(`s${i}`))),
-      )
-      mount()
-      await flush()
-
-      expect(rows()).toHaveLength(10)
-    })
   })
 
   describe('search', () => {

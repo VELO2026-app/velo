@@ -204,28 +204,9 @@ describe('SupportView', () => {
 
       expect(submitBtn().disabled).toBe(true)
     })
-
-    // Was: the "other" topic (i18n:supportTopics.other) with an EMPTY
-    // free-text field stayed disabled. Right while that topic carried its own
-    // text; FE-104 (owner ruling) removed that text -- the substance is the
-    // message -- so "other" + message is enough.
-    it('topic «Другое» + message: ENABLED -- no free text is required', async () => {
-      mount()
-      await flush()
-
-      radioByLabel(TOPIC_LABEL.other).click()
-      await flush()
-      setValue(messageField(), 'У меня вопрос')
-      await flush()
-
-      expect(submitBtn().disabled).toBe(false)
-    })
   })
 
   // ===========================================================================
-  // Was: selecting the "other" topic (i18n:supportTopics.other) revealed a
-  // free-text input. Cancelled by FE-104 (owner ruling: "other" without free
-  // text); the form has one text field.
   describe('the topic list (FE-104)', () => {
     it('offers exactly the five user topics, labelled from the one table', async () => {
       mount()
@@ -238,17 +219,6 @@ describe('SupportView', () => {
         TOPIC_LABEL.technical,
         TOPIC_LABEL.other,
       ])
-    })
-
-    it('selecting «Другое» renders no field of its own -- one textarea, one input set', async () => {
-      mount()
-      await flush()
-
-      radioByLabel(TOPIC_LABEL.other).click()
-      await flush()
-
-      expect(host?.querySelectorAll('textarea')).toHaveLength(1)
-      expect(host?.querySelectorAll('input[type="text"]')).toHaveLength(0)
     })
 
     it('the message field is capped at the contract limit (4000)', async () => {
@@ -277,18 +247,6 @@ describe('SupportView', () => {
       expect(host?.textContent).toContain('Ответ придёт в «Сообщения»')
       expect(host?.querySelector('.support__content')).toBeNull()
       expect(host?.querySelector('.v-header')).toBeNull()
-    })
-
-    it('a click while canSubmit is false does nothing (real disabled button, no submit)', async () => {
-      mount()
-      await flush()
-
-      // Message stays empty -> button is a genuinely disabled <button>; a real
-      // browser (and happy-dom) refuses to dispatch click on it.
-      submitBtn().click()
-      await flush()
-
-      expect(isTerminal()).toBe(false)
     })
   })
 

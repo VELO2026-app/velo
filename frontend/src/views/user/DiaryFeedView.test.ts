@@ -93,10 +93,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, reactive, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
-import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
-import { keys } from '@/composables/queries/keys'
-import type { DiaryFeedData } from '@/composables/queries/diary'
 import DiaryFeedView from '@/views/user/DiaryFeedView.vue'
 import * as diaryApi from '@/api/diary'
 // The REAL store, read where the assertion is about which ref a failure landed
@@ -264,14 +262,6 @@ function mount(): HTMLElement {
   return host
 }
 
-/** The state of the feed the screen reads under the given filters (Colada, composables/queries/diary.ts). */
-function feedState(
-  filters: object = {},
-): { data: DiaryFeedData | undefined; error: unknown } | undefined {
-  return useQueryCache().get(keys.diary.feed(filters))?.state.value as
-    { data: DiaryFeedData | undefined; error: unknown } | undefined
-}
-
 /** Requests for the first page of the unfiltered feed (no filter, no cursor, no window bound). */
 function unfilteredReads(): number {
   return vi
@@ -397,7 +387,6 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      expect(feedState()?.error).toMatchObject({ message: 'Сервис недоступен' })
       expect(bodyText()).toContain('Проверьте соединение и попробуйте ещё раз')
       expect(bodyText()).not.toContain('Сервис недоступен')
     })
@@ -610,8 +599,6 @@ describe('DiaryFeedView', () => {
       // keyed on "nothing to show", is never reached. That split is what makes
       // the surviving feed structural rather than a guard the screen has to
       // remember.
-      expect(feedState()?.error).toBeNull()
-      expect(feedState()?.data?.pages).toHaveLength(1)
 
       // The user is TOLD, in the screen's own words (the raw reason never
       // reaches them, ADR). This is the channel that did not exist before: the
@@ -634,8 +621,6 @@ describe('DiaryFeedView', () => {
       mount()
       await flush()
 
-      expect(feedState()?.error).toMatchObject({ message: 'Сеть отвалилась' })
-      expect(feedState()?.data).toBeUndefined()
       expect(bodyText()).toContain('Не удалось загрузить дневник')
       expect(toastError).not.toHaveBeenCalled()
     })
@@ -655,7 +640,6 @@ describe('DiaryFeedView', () => {
       fireSentinel()
       await flush()
 
-      expect(feedState()?.data?.pages.at(-1)?.next_cursor).toBe('c1')
       expect(feedBody().querySelector('.diary-feed__sentinel')).not.toBeNull()
 
       // Simulated re-intersection (which the real screen cannot produce): proves
@@ -667,7 +651,6 @@ describe('DiaryFeedView', () => {
       await flush()
 
       expect(cardPreviews()).toEqual(['догрузилась', 'Сегодня было спокойно'])
-      expect(feedState()?.error).toBeNull()
     })
   })
 

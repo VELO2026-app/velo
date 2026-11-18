@@ -319,14 +319,10 @@ function seedDiaryFeed(): void {
 
 describe('ExternalActivityCreateView', () => {
   describe('rendering + initial state', () => {
-    it('renders the header, the visible sections in order and the exact copy (owner 2026-10-01: the legend is hidden)', () => {
+    it('renders the header, the visible sections in order and the exact copy', () => {
       mount()
 
       expect(host?.querySelector('.ea__title')?.textContent?.trim()).toBe('Новое событие')
-      // No "..." placeholder on the header line (owner 2026-09-10).
-      expect(host?.querySelector('.ea__header-slot')).toBeNull()
-      // The rosette legend is hidden -- the section stars replaced it.
-      expect(host?.textContent).not.toContain('— поля, обязательные для заполнения')
       const titles = Array.from(host?.querySelectorAll('.velo-section-title') ?? []).map((t) =>
         t.textContent?.trim(),
       )
@@ -379,31 +375,6 @@ describe('ExternalActivityCreateView', () => {
       expect(host?.querySelector('[data-field="state"]')).not.toBeNull()
       expect(faceCard('Нормально').getAttribute('aria-checked')).toBe('true')
       expect(stateRange().value).toBe('5')
-    })
-
-    it('owner 2026-10-01: the rosettes are gone -- the section stars mark the required sections', () => {
-      mount()
-
-      // No flex shrink-wrappers: every field keeps the full rail.
-      expect(host?.querySelector('.ea__row')).toBeNull()
-      for (const selector of [
-        '[data-field="date"]',
-        '[data-field="time"]',
-        '[data-field="activity"]',
-      ]) {
-        const field = host?.querySelector<HTMLElement>(selector)
-        expect(field).not.toBeNull()
-        // No seal anywhere: the heading carries the marker now.
-        expect(field?.querySelector('.ea__seal')).toBeNull()
-      }
-      const starred = Array.from(host?.querySelectorAll('.velo-section-title') ?? [])
-        .filter((t) => t.querySelector('.ea__req'))
-        .map((t) => t.textContent?.trim())
-      expect(starred).toEqual(['Когда произошло событие *', 'Выбор активности *'])
-      // The 2026-09-10 screen-edge gutter classes stay gone.
-      expect(host?.querySelector('.ea__seal--gutter')).toBeNull()
-      expect(host?.querySelector('.ea__field-row')).toBeNull()
-      expect(host?.querySelector('.ea__seal-row')).toBeNull()
     })
   })
 

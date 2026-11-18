@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // =============================================================================
-// VELO CI -- scope: decide how much of the gate a pull request needs.
+// VELO CI -- scope: decide how much of the gate a pull request -- or a push
+// -- needs.
 //
 // Reads the PR's own diff (merge commit vs its first parent, so only what the
-// PR contributes) and writes three outputs to $GITHUB_OUTPUT:
+// PR contributes) -- or, for a push, the range the push brought (FE-187, see
+// PUSH below) -- and writes four outputs to $GITHUB_OUTPUT:
 //
 //   frontend = full | light | skip
 //     full  -- install + lint + format + tests + builds + whitelabel matrix
@@ -31,7 +33,8 @@
 //   everything else -> frontend full. Unknown means full: the classifier
 //                    may only ever make the gate SMALLER for files it
 //                    positively recognises.
-// The gate itself (ci.yml, this script) and generated.ts force everything.
+// The gate itself (ci.yml, this script, its test) and generated.ts force
+// everything.
 //
 // docker is a separate axis, by path alone (a comment in the Dockerfile or
 // nginx.conf counts): the files the image build reads that the other jobs
@@ -39,19 +42,48 @@
 // lockfile, pnpm-workspace.yaml, the workspace manifests, .dockerignore and
 // the smoke script. A PR without them does not pay for an image build.
 //
-// Outside pull_request (push to test) the caller does not run this script:
-// the trunk always gets the full gate, which is also the backstop for any
-// misclassification here.
+// PUSH (FE-187): `--push <before> <sha>` classifies everything the push
+// brought, before..sha -- a push can carry several commits (a batch) -- with
+// the same classes as a pull request. When that range cannot be trusted the
+// push gets the full gate, as every push did before FE-187:
+//   - no before (all zeros: a new branch);
+//   - before not in the history the caller fetched;
+//   - before not an ancestor of sha (a forced push: the range would be a
+//     difference between two unrelated heads, not what was pushed).
+// The caller fetches the whole history for a push (ci.yml, scope job), so a
+// fast-forward of any length resolves.
+// WHAT THIS GIVES UP: before FE-187 every push ran the full gate, so the
+// trunk was the backstop for a misclassification here. Now a push is sized
+// like a pull request and that backstop is gone; the classifier's own test
+// (ci-scope.test.mjs, run by the scope job) is what stands in for it.
 //
-// Node stdlib only; usage: node .github/scripts/ci-scope.mjs <base> <head>
+// Node stdlib only; usage:
+//   node .github/scripts/ci-scope.mjs <base> <head>
+//   node .github/scripts/ci-scope.mjs --push <before> <sha>
 // =============================================================================
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 
-const [base = 'HEAD^1', head = 'HEAD'] = process.argv.slice(2)
+const argv = process.argv.slice(2)
+const push = argv[0] === '--push'
+const [base = 'HEAD^1', head = 'HEAD'] = push ? argv.slice(1) : argv
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 << 20 })
+// A yes/no question to git: exit 0 is yes, anything else no (stderr quiet).
+const gitOk = (...args) => {
+  try {
+    execFileSync('git', args, { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
 
-const FORCE_ALL = [/^\.github\/workflows\/ci\.yml$/, /^\.github\/scripts\/ci-scope\.mjs$/, /^frontend\/src\/api\/generated\.ts$/]
+const FORCE_ALL = [
+  /^\.github\/workflows\/ci\.yml$/,
+  /^\.github\/scripts\/ci-scope\.mjs$/,
+  /^\.github\/scripts\/ci-scope\.test\.mjs$/,
+  /^frontend\/src\/api\/generated\.ts$/,
+]
 const DOCS = [/^docs\//, /^diagrams\//, /^Design_prototype\//]
 const CODE_TREES = /^(frontend|packages)\//
 // FE-162: paths that can change how a screen looks -> the visual comparison.
@@ -97,6 +129,32 @@ function isCommentOnly(file) {
     .every((l) => l === '' || re.test(l))
 }
 
+function write(summary, report) {
+  console.log(report.join('\n') + `\n\n${summary}`)
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, summary.split(' ').join('\n') + '\n')
+  }
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### CI scope: \`${summary}\`\n\n\`\`\`\n${report.join('\n')}\n\`\`\`\n`)
+  }
+}
+
+// PUSH (header): why the range before..head cannot be trusted, or null.
+function pushRangeProblem() {
+  if (/^0+$/.test(base)) return 'no before (a new branch)'
+  if (!gitOk('cat-file', '-e', `${base}^{commit}`)) return `before ${base} is not in the fetched history`
+  if (!gitOk('merge-base', '--is-ancestor', base, head)) return `before ${base} is not an ancestor of ${head} (a forced push)`
+  return null
+}
+
+if (push) {
+  const problem = pushRangeProblem()
+  if (problem) {
+    write('frontend=full drift=true docker=true visual=true', [`push range not classified: ${problem} -> the full gate`])
+    process.exit(0)
+  }
+}
+
 const RANK = { skip: 0, light: 1, full: 2 }
 let frontend = 'skip'
 let drift = false
@@ -119,9 +177,4 @@ for (const row of git('diff', '--name-status', '--no-renames', base, head).split
   report.push(`${cls.padEnd(13)} ${status} ${file}`)
 }
 
-const summary = `frontend=${frontend} drift=${drift} docker=${docker} visual=${visual}`
-console.log(report.join('\n') + `\n\n${summary}`)
-if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `frontend=${frontend}\ndrift=${drift}\ndocker=${docker}\nvisual=${visual}\n`)
-if (process.env.GITHUB_STEP_SUMMARY) {
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### CI scope: \`${summary}\`\n\n\`\`\`\n${report.join('\n')}\n\`\`\`\n`)
-}
+write(`frontend=${frontend} drift=${drift} docker=${docker} visual=${visual}`, report)

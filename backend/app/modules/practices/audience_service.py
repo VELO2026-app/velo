@@ -321,7 +321,7 @@ def _is_school_audience_clause(user_id: UUID) -> ColumnElement[bool]:
     brake exists to stop the audience from cutting into other people's
     calendars, not to cancel purchases.
     """
-    if not settings.schools_enabled:
+    if not settings.option_schools:
         return false()
 
     return (
@@ -376,7 +376,7 @@ def practice_in_school_clause(school_id: UUID) -> ColumnElement[bool]:
     select FROM Practice, the same contract the clauses above state. NO
     KILLSWITCH CHECK HERE, unlike _is_school_audience_clause: this
     predicate's callers sit behind the curator router's router-level
-    _require_schools_enabled, and a flag answered in two places is a
+    gate (_require_schools), and a flag answered in two places is a
     flag with a hole in it.
     """
     return Practice.school_id == school_id
@@ -946,7 +946,7 @@ async def school_audience_is_dark(
     # means exactly "nobody sees this". It leaks nothing -- the field
     # reaches the owner and whoever is being refused, never a stranger,
     # because the audience gate answers first.
-    if not settings.schools_enabled:
+    if not settings.option_schools:
         return True
 
     usable = (

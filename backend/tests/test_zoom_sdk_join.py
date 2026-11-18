@@ -87,13 +87,11 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 
 @pytest.fixture
 def real_zoom(monkeypatch: pytest.MonkeyPatch) -> dict:
-    """Zoom as a configured server sees it -- S2S not the stub, SDK keys set
-    -- with the two Zoom calls zoom/sdk.py makes replaced in ITS namespace.
-    Returns the knobs a test turns: what GET /meetings answers, what the
-    token call answers, and the calls made."""
-    monkeypatch.setattr(settings, "zoom_account_id", "acct")
-    monkeypatch.setattr(settings, "zoom_client_id", "s2s-id")
-    monkeypatch.setattr(settings, "zoom_client_secret", "s2s-secret-not-test")
+    """Zoom as an instance sees it -- not the stub, SDK keys set -- with the
+    two Zoom calls zoom/sdk.py makes replaced in ITS namespace. Returns the
+    knobs a test turns: what GET /meetings answers, what the token call
+    answers, and the calls made."""
+    monkeypatch.setattr(settings, "_zoom_stub", False)
     monkeypatch.setattr(settings, "zoom_sdk_client_id", _SDK_ID)
     monkeypatch.setattr(settings, "zoom_sdk_client_secret", _SDK_SECRET)
     state: dict = {
@@ -334,26 +332,15 @@ def test_a_registered_link_without_tk_is_no_link_for_the_predicate() -> None:
     assert link_unavailable_reason(row("https://zoom.us/w/1?tk=abc")) is None
 
 
-def test_sdk_configured_needs_real_zoom_and_both_keys(
+def test_sdk_configured_follows_the_zoom_stub(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "zoom_account_id", "acct")
-    monkeypatch.setattr(settings, "zoom_client_id", "s2s-id")
-    monkeypatch.setattr(settings, "zoom_client_secret", "s2s-secret-not-test")
-    monkeypatch.setattr(settings, "zoom_sdk_client_id", _SDK_ID)
-    monkeypatch.setattr(settings, "zoom_sdk_client_secret", _SDK_SECRET)
+    """The SDK key pair is required at start (BE-192), so "configured" is
+    one question left: is Zoom real. Under the stub (the suite's) meeting
+    numbers are fabricated and sdk-join must not sign for them."""
+    monkeypatch.setattr(settings, "_zoom_stub", False)
     assert settings.is_zoom_sdk_configured is True
-
-    monkeypatch.setattr(settings, "zoom_sdk_client_secret", "")
-    assert settings.is_zoom_sdk_configured is False
-
-    monkeypatch.setattr(settings, "zoom_sdk_client_secret", _SDK_SECRET)
-    monkeypatch.setattr(settings, "zoom_sdk_client_id", "")
-    assert settings.is_zoom_sdk_configured is False
-
-    # Keys present, but Zoom itself is the stub: fabricated meeting numbers.
-    monkeypatch.setattr(settings, "zoom_sdk_client_id", _SDK_ID)
-    monkeypatch.setattr(settings, "zoom_client_secret", "TEST")
+    monkeypatch.setattr(settings, "_zoom_stub", True)
     assert settings.is_zoom_sdk_configured is False
 
 

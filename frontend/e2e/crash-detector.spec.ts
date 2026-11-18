@@ -14,8 +14,9 @@
  */
 // eslint-disable-next-line no-restricted-imports -- see the header: the watcher is attached by hand
 import { expect, test as bare, type Page } from '@playwright/test'
+import { GLOBAL_ALLOWLIST } from './support/allowlist'
 import { mockApi } from './support/api'
-import { watchCrashes, type CrashSignal, type SignalKind } from './support/crashes'
+import { isAllowed, watchCrashes, type CrashSignal, type SignalKind } from './support/crashes'
 import { mockSignedIn, seedSession } from './support/fixtures'
 import { test } from './support/test'
 
@@ -169,5 +170,47 @@ test.describe('crash detector fixture', () => {
 
   test('allow() refuses an exception without a reason', ({ crashes }) => {
     expect(() => crashes.allow({ reason: ' ', console: [/x/] })).toThrow(/reason is required/)
+  })
+})
+
+// FE-188: an allowance scoped to an engine. The global entry for WebKit's
+// viewport warning accepts that exact text, in WebKit, and nothing else.
+bare.describe('crash detector scoped to an engine', () => {
+  const WARNING = 'Viewport argument key "interactive-widget" not recognized and ignored.'
+  const consoleSignal = (message: string): CrashSignal => ({ kind: 'console', message })
+
+  bare('accepts the WebKit viewport warning only in WebKit, only by its exact text', () => {
+    const allowed = (message: string, browser?: 'chromium' | 'firefox' | 'webkit'): boolean =>
+      isAllowed(consoleSignal(message), GLOBAL_ALLOWLIST, browser)
+
+    expect(allowed(WARNING, 'webkit')).toBe(true)
+    expect(allowed(WARNING, 'chromium')).toBe(false)
+    expect(allowed(WARNING, 'firefox')).toBe(false)
+    // An engine that cannot be read gets no engine-scoped allowance.
+    expect(allowed(WARNING, undefined)).toBe(false)
+    // Anything else WebKit prints stays a signal.
+    expect(allowed(`${WARNING} Extra.`, 'webkit')).toBe(false)
+    expect(allowed(`Error: ${WARNING}`, 'webkit')).toBe(false)
+    expect(
+      allowed('Viewport argument key "viewport-fit" not recognized and ignored.', 'webkit'),
+    ).toBe(false)
+    expect(allowed('e2e: something went wrong', 'webkit')).toBe(false)
+  })
+
+  bare('takes the engine from the page', async ({ page, browserName }) => {
+    const watch = await watchCrashes(page)
+    await signedIn(page)
+    await page.goto('/user/dashboard')
+
+    await page.evaluate((text) => {
+      console.error(text)
+      console.error('e2e: the line after the warning')
+    }, WARNING)
+    // The second line proves the listener ran past the first.
+    await expectSignal(() => watch.crashes.signals(), 'console', /the line after the warning/)
+
+    const seen = watch.crashes.signals().some((s) => s.kind === 'console' && s.message === WARNING)
+    // Smoke runs on Chromium: the WebKit-only allowance must not hide it there.
+    expect(seen, `the warning on ${browserName}`).toBe(browserName !== 'webkit')
   })
 })
