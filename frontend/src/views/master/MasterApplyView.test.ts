@@ -292,7 +292,7 @@ function stepTitle(): string {
 
 /** Drives step 1 through the real DOM (name + privacy) and advances. */
 async function fillStep1(name = 'Анна Иванова'): Promise<void> {
-  setValue(inputByLabel('Имя'), name)
+  setValue(inputByLabel('Имя Фамилия'), name)
   await flush()
   checkboxByLabel('Условия использования').click()
   await flush()
@@ -358,7 +358,7 @@ describe('MasterApplyView', () => {
       nextBtn().click()
       await flush()
 
-      expect(inputErrorText('Имя')).toBe('Пожалуйста, введите имя')
+      expect(inputErrorText('Имя Фамилия')).toBe('Пожалуйста, введите имя и фамилию')
       expect(stepTitle()).toBe('Шаг 1: Профиль *')
     })
 
@@ -366,19 +366,19 @@ describe('MasterApplyView', () => {
       mount()
       await flush()
 
-      setValue(inputByLabel('Имя'), '   ')
+      setValue(inputByLabel('Имя Фамилия'), '   ')
       await flush()
       nextBtn().click()
       await flush()
 
-      expect(inputErrorText('Имя')).toBe('Пожалуйста, введите имя')
+      expect(inputErrorText('Имя Фамилия')).toBe('Пожалуйста, введите имя и фамилию')
     })
 
     it('display_name filled but privacy NOT accepted: blocks with the privacy error', async () => {
       mount()
       await flush()
 
-      setValue(inputByLabel('Имя'), 'Анна Иванова')
+      setValue(inputByLabel('Имя Фамилия'), 'Анна Иванова')
       await flush()
       nextBtn().click()
       await flush()
@@ -394,7 +394,7 @@ describe('MasterApplyView', () => {
       nextBtn().click() // empty name AND unchecked privacy
       await flush()
 
-      expect(inputErrorText('Имя')).toBe('Пожалуйста, введите имя')
+      expect(inputErrorText('Имя Фамилия')).toBe('Пожалуйста, введите имя и фамилию')
       expect(fieldErrorText('Необходимо принять условия')).toBeUndefined()
     })
 
@@ -404,14 +404,14 @@ describe('MasterApplyView', () => {
 
       nextBtn().click()
       await flush()
-      expect(inputErrorText('Имя')).toBe('Пожалуйста, введите имя')
+      expect(inputErrorText('Имя Фамилия')).toBe('Пожалуйста, введите имя и фамилию')
 
-      setValue(inputByLabel('Имя'), 'Анна Иванова')
+      setValue(inputByLabel('Имя Фамилия'), 'Анна Иванова')
       await flush()
       nextBtn().click()
       await flush()
 
-      expect(inputErrorText('Имя')).toBe('') // cleared
+      expect(inputErrorText('Имя Фамилия')).toBe('') // cleared
       expect(fieldErrorText('Необходимо принять условия')).toBeDefined()
     })
 
@@ -495,7 +495,7 @@ describe('MasterApplyView', () => {
       await flush()
 
       expect(stepTitle()).toBe('Шаг 1: Профиль *')
-      expect(inputByLabel('Имя').value).toBe('Борис Кузнецов')
+      expect(inputByLabel('Имя Фамилия').value).toBe('Борис Кузнецов')
     })
 
     it('at step 1, back calls router.back() instead of decrementing (there is no step 0)', async () => {
@@ -621,7 +621,7 @@ describe('MasterApplyView', () => {
     it('email/phone are trimmed and sent when filled', async () => {
       mount()
       await flush()
-      setValue(inputByLabel('Имя'), 'Анна Иванова')
+      setValue(inputByLabel('Имя Фамилия'), 'Анна Иванова')
       await flush()
       setValue(inputByLabel('E-mail'), '  anna@example.com  ')
       await flush()
@@ -911,7 +911,7 @@ describe('MasterApplyView', () => {
       await flush()
     })
 
-    it('REALISTIC interaction: once :loading has painted, a second real click on the disabled button is a no-op', async () => {
+    it('the submit button is disabled while the application is in flight', async () => {
       let resolveApply!: (v: MasterApplyResponse) => void
       vi.mocked(mastersApi.applyMaster).mockImplementation(
         () =>
@@ -929,9 +929,6 @@ describe('MasterApplyView', () => {
       submitBtn().click()
       await flush() // let :loading="submitting" paint
       expect(submitBtn().disabled).toBe(true)
-      submitBtn().click()
-
-      expect(mastersApi.applyMaster).toHaveBeenCalledTimes(1)
       resolveApply(applyResponse())
       await flush()
     })

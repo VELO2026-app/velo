@@ -41,6 +41,14 @@
 #                  / 200; /health and /ready 404; manifest lang of the
 #                  instance. Catches what only the machine used to see.
 #                  Runs only when scope's `docker` output says so.
+#   bundle-budget-guard
+#                — FE-183: the label rule of frontend/bundle-budget.json. No
+#                  install, no build, no `scope`: it compares the file of the
+#                  base branch with the head and reads the PR labels, so it
+#                  runs on every PR event, `labeled`/`unlabeled` included, and
+#                  putting or taking a label off re-runs only this job.
+#                  A raised budget needs `bundle-growth`, a raised ceiling
+#                  `bundle-ceiling` (policy: docs/agents/bundle.md).
 #   drift-check  — regenerate frontend/src/api/generated.ts from the app's own
 #                  OpenAPI schema and fail on any diff. Read-only w.r.t. the
 #                  backend. The generator is deterministic by contract
@@ -89,8 +97,9 @@ on:
   pull_request:
     branches: [test, deploy-machine]
     # labeled/unlabeled: FE-162 -- a `visual` / `no-visual-change` label put on
-    # (or taken off) an open PR re-runs the visual job. Nothing else reacts to
-    # them: `scope` is skipped on those events, and every other job needs it.
+    # (or taken off) an open PR re-runs the visual job; FE-183 -- any label
+    # re-runs bundle-budget-guard. Nothing else reacts to them: `scope` is
+    # skipped on those events, and every other job needs it.
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
@@ -377,11 +386,63 @@ jobs:
           pnpm -C frontend build 2>&1 | tee "$RUNNER_TEMP/frontend-build.log"
           node frontend/scripts/build-log-gate.mjs "$RUNNER_TEMP/frontend-build.log"
 
-      # FE-157 2E: size budget (frontend/bundle-budget.json). Fails when the
-      # app chunk gzip is >2% over budget or the PWA precache is over budget;
-      # the delta table goes to the step summary.
+      # FE-183: sizes of the base branch build, kept by the pushes to it (the
+      # save step below), so the report can show what this PR added. The key
+      # never matches; the newest cache of the base branch comes in through
+      # restore-keys. Absent (first run, evicted cache): the column says n/a.
+      - name: Base build sizes
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .bundle-base
+          key: bundle-sizes-none
+          restore-keys: bundle-sizes-${{ github.base_ref }}-
+
+      # FE-157 2E, FE-183: size gate (frontend/bundle-budget.json, rules in
+      # frontend/scripts/lib/bundle-budget.mjs). Fails above the ceiling, more
+      # than 2% above the budget, or more than 2% below it (the message holds
+      # the value to lower the budget to). The delta table (vs budget, vs
+      # base) goes to the step summary; the label rule is the guard job's.
       - name: Bundle size budget
-        run: node frontend/scripts/bundle-report.mjs --budget
+        run: |
+          mkdir -p .bundle-head
+          node frontend/scripts/bundle-report.mjs --budget \
+            --base .bundle-base/sizes.json --save-sizes .bundle-head/sizes.json
+
+      - name: Keep this build's sizes as the base for the next PRs
+        if: github.event_name == 'push' && !cancelled() && hashFiles('.bundle-head/sizes.json') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: .bundle-head/sizes.json
+          key: bundle-sizes-${{ github.ref_name }}-${{ github.sha }}
+
+  # FE-183: the label rule of bundle-budget.json. Deliberately light: no
+  # `needs`, no install, no build -- so the `scope` filter on label events
+  # does not apply and a label change re-runs only this job. The base file
+  # is the first parent of the merge ref (HEAD^1, as in `scope`), the very
+  # base this PR was merged onto: a budget lowered on the base branch since
+  # then must not look like a raise made by this PR. The labels come from the
+  # event payload (passed through env, never interpolated into the script).
+  bundle-budget-guard:
+    name: bundle budget guard
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Budget file of the base branch
+        run: |
+          if git cat-file -e "HEAD^1:frontend/bundle-budget.json" 2>/dev/null; then
+            git show "HEAD^1:frontend/bundle-budget.json" > "$RUNNER_TEMP/base-budget.json"
+          fi
+
+      - name: Budget or ceiling raised without its label
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node frontend/scripts/bundle-budget-guard.mjs --base "$RUNNER_TEMP/base-budget.json" --labels "$LABELS"
 
   # FE-157 5A.2: smoke e2e on Playwright -- the golden production build under
   # `vite preview`, the API mocked at the network layer (frontend/e2e/), so
@@ -471,7 +532,8 @@ jobs:
   # `strict` = the PR carries `no-visual-change`: a non-empty report fails.
   visual-scope:
     name: visual — scope
-    if: github.event_name == 'pull_request'
+    # FE-183: a bundle label belongs to bundle-budget-guard alone.
+    if: github.event_name == 'pull_request' && !((github.event.action == 'labeled' || github.event.action == 'unlabeled') && contains(fromJSON('["bundle-growth","bundle-ceiling"]'), github.event.label.name))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:

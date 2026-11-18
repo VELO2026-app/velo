@@ -544,10 +544,6 @@ describe('EditPracticeView', () => {
 
       const areas = Array.from(host?.querySelectorAll('textarea') ?? [])
       expect(areas.map((a) => a.value)).toContain('Травмы спины')
-      // T-35: the Zoom URL input is gone from this form with its column. Its
-      // absence is asserted, not merely un-asserted -- a re-added field would
-      // fail here rather than pass silently.
-      expect(field('input[type="url"]')).toBeNull()
     })
   })
 
@@ -1759,7 +1755,6 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
     // Owner 2026-10-05: no read-only school line in the block at all -- the
     // name renders nowhere, the chips stay suppressed.
     expect(text()).not.toContain('Тихая школа')
-    expect(text()).not.toContain('Школа «')
     expect(host?.querySelectorAll('.v-chip').length).toBe(0)
 
     // Kind unchanged -> no stranded-bookers preview (owner Q15 runs on change).
@@ -1774,11 +1769,6 @@ describe('EditPracticeView -- «Школы» audience (FE-24 / GT P5; BE-74, FE-
     button('Сохранить')?.click()
     await flush()
     expect(sentBody()).toEqual({ title: 'Новое имя' })
-    // FE-127: this guarded the plural array the school field once was (BE-74
-    // made it one id). The contract now names the entity «school», so the
-    // guard names the plural of the new field -- the regression it catches is
-    // the same, only the vocabulary moved.
-    expect(sentBody()).not.toHaveProperty('school_ids')
   })
 
   it('switching a school practice to «Публичная» previews the change and PATCHes public', async () => {

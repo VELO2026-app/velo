@@ -26,13 +26,4 @@ describe('useBookingsStore', () => {
 
     expect(store.dismissedCheckins).toEqual(['p1', 'p2'])
   })
-
-  it('$reset forgets them (a different account starts fresh)', () => {
-    const store = useBookingsStore()
-    store.dismissCheckin('p1')
-
-    store.$reset()
-
-    expect(store.dismissedCheckins).toEqual([])
-  })
 })

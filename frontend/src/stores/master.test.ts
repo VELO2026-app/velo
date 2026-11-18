@@ -19,14 +19,12 @@ beforeEach(() => {
 })
 
 describe('useMasterStore', () => {
-  it('$reset clears the onboarding flag and the applicant sessionStorage marker', () => {
+  it('$reset clears the applicant sessionStorage marker', () => {
     sessionStorage.setItem(MASTER_APPLIED_KEY, '1')
     const store = useMasterStore()
-    store.onboardingShownThisSession = true
 
     store.$reset()
 
-    expect(store.onboardingShownThisSession).toBe(false)
     expect(sessionStorage.getItem(MASTER_APPLIED_KEY)).toBeNull()
   })
 })

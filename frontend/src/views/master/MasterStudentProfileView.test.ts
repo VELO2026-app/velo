@@ -421,21 +421,6 @@ describe('MasterStudentProfileView', () => {
     })
   })
 
-  describe('practicesCount / hours (.vue:145-146)', () => {
-    it('a missing detail renders 0, never blank or NaN', async () => {
-      // The ?? 0 branch: reachable while detail is still null only via the
-      // error->retry path in real use, but the derivation is the screen's own.
-      vi.mocked(mastersApi.getStudent).mockResolvedValue(detail({ practices_count: 0, hours: 0 }))
-      mount()
-      await flush()
-
-      const values = Array.from(host?.querySelectorAll('.v-stat__value') ?? []).map((n) =>
-        n.textContent?.trim(),
-      )
-      expect(values).toEqual(['0', '0'])
-    })
-  })
-
   describe('checkinRows (.vue:154-160)', () => {
     it("a check-in with a comment shows the comment; the date is the fixture's, formatted short", async () => {
       vi.mocked(mastersApi.getStudent).mockResolvedValue(

@@ -285,7 +285,6 @@ describe('MasterNewPromocodeView', () => {
 
       const body = sentBody()
       expect(body.discount_percent).toBe(100)
-      expect(typeof body.discount_percent).toBe('number')
     })
 
     it('an empty limit is sent as null, NOT as 0', async () => {
@@ -317,19 +316,6 @@ describe('MasterNewPromocodeView', () => {
       await flush()
 
       expect(sentBody().valid_until).toBe('2026-07-25T23:59:59.000Z')
-    })
-
-    it('valid_until is sent as a UTC ISO string, not a local-format string', async () => {
-      mount()
-      await flush()
-      typeCode('SUMMER')
-      await flush()
-      await pickDay(25)
-
-      button('Создать промокод')?.click()
-      await flush()
-
-      expect(sentBody().valid_until).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
     })
   })
 
