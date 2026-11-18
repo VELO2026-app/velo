@@ -34,7 +34,7 @@ describe('brand-grep: the brand word (tz-i18n §7.2)', () => {
       ],
     ])
     expect(report.brand.length).toBe(5)
-    expect(report.brand.every((h) => h.includes('VELO')))
+    expect(report.brand.every((h) => h.includes('VELO'))).toBe(true)
   })
 
   it('comments, headers and non-user identifiers are not user strings', () => {

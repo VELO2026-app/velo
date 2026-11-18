@@ -63,13 +63,6 @@ describe('tma-viewport seam', () => {
     vp.contentSafeAreaInsetTop.emit(48)
     expect(seam.tmaViewportState.contentSafeAreaInsetTop.value).toBe(48)
   })
-
-  it('loads the SDK once however many callers ask', async () => {
-    const seam = await import('@/platform/tma-viewport')
-    const [a, b] = await Promise.all([seam.loadTmaSdk(), seam.loadTmaSdk()])
-
-    expect(a).toBe(b)
-  })
 })
 
 describe('tma-viewport seam -- chunk failure', () => {

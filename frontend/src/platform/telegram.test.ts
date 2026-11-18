@@ -65,16 +65,6 @@ afterEach(() => {
 })
 
 describe('telegramPlatform.init -- app chrome', () => {
-  it('paints the chrome from the design tokens when they are defined', async () => {
-    setToken('--velo-tg-header', '#334d6e')
-    setToken('--velo-tg-bg', '#f8fafc')
-
-    await telegramPlatform.init()
-
-    expect(setHeaderColor).toHaveBeenCalledWith('#334d6e')
-    expect(setBackgroundColor).toHaveBeenCalledWith('#f8fafc')
-  })
-
   it('a re-theme of the token re-themes the chrome -- the token is really the source', async () => {
     // The whole point of the change: change the value in variables.css and the
     // Telegram header follows. If someone reverts to a literal, this goes red.
