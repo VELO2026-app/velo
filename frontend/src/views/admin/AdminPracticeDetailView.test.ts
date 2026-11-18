@@ -280,6 +280,24 @@ describe('AdminPracticeDetailView', () => {
       expect(adminApi.getAdminPracticeDetail).toHaveBeenCalledTimes(2)
     })
 
+    it('FE-199: the FIRST synchronous frame after mount shows the loader, not the "Практика недоступна" rung', () => {
+      let resolveGet!: (v: AdminPracticeDetailResponse) => void
+      vi.mocked(adminApi.getAdminPracticeDetail)
+        .mockReset()
+        .mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveGet = resolve
+            }),
+        )
+      mount('p_upcoming')
+      // NO await at all here -- the exact synchronous tick app.mount() returns in.
+      expect(text()).not.toContain('Практика недоступна')
+      expect(document.body.querySelector('.admin-detail__loader')).not.toBeNull()
+
+      resolveGet(PRACTICE_UPCOMING())
+    })
+
     it('the FOURTH rung is also reachable (permanently, not transiently) if the resolved response body itself is falsy -- an honest edge case for a contract violation, not a normal empty-list state', async () => {
       // @ts-expect-error -- deliberately violating the non-null return type to
       // simulate a malformed/empty backend response.

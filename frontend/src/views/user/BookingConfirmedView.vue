@@ -97,7 +97,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { isOptionEnabled } from '@/platform/instance'
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { usePracticesStore } from '@/stores/practices'
 import { useToast } from '@/composables/useToast'
@@ -203,11 +203,12 @@ function goToDashboard(): void {
   void router.push({ name: 'user-dashboard' })
 }
 
-onMounted(() => {
-  // Load the practice so the title can be shown. Self-contained: works on
-  // direct navigation / reload, not only via the booking redirect.
-  void store.fetchPractice(practiceId)
-})
+// Load the practice so the title can be shown. Self-contained: works on
+// direct navigation / reload, not only via the booking redirect. Started in
+// setup, NOT onMounted: fetchPractice flips selectedLoading (and clears
+// selectedError) synchronously, so the very first render already shows the
+// loader instead of the not-found rung (FE-199).
+void store.fetchPractice(practiceId)
 </script>
 
 <style scoped>
