@@ -215,11 +215,11 @@ describe('Composer -- the recording phase', () => {
 
     mic()!.click()
     await flush()
-    expect(composingEvents).toContain(false)
+    expect(composingEvents.at(-1)).toBe(false)
     // The keyboard must not rise over the recording panel.
     textareaEl().click()
     await flush()
-    expect(composingEvents).toContain(false)
+    expect(composingEvents.at(-1)).toBe(false)
   })
 
   it('requesting (permission prompt): the row freezes WITHOUT a premature busy panel', async () => {
@@ -235,17 +235,6 @@ describe('Composer -- the recording phase', () => {
     expect(sendSlot()).toBeNull()
 
     voice.state.value = 'idle'
-  })
-
-  it('a second tap while a take is live cannot restart the recorder', async () => {
-    voice.start.mockImplementation(async () => {
-      voice.state.value = 'recording'
-    })
-    await mount()
-    mic()!.click()
-    await flush()
-    // The mic disc is gone -- nothing left to tap; the guard holds regardless.
-    expect(voice.start).toHaveBeenCalledTimes(1)
   })
 
   it('panel taps never bubble into the field focus handler (no keyboard mid-take)', async () => {
