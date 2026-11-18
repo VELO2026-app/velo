@@ -33,7 +33,7 @@
 // for what's on screen"). TWO findings were surfaced against this rung
 // (PROMPT №464); this file now reflects the outcome of BOTH:
 //
-//  (a) STRUCTURAL, NOT USER-VISIBLE -- STILL PRESENT, NOT FIXED (out of scope,
+//  (a) FIXED IN FE-199 (fetchPractice now starts in setup, so the first frame is the loader). Was: STRUCTURAL -- STILL PRESENT, NOT FIXED (out of scope,
 //      the owner's call): the guard's own literal DEFAULTS
 //      (selectedLoading=false, selected=null, selectedError=null -- the
 //      state before onMounted has run at all) satisfy `!practice` and fail
@@ -225,6 +225,15 @@ describe('BookingConfirmedView', () => {
       getPracticeMock.mockReturnValue(new Promise(() => {}))
       mount()
       await nextTick() // one tick is enough for loading=true to flush (SC finding (a))
+
+      expect(loader()).not.toBeNull()
+      expect(emptyState()).toBeNull()
+      expect(content()).toBeNull()
+    })
+
+    it('FE-199: the FIRST synchronous frame -- zero ticks after mount() -- shows the loader, never the error rung', () => {
+      getPracticeMock.mockReturnValue(new Promise(() => {}))
+      mount() // NO await at all -- inspecting the pre-flush DOM on purpose
 
       expect(loader()).not.toBeNull()
       expect(emptyState()).toBeNull()
