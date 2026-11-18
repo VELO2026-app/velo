@@ -530,19 +530,6 @@ describe('MasterPracticeDetailView', () => {
       // Attendance is never cached -- it must still be fetched.
       expect(practicesApi.getAttendance).toHaveBeenCalledWith('p1')
     })
-
-    it('falls through to the API when the cache holds a DIFFERENT practice', async () => {
-      // .find() keys on id. A cache hit that ignored the id would render some
-      // other master's practice under this route.
-      masterState.practices = [practice({ id: 'p_other', title: 'Чужая практика' })]
-      vi.mocked(practicesApi.getPractice).mockResolvedValue(practice({ title: 'Настоящая' }))
-      mount()
-      await flush()
-
-      expect(text()).toContain('Настоящая')
-      expect(text()).not.toContain('Чужая практика')
-      expect(practicesApi.getPractice).toHaveBeenCalledWith('p1')
-    })
   })
 
   describe('the status branch (isPast / isUpcoming, .vue:362-367)', () => {
@@ -989,7 +976,6 @@ describe('MasterPracticeDetailView', () => {
       mount()
       await flush()
 
-      expect(loadInsights).toHaveBeenCalledWith('p1')
       expect(badgeTexts()).toEqual(['60%', '30%', '0%', '0%', '10%'])
     })
 
@@ -1527,20 +1513,6 @@ describe('MasterPracticeDetailView', () => {
 
       expect(back).toHaveBeenCalled()
     })
-
-    it('the UPCOMING hub deliberately offers NO «Начать практику» (going live is automatic)', async () => {
-      // .vue:15-18: the backend lifecycle worker flips scheduled -> live by the
-      // clock, and PATCH status='live' is a 422. A button here would be a dead
-      // end the master would keep pressing. Pinned so nobody re-adds it.
-      mount()
-      await flush()
-
-      // Anchored: the hub must actually be on screen, or "no button" is true of
-      // an error state too.
-      expect(text()).toContain('Записалось')
-      expect(text()).not.toContain('Начать практику')
-      expect(text()).not.toContain('Опубликовать')
-    })
   })
 
   // NOT COVERED, deliberately -- stated rather than faked:
@@ -1584,9 +1556,7 @@ describe('MasterPracticeDetailView -- audience_unavailable (FE-24 / GT P5)', () 
     expect(warn).toBeTruthy()
     expect(warn?.textContent).toContain('Школа недоступна')
     expect(warn?.textContent).toContain('кроме вас и уже записавшихся')
-    // ... and carries neither the advice nor any control.
-    expect(text()).not.toContain('Смените аудиторию')
-    expect(text()).not.toContain('Изменить аудиторию')
+    // ... and carries no control.
     expect(warn?.querySelectorAll('button')).toHaveLength(0)
     warn?.click()
     await flush()

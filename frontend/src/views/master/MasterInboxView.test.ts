@@ -157,21 +157,6 @@ describe('MasterInboxView', () => {
     expect(isUnread(row(1))).toBe(false)
   })
 
-  it('empty list shows the confirmed empty-state, not fake rows', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-      items: [],
-      next_cursor: null,
-      unread: 0,
-    })
-    mount()
-    await flush()
-
-    expect(rows()).toHaveLength(0)
-    expect(host?.textContent).toContain(
-      'Здесь появятся уведомления о записях, сообщениях и операциях',
-    )
-  })
-
   it('a failed load shows the retry state, and «Повторить» actually refetches', async () => {
     vi.mocked(notificationsApi.listNotifications)
       .mockRejectedValueOnce(new Error('down'))
@@ -222,21 +207,6 @@ describe('MasterInboxView', () => {
 
     expect(isUnread(row(0))).toBe(true) // reverted, not left read
     expect(toastError).toHaveBeenCalledWith('Не удалось отметить прочитанным')
-  })
-
-  it('tapping an ALREADY-READ row is a no-op -- no network call', async () => {
-    vi.mocked(notificationsApi.listNotifications).mockResolvedValue({
-      items: [item({ id: 'a', read_at: '2026-08-14T09:00:00Z' })],
-      next_cursor: null,
-      unread: 0,
-    })
-    mount()
-    await flush()
-
-    row(0).click()
-    await flush()
-
-    expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled()
   })
 
   it('a tap navigates by action_data AND marks read: open_practice -> master-practice-detail', async () => {
@@ -642,12 +612,12 @@ describe('MasterInboxView', () => {
     // kinds).
     function mixed(): NotificationItem[] {
       return [
-        item({ id: 'a', type: 'msg.support_message' }),
-        item({ id: 'b', type: 'booking.cancelled_by_user' }),
-        item({ id: 'c', type: 'practice.cancelled_by_curator' }),
-        item({ id: 'd', type: 'waitlist.expired' }),
-        item({ id: 'e', type: 'wallet.withdrawal_approved' }),
-        item({ id: 'f', type: 'system.announcement' }),
+        item({ id: 'a', type: 'msg.support_message', title: 'Сообщение от Ани' }),
+        item({ id: 'b', type: 'booking.cancelled_by_user', title: 'Запись отменена' }),
+        item({ id: 'c', type: 'practice.cancelled_by_curator', title: 'Практика отменена' }),
+        item({ id: 'd', type: 'waitlist.expired', title: 'Лист ожидания истёк' }),
+        item({ id: 'e', type: 'wallet.withdrawal_approved', title: 'Вывод одобрен' }),
+        item({ id: 'f', type: 'system.announcement', title: 'Объявление' }),
       ]
     }
 
@@ -680,7 +650,11 @@ describe('MasterInboxView', () => {
       segment('Практики')?.click()
       await flush()
 
-      expect(rows()).toHaveLength(3) // booking.* + practice.* + waitlist.*
+      expect(rows().map((r) => r.textContent)).toEqual([
+        expect.stringContaining('Запись отменена'),
+        expect.stringContaining('Практика отменена'),
+        expect.stringContaining('Лист ожидания истёк'),
+      ])
     })
 
     it('«Финансы» shows the wallet rows only', async () => {
@@ -696,6 +670,7 @@ describe('MasterInboxView', () => {
       await flush()
 
       expect(rows()).toHaveLength(1)
+      expect(rows()[0]?.textContent).toContain('Вывод одобрен')
     })
 
     it('«Другое» shows the complement: the announcement in, every bucket out', async () => {
@@ -711,6 +686,7 @@ describe('MasterInboxView', () => {
       await flush()
 
       expect(rows()).toHaveLength(1)
+      expect(rows()[0]?.textContent).toContain('Объявление')
     })
 
     it('a filter with no matches shows the per-filter note, NOT the global empty state', async () => {

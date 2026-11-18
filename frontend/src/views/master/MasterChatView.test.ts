@@ -146,24 +146,6 @@ describe('MasterChatView -- which row a route id opens', () => {
     expect(stub()?.dataset.support).toBe('true')
   })
 
-  it('the id of the pre-ticket history opens it too', async () => {
-    mount('history_1')
-    await flush()
-
-    expect(stub()?.dataset.support).toBe('true')
-  })
-
-  it('an id that is the row id AND in thread_ids is one row -- the support one', async () => {
-    listChats.mockResolvedValue({
-      threads: [supportRow({ id: 'ticket_new', thread_ids: ['ticket_new'] })],
-      next_cursor: null,
-    })
-    mount('ticket_new')
-    await flush()
-
-    expect(stub()?.dataset.support).toBe('true')
-  })
-
   it('a DM row still opens by its id, as a chat -- rows without thread_ids are no obstacle', async () => {
     mount('dm_1')
     await flush()

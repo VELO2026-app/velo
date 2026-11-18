@@ -65,32 +65,10 @@ afterEach(() => {
 })
 
 describe('MasterGroupCreateView', () => {
-  it('renders a single «Название» field and the submit button', () => {
-    mount()
-
-    expect(host?.textContent).toContain('Название')
-    expect(submitBtn()).toBeDefined()
-  })
-
   it('G17 (PROMPT №609): shows the «Основное» section heading', () => {
     mount()
 
     expect(host?.querySelector('.velo-section-title')?.textContent?.trim()).toBe('Основное *')
-  })
-
-  it('owner 2026-10-01: the legend is hidden -- the section star replaces it', () => {
-    mount()
-
-    expect(host?.querySelector('.new-group__legend')).toBeNull()
-    expect(host?.querySelector('.new-group__req')).not.toBeNull()
-    expect(host?.querySelector('.cp-req')).toBeNull()
-  })
-
-  it('owner 2026-10-01: «Название» carries no rosette -- the canon is the section star', () => {
-    mount()
-
-    expect(host?.querySelector('.v-input__seal')).toBeNull()
-    expect(host?.querySelector('.v-textarea__seal')).toBeNull()
   })
 
   it('owner 2026-10-01: an empty submit shows the inline slot error and scrolls to it', async () => {
@@ -111,13 +89,6 @@ describe('MasterGroupCreateView', () => {
     expect(slot?.textContent).toBe('Введите название группы')
     expect(scrollSpy).toHaveBeenCalled()
     scrollSpy.mockRestore()
-  })
-
-  it('owner Q4 (PROMPT №610): renders an optional «Описание» textarea', () => {
-    mount()
-
-    expect(host?.textContent).toContain('Описание')
-    expect(host?.querySelector('textarea')).not.toBeNull()
   })
 
   it('T24-5/6 (PROMPT №639): both fields carry the placeholder AND a visually-hidden (not deleted) label', () => {

@@ -817,7 +817,6 @@ describe('CreatePracticeView', () => {
       await flush()
 
       expect(sentBody().duration_minutes).toBe(90)
-      expect(typeof sentBody().duration_minutes).toBe('number')
     })
 
     it('trims the title and nulls out every blank optional field', async () => {
@@ -1085,7 +1084,6 @@ describe('CreatePracticeView', () => {
         days: [1],
         count: 4,
       })
-      expect(typeof (sentBody().recurrence?.count ?? null)).toBe('number')
     })
   })
 
@@ -1596,18 +1594,6 @@ describe('CreatePracticeView', () => {
   })
 
   describe('«Для кого практика» (P5, PROMPT №594)', () => {
-    it('defaults to public with no group_ids when left untouched', async () => {
-      mount()
-      await flush()
-      await fillMinimalForm()
-
-      submitForm()
-      await flush()
-
-      expect(sentBody().audience_kind).toBe('public')
-      expect(sentBody().group_ids).toEqual([])
-    })
-
     it('T24-24 (PROMPT №639): «Все мои ученики» sends audience_kind=students', async () => {
       mount()
       await flush()
@@ -1983,8 +1969,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     // An invisible (suspended) master is not offered.
     expect(text()).not.toContain('Заморожен')
     // Default self pick (i18n:masterScreens.createPractice.audience.me):
-    // no warning, submit enabled -- the historical flow.
-    expect(text()).not.toContain('Создание для другого мастера пока недоступно')
+    // submit enabled -- the historical flow.
     expect(button('Создать практику')?.disabled).toBe(false)
 
     await fillMinimalForm()

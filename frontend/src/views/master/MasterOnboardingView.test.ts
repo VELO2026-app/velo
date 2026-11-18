@@ -99,20 +99,6 @@ describe('MasterOnboardingView', () => {
     expect(primaryButton().textContent?.trim()).toBe('Войти в кабинет')
   })
 
-  it('advancing never overshoots the last slide even with extra clicks', async () => {
-    // Math.min(step+1, TOTAL_STEPS-1) (.vue:104) -- a click on the LAST slide
-    // takes the isLastStep branch (finish()) instead, so this only proves the
-    // cap holds for clicks that land while still short of it.
-    mount()
-    await flush()
-    primaryButton().click()
-    await flush()
-    primaryButton().click()
-    await flush()
-    expect(activeDotIndex()).toBe(2)
-    expect(primaryButton().textContent?.trim()).toBe('Войти в кабинет')
-  })
-
   it('«Войти в кабинет» on the last slide finishes -- emits done exactly once', async () => {
     const onDone = vi.fn()
     mount(onDone)

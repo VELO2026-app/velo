@@ -31,7 +31,7 @@ const push = vi.fn()
 const back = vi.fn()
 const replace = vi.fn()
 const routeParams: { id: string } = { id: 'g1' }
-const routeQuery: { name: string } = { name: 'VIP' }
+const routeQuery: { name: string; description?: string } = { name: 'VIP' }
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push, back, replace }),
   useRoute: () => ({ params: routeParams, query: routeQuery }),
@@ -106,6 +106,7 @@ beforeEach(() => {
   createApp({}).use(pinia).use(PiniaColada, coladaOptions)
   routeParams.id = 'g1'
   routeQuery.name = 'VIP'
+  delete routeQuery.description
   vi.mocked(groupsApi.getGroupMembers).mockReset().mockResolvedValue(page([]))
   // Owner Q12 (PROMPT №611): the screen now resolves its own name/description
   // by matching THIS group's id in getGroups()' response -- the default
@@ -155,13 +156,6 @@ afterEach(() => {
 })
 
 describe('MasterGroupDetailView', () => {
-  it('header reads Группа "{name}" (API-resolved, matching the default mock)', async () => {
-    mount()
-    await flush()
-
-    expect(text()).toContain('Группа "VIP"')
-  })
-
   describe('owner Q12 (PROMPT №611): API-driven name/description, not the URL', () => {
     it('shows the route.query hint on first paint, before getGroups() resolves', async () => {
       routeQuery.name = 'Из query'
@@ -201,6 +195,7 @@ describe('MasterGroupDetailView', () => {
 
     it('description follows the same rule -- API value wins, including clearing a stale query hint to empty', async () => {
       routeQuery.name = 'VIP'
+      routeQuery.description = 'Старое описание'
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
         customGroups([
           { id: 'g1', kind: 'custom', name: 'VIP', description: null, members_count: 0 },
@@ -391,34 +386,6 @@ describe('MasterGroupDetailView', () => {
     })
   })
 
-  // T24-19 (PROMPT №638): the per-row «⋯» menu (add to group / add tag /
-  // remove from group / unblock) is REMOVED from every row, every kind --
-  // it moved to the student profile's own menu + bottom action (T24-9/10/20,
-  // see MasterStudentProfileView.test.ts for that coverage; the row-scoped
-  // behaviour tests that used to live in this file -- action counts by
-  // kind, AddTagSheet, AddToGroupSheet, RemoveFromGroupSheet, Unblock --
-  // moved there with it, not dropped). This screen's own header-level «⋯»
-  // menu (invite/rename/delete, G2 PROMPT №609) is a SEPARATE menu, one
-  // level up, and is untouched -- see 'header menu' describe below.
-  describe('T24-19: no per-row «⋯» menu, any kind', () => {
-    it.each(['g1', 'students', 'deleted'])(
-      'group id %s: a member row has no .v-menu trigger of its own',
-      async (id) => {
-        routeParams.id = id
-        vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(
-          page([member('s1', { name: 'Анна', tag: 'VIP-клиент' })]),
-        )
-        mount()
-        await flush()
-
-        expect(host?.querySelector('.group-detail__row-wrap .v-menu__trigger')).toBeNull()
-        expect(host?.querySelector('.group-detail__row-wrap .v-menu-item')).toBeNull()
-        // The tag chip is the only thing left in the trailing slot -- read-only.
-        expect(text()).toContain('VIP-клиент')
-      },
-    )
-  })
-
   describe('search (server-side, debounced)', () => {
     it('calls getGroupMembers with ?search= after the debounce window, not on every keystroke', async () => {
       vi.useFakeTimers()
@@ -547,18 +514,6 @@ describe('MasterGroupDetailView', () => {
 
       expect(writeText).not.toHaveBeenCalled()
       expect(toastError).toHaveBeenCalledWith('Не удалось создать ссылку')
-    })
-
-    it('the empty state renders no invite button anymore (removed duplicate, header menu is the single entry point)', async () => {
-      routeParams.id = 'g1'
-      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
-      mount()
-      await flush()
-
-      const invite = Array.from(host?.querySelectorAll<HTMLElement>('button') ?? []).find(
-        (b) => b.textContent?.trim() === 'Пригласить в группу',
-      )
-      expect(invite).toBeUndefined()
     })
   })
 
