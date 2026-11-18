@@ -11,7 +11,7 @@ import { mixHex } from './noise'
 export { fnv1a, mulberry32, schoolHashFromName } from './hash'
 export { PALETTES, type Palette } from './palettes'
 export { generateParams, type SchoolBrandingParams }
-export { mandalaGroup, mandalaSvg } from './mandala'
+export { mandalaGroup } from './mandala'
 export { logoSvg, type LogoOptions } from './logo'
 export { bannerSvg, type BannerSvgOptions } from './banner'
 
@@ -24,14 +24,6 @@ export function brandingParams(hash: string): SchoolBrandingParams {
   const fresh = generateParams(hash)
   paramsCache.set(hash, fresh)
   return fresh
-}
-
-/** The first letter of the name for the monogram (as in the prototype:
- *  quotes stripped). */
-export function schoolLetter(name: string): string {
-  // U+0428 (Cyrillic Sha) -- golden-port fallback (see logo.ts); no live
-  // caller relies on it.
-  return (name.replace(/^["«'«]*/, '')[0] || 'Ш').toUpperCase()
 }
 
 /**

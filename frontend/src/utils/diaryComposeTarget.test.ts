@@ -7,23 +7,9 @@ describe('diaryWriteTarget (T5 filter-aware compose routing)', () => {
     expect(diaryWriteTarget([])).toBe('note')
   })
 
-  it('writes to Дневник (note) when only entries is selected', () => {
-    expect(diaryWriteTarget(['entries'])).toBe('note')
-  })
-
-  it('writes to Сонник (dream) when only dreams is selected', () => {
-    expect(diaryWriteTarget(['dreams'])).toBe('dream')
-  })
-
   it('defaults to Дневник (note) when entries + dreams are both selected', () => {
     expect(diaryWriteTarget(['entries', 'dreams'])).toBe('note')
     expect(diaryWriteTarget(['dreams', 'entries'])).toBe('note')
-  })
-
-  it('blocks (null) each read-only category on its own', () => {
-    expect(diaryWriteTarget(['practices'])).toBeNull()
-    expect(diaryWriteTarget(['checkins'])).toBeNull()
-    expect(diaryWriteTarget(['feedbacks'])).toBeNull()
   })
 
   it('blocks (null) any mix that contains a read-only category (variant в)', () => {

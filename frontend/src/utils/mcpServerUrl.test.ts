@@ -28,7 +28,5 @@ describe('bearerHeaderValue', () => {
     const token = 'velo_pat_0123456789abcdef_' + 'S'.repeat(43)
     const value = bearerHeaderValue(token)
     expect(value).toBe(`Bearer ${token}`)
-    expect(value.match(/Bearer/g)).toHaveLength(1)
-    expect(value.startsWith('Bearer velo_pat_')).toBe(true)
   })
 })

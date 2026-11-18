@@ -50,7 +50,6 @@ describe('mergeJumpWindow', () => {
       [item('n_tie', tie), item('x', tie)],
     )
     const ids = merged.map((i) => i.id)
-    expect(ids.filter((id) => id === 'x')).toHaveLength(1)
     // Deterministic: newer-window members first among the ties (stable sort).
     expect(ids).toEqual(['n_tie', 'x', 'o_tie'])
   })

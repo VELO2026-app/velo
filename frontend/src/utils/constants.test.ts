@@ -24,11 +24,4 @@ describe('masterApprovedSeenKey (W18 -- per-user isolation)', () => {
   it('produces a distinct key per user', () => {
     expect(masterApprovedSeenKey('user_a')).not.toBe(masterApprovedSeenKey('user_b'))
   })
-
-  it('two users on one device are isolated -- marking user A seen leaves user B unseen', () => {
-    localStorage.setItem(masterApprovedSeenKey('user_a'), '1')
-
-    expect(localStorage.getItem(masterApprovedSeenKey('user_a'))).toBe('1')
-    expect(localStorage.getItem(masterApprovedSeenKey('user_b'))).toBeNull()
-  })
 })

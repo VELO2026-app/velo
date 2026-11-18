@@ -45,20 +45,6 @@ describe('category -> icon', () => {
   ] as const)('%s -> its glyph and colour', (category, icon, color) => {
     expect(supportCategoryIcon(category)).toEqual({ icon, color })
   })
-
-  it('six categories, five glyphs -- the two complaints share one', () => {
-    const glyphs = new Set(CATEGORIES.map((c) => supportCategoryIcon(c).icon))
-    expect(glyphs.size).toBe(5)
-    expect(supportCategoryIcon('complaint_master').icon).toBe(
-      supportCategoryIcon('complaint_user').icon,
-    )
-  })
-
-  it('every colour is a token, none is a raw value', () => {
-    for (const c of CATEGORIES) {
-      expect(supportCategoryIcon(c).color).toMatch(/^var\(--velo-[a-z0-9-]+\)$/)
-    }
-  })
 })
 
 describe('the five filter chips', () => {

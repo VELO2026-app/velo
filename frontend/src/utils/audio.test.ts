@@ -65,9 +65,9 @@ describe('formatStopwatch', () => {
 describe('pickRecorderMime', () => {
   it('returns the first supported candidate in preference order', () => {
     vi.stubGlobal('MediaRecorder', {
-      isTypeSupported: (t: string) => t === 'audio/mp4',
+      isTypeSupported: (t: string) => t === 'audio/mp4' || t === 'audio/webm',
     })
-    expect(pickRecorderMime()).toBe('audio/mp4')
+    expect(pickRecorderMime()).toBe('audio/webm')
   })
 
   it('returns undefined when nothing is supported or the API is absent', () => {

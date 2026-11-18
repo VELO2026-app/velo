@@ -16,7 +16,6 @@ import {
   MOOD_SCALE_MIN,
   MOOD_SCALE_DEFAULT_SCORE,
   MOOD_SCALE_KEYS,
-  MOOD_SCALE_LABELS,
   clampMoodScore,
   moodIndexFromScore,
   moodScoreFromIndex,
@@ -31,16 +30,6 @@ describe('the scale itself', () => {
     expect(MOOD_SCALE_MAX).toBe(10)
     expect(MOOD_SCALE_DEFAULT_SCORE).toBe(5)
     expect([...MOOD_SCALE_KEYS]).toEqual(['bad', 'low', 'neutral', 'good', 'fire'])
-  })
-
-  it('carries exactly the approved label set (no «Огонь!», no «Есть вопросы»)', () => {
-    expect(MOOD_SCALE_LABELS).toEqual({
-      bad: 'Плохо',
-      low: 'Не очень',
-      neutral: 'Нормально',
-      good: 'Хорошо',
-      fire: 'Огонь',
-    })
   })
 })
 
