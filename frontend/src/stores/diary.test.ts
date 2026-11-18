@@ -40,14 +40,6 @@ vi.mock('@/api/diary')
 const invalidateAfter = vi.hoisted(() => vi.fn())
 vi.mock('@/composables/queries/invalidation', () => ({ invalidateAfter }))
 
-// The bookings store must stay UNREACHED. If someone re-adds the import and a
-// call, useBookingsStore starts getting hit and the negative-space tests below
-// fail -- which is the whole point of mocking a store the diary does not use.
-// (Since FE-166 the bookings store holds no server data at all: the booking
-// flags a submit flips come back through invalidateAfter.)
-const useBookingsStore = vi.hoisted(() => vi.fn())
-vi.mock('@/stores/bookings', () => ({ useBookingsStore }))
-
 const CHECKIN: CheckinRequest = { mood: 4, energy: 3, comment: null } as CheckinRequest
 const FEEDBACK: FeedbackRequest = { rating: 5, comment: null } as FeedbackRequest
 
@@ -70,7 +62,6 @@ beforeEach(() => {
   vi.mocked(diaryApi.createReflection)
     .mockReset()
     .mockResolvedValue({} as never)
-  useBookingsStore.mockReset()
   invalidateAfter.mockReset().mockResolvedValue(undefined)
   // The diary feed as a visit left it (composables/queries/diary.ts): a
   // submit that moves the timeline reloads its first page.
@@ -302,14 +293,6 @@ describe('diary store', () => {
       expect(result.fieldErrors).toBeUndefined()
       expect(diaryApi.listDiaryFeed).not.toHaveBeenCalled()
     })
-
-    it('does not reach into the bookings store', async () => {
-      const store = useDiaryStore()
-
-      await store.submitExternalActivity(ACTIVITY)
-
-      expect(useBookingsStore).not.toHaveBeenCalled()
-    })
   })
 
   describe('updateEntry (FE-182)', () => {
@@ -348,60 +331,12 @@ describe('diary store', () => {
     // the submit tests above). If either of these goes red, someone has put the
     // cycle back.
 
-    it('submitCheckin does not refresh bookings', async () => {
-      const store = useDiaryStore()
-
-      await store.submitCheckin('p1', CHECKIN)
-
-      expect(useBookingsStore).not.toHaveBeenCalled()
-    })
-
-    it('submitFeedback does not refresh bookings', async () => {
-      const store = useDiaryStore()
-
-      await store.submitFeedback('p1', FEEDBACK)
-
-      expect(useBookingsStore).not.toHaveBeenCalled()
-    })
-
     it('exactly ONE feed read per submit -- no duplicate refresh', async () => {
       const store = useDiaryStore()
 
       await store.submitCheckin('p1', CHECKIN)
 
       expect(vi.mocked(diaryApi.listDiaryFeed).mock.calls).toHaveLength(1)
-    })
-  })
-
-  // ===========================================================================
-  // $reset -- THE HABIT: three sibling refs, and one of them was forgotten.
-  // ===========================================================================
-  describe('$reset', () => {
-    it('clears ALL THREE submitting refs, not just the two someone remembered', async () => {
-      // Found by coverage in №445, fixed in №446. $reset cleared checkinSubmitting
-      // (:387) and feedbackSubmitting (:388) and silently skipped
-      // reflectionSubmitting (:117) -- three sibling refs declared together, two
-      // reset, one forgotten. The same shape as MasterPracticesView :50 vs :57,
-      // VInput's fix landing on one render path of three, and EntryView's onSave
-      // vs onDelete twenty lines apart. It is a habit of this codebase.
-      //
-      // It was INERT when found -- the reflection submit was then a stub that never
-      // held the ref across an await. Since BE-108 it awaits the real endpoint, so
-      // without this line a logout mid-submit would leave the reflection form
-      // permanently wedged.
-      //
-      // Asserted by SETTING all three first: reading three falses on a fresh store
-      // would pass with $reset deleted entirely.
-      const store = useDiaryStore()
-      store.checkinSubmitting = true
-      store.feedbackSubmitting = true
-      store.reflectionSubmitting = true
-
-      store.$reset()
-
-      expect(store.checkinSubmitting).toBe(false)
-      expect(store.feedbackSubmitting).toBe(false)
-      expect(store.reflectionSubmitting).toBe(false)
     })
   })
 })

@@ -349,17 +349,27 @@ describe('ChatThreadScreen', () => {
   })
 
   it('a poll that already carries the just-delivered message does not render it twice', async () => {
-    vi.mocked(chatsApi.sendChatMessage).mockResolvedValueOnce(
-      msg({ id: 'm-9', sender: MY_ID, body: 'одно' }),
-    )
+    // The delivered send waits in the queue behind an earlier failed one, so
+    // it is still a pending row when the poll brings the same message in.
+    vi.useFakeTimers()
+    const delivered = msg({ id: 'm-9', sender: MY_ID, body: 'второе' })
+    vi.mocked(chatsApi.sendChatMessage)
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValueOnce(delivered)
     mount()
-    await flush()
-    await type('одно')
+    await vi.advanceTimersByTimeAsync(0)
+    await type('первое')
     sendBtn().click()
-    await flush()
+    await vi.advanceTimersByTimeAsync(0)
+    await type('второе')
+    sendBtn().click()
+    await vi.advanceTimersByTimeAsync(0)
 
-    expect(bodies()).toEqual(['одно'])
-    expect(host?.querySelectorAll('[data-testid="bubble-mine"]')).toHaveLength(1)
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([delivered]))
+    await vi.advanceTimersByTimeAsync(12_000)
+
+    expect(bodies().filter((b) => b === 'второе')).toHaveLength(1)
+    expect(host?.querySelectorAll('[data-state="failed"]')).toHaveLength(1)
   })
 
   // PROMPT №740 (track 2, B48) used to make the send control ABSENT while
@@ -762,14 +772,12 @@ describe('ChatThreadScreen', () => {
     await vi.advanceTimersByTimeAsync(117_000) // t=120s: the lease is spent
     expect(vi.mocked(chatsApi.listChatMessages).mock.calls.length).toBeGreaterThan(20)
 
-    const fastCount = vi.mocked(chatsApi.listChatMessages).mock.calls.length
     vi.mocked(chatsApi.listChatMessages).mockClear()
     // ...then the plain 12s cadence takes over.
     await vi.advanceTimersByTimeAsync(11_999)
     expect(chatsApi.listChatMessages).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(chatsApi.listChatMessages).toHaveBeenCalledTimes(1)
-    expect(fastCount).toBeGreaterThan(0)
   })
 
   it('BE-166: a hidden screen parks the re-read loop; visibility re-kicks it', async () => {

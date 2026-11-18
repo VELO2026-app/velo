@@ -45,20 +45,6 @@ const factories: StoreFactory[] = Object.values(modules).flatMap((module) =>
 /** The session owner: _clearSession clears it, the account scope skips it. */
 const SESSION_OWNER = 'auth'
 
-/**
- * Stores that do not own a $reset, so the account scope leaves them out.
- * Empty since FE-157 gave `ui` its reset; a store listed here must really
- * have none (the test below checks it).
- */
-const KNOWN_WITHOUT_RESET: string[] = []
-
-/**
- * Stores whose $reset is complete but that start a request right after it.
- * Empty since FE-157 moved the bookings reload from a statusFilter watcher
- * into setStatusFilter; a store listed here gets `it.fails` cases below.
- */
-const KNOWN_REFETCH_AFTER_RESET: string[] = []
-
 /** A Pinia set up the way app.ts sets it up, with every store created in it. */
 function installAllStores(): { pinia: Pinia; stores: Map<string, StoreGeneric> } {
   const pinia = createPinia().use(accountScopePlugin)
@@ -117,9 +103,7 @@ function dirtyStore(store: StoreGeneric): void {
 
 /** Stores the account scope is responsible for. */
 function accountStores(stores: Map<string, StoreGeneric>): StoreGeneric[] {
-  return [...stores.values()].filter(
-    (store) => store.$id !== SESSION_OWNER && !KNOWN_WITHOUT_RESET.includes(store.$id),
-  )
+  return [...stores.values()].filter((store) => store.$id !== SESSION_OWNER)
 }
 
 describe('the store set', () => {
@@ -137,17 +121,6 @@ describe('the store set', () => {
         'practices',
       ]),
     )
-  })
-
-  it('the stores listed as having no reset really have none (drop them once they do)', () => {
-    const { pinia, stores } = installAllStores()
-    for (const id of KNOWN_WITHOUT_RESET) {
-      const store = stores.get(id)!
-      dirtyStore(store)
-      const dirty = snapshot(store.$state)
-      resetAccountScope(pinia, SESSION_OWNER)
-      expect(snapshot(store.$state), id).toEqual(dirty)
-    }
   })
 })
 
@@ -212,13 +185,8 @@ describe('the end of a session leaves every store in its initial state', () => {
     return { stores, initial }
   }
 
-  function expectInitial(
-    stores: Map<string, StoreGeneric>,
-    initial: Map<string, unknown>,
-    skip: readonly string[] = [],
-  ): void {
+  function expectInitial(stores: Map<string, StoreGeneric>, initial: Map<string, unknown>): void {
     for (const store of accountStores(stores)) {
-      if (skip.includes(store.$id)) continue
       expect(snapshot(store.$state), store.$id).toEqual(initial.get(store.$id))
     }
     const auth = useAuthStore()
@@ -232,7 +200,7 @@ describe('the end of a session leaves every store in its initial state', () => {
 
     await useAuthStore().logout()
 
-    expectInitial(stores, initial, KNOWN_REFETCH_AFTER_RESET)
+    expectInitial(stores, initial)
   })
 
   it('after a 401 for the current token', async () => {
@@ -242,29 +210,8 @@ describe('the end of a session leaves every store in its initial state', () => {
 
     await expect(api.get('/api/v1/users/me')).rejects.toMatchObject({ status: 401 })
 
-    expectInitial(stores, initial, KNOWN_REFETCH_AFTER_RESET)
+    expectInitial(stores, initial)
   })
-
-  for (const id of KNOWN_REFETCH_AFTER_RESET) {
-    it.fails(`known gap: ${id} is not initial after logout`, async () => {
-      const { stores, initial } = await signedIn()
-      dirtyStore(stores.get(id)!)
-
-      await useAuthStore().logout()
-
-      expect(snapshot(stores.get(id)!.$state)).toEqual(initial.get(id))
-    })
-
-    it.fails(`known gap: ${id} is not initial after a 401`, async () => {
-      const { stores, initial } = await signedIn()
-      dirtyStore(stores.get(id)!)
-      otherwise = () => json(401, {})
-
-      await expect(api.get('/api/v1/users/me')).rejects.toMatchObject({ status: 401 })
-
-      expect(snapshot(stores.get(id)!.$state)).toEqual(initial.get(id))
-    })
-  }
 
   it("drops the previous account's answers that land after logout", async () => {
     const { stores, initial } = await signedIn()

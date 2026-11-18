@@ -47,12 +47,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      # The machine pinned by its release, as its README has it: the tag, the
-      # sha256 of its wheel and of requirements.lock at the tag (BE-194, the
-      # machine's first release v0.1.0, DM-103). Not the final pin: the
-      # release velo-test is installed with is named by Primer separately.
-      PRIDEM_TAG: v0.1.0
-      PRIDEM_WHEEL_SHA256: "daf26ee4b85b4d6ca253b8691bd0efa29b8f0cdf3508a10af032f19c0e4c2e0e"
+      # The machine for velo-test: the final pin (Primer's letter 17.11),
+      # release v0.1.2 by its README's recipe -- the tag, the sha256 of its
+      # wheel and of requirements.lock at the tag.
+      PRIDEM_TAG: v0.1.2
+      PRIDEM_WHEEL_SHA256: "37b8e91f85d579d0f279736cf99811a74a8ef75ba7e16423eb018a4188c46032"
       PRIDEM_LOCK_SHA256: "8c3a137cab01cdff7044b3caa1af3ad0d82b45e7df2917993a2d4338f243b85e"
     steps:
       - uses: actions/checkout@v4

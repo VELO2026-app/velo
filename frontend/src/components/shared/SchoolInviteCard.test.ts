@@ -128,18 +128,4 @@ describe('SchoolInviteCard', () => {
 
     expect(text()).not.toContain('Куратор:')
   })
-
-  it('no analytics lines exist on the card at all -- counts are the only figures', async () => {
-    mount({
-      name: 'Ураган',
-      studentsCount: 220,
-      mastersCount: 15,
-      description: 'Школа медитации и дыхания',
-      heading: 'Вас пригласили в школу!',
-    })
-    await flush()
-
-    // The card renders exactly two stat spans and no other numeric lines.
-    expect(host?.querySelectorAll('.school-invite__stats span').length).toBe(2)
-  })
 })

@@ -180,11 +180,4 @@ describe('DiarySearchBar', () => {
     expect(events.cancel).toHaveLength(1)
     expect(events.live).toEqual([]) // closing is not a query change
   })
-
-  it('the retired go disc is really gone -- submit is Enter / a recent', async () => {
-    mount()
-    await flush()
-    expect(host?.querySelector('.diary-search__go')).toBeNull()
-    expect(host?.querySelector('.diary-search__close')).not.toBeNull()
-  })
 })

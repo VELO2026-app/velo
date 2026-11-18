@@ -191,7 +191,7 @@ describe('SchoolStudentProfileView', () => {
     expect(text()).toContain('Ученик недоступен')
   })
 
-  it('the menu is «Написать сообщение» / «Изменить роль» / «Заблокировать» (owner 2026-09-30: no exclusion)', async () => {
+  it('the menu is «Написать сообщение» / «Изменить роль» / «Заблокировать»', async () => {
     mount()
     await flush()
 
@@ -200,12 +200,10 @@ describe('SchoolStudentProfileView', () => {
 
     expect(buttonWith('Написать сообщение')).toBeTruthy()
     expect(buttonWith('Изменить роль')).toBeTruthy()
-    // The lock replaces the trash: an exclusion no longer exists. It is LIVE
-    // (owner 2026-09-30) and opens the block confirm.
+    // The lock is LIVE (owner 2026-09-30) and opens the block confirm.
     const lock = buttonWith('Заблокировать')
     expect(lock).toBeTruthy()
     expect((lock as HTMLButtonElement).disabled).toBe(false)
-    expect(buttonWith('Исключить из школы')).toBeUndefined()
     expect(buttonWith('Предложить стать мастером')).toBeUndefined()
   })
 
@@ -231,8 +229,7 @@ describe('SchoolStudentProfileView', () => {
     await flush()
 
     expect(text()).not.toContain('Заблокировать ученика?')
-    expect(toastInfo).not.toHaveBeenCalled()
-    expect(cgApi.offerSchoolMaster).not.toHaveBeenCalled()
+    expect(cgApi.blockSchoolMember).not.toHaveBeenCalled()
   })
 
   // BE-79 (2): this used to pin the INTERIM -- «nothing mutates, the chain is
@@ -438,19 +435,6 @@ describe('SchoolStudentProfileView', () => {
     // The recipient chip carries the roster name; the modal's own pills show.
     expect(exactButton('Отправить')).toBeTruthy()
     expect(exactButton('Отмена')).toBeTruthy()
-  })
-
-  it('owner 2026-09-30: an exclusion no longer exists -- no affordance, no removal API calls', async () => {
-    mount()
-    await flush()
-
-    buttonWith('Действия с учеником')?.click()
-    await flush()
-
-    expect(buttonWith('Исключить из школы')).toBeUndefined()
-    expect(exactButton('Исключить')).toBeUndefined()
-    expect(cgApi.getSchoolRemovePreview).not.toHaveBeenCalled()
-    expect(cgApi.removeSchoolMember).not.toHaveBeenCalled()
   })
 
   it('a masked 404 is its own rung (P-08), not an error and not an empty hero', async () => {

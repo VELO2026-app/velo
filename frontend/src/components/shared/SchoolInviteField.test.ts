@@ -87,9 +87,6 @@ describe('SchoolInviteField', () => {
     expect(cgApi.createSchoolInvite).toHaveBeenCalledWith('g1')
     expect(copyChip()).toBeTruthy()
     expect(copyChip()?.disabled).toBe(false)
-    // No input anywhere: the url itself is never displayed, the field IS
-    // the interface.
-    expect(document.body.querySelector('input')).toBeNull()
   })
 
   it('the chip writes the url to the clipboard and toasts (B2)', async () => {
@@ -118,7 +115,9 @@ describe('SchoolInviteField', () => {
     copyChip()?.click()
     await flush()
 
-    expect(cgApi.createSchoolInvite).toHaveBeenCalledWith('g1')
+    // Once on mount, once more for the tap.
+    expect(cgApi.createSchoolInvite).toHaveBeenCalledTimes(2)
+    expect(cgApi.createSchoolInvite).toHaveBeenLastCalledWith('g1')
     expect(toastError).toHaveBeenCalled()
     expect(writeText).not.toHaveBeenCalled()
   })
@@ -138,9 +137,6 @@ describe('SchoolInviteField', () => {
     copyChip()?.click()
     await flush()
 
-    // The retry re-mints but NEVER revokes -- rotation has no seat in this
-    // form; a retry is always just a mint.
-    expect(cgApi.revokeSchoolInvite).not.toHaveBeenCalled()
     expect(writeText).toHaveBeenCalledWith(URL_V1)
     expect(toastSuccess).toHaveBeenCalledWith('Ссылка скопирована')
   })

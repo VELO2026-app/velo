@@ -10,8 +10,7 @@
 // THE FEED (`GET /diary/feed`) is a chat-like timeline: the API answers newest
 // first, `next_cursor` walks into the past, the screen draws the oldest entry
 // on top and loads more when the reader scrolls UP. In useInfiniteQuery terms
-// "up" is the NEXT page (older), rendered reversed (the ADR's prototype,
-// ./diary-infinite.prototype.test.ts). One entry per filter set.
+// "up" is the NEXT page (older), rendered reversed. One entry per filter set.
 //
 // Freshness, as in the store: the feed is read once per session and changes
 // on screen through this app's own mutations -- a note sent, edited, deleted,

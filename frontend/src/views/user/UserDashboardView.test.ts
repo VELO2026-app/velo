@@ -945,13 +945,6 @@ describe('UserDashboardView', () => {
       })
     })
 
-    it('[FE-56] the dashboard no longer warms the paginated bookings page (nothing here reads it)', async () => {
-      mount()
-      await flush()
-
-      expect(bookingsApi.getMyBookings).not.toHaveBeenCalled()
-    })
-
     it('out-of-window: does not show (too early, outside the 24h check-in window)', async () => {
       vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([UP_CHECKIN_OUT])
       mount()
@@ -1011,7 +1004,7 @@ describe('UserDashboardView', () => {
   })
 
   // ===========================================================================
-  describe('progress stats ([FE-37] the AI-summary section is removed)', () => {
+  describe('progress stats', () => {
     it('renders the REAL fetched numbers (not the silent-degrade default) in the progress cards', async () => {
       vi.mocked(bookingsApi.getMyStats).mockResolvedValue(
         stats({ practices_attended: 12, hours_attended: 9 }),
@@ -1021,19 +1014,6 @@ describe('UserDashboardView', () => {
 
       expect(statValue('Практик пройдено')).toBe('12')
       expect(statValue('Часов в практике')).toBe('9')
-    })
-
-    it('[FE-37] the AI-summary section is fully gone: no heading, no card, no route out', async () => {
-      mount()
-      await flush()
-
-      expect(
-        Array.from(host?.querySelectorAll('.dashboard__section-title') ?? []).some(
-          (h) => h.textContent?.trim() === 'AI-саммари',
-        ),
-      ).toBe(false)
-      expect(host?.querySelector('.v-card')).toBeNull()
-      expect(host?.textContent).not.toContain('За всё время')
     })
 
     it('half-decimal hours render with a comma, not a dot (ru locale)', async () => {

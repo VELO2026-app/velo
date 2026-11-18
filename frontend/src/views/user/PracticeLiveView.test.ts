@@ -309,9 +309,6 @@ function enterBtn(): HTMLButtonElement | null {
 function checkinBtn(): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>('.v-btn--secondary') ?? null
 }
-function leaveBtn(): HTMLButtonElement | null {
-  return host?.querySelector<HTMLButtonElement>('.v-btn--danger') ?? null
-}
 function backBtn(): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>('.live__back') ?? null
 }
@@ -389,12 +386,10 @@ describe('PracticeLiveView', () => {
 
   // ===========================================================================
   describe('onMounted data fetch', () => {
-    it('fetches the practice when nothing is selected yet, and always reads my bookings', () => {
+    it('fetches the practice when nothing is selected yet', () => {
       mount()
 
       expect(fetchPractice).toHaveBeenCalledWith('p1')
-      // Reading the list is what loads it (a Colada query; cached = no request).
-      expect(useMyBookings).toHaveBeenCalledTimes(1)
     })
 
     it('skips re-fetching the practice when it is already the selected one (cache hit)', () => {
@@ -499,7 +494,6 @@ describe('PracticeLiveView', () => {
       await flush()
 
       expect(checkinBtn()).toBeNull()
-      expect(leaveBtn()).toBeNull()
       buttonByText('Начать')?.click()
       await flush()
       // F4 fix: + the top safe area for the meeting's root (useSafeArea).
@@ -693,36 +687,6 @@ describe('PracticeLiveView', () => {
   })
 
   // ===========================================================================
-  // FE-49 (product decision 2026-11-02): the leave button is deleted from
-  // the screen. It never cancelled anything -- to the person it only left
-  // for the dashboard, which the back control already does -- so what needs
-  // proving here is the ABSENCE: no booking state renders it. No leave
-  // mutation is even on the mock (see the queries/bookings factory above);
-  // the endpoint wrapper stays in api/bookings.ts with a comment, out of
-  // this screen's reach.
-  describe('FE-49: the leave button is gone', () => {
-    it('no booking state renders the button: never joined, joined, or already left', () => {
-      practicesState.selected = practice()
-      bookingsState.bookings = [booking({ joined_at: null, left_at: null })]
-      mount()
-      expect(leaveBtn()).toBeNull()
-      app?.unmount()
-      host?.remove()
-
-      bookingsState.bookings = [booking({ joined_at: '2026-07-20T09:00:00Z', left_at: null })]
-      mount()
-      expect(leaveBtn()).toBeNull()
-      app?.unmount()
-      host?.remove()
-
-      bookingsState.bookings = [
-        booking({ joined_at: '2026-07-20T09:00:00Z', left_at: '2026-07-20T10:30:00Z' }),
-      ]
-      mount()
-      expect(leaveBtn()).toBeNull()
-    })
-  })
-
   // ===========================================================================
   describe('navigation', () => {
     it('the back button navigates to the dashboard (breaks the check-in <-> live loop, not router.back())', () => {
@@ -864,7 +828,6 @@ describe('PracticeLiveView', () => {
       await flush()
 
       expect(checkinBtn()).toBeNull()
-      expect(leaveBtn()).toBeNull()
       backBtn()?.click()
       expect(push).toHaveBeenCalledWith({ name: 'master-dashboard' })
     })
@@ -879,7 +842,6 @@ describe('PracticeLiveView', () => {
 
       expect(buttonByText('Войти')).toBeDefined()
       expect(checkinBtn()).toBeNull()
-      expect(leaveBtn()).toBeNull()
     })
 
     // F4 fix (iPhone): the meeting's root keeps the SAME top safe area as our

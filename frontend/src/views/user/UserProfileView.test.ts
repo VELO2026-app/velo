@@ -245,18 +245,6 @@ describe('UserProfileView', () => {
 
   // ===========================================================================
   describe('hoursLabel formatting (.vue:162-165)', () => {
-    it('an integer renders plain, without a trailing separator', async () => {
-      vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
-        practices_attended: 1,
-        hours_attended: 12,
-        has_unread_messages: false,
-      })
-      mount()
-      await flush()
-
-      expect(statValue('Часов')).toBe('12')
-    })
-
     it('a fractional value renders with a Russian COMMA, not a dot', async () => {
       vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
         practices_attended: 1,

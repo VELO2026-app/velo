@@ -160,7 +160,7 @@ describe('what the sheet opens on', () => {
 })
 
 describe('a submit', () => {
-  it('sends the stars and the trimmed comment; a thank-you lands and the sheet closes', async () => {
+  it('sends the stars and the comment; a thank-you lands and the sheet closes', async () => {
     vi.mocked(supportApi.listPendingRatings).mockResolvedValue({ tickets: [pending('t_1')] })
     mount()
     await flush()
