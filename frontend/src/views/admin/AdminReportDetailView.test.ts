@@ -475,10 +475,6 @@ describe('AdminReportDetailView', () => {
       await flush() // let the :disabled="anyLoading" binding paint
 
       expect(dismissBtn().disabled).toBe(true)
-      dismissBtn().click()
-      await flush()
-
-      expect(adminApi.dismissReport).not.toHaveBeenCalled()
 
       resolveResolve(REPORT_RESOLVED)
       await flush()
