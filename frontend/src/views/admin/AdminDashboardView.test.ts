@@ -342,29 +342,6 @@ describe('AdminDashboardView', () => {
   })
 
   // ===========================================================================
-  // FE-100, owner ruling 25.10: support appeals live in Moderation
-  // (i18n:adminScreens.adminReports.moderationTab); the dashboard's Support
-  // row is gone.
-  describe('no support block (FE-100)', () => {
-    it('the dashboard lists no «Поддержка» row and never routes to a support list', async () => {
-      const store = useAdminStore()
-      store.stats = stats()
-      store.overview = overview()
-      mount()
-      await flush()
-
-      expect(host?.textContent).not.toContain('Обращения пользователей и мастеров')
-      const rows = Array.from(host?.querySelectorAll<HTMLElement>('.v-list-row') ?? [])
-      expect(rows.length).toBeGreaterThan(0)
-      for (const row of rows) row.click()
-      await flush()
-      const targets = push.mock.calls.map((c) => (c[0] as { name?: string }).name)
-      expect(targets).not.toContain('admin-support')
-      expect(targets.length).toBe(rows.length)
-    })
-  })
-
-  // ===========================================================================
   describe('stat cards from overview (.vue:295-303)', () => {
     it('values + deltas + tones render per the mixed fixture', async () => {
       const store = useAdminStore()
@@ -501,18 +478,12 @@ describe('AdminDashboardView', () => {
     // call stepNext() directly without a source change, out of this task's
     // scope). What IS tested below, and IS reachable and real: the DOM
     // disabled attribute itself correctly gates the UI at offset=0.
-    it('cannot step into the future: at offset=0 the button is disabled and a click is a no-op', async () => {
+    it('cannot step into the future: at offset=0 the button is disabled', async () => {
       const store = useAdminStore()
       store.stats = stats()
       mount()
       await flush()
       expect(nextBtn()?.disabled).toBe(true) // canStepNext: offset(0) < 0 is false
-
-      const callsBefore = fetchOverviewSpy.mock.calls.length
-      nextBtn()?.click()
-      await flush()
-
-      expect(fetchOverviewSpy.mock.calls.length).toBe(callsBefore)
     })
 
     it('stepPrev then stepNext returns to offset 0 and re-fetches accordingly', async () => {

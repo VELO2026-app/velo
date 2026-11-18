@@ -23,13 +23,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { useDiaryCardModel } from '@/composables/useDiaryCardModel'
-import {
-  IconMessages,
-  IconPen,
-  IconDiaryBook,
-  IconDreamBook,
-  IconCalendarStar,
-} from '@/components/icons'
+import { IconMessages, IconDiaryBook, IconDreamBook, IconCalendarStar } from '@/components/icons'
 import type { DiaryFeedItem } from '@/api/types'
 
 // FE-70: the mood-visibility flag is read at CALL time by the model, so the
@@ -105,7 +99,6 @@ describe('useDiaryCardModel -- thread_started', () => {
     const m = model(item('thread_started', threadSnapshot()))
 
     expect(m.standardIcon.value).toBe(IconMessages)
-    expect(m.standardIcon.value).not.toBe(IconPen)
   })
 
   it('is not editable: it points at a conversation, not at a diary entry the user can rewrite', () => {

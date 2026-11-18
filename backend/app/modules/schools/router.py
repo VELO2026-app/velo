@@ -35,9 +35,8 @@ import structlog
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_db_reader, get_db_session
-from app.core.exceptions import NotFoundError
+from app.core.options import require_option
 from app.modules.auth.dependencies import (
     get_current_master,
     get_current_user,
@@ -138,55 +137,55 @@ from app.modules.users.models import User
 logger = structlog.get_logger()
 
 
-def _require_schools_enabled() -> None:
-    """The schools killswitch, checked ONCE PER ROUTER (GT-19).
-
-    Mounted as a router-level dependency on both routers in this module,
-    which is EVERY operation of the feature except one, in two lines. The
-    alternative -- the same `if` copied into each endpoint -- is one place
-    per endpoint to forget, and a forgotten one does not fail any test that
-    only checks the endpoints somebody remembered. The exception, the admin
-    list of schools, stays available deliberately; see the flag's own
-    comment in core/config.py.
-
-    NO COUNT HERE ON PURPOSE (BE-35). This paragraph used to say "23 of 24"
-    and "23 places to forget". It was true when written; five endpoints
-    arrived over two deliveries, the dependency picked up all five -- the
-    mechanism worked exactly as argued -- and only the illustration went
-    stale. A number maintained by hand beside a list maintained by the
-    framework is the part that rots, so there is no longer one to maintain.
-    The tests count instead, by deriving the list:
-    tests/test_schools_killswitch.py.
-
-    404, NOT 503, AND NO MACHINE CODE. A 503 announces that the feature
-    exists and is broken, which invites retries during the incident the
-    flag was pulled for; a dedicated code would become the one reliable
-    way to detect that the killswitch is down. To a client, schools simply
-    do not exist -- indistinguishable from a build that never had them.
-
-    RUNS BEFORE THE PATH DEPENDENCIES, and that is observable rather than
-    assumed: measured with a two-dependency FastAPI app before this was
-    written, the router dependency fired and the path dependency was never
-    called. The consequence matters for the tests -- with the flag off an
-    UNAUTHENTICATED caller gets 404, not 401/403, and so does a plain user
-    where get_current_master would otherwise answer 403. Any test
-    expecting 403 on these paths while the flag is off is wrong about the
-    layer, not about the code.
-
-    Reads settings directly, like the six other boolean toggles in this
-    codebase; there is no shared helper, because the audience side
-    (practices/audience_service.py) needs a SQL-shaped answer, not a
-    dependency, and one abstraction over two different shapes would fit
-    neither.
-    """
-    if not settings.schools_enabled:
-        raise NotFoundError("Not found")
+# THE SCHOOLS GATE -- require_option("schools") (app/core/options.py), the
+# passport's option since BE-182 (the killswitch settings.schools_enabled
+# before it). Why this shape, as argued when it was the killswitch:
+#
+# The gate is checked ONCE PER ROUTER (GT-19).
+#
+# Mounted as a router-level dependency on both routers in this module,
+# which is EVERY operation of the feature except one, in two lines. The
+# alternative -- the same `if` copied into each endpoint -- is one place
+# per endpoint to forget, and a forgotten one does not fail any test that
+# only checks the endpoints somebody remembered. The exception, the admin
+# list of schools, stays available deliberately; see the flag's own
+# comment in core/config.py.
+#
+# NO COUNT HERE ON PURPOSE (BE-35). This paragraph used to say "23 of 24"
+# and "23 places to forget". It was true when written; five endpoints
+# arrived over two deliveries, the dependency picked up all five -- the
+# mechanism worked exactly as argued -- and only the illustration went
+# stale. A number maintained by hand beside a list maintained by the
+# framework is the part that rots, so there is no longer one to maintain.
+# The tests count instead, by deriving the list:
+# tests/test_schools_killswitch.py.
+#
+# 404, NOT 503, AND NO MACHINE CODE. A 503 announces that the feature
+# exists and is broken, which invites retries during the incident the
+# flag was pulled for; a dedicated code would become the one reliable
+# way to detect that the killswitch is down. To a client, schools simply
+# do not exist -- indistinguishable from a build that never had them.
+#
+# RUNS BEFORE THE PATH DEPENDENCIES, and that is observable rather than
+# assumed: measured with a two-dependency FastAPI app before this was
+# written, the router dependency fired and the path dependency was never
+# called. The consequence matters for the tests -- with the flag off an
+# UNAUTHENTICATED caller gets 404, not 401/403, and so does a plain user
+# where get_current_master would otherwise answer 403. Any test
+# expecting 403 on these paths while the flag is off is wrong about the
+# layer, not about the code.
+#
+# Since BE-182 every option closes its endpoints with this one factory.
+# The audience side (practices/audience_service.py) still reads the flag
+# itself (settings.option_schools): it needs a SQL-shaped answer, not a
+# dependency.
+_require_schools = require_option("schools")
 
 
 router = APIRouter(
     prefix="/api/v1/masters",
     tags=["schools"],
-    dependencies=[Depends(_require_schools_enabled)],
+    dependencies=[Depends(_require_schools)],
 )
 
 
@@ -489,7 +488,7 @@ async def list_school_events_endpoint(
 # rule and for the journal's reason.
 #
 # The killswitch is not mentioned in either handler because it is already
-# on the router (_require_schools_enabled) -- with the flag off both
+# on the router (_require_schools) -- with the flag off both
 # paths are 404 before authentication is even attempted.
 # ===========================================================================
 
@@ -615,7 +614,7 @@ async def get_school_student_profile_endpoint(
     ROUTER. BE-43 added early returns inside two service functions, and
     the reason was that both were reached from OUTSIDE the two school
     routers; this endpoint is on one of them, so
-    _require_schools_enabled answers first and a second check would
+    _require_schools answers first and a second check would
     be a second place to keep true.
 
     Curator and every master of the school, same content for both (owner
@@ -1015,7 +1014,7 @@ async def delete_school_preview_endpoint(
 member_router = APIRouter(
     prefix="/api/v1/schools",
     tags=["schools"],
-    dependencies=[Depends(_require_schools_enabled)],
+    dependencies=[Depends(_require_schools)],
 )
 
 

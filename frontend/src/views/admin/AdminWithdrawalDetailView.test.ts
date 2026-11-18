@@ -373,11 +373,12 @@ describe('AdminWithdrawalDetailView', () => {
       await flush()
       await openConfirm()
 
+      // Same tick: the button has not repainted, so only the handler's
+      // `approving` guard can stop the second POST.
+      cpmApprove()?.click()
       cpmApprove()?.click()
       await nextTick()
       expect(cpmApprove()?.disabled).toBe(true)
-      cpmApprove()?.click()
-      await nextTick()
 
       expect(adminApi.approveWithdrawal).toHaveBeenCalledTimes(1)
 

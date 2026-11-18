@@ -62,6 +62,7 @@ import structlog
 from fastapi import HTTPException
 
 from app.core.config import settings
+from app.core.middleware import REQUEST_ID_HEADER, request_id_scope
 
 logger = structlog.get_logger()
 
@@ -216,6 +217,35 @@ async def comms_request(
 ) -> Any:
     """One request to the internal comms API; returns the parsed JSON body.
 
+    Every call carries X-Request-ID (protocol 9.6, BE-190): the id of the
+    request being served, or -- outside one (a background loop) -- a fresh
+    id bound for the call, so velo's lines about it and comms' lines share
+    it. The arguments and the outcome are those of _comms_request below.
+    """
+    with request_id_scope() as request_id:
+        return await _comms_request(
+            method,
+            path,
+            params=params,
+            json=json,
+            forward_403=forward_403,
+            idempotency_key=idempotency_key,
+            request_id=request_id,
+        )
+
+
+async def _comms_request(
+    method: str,
+    path: str,
+    *,
+    params: dict[str, Any] | None,
+    json: dict[str, Any] | None,
+    forward_403: bool,
+    idempotency_key: str | None,
+    request_id: str,
+) -> Any:
+    """One request to the internal comms API; returns the parsed JSON body.
+
     Args:
         method: HTTP method ("GET", "POST", "PATCH", "DELETE").
         path: API path starting with "/" (e.g.
@@ -230,6 +260,7 @@ async def comms_request(
             that needs it.
         idempotency_key: Sent as the Idempotency-Key header; required
             by comms on the two calls that create (module header).
+        request_id: Sent as the X-Request-ID header.
 
     Returns:
         The response body parsed as JSON.
@@ -247,7 +278,10 @@ async def comms_request(
         raise _UNAVAILABLE
 
     url = f"{base_url}{path}"
-    headers = {"Authorization": f"Bearer {settings.comms_service_token}"}
+    headers = {
+        "Authorization": f"Bearer {settings.comms_service_token}",
+        REQUEST_ID_HEADER: request_id,
+    }
     if idempotency_key is not None:
         headers[IDEMPOTENCY_HEADER] = idempotency_key
     timeout = httpx.Timeout(settings.comms_http_timeout_seconds)

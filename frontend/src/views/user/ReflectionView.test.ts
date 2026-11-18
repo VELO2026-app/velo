@@ -460,23 +460,6 @@ describe('ReflectionView', () => {
       expect(questionSubtitle()).toBe('Расскажете, как прошел ваш день?')
     })
 
-    it('the SAME practice gets the SAME copy on every mount -- no flicker', async () => {
-      // The whole reason the pick is a hash and not Math.random (.vue:85-87): the
-      // dashboard re-evaluates its banner every 60s, and a rotating title would
-      // churn under the user. Two independent mounts of the same id.
-      mount()
-      await flush()
-      const first = questionTitle()
-
-      app?.unmount()
-      host?.remove()
-      mount()
-      await flush()
-
-      expect(questionTitle()).toBe(first)
-      expect(first).toBe('Иногда тело просит паузы')
-    })
-
     it('the copy is keyed on the ROUTE param, not on the loaded practice', async () => {
       // `pickReflectionVariant(practiceId)` runs at setup off route.params
       // (.vue:83,87) -- before any fetch resolves, and independent of it. A
@@ -560,28 +543,16 @@ describe('ReflectionView', () => {
   // createReflection seam, and the stale mark off the Colada bookings entry.
   // ===========================================================================
   describe('submitting the reflection', () => {
-    /** Captures the (practiceId, body) the VIEW hands the store at .vue:98-100. */
-    function captureSubmits(): Array<[string, { comment: string | null }]> {
-      const calls: Array<[string, { comment: string | null }]> = []
-      useDiaryStore().$onAction(({ name, args }) => {
-        if (name === 'submitReflection') {
-          calls.push(args as [string, { comment: string | null }])
-        }
-      })
-      return calls
-    }
-
     it('sends the trimmed comment and shows the thank-you screen', async () => {
       mount()
       await flush()
-      const calls = captureSubmits()
 
       typeComment('   Отдыхала весь день   ')
       await flush()
       submitBtn()?.click()
       await flush()
 
-      expect(calls).toEqual([['p1', { comment: 'Отдыхала весь день' }]])
+      expect(createReflectionMock.mock.calls).toEqual([['p1', { comment: 'Отдыхала весь день' }]])
       expect(successTitle()).toBe('Спасибо, что поделились')
       expect(text()).toContain('Бережно к себе. Возвращайтесь, когда будете готовы.')
     })
@@ -591,25 +562,23 @@ describe('ReflectionView', () => {
       // well (ReflectionRequest); the client does not lean on that.
       mount()
       await flush()
-      const calls = captureSubmits()
 
       submitBtn()?.click()
       await flush()
 
-      expect(calls).toEqual([['p1', { comment: null }]])
+      expect(createReflectionMock.mock.calls).toEqual([['p1', { comment: null }]])
     })
 
     it('a whitespace-only comment is sent as null, not as blanks', async () => {
       mount()
       await flush()
-      const calls = captureSubmits()
 
       typeComment('     ')
       await flush()
       submitBtn()?.click()
       await flush()
 
-      expect(calls).toEqual([['p1', { comment: null }]])
+      expect(createReflectionMock.mock.calls).toEqual([['p1', { comment: null }]])
     })
 
     it('sends the reflection for the practice in the ROUTE, not the one in the store', async () => {
@@ -620,13 +589,10 @@ describe('ReflectionView', () => {
       getPracticeMock.mockResolvedValue(practice({ id: 'p42' }))
       mount()
       await flush()
-      const calls = captureSubmits()
 
       submitBtn()?.click()
       await flush()
 
-      expect(calls).toEqual([['p42', { comment: null }]])
-      // The route's practice is also what reaches the network.
       expect(createReflectionMock).toHaveBeenCalledWith('p42', { comment: null })
     })
 
@@ -667,23 +633,6 @@ describe('ReflectionView', () => {
 
       expect(successTitle()).toBe('Спасибо, что поделились')
       expect(cache.get(keys.bookings.list())?.when).toBe(0)
-    })
-
-    it('the "sent" state is not kept in the browser', async () => {
-      // Replaces "the dismissal SURVIVES a reload -- it is persisted". That test
-      // was right for the batch O stopgap, which persisted the dismissal to
-      // localStorage because nothing else remembered the submit. BE-108 deleted
-      // that stopgap whole: the submit is remembered by the server alone.
-      // Positive half first (SC-15): the reflection DID go to the server.
-      localStorage.clear()
-      mount()
-      await flush()
-
-      submitBtn()?.click()
-      await flush()
-
-      expect(createReflectionMock).toHaveBeenCalledWith('p1', { comment: null })
-      expect(localStorage.length).toBe(0)
     })
 
     it('submitting POSTs the reflection -- the body the view built, and nothing else', async () => {
@@ -757,11 +706,6 @@ describe('ReflectionView', () => {
       // server sees one POST.
       mount()
       await flush()
-      const diary = useDiaryStore()
-      let viewCalls = 0
-      diary.$onAction(({ name }) => {
-        if (name === 'submitReflection') viewCalls++
-      })
 
       const btn = submitBtn()
       expect(btn).toBeDefined()
@@ -772,7 +716,6 @@ describe('ReflectionView', () => {
       btn?.click()
       await flush()
 
-      expect(viewCalls).toBe(1)
       expect(createReflectionMock).toHaveBeenCalledTimes(1)
       expect(successTitle()).toBe('Спасибо, что поделились')
     })

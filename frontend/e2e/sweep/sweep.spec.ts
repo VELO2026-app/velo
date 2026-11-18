@@ -16,8 +16,6 @@ import { expect, test } from '../support/test'
 import { SESSION_TOKEN_KEY } from '../support/fixtures'
 import { SWEEP, fillPath, type SweepRole } from './routes'
 
-const params = readParams()
-
 /** Screens App.vue draws INSTEAD of the route (src/views/auth/). */
 const GATES = /^(splash|welcome|login)$/
 
@@ -36,9 +34,11 @@ for (const [name, entry] of Object.entries(SWEEP)) {
   if ('skip' in entry) continue
   for (const role of entry.roles) {
     // Titled by the route TEMPLATE: the values (an invite token minted per
-    // run) differ between the listing and the worker.
-    test(`[${role}] ${entry.path}`, { tag: `@${name}` }, async ({ page, crashes }) => {
-      const path = fillPath(entry, params)
+    // project of the run) differ between the listing and the worker, and
+    // between the projects -- so they are read inside the test, as the
+    // project that runs it sees them (FE-188).
+    test(`[${role}] ${entry.path}`, { tag: `@${name}` }, async ({ page, crashes }, testInfo) => {
+      const path = fillPath(entry, readParams(testInfo.project.name))
       // A missing value is a setup bug, not a reason to skip the screen.
       expect(path, `no value for a parameter of ${entry.path} in params.json`).not.toBeNull()
       for (const allowance of entry.allow?.(role) ?? []) crashes.allow(allowance)

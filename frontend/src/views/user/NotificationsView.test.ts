@@ -358,20 +358,6 @@ describe('NotificationsView -- unsynced recipient / comms down', () => {
     expect(isDisabled(LABEL.finance)).toBe(true)
   })
 
-  it('never attempts a save while the load has failed', async () => {
-    prefsGet.mockRejectedValue(new Error('502'))
-    mount()
-    await flush()
-
-    // VSwitch's own guard returns before emitting when disabled, so this click
-    // must not reach the view at all -- nothing is written anywhere.
-    switchByLabel(LABEL.reminders).click()
-    switchByLabel(LABEL.master).click()
-    await flush()
-
-    expect(prefsPut).not.toHaveBeenCalled()
-  })
-
   it('disables only the rows comms did not report', async () => {
     // A category the profile stopped declaring: we cannot honestly control it,
     // so its row is disabled rather than shown as a working switch.

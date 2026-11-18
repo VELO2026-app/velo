@@ -10,6 +10,7 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { globSync } from 'node:fs'
+import DurationSequencer from './vitest.sequencer'
 import { fileURLToPath, URL } from 'node:url'
 import { featureDefines } from './src/platform/features'
 import { skinVirtualModules } from './src/platform/skin-virtual'
@@ -72,12 +73,29 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       // FE-157 5A.1: .vue is in -- screens and components are most of the app.
-      include: ['src/**/*.{ts,vue}'],
-      exclude: ['src/**/*.test.ts', 'src/**/*.d.ts', 'src/main.ts'],
+      // FE-204: a shard (VITEST_SHARD set) reports only the files it loaded.
+      // With an include, every shard also reports each file it did NOT load,
+      // mapped from raw source, and those maps inflate the totals when merged
+      // with the shard that did load the file. The merge cannot add unloaded
+      // files back, so scripts/coverage-budget.mjs fails on any app file
+      // missing from the report.
+      include: process.env.VITEST_SHARD ? undefined : ['src/**/*.{ts,vue}'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/*.d.ts',
+        'src/main.ts',
+        // A shard has no include (above): keep it to the app's own code.
+        ...(process.env.VITEST_SHARD
+          ? ['**/*.{json,svg,css,png,webp,jpg,woff2,html}', 'scripts/**', 'e2e/**', '*.config.*']
+          : []),
+      ],
       // json-summary feeds scripts/coverage-budget.mjs (the ratchet gate).
       reporter: ['text-summary', 'json-summary'],
       reportsDirectory: 'coverage',
     },
+    // FE-204: `--shard=i/n` cuts by recorded duration, not by path hash
+    // (vitest.sequencer.ts). A plain run is unaffected.
+    sequence: { sequencer: DurationSequencer },
     // Two projects (FE-157 5C): the happy-dom environment cost 77 of 99 s.
     // Pure utils/platform tests need no DOM and run under plain node.
     projects: [

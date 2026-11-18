@@ -280,18 +280,16 @@ describe('useAuthStore', () => {
   })
 
   describe('logout', () => {
-    it('standalone: posts logout, clears session and every store, does NOT touch the Telegram gate', async () => {
+    it('standalone: posts logout, clears the session, does NOT touch the Telegram gate (store reset: session-reset.test.ts)', async () => {
       platformName = 'standalone'
       vi.mocked(api.post).mockResolvedValue(undefined)
       localStorage.setItem('velo_token', 'tok')
       const store = useAuthStore()
       store.token = 'tok'
       store.user = fakeUser()
-      fillAccountStores()
 
       await store.logout()
 
-      expectAccountStoresReset()
       expect(api.post).toHaveBeenCalledWith('/api/v1/auth/logout')
       expect(store.token).toBeNull()
       expect(store.user).toBeNull()
@@ -306,11 +304,9 @@ describe('useAuthStore', () => {
       const store = useAuthStore()
       store.token = 'tok'
       store.user = fakeUser()
-      fillAccountStores()
 
       await store.logout()
 
-      expectAccountStoresReset()
       expect(store.token).toBeNull()
       expect(platformClose).toHaveBeenCalledTimes(1)
     })

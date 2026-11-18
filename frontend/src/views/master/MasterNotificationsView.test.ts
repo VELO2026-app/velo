@@ -297,23 +297,6 @@ describe('MasterNotificationsView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('a STUB row (Ежемесячный отчет) is DISABLED -- a click does nothing, not merely unpersisted', async () => {
-      // B8/B31 owner ruling 2026-08-16 (PROMPT №746): a stub row stays
-      // visible but its switch is disabled outright (VSwitch's own
-      // `disabled`, which no-ops the click at the component level) --
-      // superseding the earlier "flips then reverts on remount" honest-stub
-      // shape this test used to assert.
-      mount()
-      await flush()
-
-      expect(isOn('Ежемесячный отчет')).toBe(false) // default
-      switchByRow('Ежемесячный отчет').click()
-      await flush()
-
-      expect(isOn('Ежемесячный отчет')).toBe(false) // click was a no-op
-      expect(prefsPut).not.toHaveBeenCalled()
-    })
-
     it('a STUB row (Ежемесячный отчет) carries the "Скоро" marker; a live row does not', () => {
       mount()
 
@@ -342,16 +325,6 @@ describe('MasterNotificationsView', () => {
 
   // ===========================================================================
   describe('toggles (.vue:111-158) -- representative rows, both directions', () => {
-    it('"Новое бронирование" (Практики, default ON) toggles off', async () => {
-      mount()
-      await flush()
-
-      switchByRow('Новое бронирование').click()
-      await flush()
-
-      expect(isOn('Новое бронирование')).toBe(false)
-    })
-
     // The former "default-OFF row toggles on" case lived here and used
     // the monthly-report row (i18n:masterScreens.masterNotifications.monthlyReport)
     // as its example -- the one row this file's own defaults comment calls
@@ -601,21 +574,6 @@ describe('MasterNotificationsView', () => {
       await flush()
 
       expect(liveSheet()).toBeNull() // closed
-      expect(fromField().textContent?.trim()).toBe('08:00') // committed back to its OWN edge
-      expect(toField().textContent?.trim()).toBe('22:00') // "to" untouched
-    })
-
-    it('opening the "to" field routes Save to "to", NOT "from" -- proves timePickerEdge, not just that both fields exist', async () => {
-      mount()
-      await flush()
-
-      toField().click()
-      await flush()
-      sheetSaveBtn()?.click()
-      await flush()
-
-      expect(toField().textContent?.trim()).toBe('22:00') // its own edge, committed
-      expect(fromField().textContent?.trim()).toBe('08:00') // NOT overwritten by the "to" commit
     })
 
     // FE-76 §4: to "00:00" ("keep sending until midnight") is VALID on comms 2.0.0

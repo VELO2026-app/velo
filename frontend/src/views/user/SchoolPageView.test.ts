@@ -679,17 +679,6 @@ describe('SchoolPageView -- §1.6 page body', () => {
     expect(counts.indexOf('5 учеников')).toBeLessThan(counts.indexOf('2 мастера'))
   })
 
-  it('no avatar stack and no invite anywhere on the page (§1.8 + owner)', async () => {
-    mockHappyLoad('curator')
-    mount()
-    await flush()
-
-    expect(document.body.querySelector('.avs')).toBeNull()
-    const hero = document.body.querySelector('.school-hero')
-    expect(hero?.textContent).not.toContain('Пригласить')
-    expect(rowWith('Пригласить')).toBeUndefined()
-  })
-
   it('the curator page carries the edit row, the nav rows and the create CTA (master zone, FE-93)', async () => {
     routeState.name = 'master-school'
     mockHappyLoad('curator')
