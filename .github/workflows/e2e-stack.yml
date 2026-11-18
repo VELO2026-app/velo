@@ -146,13 +146,18 @@ jobs:
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium ${{ contains(env.PROJECTS, 'webkit') && 'webkit' || '' }}
 
-      - name: Install the browser system libraries (cache hit)
-        if: steps.browser-cache.outputs.cache-hit == 'true'
+      # FE-204: Chromium's libraries ship with ubuntu-latest (Google Chrome);
+      # only WebKit (the nightly) needs the apt step on a cache hit. A
+      # missing library fails the browser launch, never passes silently.
+      - name: Install the WebKit system libraries (cache hit)
+        if: steps.browser-cache.outputs.cache-hit == 'true' && contains(env.PROJECTS, 'webkit')
         working-directory: frontend
-        run: pnpm exec playwright install-deps chromium ${{ contains(env.PROJECTS, 'webkit') && 'webkit' || '' }}
+        run: pnpm exec playwright install-deps webkit
 
+      # FE-204: vite only -- this job needs the dist. vue-tsc runs in the
+      # typecheck job and the skin validation in the build job.
       - name: Build the app (golden)
-        run: pnpm -C frontend build
+        run: pnpm -C frontend exec vite build
 
       - name: Sweep
         id: sweep
