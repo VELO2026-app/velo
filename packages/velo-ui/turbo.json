@@ -2,9 +2,17 @@
   "$schema": "https://turborepo.dev/schema.json",
   "extends": ["//"],
   "tasks": {
-    // .stylelintrc.json extends the frontend's one.
+    // .stylelintrc.json extends the frontend's one. The kit's eslint.config.js
+    // imports the test-lint rules and the allowlist from the frontend
+    // (frontend/eslint-rules/); eslint over the kit runs in the frontend's
+    // lint task, and listing the directory here keeps this task honest if the
+    // kit's own lint ever runs eslint.
     "lint": {
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/frontend/.stylelintrc.json"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/frontend/.stylelintrc.json",
+        "$TURBO_ROOT$/frontend/eslint-rules/**"
+      ]
     }
   }
 }
