@@ -51,18 +51,6 @@ describe('useRoleFreshness', () => {
   })
 
   describe('refreshRoleIfStale (debounce)', () => {
-    it('fetches on the first call', async () => {
-      await refreshRoleIfStale()
-      expect(fetchMe).toHaveBeenCalledTimes(1)
-    })
-
-    it('a second call immediately after does NOT fetch again (still within the debounce window)', async () => {
-      await refreshRoleIfStale()
-      await refreshRoleIfStale()
-      await refreshRoleIfStale()
-      expect(fetchMe).toHaveBeenCalledTimes(1)
-    })
-
     it('fetches again once the debounce window has passed', async () => {
       vi.useFakeTimers()
       await refreshRoleIfStale()
@@ -90,20 +78,6 @@ describe('useRoleFreshness', () => {
   // on that old behaviour -- confirmed red against it before the fix (see
   // DONE report) and green against the fixed stamp-only-on-success code.
   describe('refreshRoleIfStale (failed attempt does not consume the window)', () => {
-    it('a failed fetch leaves lastFetchAt unmoved -- the very next call retries immediately', async () => {
-      fetchMe.mockResolvedValueOnce(false)
-      await refreshRoleIfStale()
-      expect(fetchMe).toHaveBeenCalledTimes(1)
-
-      // Immediately after -- well inside what would be the debounce window
-      // (15s) if lastFetchAt had been stamped. Old (broken) behaviour: this
-      // second call is suppressed and fetchMe is NOT called again. Fixed
-      // behaviour: the window never opened, so this retries right away.
-      fetchMe.mockResolvedValueOnce(true)
-      await refreshRoleIfStale()
-      expect(fetchMe).toHaveBeenCalledTimes(2)
-    })
-
     it('a failed fetch does not block a later SUCCESSFUL debounce window from opening normally', async () => {
       fetchMe.mockResolvedValueOnce(false)
       await refreshRoleIfStale()

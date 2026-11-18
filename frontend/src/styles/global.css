@@ -152,8 +152,8 @@ html.is-keyboard-open .app-frame {
    measured (--velo-vv-offset, published from visualViewport.offsetTop) --
    this block finally USES it: while the keyboard is open, the three
    independent planes each translate DOWN by the pan, which is the exact
-   equivalent of the tested computeKeyboardBottomOffset formula
-   (frozenVh - (offsetTop + visibleHeight)) expressed as one transform:
+   equivalent of the formula frozenVh - (offsetTop + visibleHeight)
+   expressed as one transform:
 
      - #app             the foreground root: its (vvh-sized, see above) box
                         lands exactly in the visible window

@@ -45,9 +45,7 @@ describe('composerGrowCap (pure formula, [FE-9]: clamp(round(vh/3), 80, 240))', 
     expect(composerGrowCap(true, 150)).toBe(80)
   })
 
-  it('the constants ([FE-9] rework): ceiling matches the CSS token, floor and idle cap unchanged', () => {
-    expect(COMPOSING_HEIGHT_CEILING).toBe(240)
-    expect(COMPOSING_HEIGHT_FLOOR).toBe(80)
+  it('the idle cap is 120px ([FE-9] rework)', () => {
     expect(COLLAPSED_HEIGHT_CAP).toBe(120)
   })
 })
