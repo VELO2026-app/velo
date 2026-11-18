@@ -43,6 +43,15 @@ export const PARAM_KEYS = [
 /** A key of params.json. */
 export type ParamKey = (typeof PARAM_KEYS)[number]
 
+/**
+ * FE-188: the keys whose value belongs to one project of the run. A master
+ * invite is single-use (the screen claims it, the backend burns it), and
+ * `sweep` and `sweep-webkit` run in parallel from ONE setup: a shared token
+ * was spent by whichever project opened the screen first, and the other got
+ * 404. The setup mints one per project (e2e/stack/stack.setup.ts).
+ */
+export const PROJECT_PARAM_KEYS = ['masterInviteToken'] as const satisfies readonly ParamKey[]
+
 /** Who opens a screen. */
 export type SweepRole = 'student' | 'master' | 'admin' | 'cara' | 'ben'
 
@@ -251,8 +260,8 @@ export const SWEEP: Record<string, SweepRow> = {
   'master-apply': { path: '/master/apply', roles: ['cara'] },
   // A verified master sees the "approved, enter the workspace" state.
   'master-pending': { path: '/master/pending', roles: M },
-  // Claims the one-time token on mount (setup mints one per run), then
-  // replaces to the application form.
+  // Claims the one-time token on mount (setup mints one per project of the
+  // run, PROJECT_PARAM_KEYS), then replaces to the application form.
   'master-invite': {
     path: '/master/invite/:token',
     roles: ['cara'],

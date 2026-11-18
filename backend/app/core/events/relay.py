@@ -9,6 +9,7 @@
 #
 # WIRE (frozen comms contract, app/transport/events.py 3c):
 #   XADD <COMMS_EVENTS_STREAM> * event <name> data <UTF-8 JSON>
+#        request_id <id>                       (protocol 9.6, BE-190)
 # The stream name mirrors the comms consumer's default
 # (comms app/core/config.py:66 `comms_events_stream: str =
 # "comms:events"`); the consumer itself creates the consumer group
@@ -73,12 +74,15 @@ from app.core.events.models import (
     REDACTED_PAYLOAD,
     OutboxEvent,
 )
+from app.core.events.service import REQUEST_ID_KEY
+from app.core.middleware import new_request_id
 
 logger = structlog.get_logger()
 
 # Envelope field names (frozen contract mirror).
 _ENVELOPE_EVENT_FIELD = "event"
 _ENVELOPE_DATA_FIELD = "data"
+_ENVELOPE_REQUEST_ID_FIELD = "request_id"
 
 # Redis errors that mean "the pipe is down", not "this event is bad".
 _CONNECTION_ERRORS = (RedisConnectionError, RedisTimeoutError, OSError)
@@ -133,11 +137,13 @@ _CONNECTION_ERRORS = (RedisConnectionError, RedisTimeoutError, OSError)
 # BE-47: the advisory-lock key of the outbox relay. A NAMED constant, not a
 # literal at the call: any other pg_advisory_* lock on the same number in
 # this database would silence the relay for as long as it is held. The
-# number is this relay's alone. One other advisory lock exists in this
-# database since BE-134: the comms push listener's,
-# core/comms_listener.py _LISTENER_ADVISORY_LOCK_KEY (4_701_134_000_134);
-# none in the comms code (checked at BE-47). A new one picks another number
-# and says so here. Advisory locks are scoped to one database.
+# number is this relay's alone. Two other advisory locks exist in this
+# database: the comms push listener's since BE-134,
+# core/comms_listener.py _LISTENER_ADVISORY_LOCK_KEY (4_701_134_000_134),
+# and the admin roster lock since BE-202, users/service.py
+# ADMIN_ROSTER_LOCK_KEY (4_701_202_000_202); none in the comms code (checked
+# at BE-47). A new one picks another number and says so here. Advisory
+# locks are scoped to one database.
 _RELAY_ADVISORY_LOCK_KEY = 4_701_047_000_047
 
 # T-13 redaction pass. Its own slow cadence, deliberately unrelated to
@@ -160,10 +166,21 @@ _last_redaction_at: float | None = None
 
 
 def build_envelope(event: OutboxEvent) -> dict[str, str]:
-    """Assemble the wire envelope {event, data} for one outbox row."""
+    """Assemble the wire envelope {event, data, request_id} for one row.
+
+    BE-190: the request id the row was made in (REQUEST_ID_KEY of the
+    payload, core/events/service.py) is the envelope's `request_id` field,
+    next to `event` and `data` (protocol 9.6), and is taken out of `data`.
+    A row without one -- made before the key existed: the production
+    database moves to the machine with its outbox (migration plan, the
+    transfer) -- gets a fresh id here.
+    """
+    data = dict(event.payload)
+    request_id = data.pop(REQUEST_ID_KEY, None) or new_request_id()
     return {
         _ENVELOPE_EVENT_FIELD: event.event_type,
-        _ENVELOPE_DATA_FIELD: json.dumps(event.payload, ensure_ascii=False),
+        _ENVELOPE_DATA_FIELD: json.dumps(data, ensure_ascii=False),
+        _ENVELOPE_REQUEST_ID_FIELD: str(request_id),
     }
 
 
