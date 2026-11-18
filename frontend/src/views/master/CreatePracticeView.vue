@@ -18,8 +18,12 @@
   retry (master dashboard / practice screen), not a link that breaks
   attendance.
 
-  Submit: POST /api/v1/practices (status defaults to 'draft' in backend).
+  Submit: POST /api/v1/practices (status defaults to 'draft' in backend),
+  then PATCH status=scheduled to publish it.
   On success -> show toast + navigate to master-practices + myPracticesChanged().
+  FE-202: a failed publish after a successful POST is NOT a create failure.
+  The draft exists, so the form stops offering submit and shows a banner that
+  retries the publish alone or opens the draft -- never a second POST.
 
   Fixes:
     W-2: DURATION_OPTIONS / TIMEZONE_OPTIONS imported from @/utils/practiceOptions
@@ -384,8 +388,31 @@
         </div>
       </div>
 
+      <!-- FE-202: the create POST succeeded but the publish PATCH failed. The
+           practice already exists as a draft, so the submit button is replaced
+           by a publish retry and a way to the draft: a second submit would POST
+           a duplicate. -->
+      <Banner
+        v-if="unpublishedId"
+        variant="warning"
+        role="alert"
+        :title="t('masterScreens.createPractice.publishFailed.title')"
+        :body="t('masterScreens.createPractice.publishFailed.text')"
+      >
+        <template #body>
+          <div class="create-practice__draft-actions">
+            <VButton variant="secondary" size="sm" :loading="submitting" @click="retryPublish">{{
+              t('masterScreens.createPractice.publishFailed.publish')
+            }}</VButton>
+            <VButton variant="ghost" size="sm" @click="openUnpublishedDraft">{{
+              t('masterScreens.createPractice.publishFailed.openDraft')
+            }}</VButton>
+          </div>
+        </template>
+      </Banner>
+
       <!-- Submit -->
-      <VButton variant="primary" block size="lg" :loading="submitting" @click="submit">
+      <VButton v-else variant="primary" block size="lg" :loading="submitting" @click="submit">
         {{ t('masterScreens.createPractice.submit') }}
       </VButton>
     </div>
@@ -796,11 +823,19 @@ function applyTemplate(p: PracticeResponse): void {
   })
 }
 
+// -- Publish failed after a successful create (FE-202) --
+// The id of the practice the POST created while its publish PATCH failed. It
+// exists server-side as a draft, so the form must never POST again: the
+// submit button gives way to the publish-failed banner
+// (i18n:masterScreens.createPractice.publishFailed.title), which retries the
+// PATCH alone or opens the draft.
+const unpublishedId = ref<string | null>(null)
+
 // -- Submit --
 // FP-04: double-submit guard must come before validate() --
 // parallel clicks both pass validate() before guard fires.
 async function submit(): Promise<void> {
-  if (submitting.value) return
+  if (submitting.value || unpublishedId.value) return
   if (!validate()) {
     await revealFirstFieldError()
     return
@@ -817,11 +852,19 @@ async function submit(): Promise<void> {
   try {
     // FE-92: for another master the school is ALWAYS sent (the practice
     // belongs to it, with either of its two audiences), plus master_id.
-    const created = await createPractice(
-      targetsForeignMaster.value
-        ? { ...payload, school_id: contextSchoolId.value, master_id: targetMasterId.value }
-        : payload,
-    )
+    // FE-202: only a failed POST is a create failure; the publish below has
+    // its own error path, because by then the practice exists.
+    let created: PracticeResponse
+    try {
+      created = await createPractice(
+        targetsForeignMaster.value
+          ? { ...payload, school_id: contextSchoolId.value, master_id: targetMasterId.value }
+          : payload,
+      )
+    } catch (e) {
+      toast.error(practiceSaveErrorText(e, t('masterScreens.createPractice.toast.createFailed')))
+      return
+    }
 
     // A4 V6 (PROMPT №572): `deduplicated` is the EXPLICIT backend signal that
     // `created` is the master's own EARLIER submission (the window-scoped
@@ -866,36 +909,79 @@ async function submit(): Promise<void> {
     // draft→scheduled PATCH the edit screen uses, so the practice appears on the
     // dashboard's nearest-practice card
     // (i18n:masterScreens.masterDashboard.nearestOne; scheduled/live only)
-    // right away.
-    if (created.status !== 'scheduled') {
-      await updatePractice(created.id, { status: 'scheduled' })
-    }
+    // right away. A failed PATCH leaves the master on the form with the
+    // publish-failed banner (FE-202, see publishCreated).
+    if (created.status !== 'scheduled' && !(await publishCreated(created.id))) return
 
-    // Draft fulfilled — drop it (and block any late debounced save) so it can't
-    // resurrect on the next create. Runs only AFTER a successful publish: if
-    // the PATCH above throws, control never reaches here and the draft
-    // survives for a retry (see the catch block's failed-publish test).
-    finishDraft()
-
-    toast.success(t('masterScreens.createPractice.toast.created'))
-    // Redirect to the master's practices list — it defaults to the upcoming tab
-    // (i18n:masterScreens.masterPractices.tab.upcoming), and the practice we
-    // just published is status='scheduled', so
-    // it lands there. replace() (not push) so Back returns to the origin
-    // (practices / dashboard), not back onto this filled form (#1). Navigate
-    // BEFORE the refresh so a failing refresh can never divert to catch and strand
-    // the user on the form still showing the created toast copy
-    // (i18n:masterScreens.createPractice.toast.created) (G1).
-    void router.replace({ name: 'master-practices' })
-    // Invalidate the cached list so it reloads with the new practice. Fire-and-
-    // forget + swallow: master-practices loads its own list on mount, so a missed
-    // refresh is harmless and must not turn a successful create into an error path.
-    void myPracticesChanged(queryCache)
-  } catch (e) {
-    toast.error(practiceSaveErrorText(e, t('masterScreens.createPractice.toast.createFailed')))
+    leaveAfterPublish()
   } finally {
     submitting.value = false
   }
+}
+
+/**
+ * Publish the created practice: draft to scheduled.
+ *
+ * @returns Whether the PATCH succeeded. On failure the id is kept in
+ * unpublishedId and the error is toasted; the lists are refreshed, since
+ * they now hold the draft.
+ */
+async function publishCreated(id: string): Promise<boolean> {
+  try {
+    await updatePractice(id, { status: 'scheduled' })
+    unpublishedId.value = null
+    return true
+  } catch (e) {
+    unpublishedId.value = id
+    toast.error(practiceSaveErrorText(e, t('masterScreens.createPractice.toast.publishFailed')))
+    void myPracticesChanged(queryCache)
+    return false
+  }
+}
+
+/** The success exit, once the practice is created AND published. */
+function leaveAfterPublish(): void {
+  // Draft fulfilled — drop it (and block any late debounced save) so it can't
+  // resurrect on the next create. Runs only AFTER a successful publish: while
+  // the publish is still failing the local draft survives.
+  finishDraft()
+
+  toast.success(t('masterScreens.createPractice.toast.created'))
+  // Redirect to the master's practices list — it defaults to the upcoming tab
+  // (i18n:masterScreens.masterPractices.tab.upcoming), and the practice we
+  // just published is status='scheduled', so
+  // it lands there. replace() (not push) so Back returns to the origin
+  // (practices / dashboard), not back onto this filled form (#1). Navigate
+  // BEFORE the refresh so a failing refresh can never strand the user on the
+  // form still showing the created toast copy
+  // (i18n:masterScreens.createPractice.toast.created) (G1).
+  void router.replace({ name: 'master-practices' })
+  // Invalidate the cached list so it reloads with the new practice. Fire-and-
+  // forget + swallow: master-practices loads its own list on mount, so a missed
+  // refresh is harmless and must not turn a successful create into an error path.
+  void myPracticesChanged(queryCache)
+}
+
+/** Publish-failed banner: retry the PATCH for the practice already created. */
+async function retryPublish(): Promise<void> {
+  const id = unpublishedId.value
+  if (!id || submitting.value) return
+  submitting.value = true
+  try {
+    if (await publishCreated(id)) leaveAfterPublish()
+  } finally {
+    submitting.value = false
+  }
+}
+
+/** Publish-failed banner: open the created draft instead of publishing here. */
+function openUnpublishedDraft(): void {
+  const id = unpublishedId.value
+  if (!id) return
+  // The form's content now lives in the server-side draft; a local copy
+  // would offer to create it a second time on the next visit.
+  finishDraft()
+  void router.replace({ name: 'master-practice-detail', params: { id } })
 }
 </script>
 
