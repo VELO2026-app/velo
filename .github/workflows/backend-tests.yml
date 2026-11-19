@@ -324,6 +324,7 @@ jobs:
             -e TELEGRAM_BOT_URL=https://telegram.me/velo_ci_bot \
             -e STORAGE_ENDPOINT=http://velo-storage:9000 \
             -e STORAGE_SECRET_KEY \
+            -e VELO_TESTS_STORAGE=required \
             "$IMAGE" python -m pytest tests/ -v --tb=short
 
       - name: Logs of the services (on failure)

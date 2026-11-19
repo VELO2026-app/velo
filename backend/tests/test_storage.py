@@ -36,6 +36,10 @@ from app.core.config import settings
 from app.core.storage_registry import load_registry
 from tests.settings_instance import MISSING, build_settings
 
+# Talks to the live storage (BE-194 part 10): skipped where none answers,
+# never in CI (VELO_TESTS_STORAGE=required, backend-tests.yml).
+pytestmark = pytest.mark.storage
+
 TYPES = [b.name for b in load_registry().buckets]
 
 

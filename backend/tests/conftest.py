@@ -31,6 +31,7 @@
 import os
 import subprocess
 from collections.abc import AsyncGenerator
+from functools import cache
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -41,6 +42,7 @@ from app.core.database import dispose_engine, get_session_factory
 from app.core.redis import close_redis, get_redis, init_redis
 from app.main import app
 from tests import pg_isolation
+from tests.ci_environment import STORAGE_MODE, storage_gate, storage_reachable
 from tests.notification_guard import GUARD
 from tests.pg_isolation import (
     PgIsolationError,
@@ -183,7 +185,37 @@ def pytest_configure(config: pytest.Config) -> None:
         "its own making to test the emitting mechanism; the notification "
         "guard (BE-174) does not check it. Never for a product site.",
     )
+    config.addinivalue_line(
+        "markers",
+        "storage: the test talks to the live storage (velo-storage); with none "
+        "reachable it skips, or ends the run where VELO_TESTS_STORAGE=required "
+        "(CI) -- BE-194 part 10.",
+    )
     GUARD.install()
+
+
+@cache
+def _storage_reachable() -> bool:
+    """One probe a session: the deploy machine's test run has no storage."""
+    return storage_reachable(settings.storage_endpoint)
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    if item.get_closest_marker("storage") is None:
+        return
+    required = os.environ.get(STORAGE_MODE) == "required"
+    gate = storage_gate(_storage_reachable(), required)
+    if gate == "exit":
+        pytest.exit(
+            f"{STORAGE_MODE}=required and no storage answers at "
+            f"{settings.storage_endpoint}",
+            returncode=3,
+        )
+    if gate == "skip":
+        pytest.skip(
+            f"no storage in this test run ({settings.storage_endpoint} does not "
+            "answer): the deploy machine runs the tests without velo-storage"
+        )
 
 
 @pytest.fixture(autouse=True)

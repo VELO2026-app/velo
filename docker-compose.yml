@@ -161,6 +161,20 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # The tests' Redis (BE-194 part 10). The deploy machine gives its test
+  # container nothing but DATABASE_URL, so the Redis the suite reaches has no
+  # password; it holds nothing of the app and no volume, and the suite never
+  # touches the live one. test.services of primer.yaml names it.
+  redis-test:
+    image: redis:7.4.11-alpine3.21@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   velo_postgres_data: {}
   velo_redis_data: {}

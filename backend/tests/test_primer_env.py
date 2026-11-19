@@ -27,18 +27,26 @@ BE-194: comms' profile, data of the machine, against the tree and ci.env.
 BE-218: the skin's slot against the generation the frontend reads.
 BE-194 part 6: the lock on comms v4.0.0 and the bot's token by its seam.
 BE-194 (v0.1.0): the frontend's types by the product's commands.
+BE-194 part 10: the machine's test run -- its Redis, the environment it builds
+Settings from, and CI that must have its storage.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
 (backend/Dockerfile, stage `test`).
 """
 
+import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 import yaml
 
+import tests as tests_package
 from app.core import report
 from app.core.config import Settings
 from app.core.i18n import SUPPORTED_LANGUAGES
@@ -571,3 +579,76 @@ def test_the_types_are_made_by_the_products_scripts_into_what_ci_checks() -> Non
     drift = re.findall(r"git diff --exit-code -- (\S+)", CI_YML.read_text())
     assert drift == [types["out"]], drift
     assert types["commit_as"], "the types commit names its author"
+
+
+# -- BE-194 part 10: the deploy machine's test run -------------------------------
+
+
+def test_the_machine_runs_the_tests_with_a_redis_of_their_own() -> None:
+    """The machine brings up the database and test.services for the tests
+    and gives their container nothing but DATABASE_URL (pridem
+    steps/tests.py). So the Redis they reach is a compose service with no
+    password and no data -- redis-test -- and the suite's default address is
+    that service; the app's Redis keeps its password."""
+    from tests.ci_environment import MACHINE_REDIS_URL
+
+    test = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["stacks"]["velo"]["test"]
+    services = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]
+    assert test["services"] == ["postgres", "redis-test"], test
+    assert all(name in services for name in test["services"]), test["services"]
+    redis_test = services["redis-test"]
+    assert "requirepass" not in " ".join(redis_test["command"]), redis_test
+    assert not redis_test.get("volumes") and not redis_test.get("environment")
+    assert redis_test.get("healthcheck"), "every service but a job is checked"
+    assert "requirepass" in " ".join(services["redis"]["command"]), "the app's keeps it"
+    url = urlsplit(MACHINE_REDIS_URL)
+    assert (url.hostname, url.port) == ("redis-test", 6379), MACHINE_REDIS_URL
+
+
+def test_a_run_with_only_database_url_builds_settings_from_ci_env() -> None:
+    """The machine's test container is a place that builds Settings (par0
+    section 14): from DATABASE_URL alone, the rest out of backend/ci.env --
+    tests/__init__.py fills it before app is imported. What the run gives
+    stays: a key it brings is not overridden."""
+    from tests.ci_environment import MACHINE_REDIS_URL, NO_STORAGE_ENDPOINT
+
+    env = {
+        "PATH": os.environ["PATH"],
+        "DATABASE_URL": os.environ["DATABASE_URL"],
+        "PRIMER_RELEASE": os.environ.get("PRIMER_RELEASE", "ci"),
+        "PRIMER_COMMIT": os.environ.get("PRIMER_COMMIT", "local"),
+        "TELEGRAM_BOT_TOKEN": "given-by-the-run",
+    }
+    code = (
+        "import tests, json; from app.core.config import Settings; s = Settings(); "
+        "print(json.dumps([s.redis_url, s.storage_endpoint, s.telegram_bot_token]))"
+    )
+    run = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=Path(tests_package.__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert run.returncode == 0, run.stderr[-2000:]
+    printed = run.stdout.strip().splitlines()[-1]
+    redis_url, storage_endpoint, token = json.loads(printed)
+    assert (redis_url, storage_endpoint) == (MACHINE_REDIS_URL, NO_STORAGE_ENDPOINT)
+    assert token == "given-by-the-run", "the run's own value stays"
+    assert _ci_env().get("TELEGRAM_BOT_TOKEN") not in (None, token), "ci.env differs"
+
+
+def test_no_ci_env_ends_the_run_with_its_path(tmp_path: Path) -> None:
+    from tests.ci_environment import apply_ci_env
+
+    missing = tmp_path / "ci.env"
+    with pytest.raises(pytest.exit.Exception, match=str(missing)):
+        apply_ci_env({}, missing)
+
+
+def test_ci_must_have_its_storage() -> None:
+    """CI runs the storage tests against a live storage; a storage that does
+    not answer there ends the run instead of skipping them quietly."""
+    [suite] = [s for s in _steps(BACKEND_TESTS_YML) if "python -m pytest" in s["run"]]
+    assert "-e VELO_TESTS_STORAGE=required" in suite["run"]
