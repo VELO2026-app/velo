@@ -159,3 +159,33 @@ test('pull request: the merge commit against its first parent, as before', () =>
     visual: 'false',
   })
 })
+
+// FE-212: a PR that changes the visual comparison itself runs it, without
+// the `visual` label. One PR per path, each touching that path alone.
+for (const file of [
+  '.github/workflows/visual.yml',
+  'frontend/e2e/visual/compare.ts',
+  'frontend/e2e/visual/run.sh',
+  'frontend/e2e/visual/har/student.har',
+  'frontend/playwright.config.ts',
+  'frontend/e2e/support/settle.ts',
+]) {
+  test(`pull request: the comparison itself (${file}) -> visual`, () => {
+    const { dir, commit } = repo()
+    commit({ [file]: 'base\n' }, 'base of the file')
+    commit({ [file]: 'changed\n' })
+    assert.equal(classify(dir, 'HEAD^1', 'HEAD').visual, 'true')
+  })
+}
+
+// The e2e files the comparison imports but left out of VISUAL on purpose
+// (see VISUAL in ci-scope.mjs): the smoke e2e, typecheck and the sweep cover
+// them, and routes.ts changes with every new route.
+for (const file of ['frontend/e2e/support/test.ts', 'frontend/e2e/sweep/routes.ts']) {
+  test(`pull request: shared e2e code (${file}) -> no visual`, () => {
+    const { dir, commit } = repo()
+    commit({ [file]: 'base\n' }, 'base of the file')
+    commit({ [file]: 'changed\n' })
+    assert.equal(classify(dir, 'HEAD^1', 'HEAD').visual, 'false')
+  })
+}
