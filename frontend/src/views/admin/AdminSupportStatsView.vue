@@ -64,7 +64,7 @@
       :title="t('common.loadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
+      <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="stats">
@@ -107,23 +107,24 @@
 
 <script setup lang="ts">
 import { t, getLocale } from '@/locales'
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuery } from '@pinia/colada'
 import { VBackButton, VButton, VCard, VEmptyState, VLoader, VStatCard } from '@/components/ui'
 import { DateTime } from 'luxon'
 import { useAuthStore } from '@/stores/auth'
+import type { SupportStatsFigures } from '@/api/support'
+import { adminFigures, adminSupportStatsQuery } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
-import { getSupportStats, type SupportStats, type SupportStatsFigures } from '@/api/support'
+import { useToast } from '@/composables/useToast'
 import { supportCategoryLabel } from '@/utils/supportTopics'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const toast = useToast()
 
 /** 0 = the current month; each step is one month further back. */
 const monthOffset = ref(0)
-const stats = ref<SupportStats | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
 
 const monthStart = computed(() =>
   DateTime.now()
@@ -138,23 +139,24 @@ function shift(steps: number): void {
   const next = monthOffset.value - steps
   if (next < 0) return
   monthOffset.value = next
-  void load()
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
-    const from = monthStart.value
-    stats.value = await getSupportStats(from.toISO() ?? '', from.plus({ months: 1 }).toISO() ?? '')
-  } catch (e) {
-    error.value = extractApiError(e, t('common.loadError'))
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(load)
+// The month's figures (Pinia Colada, composables/queries/admin.ts): one
+// entry per month; a step shows the loader until the month answers.
+const statsWindow = computed(() => ({
+  createdFrom: monthStart.value.toISO() ?? '',
+  createdTo: monthStart.value.plus({ months: 1 }).toISO() ?? '',
+}))
+const {
+  data: stats,
+  loading,
+  error,
+  retry,
+} = adminFigures(
+  useQuery(() => adminSupportStatsQuery(statsWindow.value)),
+  // A failed read over the shown month (a return to the app) is told.
+  (e) => toast.error(extractApiError(e, t('common.loadError'))),
+)
 
 /** One row's figures: a "12 tickets · 3 rated · avg 4.33 · 4–5: 67%" line
  *  built from the adminScreens.adminSupportStats ticketsCount / ratedCount /
