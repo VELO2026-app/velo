@@ -256,6 +256,16 @@ describe('AdminDashboardView', () => {
       expect(title ?? null).toBe(form === null ? null : `${n} ${form} на верификации`)
     })
 
+    it('pending method-change requests: a red badge with their count on the requests row', async () => {
+      counters({ pending_method_changes: 4 })
+      mount()
+      await flush()
+
+      expect(
+        host?.querySelector('.admin-dashboard__row-trailing .v-badge')?.textContent?.trim(),
+      ).toBe('4')
+    })
+
     // FE-100: Moderation (i18n:adminScreens.adminReports.moderationTab) opens
     // on the tickets tab (i18n:adminScreens.adminReports.tabTickets) by
     // default; the banner counts pending REPORTS, so it lands on the

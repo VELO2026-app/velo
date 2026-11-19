@@ -451,6 +451,18 @@ describe('AdminParticipantsView', () => {
       expect(Array.from(metas ?? []).some((m) => m.textContent?.includes('10 июня'))).toBe(true)
     })
 
+    it('an avatar url renders the photo instead of the placeholder icon', async () => {
+      vi.mocked(adminApi.getParticipants).mockResolvedValue(
+        paginated([participant({ avatar_url: 'https://cdn.example/a.png' })], 1),
+      )
+      mount()
+      await flush()
+
+      expect(rows()[0]?.querySelector('img.prow__avatar-img')?.getAttribute('src')).toBe(
+        'https://cdn.example/a.png',
+      )
+    })
+
     it('telegram_id/last_login_at absent: their own row lines simply do not render', async () => {
       vi.mocked(adminApi.getParticipants).mockResolvedValue(
         paginated([participant({ telegram_id: null, last_login_at: null })], 1),
