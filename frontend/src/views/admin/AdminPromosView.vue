@@ -124,7 +124,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useInfiniteQuery, useQueryCache } from '@pinia/colada'
 import {
@@ -142,6 +142,7 @@ import type { SegmentOption } from '@/components/ui'
 import { IconPromo } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { deactivateAdminPromo } from '@/api/admin'
+import { onFailedRequest } from '@/composables/queries/admin'
 import type { AdminPromoResponse } from '@/api/admin'
 import {
   adminPromosQuery,
@@ -202,8 +203,8 @@ function untilLabel(p: AdminPromoResponse): string {
 
 // -- Fetch. A failed first page is the error state and its toast; a failed
 //    next page keeps the list and toasts on its own (loadMore). --
-watch(promosQuery.error, (e) => {
-  if (e && promosQuery.data.value === undefined)
+onFailedRequest(promosQuery, (e) => {
+  if (promosQuery.data.value === undefined)
     toast.error(extractApiError(e, t('adminScreens.adminPromos.promocodesLoadError')))
 })
 
@@ -214,7 +215,8 @@ function retry(): void {
 async function loadMore(): Promise<void> {
   loadingMore.value = true
   try {
-    // cancelRefetch false: a tap during a reload waits for it.
+    // cancelRefetch false: a tap during a reload joins it instead of gluing
+    // a stale page to a fresh one.
     await promosQuery.loadNextPage({ throwOnError: true, cancelRefetch: false })
   } catch (e) {
     toast.error(extractApiError(e, t('common.loadError')))

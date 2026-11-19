@@ -92,11 +92,12 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VBadge, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
 import type { AdminSchoolListItem } from '@/api/types'
+import { onFailedRequest } from '@/composables/queries/admin'
 import { adminSchoolsQuery } from '@/composables/queries/adminCatalogs'
 import { useToast } from '@/composables/useToast'
 
@@ -116,17 +117,17 @@ const error = computed(
 )
 const hasMore = schoolsQuery.hasNextPage
 
-watch(schoolsQuery.error, (e) => {
-  if (e) toast.error(t('school.loadFailed'))
-})
+// Every failed request is told once (a first page's and a next page's).
+onFailedRequest(schoolsQuery, () => toast.error(t('school.loadFailed')))
 
 function retry(): void {
   void schoolsQuery.refetch()
 }
 
 function loadMore(): void {
-  // cancelRefetch false: a tap during a reload waits for it.
-  void schoolsQuery.loadNextPage({ cancelRefetch: false })
+  // cancelRefetch false: a tap during a reload joins it instead of gluing a
+  // stale page to a fresh one. A failure is already told above.
+  schoolsQuery.loadNextPage({ cancelRefetch: false }).catch(() => {})
 }
 
 // school creation month, from created_at (UTC).
