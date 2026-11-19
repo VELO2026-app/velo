@@ -49,12 +49,16 @@ const SAMPLE = {
   adminRevokePreview: adminKeys.revokePreview('m1') as EntryKey,
   adminOverview: adminKeys.overview('week', 0) as EntryKey,
   adminMetric: adminKeys.metric('checkin', 'week', 0) as EntryKey,
+  adminRevenue: adminKeys.metric('revenue', 'month', -1) as EntryKey,
   adminPractices: adminKeys.practices('all') as EntryKey,
   adminPractice: adminKeys.practice('p1') as EntryKey,
   masterPublic: keys.masters.public('m1') as EntryKey,
   // The admin's own master profile: no admin edit of another master reaches it.
   masterProfile: keys.masters.profile() as EntryKey,
   adminParticipants: adminKeys.participants('all') as EntryKey,
+  adminReports: adminKeys.reports('pending') as EntryKey,
+  adminReport: adminKeys.report('r1') as EntryKey,
+  adminWithdrawals: adminKeys.withdrawals() as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -170,6 +174,14 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
     'masterPublic',
   ],
   rejectMethodChange: ['adminMethodRequests', 'adminStats'],
+  decideReport: ['adminReports', 'adminReport', 'adminStats'],
+  decideWithdrawal: [
+    'adminWithdrawals',
+    'adminMasters',
+    'adminMaster',
+    'adminRevokePreview',
+    'adminRevenue',
+  ],
 }
 
 describe('ADMIN_INVALIDATES', () => {

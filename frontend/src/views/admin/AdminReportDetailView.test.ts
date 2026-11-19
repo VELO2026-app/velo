@@ -46,6 +46,11 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminStatsQuery } from '@/composables/queries/admin'
+import { adminKeys } from '@/composables/queries/adminKeys'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminReportDetailView from '@/views/admin/AdminReportDetailView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -111,13 +116,21 @@ function mount(id: string, stateReport: ReportResponse | null = null): HTMLEleme
   window.history.replaceState(stateReport ? { report: stateReport } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminReportDetailView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminReportDetailView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 6; i++) await nextTick()
+  for (let n = 0; n < 8; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function text(): string {
@@ -338,11 +351,30 @@ describe('AdminReportDetailView', () => {
 
       expect(adminApi.resolveReport).toHaveBeenCalledWith('r_pending', 'Меры приняты')
       expect(toastSuccess).toHaveBeenCalledWith('Жалоба решена')
-      // S-1/S-2: push to the list, not back() -- fresh loadInitial() on return.
+      // S-1/S-2: push to the list, not back() -- it remounts over invalidated complaints.
       // FE-100: the complaints tab (i18n:adminScreens.adminReports.tabComplaints) of
       // Moderation (i18n:adminScreens.adminReports.moderationTab) -- the list it came
       // from, as before.
       expect(push).toHaveBeenCalledWith({ name: 'admin-reports', query: { tab: 'complaints' } })
+    })
+
+    it('a verdict makes the moderation counters stale: the shell badge asks again', async () => {
+      // The shell (not mounted here) holds the counters on every admin route;
+      // a stale entry is what makes it ask again.
+      vi.mocked(adminApi.resolveReport).mockResolvedValue(REPORT_RESOLVED)
+      mount('r_pending', REPORT_PENDING)
+      const queryCache = useQueryCache()
+      queryCache.ensure(adminStatsQuery())
+      queryCache.setQueryData(adminKeys.stats(), { stats: {}, pendingReports: 3 })
+      await flush()
+      expect(queryCache.get(adminKeys.stats())?.stale).toBe(false)
+
+      setValue(textareaField('Примечание к решению *'), 'Меры приняты')
+      await flush()
+      resolveBtn().click()
+      await flush()
+
+      expect(queryCache.get(adminKeys.stats())?.stale).toBe(true)
     })
 
     it('failure: toasts the generic fallback (unmapped code) and the report STAYS pending (no navigation)', async () => {

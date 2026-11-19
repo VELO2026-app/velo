@@ -39,7 +39,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
+        ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -93,28 +93,30 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
-import { ref, computed, onMounted, type Component } from 'vue'
+import { computed, type Component } from 'vue'
 import { useRouter } from 'vue-router'
+import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
 import { IconPending, IconCheck, IconClose } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
-import { getAdminWithdrawals } from '@/api/admin'
+import { adminWithdrawalsQuery, usePagedListFailures } from '@/composables/queries/admin'
+import { screenQueryState } from '@/composables/queries/screenState'
 import type { AdminWithdrawalResponse, WithdrawalStatus, PayoutDetails } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { formatMoney } from '@/utils/format'
 import { formatRelative } from '@/utils/adminHelpers'
 
-const LIMIT = 20
-
 const router = useRouter()
 const toast = useToast()
 
-const items = ref<AdminWithdrawalResponse[]>([])
-const total = ref(0)
-const loading = ref(false)
-const loadingMore = ref(false)
-const hasMore = ref(false)
-const error = ref(false)
+// Every payout request, page by page (Pinia Colada, composables/queries/admin.ts).
+const withdrawalsQuery = useInfiniteQuery(adminWithdrawalsQuery)
+const items = computed<AdminWithdrawalResponse[]>(
+  () => withdrawalsQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
+)
+const total = computed(() => withdrawalsQuery.data.value?.pages.at(-1)?.total ?? 0)
+const { loading, failed: error } = screenQueryState(withdrawalsQuery)
+const hasMore = withdrawalsQuery.hasNextPage
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
 
@@ -174,45 +176,20 @@ function openDetail(w: AdminWithdrawalResponse): void {
   })
 }
 
-// -- Fetch (generation counter discards stale responses, like AdminReportsView). --
-let generation = 0
-async function loadInitial(): Promise<void> {
-  generation += 1
-  const myGeneration = generation
-  loading.value = true
-  error.value = false
-  items.value = []
-  total.value = 0
-  hasMore.value = false
-  try {
-    const res = await getAdminWithdrawals(undefined, LIMIT, 0)
-    if (myGeneration !== generation) return
-    items.value = res.items
-    total.value = res.total
-    hasMore.value = res.items.length < res.total
-  } catch (e) {
-    if (myGeneration !== generation) return
-    error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.withdrawalsLoadError')))
-  } finally {
-    if (myGeneration === generation) loading.value = false
-  }
-}
+// Every failed request is told: a next page with its own fallback, the
+// list itself (its first load, a refetch) with the list's.
+const { loadingMore, loadMore } = usePagedListFailures(withdrawalsQuery, (e, nextPage) =>
+  toast.error(
+    extractApiError(
+      e,
+      nextPage ? t('common.loadError') : t('adminScreens.adminWithdrawals.withdrawalsLoadError'),
+    ),
+  ),
+)
 
-async function loadMore(): Promise<void> {
-  loadingMore.value = true
-  try {
-    const res = await getAdminWithdrawals(undefined, LIMIT, items.value.length)
-    items.value.push(...res.items)
-    hasMore.value = items.value.length < res.total
-  } catch (e) {
-    toast.error(extractApiError(e, t('common.loadError')))
-  } finally {
-    loadingMore.value = false
-  }
+function retry(): void {
+  void withdrawalsQuery.refetch()
 }
-
-onMounted(loadInitial)
 </script>
 
 <style scoped>

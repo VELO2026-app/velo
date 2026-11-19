@@ -16,6 +16,10 @@
 //     oversight list, one practice's oversight detail.
 //   - users and masters: the users and masters lists, one master's review
 //     page, the method-change queue.
+//   - the metric drill-ins and the revenue: the dashboard's window queries,
+//     read through adminFigures;
+//   - reports and payouts: the complaints tab, one report, the payout
+//     requests.
 //
 // ONE module on purpose, not one per area: Rollup puts every module into a
 // chunk by the set of routes that import it, and each extra shared chunk
@@ -66,7 +70,11 @@ import {
   getReturnMetric,
   getRevokePreview,
   getUsersList,
+  getAdminWithdrawals,
+  getReportById,
   type AdminMasterDetail,
+  type AdminWithdrawalResponse,
+  type ReportStatusFilter,
   type AdminPaginatedPromosResponse,
   type AdminPracticeScope,
   type AdminPromoTypeFilter,
@@ -81,7 +89,9 @@ import type {
   FeedbackMetricResponse,
   PaginatedAdminSchoolsResponse,
   PaginatedMethodChangeRequestsResponse,
+  PaginatedAdminWithdrawalsResponse,
   PaginatedParticipantsResponse,
+  PaginatedReportsResponse,
   PaginatedUsersResponse,
   ReturnMetricResponse,
 } from '@/api/types'
@@ -293,6 +303,26 @@ export const ADMIN_INVALIDATES = {
   ],
   /** `POST /admin/masters/{id}/method-change-request/reject`: the request leaves the queue and its badge. */
   rejectMethodChange: [adminKeys.methodRequests(), adminKeys.stats()],
+  /**
+   * `POST /admin/reports/{id}/resolve` and `.../dismiss`: the report leaves
+   * "pending" -- every complaints list, its detail, the moderation badge.
+   */
+  decideReport: [adminKeys.reportsAll(), adminKeys.reportAll(), adminKeys.stats()],
+  /**
+   * `POST /admin/withdrawals/{id}/approve` and `.../reject`: the request's
+   * status in the payouts list (the answer is also written in place); the
+   * master's balance moves -- frozen to paid out, or back to available --
+   * in the masters list, their detail and their revoke advisory (available,
+   * frozen, pending withdrawals); an approval adds to the period's payouts
+   * (the revenue windows, not the other metrics).
+   */
+  decideWithdrawal: [
+    adminKeys.withdrawals(),
+    adminKeys.masters(),
+    adminKeys.masterAll(),
+    adminKeys.revokePreviewAll(),
+    adminKeys.revenueAll(),
+  ],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of an admin mutation that has a row in `ADMIN_INVALIDATES`. */
@@ -823,5 +853,83 @@ export function dropMethodRequest(queryCache: QueryCache, userId: string): void 
         })),
       }
     },
+  )
+}
+
+// =============================================================================
+// Reports and payouts
+// =============================================================================
+
+/** Reports per page of the complaints tab. */
+export const ADMIN_REPORTS_PAGE_SIZE = 20
+
+/**
+ * Infinite query options for the complaints tab under one status filter
+ * (`GET /admin/reports?status=`, all statuses when undefined).
+ *
+ * @param enabled - Off while the moderation screen shows its tickets tab:
+ *   the complaints load when their tab is shown.
+ */
+export const adminReportsQuery = defineInfiniteQueryOptions(
+  ({ status, enabled }: { status: ReportStatusFilter | undefined; enabled: boolean }) => ({
+    key: adminKeys.reports(status ?? 'all'),
+    query: ({ pageParam }: { pageParam: number }) =>
+      getReports(status, undefined, ADMIN_REPORTS_PAGE_SIZE, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (last: PaginatedReportsResponse, pages: PaginatedReportsResponse[]) =>
+      nextOffset(last, pages),
+    staleTime: 0,
+    enabled,
+  }),
+)
+
+/**
+ * Query options for one report (`GET /admin/reports/{id}`).
+ *
+ * @param enabled - Off when the list handed the row (router state): the
+ *   screen renders it without a request, as it always did.
+ */
+export const adminReportQuery = defineQueryOptions(
+  ({ reportId, enabled }: { reportId: string; enabled: boolean }) => ({
+    key: adminKeys.report(reportId),
+    query: () => getReportById(reportId),
+    staleTime: 0,
+    enabled,
+  }),
+)
+
+/** Payout requests per page of `GET /admin/withdrawals`. */
+export const ADMIN_WITHDRAWALS_PAGE_SIZE = 20
+
+/** Infinite query options for every payout request, all statuses (`GET /admin/withdrawals`). */
+export const adminWithdrawalsQuery = defineInfiniteQueryOptions(() => ({
+  key: adminKeys.withdrawals(),
+  query: ({ pageParam }: { pageParam: number }) =>
+    getAdminWithdrawals(undefined, ADMIN_WITHDRAWALS_PAGE_SIZE, pageParam),
+  initialPageParam: 0,
+  getNextPageParam: (
+    last: PaginatedAdminWithdrawalsResponse,
+    pages: PaginatedAdminWithdrawalsResponse[],
+  ) => nextOffset(last, pages),
+  staleTime: 0,
+}))
+
+/**
+ * Write a decided payout request into the payouts list held, at once --
+ * the row leaves "pending" before the refetch answers (a second decision
+ * would only meet 409).
+ */
+export function setWithdrawal(queryCache: QueryCache, decided: AdminWithdrawalResponse): void {
+  if (queryCache.getQueryData(adminKeys.withdrawals()) === undefined) return
+  setInfiniteQueryData<PaginatedAdminWithdrawalsResponse, number>(
+    queryCache,
+    adminKeys.withdrawals(),
+    (data) => ({
+      pageParams: data?.pageParams ?? [],
+      pages: (data?.pages ?? []).map((page) => ({
+        ...page,
+        items: page.items.map((w) => (w.id === decided.id ? decided : w)),
+      })),
+    }),
   )
 }

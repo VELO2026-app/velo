@@ -112,6 +112,8 @@ import { useToast } from '@/composables/useToast'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
 import type { AdminWithdrawalResponse } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
+import { setWithdrawal, useAdminMutation } from '@/composables/queries/admin'
+import { useQueryCache } from '@pinia/colada'
 import { formatMoney } from '@/utils/format'
 
 const router = useRouter()
@@ -138,6 +140,24 @@ const rejectError = ref('')
 const showConfirm = ref(false)
 const approving = ref(false)
 const rejecting = ref(false)
+
+// The verdicts: the payouts list and the masters' balances go stale
+// (ADMIN_INVALIDATES.decideWithdrawal); the screen goes back to the list.
+const queryCache = useQueryCache()
+const writeDecided = {
+  write: (decided: AdminWithdrawalResponse) => setWithdrawal(queryCache, decided),
+  waitForRefetch: false,
+}
+const approve = useAdminMutation(
+  'decideWithdrawal',
+  (id: string) => approveWithdrawal(id),
+  writeDecided,
+)
+const reject = useAdminMutation(
+  'decideWithdrawal',
+  ({ id, reason }: { id: string; reason: string }) => rejectWithdrawal(id, reason),
+  writeDecided,
+)
 
 const anyLoading = computed<boolean>(() => approving.value || rejecting.value)
 const isPending = computed<boolean>(() => w.value?.status === 'pending')
@@ -189,10 +209,11 @@ function openReject(): void {
 }
 
 async function onApprove(): Promise<void> {
-  if (!w.value || approving.value) return
+  // One decision at a time: approve and reject block each other.
+  if (!w.value || anyLoading.value) return
   approving.value = true
   try {
-    await approveWithdrawal(w.value.id)
+    await approve.mutateAsync(w.value.id)
     toast.success(t('adminScreens.adminWithdrawalDetail.toast.approved'))
     showConfirm.value = false
     router.back()
@@ -204,7 +225,7 @@ async function onApprove(): Promise<void> {
 }
 
 async function onReject(): Promise<void> {
-  if (!w.value || rejecting.value) return
+  if (!w.value || anyLoading.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
     rejectError.value = t('adminScreens.adminWithdrawalDetail.rejectionReasonRequired')
@@ -212,7 +233,7 @@ async function onReject(): Promise<void> {
   }
   rejecting.value = true
   try {
-    await rejectWithdrawal(w.value.id, rejectReason.value.trim())
+    await reject.mutateAsync({ id: w.value.id, reason: rejectReason.value.trim() })
     toast.success(t('adminScreens.adminWithdrawalDetail.toast.rejected'))
     showReject.value = false
     router.back()

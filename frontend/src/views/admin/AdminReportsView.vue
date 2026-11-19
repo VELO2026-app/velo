@@ -63,9 +63,7 @@
         :description="t('common.checkConnection')"
       >
         <template #action
-          ><VButton variant="primary" @click="loadInitial">{{
-            t('common.retry')
-          }}</VButton></template
+          ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
         >
       </VEmptyState>
 
@@ -125,8 +123,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VButton, VLoader, VEmptyState, VCard, VSegment } from '@/components/ui'
 import { IconFilter, IconWarning } from '@/components/icons'
 import ModerationFilterModal from '@/components/shared/ModerationFilterModal.vue'
@@ -134,12 +133,11 @@ import SupportTicketsPanel from '@/components/admin/SupportTicketsPanel.vue'
 import type { ModerationFilter } from '@/components/shared/moderationFilter'
 import { toHistoryState } from '@/utils/historySnapshot'
 import { useToast } from '@/composables/useToast'
-import { getReports } from '@/api/admin'
 import type { ReportResponse, ReportStatusFilter } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
+import { adminReportsQuery, usePagedListFailures } from '@/composables/queries/admin'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { formatRelative } from '@/utils/adminHelpers'
-
-const LIMIT = 20
 
 const router = useRouter()
 const route = useRoute()
@@ -156,12 +154,6 @@ const tabOptions = computed(() => [
   { value: 'tickets', label: t('adminScreens.adminReports.tabTickets') },
   { value: 'complaints', label: t('adminScreens.adminReports.tabComplaints') },
 ])
-
-const items = ref<ReportResponse[]>([])
-const loading = ref(false)
-const loadingMore = ref(false)
-const hasMore = ref(false)
-const error = ref(false)
 
 const showFilter = ref(false)
 const filter = ref<ModerationFilter>({
@@ -206,48 +198,40 @@ const apiStatus = computed<ReportStatusFilter | undefined>(() => {
   return undefined
 })
 
-// W-3: generation counter discards stale responses from rapid filter changes.
-let generation = 0
+// The complaints of the current status filter, page by page (Pinia Colada,
+// composables/queries/admin.ts) -- one entry per filter, so a slow answer
+// for an earlier filter lands in its own entry, never over the shown one
+// (W-3). Loaded while their tab is shown (on arrival and on every switch to
+// it, staleTime 0).
+const reportsQuery = useInfiniteQuery(() =>
+  adminReportsQuery({ status: apiStatus.value, enabled: tab.value === 'complaints' }),
+)
+const items = computed<ReportResponse[]>(
+  () => reportsQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
+)
+const { loading, failed: error } = screenQueryState(reportsQuery)
+const hasMore = reportsQuery.hasNextPage
 
-async function loadInitial(): Promise<void> {
-  generation += 1
-  const myGeneration = generation
+// Every failed request is told: a next page with its own fallback, the
+// list itself (its first load, a refetch) with the list's.
+const { loadingMore, loadMore } = usePagedListFailures(reportsQuery, (e, nextPage) =>
+  toast.error(
+    extractApiError(
+      e,
+      nextPage ? t('common.loadError') : t('adminScreens.adminReports.ticketsLoadError'),
+    ),
+  ),
+)
 
-  loading.value = true
-  error.value = false
-  items.value = []
-  hasMore.value = false
-
-  try {
-    const res = await getReports(apiStatus.value, undefined, LIMIT, 0)
-    if (myGeneration !== generation) return
-    items.value = res.items
-    hasMore.value = res.items.length < res.total
-  } catch (e) {
-    if (myGeneration !== generation) return
-    error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminReports.ticketsLoadError')))
-  } finally {
-    if (myGeneration === generation) loading.value = false
-  }
-}
-
-async function loadMore(): Promise<void> {
-  loadingMore.value = true
-  try {
-    const res = await getReports(apiStatus.value, undefined, LIMIT, items.value.length)
-    items.value.push(...res.items)
-    hasMore.value = items.value.length < res.total
-  } catch (e) {
-    toast.error(extractApiError(e, t('common.loadError')))
-  } finally {
-    loadingMore.value = false
-  }
+function retry(): void {
+  void reportsQuery.refetch()
 }
 
 function onApply(next: ModerationFilter): void {
+  const status = apiStatus.value
   filter.value = next
-  void loadInitial()
+  // Applying the same status filter again asks again, as it always did.
+  if (apiStatus.value === status) void reportsQuery.refetch()
 }
 
 function openDetail(item: ReportResponse): void {
@@ -257,16 +241,6 @@ function openDetail(item: ReportResponse): void {
     state: { report: toHistoryState(item) },
   })
 }
-
-// Complaints (i18n:adminScreens.adminReports.tabComplaints) load when their tab
-// is shown -- on arrival and on every switch to it.
-watch(
-  tab,
-  (next) => {
-    if (next === 'complaints') void loadInitial()
-  },
-  { immediate: true },
-)
 </script>
 
 <style scoped>
