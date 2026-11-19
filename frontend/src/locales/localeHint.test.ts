@@ -29,6 +29,12 @@ describe('locale boot hint', () => {
     expect(readLocaleHint()).toBe('en')
   })
 
+  it('switching back to ru rewrites the hint to ru (the default locale is a choice too)', async () => {
+    await setLocale('en')
+    await setLocale('ru')
+    expect(readLocaleHint()).toBe('ru')
+  })
+
   it('clearLocaleHint wipes it (the logout path)', async () => {
     await setLocale('en')
     expect(readLocaleHint()).toBe('en')

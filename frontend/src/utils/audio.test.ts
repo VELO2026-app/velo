@@ -63,11 +63,17 @@ describe('formatStopwatch', () => {
 })
 
 describe('pickRecorderMime', () => {
-  it('returns the first supported candidate in preference order', () => {
+  // Preference: opus-in-webm, then webm, then mp4 (Safari and iOS record
+  // only mp4, so it must stay a candidate).
+  it.each([
+    [['audio/mp4'], 'audio/mp4'],
+    [['audio/webm', 'audio/mp4'], 'audio/webm'],
+    [['audio/webm;codecs=opus', 'audio/webm'], 'audio/webm;codecs=opus'],
+  ])('supported %j -> %s', (supported, expected) => {
     vi.stubGlobal('MediaRecorder', {
-      isTypeSupported: (t: string) => t === 'audio/mp4' || t === 'audio/webm',
+      isTypeSupported: (t: string) => (supported as string[]).includes(t),
     })
-    expect(pickRecorderMime()).toBe('audio/webm')
+    expect(pickRecorderMime()).toBe(expected)
   })
 
   it('returns undefined when nothing is supported or the API is absent', () => {

@@ -47,7 +47,6 @@ describe('formatMoney', () => {
     const result = formatMoney(999900, 'EUR', 'ru')
     // 999900 cents = 9999 EUR, grouped with no-break spaces.
     expect(result).toBe('9\u00a0999,00\u00a0€')
-    expect(result).not.toBe('Бесплатно')
   })
 
   it('allowZero does not affect non-zero amounts', () => {
@@ -238,9 +237,9 @@ describe('dayLabelOf', () => {
 // deleting them re-opens the hole.
 // -----------------------------------------------------------------------
 describe('formatShortDate', () => {
-  // Day boundaries. 1 and 9 are the bug's territory; 10 and 31 always worked,
-  // and are here so a fix that over-corrects (stripping a digit from 10-31)
-  // fails loudly instead of trading one bug for another.
+  // Day boundaries. Days 1-9 are the bug's territory (the table below); 10 and
+  // 31 always worked, and are here so a fix that over-corrects (stripping a
+  // digit from 10-31) fails loudly instead of trading one bug for another.
   it('renders a two-digit day unchanged (day 10)', () => {
     expect(formatShortDate('2026-06-10T12:00:00Z')).toBe('10 июня')
   })

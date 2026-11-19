@@ -61,8 +61,9 @@ export const telegramPlatform: Platform = {
     // the Mini App down» and minimizes the window mid-scroll. Bot API 7.7+;
     // older clients simply keep the host gesture.
     if (webApp.isVersionAtLeast?.('7.7')) webApp.disableVerticalSwipes?.()
-    // Fallbacks MUST mirror variables.css. telegram.test.ts parses that file and
-    // fails if these two drift from it -- do not edit one without the other.
+    // Fallbacks mirror variables.css by hand: no test reads that file (see
+    // telegram.test.ts). The token wins whenever the stylesheet is present, so
+    // a drift only shows if variables.css failed to load.
     webApp.setHeaderColor(tokenColor('--velo-tg-header', '#334d6e'))
     webApp.setBackgroundColor(tokenColor('--velo-tg-bg', '#ffffff'))
     return Promise.resolve()
