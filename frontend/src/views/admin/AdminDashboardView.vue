@@ -16,16 +16,18 @@
     - Engagement: 3 VProgressRow (Check-in / Feedback / Return rate).
 
   DATA SOURCES:
+    Every read is a Pinia Colada query (composables/queries/admin.ts, FE-181).
     - Stat cards (i18n:adminScreens.adminDashboard.practicesStat /
       i18n:adminScreens.adminDashboard.mastersStat /
-      i18n:adminScreens.adminDashboard.participantsStat) + percent deltas +
-      revenue come from the period-scoped /admin/stats/overview (E7),
-      refetched on the i18n:common.periodWeek / i18n:common.periodMonth toggle
-      and the ← / → period stepper (offset).
+      i18n:adminScreens.adminDashboard.participantsStat) + percent deltas
+      come from the period-scoped /admin/stats/overview (E7), one entry per
+      i18n:common.periodWeek / i18n:common.periodMonth toggle and ← / →
+      period stepper (offset) position.
     - Alert banners + tab badges come from /admin/stats (cumulative pending
-      counts) via adminStore.fetchDashboard.
-    - Engagement rates (Check-in/Feedback/Return) still use the per-metric
-      endpoints here; they are rewired to period+offset in a follow-up.
+      counts), the entry the shell's badges read.
+    - Revenue and the engagement rates (Check-in/Feedback/Return) come from
+      /admin/revenue and the per-metric endpoints for the same window, one
+      entry per figure and window.
 -->
 
 <template>
@@ -232,7 +234,8 @@
 
 <script setup lang="ts">
 import { t, getLocale } from '@/locales'
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { useQuery } from '@pinia/colada'
 import { useRouter } from 'vue-router'
 import {
   VStatCard,
@@ -247,15 +250,23 @@ import {
 import type { SegmentOption } from '@/components/ui'
 import Banner from '@/components/shared/Banner.vue'
 import { IconProfile, IconPending, IconWarning, IconArrowRight } from '@/components/icons'
-import { useAdminStore } from '@/stores/admin'
-import { getCheckinMetric, getFeedbackMetric, getReturnMetric, getAdminRevenue } from '@/api/admin'
+import {
+  adminOverviewQuery,
+  checkinMetricQuery,
+  feedbackMetricQuery,
+  onFailedRequest,
+  returnMetricQuery,
+  revenueQuery,
+  useAdminStats,
+} from '@/composables/queries/admin'
+import { extractApiError } from '@/composables/useApiError'
 import { formatMoney } from '@/utils/format'
 import { formatPeriodRange } from '@/utils/periodRange'
 import { useToast } from '@/composables/useToast'
 import { isOptionEnabled } from '@/platform/instance'
 
 const router = useRouter()
-const adminStore = useAdminStore()
+const adminStats = useAdminStats()
 const toast = useToast()
 
 // FE-112 (tz-whitelabel §4): hides the payouts card on instances with
@@ -286,12 +297,18 @@ function stepNext(): void {
 }
 const canStepNext = computed((): boolean => periodOffset.value < 0)
 
-const loading = computed((): boolean => adminStore.loading && !adminStore.stats)
+// The counters (queries/admin.ts, shared with the shell's badges): the
+// loader stands only until their first answer; a failure is the shell's
+// toast, not this screen's.
+const loading = adminStats.loading
 
-const pendingVerifications = computed((): number => adminStore.pendingVerifications)
-const pendingModeration = computed((): number => adminStore.pendingModeration)
+const pendingVerifications = adminStats.pendingVerifications
+const pendingModeration = adminStats.pendingModeration
 // A2: unread indicator for incoming master method-change requests.
-const pendingMethodChanges = computed((): number => adminStore.pendingMethodChanges)
+const pendingMethodChanges = adminStats.pendingMethodChanges
+
+// The period window every figure below answers (the selected one).
+const periodWindow = computed(() => ({ period: period.value, offset: periodOffset.value }))
 
 const verificationTitle = computed(() =>
   t('adminScreens.adminDashboard.verificationBanner', pendingVerifications.value),
@@ -308,7 +325,10 @@ const moderationTitle = computed(() =>
 // users. Deltas are period-over-period percent (green up / rose down); null
 // (no prior base) hides the trend line.
 // =========================================================================
-const overview = computed(() => adminStore.overview)
+// One entry per window; a period switch keeps the previous window's cards
+// until the new answer lands, a failed one shows "—" (queries/admin.ts).
+const overviewQuery = useQuery(() => adminOverviewQuery(periodWindow.value))
+const overview = overviewQuery.data
 
 function pctDelta(v: number | null | undefined): string {
   if (v === null || v === undefined) return ''
@@ -332,32 +352,22 @@ const participantsDeltaTone = computed(() => pctTone(overview.value?.new_users_d
 // Revenue (E9). Weekly GMV from /admin/revenue, best-effort. €0.00 while seed
 // practices are free (priced templates land with the seed-pricing task). Delta
 // needs E7 (not delivered) -> blank.
-const revenueCents = ref<number | null>(null)
-const revenueValue = computed((): string =>
-  revenueCents.value !== null ? formatMoney(revenueCents.value, 'EUR', getLocale(), true) : '—',
-)
+const revenue = useQuery(() => revenueQuery(periodWindow.value))
+const revenueValue = computed((): string => {
+  const cents = revenue.data.value?.revenue_cents
+  return cents !== undefined ? formatMoney(cents, 'EUR', getLocale(), true) : '—'
+})
 const revenueDelta = computed((): string => '')
 
-// Engagement headline rates (E9). Fetched best-effort on mount; a failed metric
-// leaves its row at an empty track + "—". The detail screens carry the breakdown.
-const checkinRate = ref<number | null>(null)
-const feedbackRate = ref<number | null>(null)
-const returnRate = ref<number | null>(null)
-
-async function loadEngagement(): Promise<void> {
-  const p = period.value
-  const off = periodOffset.value
-  const [checkin, feedback, ret, revenue] = await Promise.allSettled([
-    getCheckinMetric(p, off),
-    getFeedbackMetric(p, off),
-    getReturnMetric(p, off),
-    getAdminRevenue(p, off),
-  ])
-  if (checkin.status === 'fulfilled') checkinRate.value = checkin.value.rate_pct
-  if (feedback.status === 'fulfilled') feedbackRate.value = feedback.value.rate_pct
-  if (ret.status === 'fulfilled') returnRate.value = ret.value.rate_pct
-  if (revenue.status === 'fulfilled') revenueCents.value = revenue.value.revenue_cents
-}
+// Engagement headline rates (E9), best-effort: each is its own query, so a
+// failed metric leaves only its row at an empty track + "—". The detail
+// screens carry the breakdown.
+const checkin = useQuery(() => checkinMetricQuery(periodWindow.value))
+const feedback = useQuery(() => feedbackMetricQuery(periodWindow.value))
+const returning = useQuery(() => returnMetricQuery(periodWindow.value))
+const checkinRate = computed((): number | null => checkin.data.value?.rate_pct ?? null)
+const feedbackRate = computed((): number | null => feedback.data.value?.rate_pct ?? null)
+const returnRate = computed((): number | null => returning.data.value?.rate_pct ?? null)
 
 // Navigated period label (shared util so the Engagement drill-in shows the same
 // week — batch P, P1).
@@ -370,28 +380,12 @@ const engagementQuery = computed(() => ({
   offset: String(periodOffset.value),
 }))
 
-// Refetch the overview + engagement rates whenever the period or the stepper
-// offset changes (D1/D3 cards + D4/D5 engagement share one window).
-// W14 fix (PROMPT №409): fetchOverview used to be an unhandled rejection on
-// failure -- the stat cards just silently stayed stale. Toast here (the sole
-// caller of fetchOverview, so no double-toast risk with AdminShell's own
-// fetchDashboard toast).
-function loadOverview(): void {
-  void adminStore.fetchOverview(period.value, periodOffset.value).then(() => {
-    if (adminStore.overviewError) toast.error(adminStore.overviewError)
-  })
-}
-
-watch([period, periodOffset], () => {
-  loadOverview()
-  void loadEngagement()
-})
-
-onMounted(() => {
-  void adminStore.fetchDashboard()
-  loadOverview()
-  void loadEngagement()
-})
+// W14 fix (PROMPT №409): a failed overview used to leave the stat cards
+// silently stale. Toast it -- once per failed request (the shell toasts
+// the counters, so no double toast).
+onFailedRequest(overviewQuery, (error) =>
+  toast.error(extractApiError(error, t('storeErrors.admin.overview'))),
+)
 </script>
 
 <style scoped>

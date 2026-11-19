@@ -5,8 +5,7 @@
 // 141 lines. PATTERN = stores-only, NO api seam at all -- confirmed by
 // reading every import: useAuthStore (user + logout) and useUiStore
 // (setUiMode) only, both real setup stores, both writable directly from
-// outside (same shape as useAdminStore's `stats` ref, established in
-// AdminPracticesView.test.ts / this round's AdminParticipantsView.test.ts).
+// outside.
 // Real Pinia via createPinia/setActivePinia, seeded per-test.
 //
 // RoleSwitchSection -- READ, NOT ASSUMED (same check as UserProfileView.

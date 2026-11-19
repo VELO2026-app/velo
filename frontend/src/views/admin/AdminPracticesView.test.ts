@@ -2,22 +2,11 @@
 // VELO Frontend -- AdminPracticesView Screen Tests (probekit-screen-test)
 // =============================================================================
 //
-// 214 lines. Establishes the ADMIN-STORE harness (real useAdminStore, seeded
-// ref) that later admin-store screens (incl. the heavier Dashboard) build on.
-//
-// PATTERN = list-with-full-ladder + a THIN admin-store read. Confirmed by
-// reading every import AND stores/admin.ts end to end: the list itself is
-// driven by getAdminPractices (@/api/admin, .vue:124) called directly -- the
-// store is read for exactly ONE value, `adminStore.stats?.practices_count`
-// (.vue:89), feeding the i18n:common.all segment badge. This screen never calls
-// fetchDashboard.
-//
-// ADMIN-STORE SETUP: stores/admin.ts is a setup store whose `stats` is a
-// plain `ref<AdminStatsResponse | null>(null)` returned directly from the
-// composition function (admin.ts:23,84) -- writable from outside. Pattern
-// used below: create + activate a fresh Pinia, get the REAL useAdminStore,
-// and SEED `store.stats = <fixture>` directly. NOT mocked as a module, NOT
-// its actions stubbed -- this screen only ever READS the ref.
+// The list is a Pinia Colada query per scope (composables/queries/admin.ts,
+// FE-181) over getAdminPractices; the i18n:common.all segment badge reads
+// the admin counters (getAdminStats + getReports). Both seams are mocked at
+// the module boundary (@/api/admin) and the screen mounts with a real
+// Pinia + Colada, as in production -- a fresh pair per mount.
 //
 // PracticeListCard (@/components/shared) READ END TO END, confirmed to have
 // NO fetch seam of its own: no onMounted, no API import, purely a computed
@@ -52,10 +41,11 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminPracticesView from '@/views/admin/AdminPracticesView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
-import { useAdminStore } from '@/stores/admin'
 import type { AdminPracticeListItem, AdminStatsResponse } from '@/api/types'
 
 vi.mock('@/api/admin')
@@ -130,19 +120,23 @@ function stats(overrides: Partial<AdminStatsResponse> = {}): AdminStatsResponse 
 
 let app: App | null = null
 let host: HTMLElement | null = null
-let pinia: Pinia
 
-function mount(): HTMLElement {
+/** Mount the screen; pass the previous mount's Pinia to revisit it (its Colada cache). */
+function mount(pinia: Pinia = createPinia()): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminPracticesView).use(createTestI18n())
-  app.use(pinia)
+  setActivePinia(pinia)
+  app = createApp(AdminPracticesView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
   for (let i = 0; i < 6; i++) await nextTick()
+  await vi.advanceTimersByTimeAsync(0)
 }
 
 function cards(): HTMLButtonElement[] {
@@ -178,9 +172,10 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
 
-  pinia = createPinia()
-  setActivePinia(pinia)
-
+  vi.mocked(adminApi.getAdminStats).mockReset().mockResolvedValue(stats())
+  vi.mocked(adminApi.getReports)
+    .mockReset()
+    .mockResolvedValue({ items: [], total: 0, limit: 1, offset: 0 })
   vi.mocked(adminApi.getAdminPractices)
     .mockReset()
     .mockResolvedValue(paginated([P_NOT_FULL, P_FULL, P_UNLIMITED], 3))
@@ -267,7 +262,7 @@ describe('AdminPracticesView', () => {
   })
 
   // ===========================================================================
-  describe('error message branch (.vue:128)', () => {
+  describe('error message', () => {
     it('ApiResponseError: the description shows the generic fallback (unmapped code)', async () => {
       // B8 (PROMPT №747): 'server_error' is not a real backend code -- same
       // fallback as the non-ApiResponseError case below.
@@ -290,7 +285,7 @@ describe('AdminPracticesView', () => {
   })
 
   // ===========================================================================
-  describe('scope filter (watch(filter, load), .vue:117-120,139)', () => {
+  describe('scope filter', () => {
     it('selecting each segment re-calls getAdminPractices with the mapped scope', async () => {
       mount()
       await flush()
@@ -308,21 +303,89 @@ describe('AdminPracticesView', () => {
       await flush()
       expect(adminApi.getAdminPractices).toHaveBeenLastCalledWith('all', 100, 0)
     })
+
+    it('a switch shows the loader, never the previous scope rows; the header keeps its total until the answer', async () => {
+      mount()
+      await flush()
+      let resolveUpcoming!: (v: ReturnType<typeof paginated>) => void
+      vi.mocked(adminApi.getAdminPractices).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveUpcoming = resolve
+          }),
+      )
+
+      segmentItem('Предстоящие').click()
+      await flush()
+      expect(host?.querySelector('.v-loader')).not.toBeNull()
+      expect(cards()).toHaveLength(0)
+      expect(host?.querySelector('.admin-list__count')?.textContent).toBe('3')
+
+      resolveUpcoming(paginated([P_FULL], 1))
+      await flush()
+      expect(cards()).toHaveLength(1)
+      expect(host?.querySelector('.admin-list__count')?.textContent).toBe('1')
+    })
+
+    // Owner decision 19.11: a failed switch shows the failure, never the
+    // previous scope's rows or total.
+    it('a failed switch: the error rung and "—" in the header, never the previous scope', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminPractices).mockRejectedValue(new Error('down'))
+
+      segmentItem('Предстоящие').click()
+      await flush()
+
+      expect(cards()).toHaveLength(0)
+      expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
+        'Не удалось загрузить практики',
+      )
+      expect(host?.querySelector('.admin-list__count')?.textContent).toBe('—')
+    })
   })
 
   // ===========================================================================
-  describe('store badge -- the harness point (.vue:89-94)', () => {
-    it('seeding adminStore.stats.practices_count shows it as the "Все" segment badge', async () => {
+  describe('revisit', () => {
+    it('a second visit shows the cached list at once, no loader, while it asks again', async () => {
+      const pinia = createPinia()
+      mount(pinia)
+      await flush()
+      app?.unmount()
+      host?.remove()
+      vi.mocked(adminApi.getAdminPractices).mockReturnValue(new Promise(() => {}))
+
+      app = null
+      // The same Pinia: the Colada cache outlives the screen.
+      const second = createApp(AdminPracticesView)
+        .use(createTestI18n())
+        .use(pinia)
+        .use(PiniaColada, coladaOptions)
+      app = second
+      host = document.createElement('div')
+      document.body.appendChild(host)
+      second.mount(host)
+      await flush()
+
+      expect(host.querySelector('.v-loader')).toBeNull()
+      expect(cards()).toHaveLength(3)
+      expect(adminApi.getAdminPractices).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  // ===========================================================================
+  describe('the platform total badge (/admin/stats)', () => {
+    it('practices_count shows as the "Все" segment badge', async () => {
+      vi.mocked(adminApi.getAdminStats).mockResolvedValue(stats({ practices_count: 27 }))
       mount()
-      useAdminStore().stats = stats({ practices_count: 27 })
       await flush()
 
       expect(segmentBadge('Все')).toBe('27')
     })
 
-    it('adminStore.stats = null: the "Все" segment has NO badge', async () => {
+    it('no counters yet: the "Все" segment has NO badge', async () => {
+      vi.mocked(adminApi.getAdminStats).mockReturnValue(new Promise(() => {}))
       mount()
-      useAdminStore().stats = null
       await flush()
 
       expect(segmentBadge('Все')).toBeUndefined()
@@ -330,7 +393,7 @@ describe('AdminPracticesView', () => {
   })
 
   // ===========================================================================
-  describe('headerCount (.vue:91)', () => {
+  describe('headerCount', () => {
     it('after a fetch, shows the scope total from the response', async () => {
       vi.mocked(adminApi.getAdminPractices).mockResolvedValue(
         paginated([P_NOT_FULL, P_FULL, P_UNLIMITED], 99),

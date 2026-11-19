@@ -17,6 +17,7 @@ import { createPinia } from 'pinia'
 import { PiniaColada, useQueryCache, type EntryKey, type QueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { INVALIDATES, invalidateAfter, type MutationName } from '@/composables/queries/invalidation'
 
 let app: App | null = null
@@ -30,6 +31,8 @@ const SAMPLE = {
   schoolLists: keys.schools.mine('all') as EntryKey,
   groupList: keys.groups.list() as EntryKey,
   groupMembers: keys.groups.members('g1', '') as EntryKey,
+  // The admin zone (FE-181): no user-zone mutation may reach it.
+  adminStats: adminKeys.stats() as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 

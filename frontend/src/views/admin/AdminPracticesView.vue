@@ -14,7 +14,8 @@
   slot in the newer SVGs; the verified check is hidden product-wide (2026-10-03).
 
   WIRED (E9, 2026-06-16): GET /api/v1/admin/practices?scope=all|upcoming|past drives
-  the list (loading/error/empty states). Header count = the fetched scope total; the
+  the list (loading/error/empty states), a Pinia Colada query per scope
+  (composables/queries/admin.ts, FE-181). Header count = the fetched scope total; the
   i18n:common.all segment badge keeps the platform total from /admin/stats. Tapping
   a card opens the detail, which re-fetches by id (GET /admin/practices/:id).
 -->
@@ -37,7 +38,7 @@
       :title="t('adminScreens.adminPractices.loadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
+      <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <div v-else-if="practices.length" class="admin-list__items">
@@ -66,29 +67,52 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuery } from '@pinia/colada'
 import { VBackButton, VSegment, VCard, VLoader, VEmptyState, VButton } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import { IconGroup } from '@/components/icons'
-import { useAdminStore } from '@/stores/admin'
-import { getAdminPractices, type AdminPracticeScope } from '@/api/admin'
+import { adminPracticesQuery, useAdminStats } from '@/composables/queries/admin'
+import type { AdminPracticeScope } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort, formatTime } from '@/utils/format'
-import type { AdminPracticeListItem } from '@/api/types'
+import type { AdminPracticeListItem, PaginatedAdminPracticesResponse } from '@/api/types'
 
 const router = useRouter()
-const adminStore = useAdminStore()
+const { stats } = useAdminStats()
 
 const filter = ref('all')
-const practices = ref<AdminPracticeListItem[]>([])
-const total = ref<number | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
+// Narrow the segment value to the backend scope without a cast.
+const scope = computed<AdminPracticeScope>(() =>
+  filter.value === 'upcoming' ? 'upcoming' : filter.value === 'past' ? 'past' : 'all',
+)
+
+// One entry per scope. A scope switch shows the loader (the previous scope's
+// rows never stand in for the new one), but the header keeps the previous
+// total until the new one lands (placeholderData).
+const practicesQuery = useQuery(() => ({
+  ...adminPracticesQuery(scope.value),
+  placeholderData: (previous: PaginatedAdminPracticesResponse | undefined) => previous,
+}))
+const answer = computed(() =>
+  practicesQuery.isPlaceholderData.value ? undefined : practicesQuery.data.value,
+)
+const practices = computed<AdminPracticeListItem[]>(() => answer.value?.items ?? [])
+const total = computed<number | null>(() => practicesQuery.data.value?.total ?? null)
+const loading = computed(
+  () => answer.value === undefined && practicesQuery.asyncStatus.value === 'loading',
+)
+const error = computed<string | null>(() => {
+  const e = practicesQuery.error.value
+  return answer.value === undefined && !loading.value && e
+    ? extractApiError(e, t('common.loadError'))
+    : null
+})
 
 // Platform total from /admin/stats (loaded by AdminShell) — the i18n:common.all badge.
-const totalCount = computed<number | null>(() => adminStore.stats?.practices_count ?? null)
+const totalCount = computed<number | null>(() => stats.value?.practices_count ?? null)
 // Header count reflects the fetched scope total.
 const headerCount = computed<string>(() => (total.value !== null ? String(total.value) : '—'))
 
@@ -121,30 +145,14 @@ function isFull(p: AdminPracticeListItem): boolean {
   return p.capacity != null && p.booked >= p.capacity
 }
 
-async function load(): Promise<void> {
-  // Narrow the segment value to the backend scope without a cast.
-  const scope: AdminPracticeScope =
-    filter.value === 'upcoming' ? 'upcoming' : filter.value === 'past' ? 'past' : 'all'
-  loading.value = true
-  error.value = null
-  try {
-    const res = await getAdminPractices(scope, 100, 0)
-    practices.value = res.items
-    total.value = res.total
-  } catch (e) {
-    error.value = extractApiError(e, t('common.loadError'))
-  } finally {
-    loading.value = false
-  }
+function retry(): void {
+  void practicesQuery.refetch()
 }
 
 // Tap a card -> admin practice detail; it re-fetches by id (GET /admin/practices/:id).
 function openDetail(p: AdminPracticeListItem): void {
   void router.push({ name: 'admin-practice-detail', params: { id: p.id } })
 }
-
-watch(filter, load)
-onMounted(load)
 </script>
 
 <style scoped>
