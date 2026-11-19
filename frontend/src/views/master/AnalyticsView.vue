@@ -22,8 +22,10 @@
        first PAST_PREVIEW then the reveal), each with its before / after /
        came-left / reviews blocks. A tap opens the practice analytics screen.
 
-  Payments tab: parked (owner 2026-10-01, PAYMENTS_TAB_ENABLED below) -- the
-  pane and its E2 wiring stay intact for the flip-back.
+  Payments tab: parked (owner 2026-10-01, PAYMENTS_TAB_ENABLED in
+  ./analyticsFlags.ts). Its pane keeps its income and transactions loads;
+  when the flag is switched on, the same period slider (above both panes)
+  drives its income, and the tab slider appears above it.
 -->
 
 <template>
@@ -39,19 +41,21 @@
       variant="tabs"
     />
 
+    <!-- Full-width period slider (variant="tabs": equal segments), above BOTH panes:
+         the period drives the reviews numbers and, when the Payments tab is
+         switched on, its income too. -->
+    <VSegmentTrack
+      v-model="period"
+      class="analytics__period"
+      :options="PERIOD_OPTIONS"
+      variant="tabs"
+      :aria-label="t('analytics.statsPeriod')"
+    />
+
     <!-- ================================================================
          TAB: REVIEWS
          ================================================================ -->
     <div v-show="activeTab === 'reviews'" class="analytics__body">
-      <!-- Full-width period slider (variant="tabs": equal segments). -->
-      <VSegmentTrack
-        v-model="period"
-        class="analytics__period"
-        :options="PERIOD_OPTIONS"
-        variant="tabs"
-        :aria-label="t('analytics.statsPeriod')"
-      />
-
       <div v-if="loading" class="analytics__loader"><VLoader size="lg" /></div>
 
       <!-- Transient failure: honest retry, no stale numbers. -->
@@ -68,8 +72,8 @@
 
       <template v-else-if="data">
         <div class="analytics__stats">
-          <VStatCard :value="`${Math.round(data.checkin_rate_pct)}%`" label="Check-in" />
-          <VStatCard :value="`${Math.round(data.feedback_rate_pct)}%`" label="Feedback" />
+          <VStatCard :value="`${data.checkin_rate_pct}%`" label="Check-in" />
+          <VStatCard :value="`${data.feedback_rate_pct}%`" label="Feedback" />
         </div>
 
         <DistributionCard
@@ -287,7 +291,7 @@ function retry(): void {
 // percent and both numbers, the screen divides nothing.
 const feedbackCountLabel = computed((): string =>
   t('user.screens.schoolAnalytics.conversion', {
-    pct: Math.round(data.value?.feedback_rate_pct ?? 0),
+    pct: data.value?.feedback_rate_pct ?? 0,
     reviews: data.value?.feedbacks_count ?? 0,
     visits: data.value?.bookings_count ?? 0,
   }),
@@ -416,8 +420,7 @@ function txnTitle(t: MasterTransactionItem): string {
 }
 
 async function loadIncome(): Promise<void> {
-  // Income is bounded by week or month only: a quarter reads the month.
-  incomeData.value = await getIncome(period.value === 'week' ? 'week' : 'month')
+  incomeData.value = await getIncome(period.value)
 }
 
 async function loadPayments(): Promise<void> {

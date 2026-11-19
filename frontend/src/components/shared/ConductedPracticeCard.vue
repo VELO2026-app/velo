@@ -136,6 +136,18 @@ const segments = computed(() => moodStripBars(props.practice.rating).filter((bar
 
 .conducted-practice__summary[role='button'] {
   cursor: pointer;
+  transition:
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Press: the summary sinks a little under the finger, the way a clickable
+   VCard does (the whole card used to be that VCard). */
+.conducted-practice__summary[role='button']:active {
+  transform: scale(0.985);
+  opacity: 0.92;
+  transition-duration: var(--velo-dur-press);
 }
 
 .conducted-practice__head {

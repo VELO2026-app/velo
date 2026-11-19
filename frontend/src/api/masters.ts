@@ -210,7 +210,7 @@ export function getStudent(id: string): Promise<StudentDetailResponse> {
  * plus the previous-period total and the signed delta_pct (null when the
  * previous period had no net-positive turnover).
  */
-export function getIncome(period: 'week' | 'month' = 'week'): Promise<IncomeResponse> {
+export function getIncome(period: MasterAnalyticsPeriod = 'week'): Promise<IncomeResponse> {
   const query = buildQuery({ period })
   return api.get<IncomeResponse>(`/api/v1/masters/me/income${query}`)
 }

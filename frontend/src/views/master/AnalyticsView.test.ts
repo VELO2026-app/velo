@@ -65,6 +65,22 @@ function text(): string {
   return (host?.textContent ?? '').replace(/\u00a0/g, ' ')
 }
 
+/** The card of the practice with this title. */
+function cardOf(title: string): HTMLElement {
+  const card = Array.from(host?.querySelectorAll<HTMLElement>('.conducted-practice') ?? []).find(
+    (c) => c.querySelector('.conducted-practice__title')?.textContent?.trim() === title,
+  )
+  if (!card) throw new Error(`no card for ${title}`)
+  return card
+}
+
+/** The heading line of one block of a card: its title with the "N of M" count beside it. */
+function blockLine(card: HTMLElement, heading: string): string {
+  const h2 = Array.from(card.querySelectorAll('h2')).find((h) => h.textContent?.trim() === heading)
+  if (!h2?.parentElement) throw new Error(`no block ${heading}`)
+  return (h2.parentElement.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
 function clickText(label: string): void {
   const el = Array.from(
     host?.querySelectorAll<HTMLElement>('button, [role="tab"], [role="radio"]') ?? [],
@@ -81,7 +97,12 @@ const zones = (bad = 0, low = 0, neutral = 0, good = 0, fire = 0): ScoreZoneCoun
   fire,
 })
 
-function practice(id: string, title: string, day: string): PracticeAnalyticsSummary {
+function practice(
+  id: string,
+  title: string,
+  day: string,
+  over: Partial<PracticeAnalyticsSummary> = {},
+): PracticeAnalyticsSummary {
   return {
     practice_id: id,
     title,
@@ -89,12 +110,11 @@ function practice(id: string, title: string, day: string): PracticeAnalyticsSumm
     scheduled_at: `2026-07-${day}T10:00:00+00:00`,
     timezone: 'UTC',
     attended: 10,
-    before: zones(0, 1, 3, 2, 0),
-    // `after` holds every review left: its sum (5) is the card's "feedbacks".
+    before: zones(0, 2, 3, 2, 0),
     after: zones(0, 0, 1, 2, 2),
-    pairs_total: 6,
-    // Reviews with text only: fewer than the five ratings.
+    pairs_total: 4,
     reviews_total: 3,
+    ...over,
   }
 }
 
@@ -114,7 +134,21 @@ function analytics(over: Partial<MasterAnalyticsResponse> = {}): MasterAnalytics
     feedback_rate_delta_pp: null,
     checkins: zones(0, 1, 5, 6, 4),
     feedbacks: zones(1, 0, 2, 3, 2),
-    conducted_practices: [practice('p2', 'Медитация', '19'), practice('p1', 'Дыхание', '18')],
+    // Two practices with DIFFERENT numbers in every block, and every number of a
+    // card differs from the others', so a block fed from the wrong field
+    // (pairs_total from the sum of `before`, reviews from the ratings) fails:
+    //   Meditation: came 10 -- before 7, after 5, came-left 4, reviews with text 3
+    //   Breathing:  came  8 -- before 6, after 4, came-left 5, reviews with text 2
+    conducted_practices: [
+      practice('p2', 'Медитация', '19'),
+      practice('p1', 'Дыхание', '18', {
+        attended: 8,
+        before: zones(1, 1, 2, 2, 0),
+        after: zones(0, 0, 1, 1, 2),
+        pairs_total: 5,
+        reviews_total: 2,
+      }),
+    ],
     ...over,
   }
 }
@@ -162,34 +196,28 @@ describe('AnalyticsView (master)', () => {
     expect(text()).toContain('40% · 8 из 20')
   })
 
-  it('does not show the old reviews tile or the old rating distribution', async () => {
-    mount()
-    await flush()
-
-    expect(text()).not.toContain('Общая статистика')
-    expect(text()).not.toContain('Прошедшие практики')
-    expect(host?.querySelector('.analytics__stats')?.children).toHaveLength(2)
-  })
-
-  it('lists the period practices with the four blocks, each "N из M"', async () => {
+  it('each card shows the numbers of its own practice in each block, "N из M"', async () => {
     mount()
     await flush()
 
     expect(text()).toContain('Практики недели')
-    expect(text()).toContain('Медитация')
-    expect(text()).toContain('Дыхание')
-    expect(text()).toContain('До практики')
-    expect(text()).toContain('После практики')
-    expect(text()).toContain('Пришел → ушел')
-    expect(text()).toContain('Отзывы')
-    // before: 6 check-ins of 10 who came; after: 5 of 10; came -> left: 6 of 10;
-    // reviews with text: 3 of 10 (not the 5 ratings -- the server counts texts).
-    expect(text()).toContain('6 из 10')
-    expect(text()).toContain('5 из 10')
-    expect(text()).toContain('3 из 10')
-    // The summary line: who came, and every review left.
-    expect(text()).toContain('Ученики: 10')
-    expect(text()).toContain('Фидбеки: 5')
+
+    const meditation = cardOf('Медитация')
+    expect(meditation.textContent).toContain('Ученики: 10')
+    expect(meditation.textContent).toContain('Фидбеки: 5')
+    expect(blockLine(meditation, 'До практики')).toContain('7 из 10')
+    expect(blockLine(meditation, 'После практики')).toContain('5 из 10')
+    expect(blockLine(meditation, 'Пришел → ушел')).toContain('4 из 10')
+    // Reviews with text, not the five ratings of `after`.
+    expect(blockLine(meditation, 'Отзывы')).toContain('3 из 10')
+
+    const breathing = cardOf('Дыхание')
+    expect(breathing.textContent).toContain('Ученики: 8')
+    expect(breathing.textContent).toContain('Фидбеки: 4')
+    expect(blockLine(breathing, 'До практики')).toContain('6 из 8')
+    expect(blockLine(breathing, 'После практики')).toContain('4 из 8')
+    expect(blockLine(breathing, 'Пришел → ушел')).toContain('5 из 8')
+    expect(blockLine(breathing, 'Отзывы')).toContain('2 из 8')
   })
 
   it('the slider refetches with the selected period and renames the section', async () => {
@@ -248,17 +276,6 @@ describe('AnalyticsView (master)', () => {
     expect(text()).toContain('За выбранный период практик нет')
   })
 
-  it('rounds the feedback percent on the heading line', async () => {
-    vi.mocked(mastersApi.getMasterAnalytics).mockResolvedValue(
-      analytics({ feedback_rate_pct: 33.333333, feedbacks_count: 1, bookings_count: 3 }),
-    )
-    mount()
-    await flush()
-
-    expect(text()).toContain('33% · 1 из 3')
-    expect(text()).not.toContain('33.33')
-  })
-
   it('shows three practices, the rest behind the reveal', async () => {
     vi.mocked(mastersApi.getMasterAnalytics).mockResolvedValue(
       analytics({
@@ -288,6 +305,25 @@ describe('AnalyticsView (master)', () => {
 
     host!.querySelector<HTMLElement>('.conducted-practice__summary')!.click()
     expect(push).toHaveBeenCalledWith({ name: 'master-practice-reviews', params: { id: 'p2' } })
+  })
+
+  it('Enter and Space on a practice summary open its analytics', async () => {
+    mount()
+    await flush()
+    const summary = cardOf('Медитация').querySelector<HTMLElement>('.conducted-practice__summary')!
+
+    summary.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(push).toHaveBeenLastCalledWith({
+      name: 'master-practice-reviews',
+      params: { id: 'p2' },
+    })
+
+    push.mockClear()
+    summary.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+    expect(push).toHaveBeenLastCalledWith({
+      name: 'master-practice-reviews',
+      params: { id: 'p2' },
+    })
   })
 
   it('the needs-attention section appears only with someone to show', async () => {

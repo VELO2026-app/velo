@@ -2,9 +2,7 @@
 import { t } from '@/locales'
 import { computed } from 'vue'
 import DistributionCard from '@/components/shared/DistributionCard.vue'
-import { MOOD_SCALE_KEYS, MOOD_SCALE_LABELS } from '@/utils/moodScale'
-import { MOOD_SCALE_FILLS } from '@/utils/displayHelpers'
-import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
+import { moodStripBars } from '@/components/shared/conductedPractice'
 import { moodTotal, type MoodCounts } from './analytics'
 
 const props = withDefaults(
@@ -17,15 +15,7 @@ const props = withDefaults(
   { initiallyExpanded: false },
 )
 
-const bars = computed(() =>
-  MOOD_SCALE_KEYS.map((key) => ({
-    key,
-    label: MOOD_SCALE_LABELS[key],
-    count: props.counts[key],
-    fill: MOOD_SCALE_FILLS[key],
-    icon: MOOD_SCALE_ICON[key],
-  })),
-)
+const bars = computed(() => moodStripBars(props.counts))
 const countLabel = computed(() =>
   t('shared.components.moodOf', { n: moodTotal(props.counts), total: props.participants }),
 )
