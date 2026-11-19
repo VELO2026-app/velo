@@ -49,6 +49,7 @@ const SAMPLE = {
   adminRevokePreview: adminKeys.revokePreview('m1') as EntryKey,
   adminOverview: adminKeys.overview('week', 0) as EntryKey,
   adminMetric: adminKeys.metric('checkin', 'week', 0) as EntryKey,
+  adminRevenue: adminKeys.metric('revenue', 'month', -1) as EntryKey,
   adminPractices: adminKeys.practices('all') as EntryKey,
   adminPractice: adminKeys.practice('p1') as EntryKey,
   masterPublic: keys.masters.public('m1') as EntryKey,
@@ -174,7 +175,13 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
   ],
   rejectMethodChange: ['adminMethodRequests', 'adminStats'],
   decideReport: ['adminReports', 'adminReport', 'adminStats'],
-  decideWithdrawal: ['adminWithdrawals', 'adminMasters'],
+  decideWithdrawal: [
+    'adminWithdrawals',
+    'adminMasters',
+    'adminMaster',
+    'adminRevokePreview',
+    'adminRevenue',
+  ],
 }
 
 describe('ADMIN_INVALIDATES', () => {

@@ -112,7 +112,8 @@ import { useToast } from '@/composables/useToast'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
 import type { AdminWithdrawalResponse } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
-import { useAdminMutation } from '@/composables/queries/admin'
+import { setWithdrawal, useAdminMutation } from '@/composables/queries/admin'
+import { useQueryCache } from '@pinia/colada'
 import { formatMoney } from '@/utils/format'
 
 const router = useRouter()
@@ -142,13 +143,20 @@ const rejecting = ref(false)
 
 // The verdicts: the payouts list and the masters' balances go stale
 // (ADMIN_INVALIDATES.decideWithdrawal); the screen goes back to the list.
-const approve = useAdminMutation('decideWithdrawal', (id: string) => approveWithdrawal(id), {
+const queryCache = useQueryCache()
+const writeDecided = {
+  write: (decided: AdminWithdrawalResponse) => setWithdrawal(queryCache, decided),
   waitForRefetch: false,
-})
+}
+const approve = useAdminMutation(
+  'decideWithdrawal',
+  (id: string) => approveWithdrawal(id),
+  writeDecided,
+)
 const reject = useAdminMutation(
   'decideWithdrawal',
   ({ id, reason }: { id: string; reason: string }) => rejectWithdrawal(id, reason),
-  { waitForRefetch: false },
+  writeDecided,
 )
 
 const anyLoading = computed<boolean>(() => approving.value || rejecting.value)
@@ -201,7 +209,8 @@ function openReject(): void {
 }
 
 async function onApprove(): Promise<void> {
-  if (!w.value || approving.value) return
+  // One decision at a time: approve and reject block each other.
+  if (!w.value || anyLoading.value) return
   approving.value = true
   try {
     await approve.mutateAsync(w.value.id)
@@ -216,7 +225,7 @@ async function onApprove(): Promise<void> {
 }
 
 async function onReject(): Promise<void> {
-  if (!w.value || rejecting.value) return
+  if (!w.value || anyLoading.value) return
   rejectError.value = ''
   if (!rejectReason.value.trim()) {
     rejectError.value = t('adminScreens.adminWithdrawalDetail.rejectionReasonRequired')

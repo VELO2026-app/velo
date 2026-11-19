@@ -37,7 +37,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, setInfiniteQueryData, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminWithdrawalDetailView from '@/views/admin/AdminWithdrawalDetailView.vue'
 import * as adminApi from '@/api/admin'
@@ -396,6 +397,29 @@ describe('AdminWithdrawalDetailView', () => {
     })
   })
 
+  describe('the payouts list held behind', () => {
+    it('the approved request is written over its row at once (no "pending" row for a second decision)', async () => {
+      vi.mocked(adminApi.approveWithdrawal).mockResolvedValue(wd('w1', { status: 'approved' }))
+      vi.mocked(adminApi.getAdminWithdrawals).mockReturnValue(new Promise(() => {}))
+      mountWith(wd('w1'))
+      // The list the admin came from, held in the cache.
+      setInfiniteQueryData(useQueryCache(), adminKeys.withdrawals(), {
+        pages: [{ items: [wd('w1'), wd('w2')], total: 2, limit: 20, offset: 0 }],
+        pageParams: [0],
+      })
+      await flush()
+      await openConfirm()
+
+      cpmApprove()?.click()
+      await flush()
+
+      const held = useQueryCache().getQueryData<{ pages: { items: AdminWithdrawalResponse[] }[] }>(
+        adminKeys.withdrawals(),
+      )
+      expect(held?.pages[0]?.items.map((w) => w.status)).toEqual(['approved', 'pending'])
+    })
+  })
+
   describe('reject', () => {
     it('«Отклонить» opens the reason sheet without rejecting', async () => {
       mountWith(wd('w1'))
@@ -457,6 +481,24 @@ describe('AdminWithdrawalDetailView', () => {
       expect(adminApi.rejectWithdrawal).toHaveBeenCalledWith('w7', 'Неверные реквизиты')
       expect(toastSuccess).toHaveBeenCalledWith('Выплата отклонена')
       expect(back).toHaveBeenCalled()
+    })
+
+    it('does NOT reject twice when «Отклонить выплату» is hit twice while the reject is in flight', async () => {
+      vi.mocked(adminApi.rejectWithdrawal).mockReturnValue(new Promise(() => {}))
+      mountWith(wd('w7'))
+      await flush()
+      button('Отклонить')?.click()
+      await flush()
+      const ta = document.body.querySelector<HTMLTextAreaElement>('textarea')
+      ta!.value = 'Неверные реквизиты'
+      ta!.dispatchEvent(new Event('input'))
+      await flush()
+
+      bodyButton('Отклонить выплату')?.click()
+      bodyButton('Отклонить выплату')?.click()
+      await nextTick()
+
+      expect(adminApi.rejectWithdrawal).toHaveBeenCalledTimes(1)
     })
 
     it('falls back to the generic message on failure (unmapped code) and stays put', async () => {

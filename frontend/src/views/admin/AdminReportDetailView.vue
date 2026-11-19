@@ -4,8 +4,8 @@
   Full report detail with resolve / dismiss actions.
 
   S-1/S-2: after resolve/dismiss use router.push({ name: 'admin-reports' })
-  instead of router.back(). Guarantees a fresh mount of AdminReportsView
-  and, the complaints being invalidated, a fresh read -- no stale reports shown.
+  instead of router.back(): the list remounts over the complaints the
+  verdict invalidated, so it reads them again -- no stale reports shown.
 -->
 
 <template>

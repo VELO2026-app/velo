@@ -16,8 +16,10 @@
 //     oversight list, one practice's oversight detail.
 //   - users and masters: the users and masters lists, one master's review
 //     page, the method-change queue.
+//   - the metric drill-ins and the revenue: the dashboard's window queries,
+//     read through adminFigures;
 //   - reports and payouts: the complaints tab, one report, the payout
-//     requests (the drill-ins read the dashboard's window queries).
+//     requests.
 //
 // ONE module on purpose, not one per area: Rollup puts every module into a
 // chunk by the set of routes that import it, and each extra shared chunk
@@ -71,6 +73,7 @@ import {
   getAdminWithdrawals,
   getReportById,
   type AdminMasterDetail,
+  type AdminWithdrawalResponse,
   type ReportStatusFilter,
   type AdminPaginatedPromosResponse,
   type AdminPracticeScope,
@@ -307,10 +310,19 @@ export const ADMIN_INVALIDATES = {
   decideReport: [adminKeys.reportsAll(), adminKeys.reportAll(), adminKeys.stats()],
   /**
    * `POST /admin/withdrawals/{id}/approve` and `.../reject`: the request's
-   * status in the payouts list; a rejection gives the amount back to the
-   * master's balance (the masters list shows it).
+   * status in the payouts list (the answer is also written in place); the
+   * master's balance moves -- frozen to paid out, or back to available --
+   * in the masters list, their detail and their revoke advisory (available,
+   * frozen, pending withdrawals); an approval adds to the period's payouts
+   * (the revenue windows, not the other metrics).
    */
-  decideWithdrawal: [adminKeys.withdrawals(), adminKeys.masters()],
+  decideWithdrawal: [
+    adminKeys.withdrawals(),
+    adminKeys.masters(),
+    adminKeys.masterAll(),
+    adminKeys.revokePreviewAll(),
+    adminKeys.revenueAll(),
+  ],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of an admin mutation that has a row in `ADMIN_INVALIDATES`. */
@@ -901,3 +913,23 @@ export const adminWithdrawalsQuery = defineInfiniteQueryOptions(() => ({
   ) => nextOffset(last, pages),
   staleTime: 0,
 }))
+
+/**
+ * Write a decided payout request into the payouts list held, at once --
+ * the row leaves "pending" before the refetch answers (a second decision
+ * would only meet 409).
+ */
+export function setWithdrawal(queryCache: QueryCache, decided: AdminWithdrawalResponse): void {
+  if (queryCache.getQueryData(adminKeys.withdrawals()) === undefined) return
+  setInfiniteQueryData<PaginatedAdminWithdrawalsResponse, number>(
+    queryCache,
+    adminKeys.withdrawals(),
+    (data) => ({
+      pageParams: data?.pageParams ?? [],
+      pages: (data?.pages ?? []).map((page) => ({
+        ...page,
+        items: page.items.map((w) => (w.id === decided.id ? decided : w)),
+      })),
+    }),
+  )
+}

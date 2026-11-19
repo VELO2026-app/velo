@@ -13,7 +13,7 @@
 // (`.v-modal__overlay`, Teleport+Transition) -- same cleanup as №475/№476,
 // purged in afterEach.
 //
-// (1) THE STALE-RESPONSE RACE GUARD (`generation`, .vue:173-198, W-3). Built
+// (1) THE STALE-RESPONSE RACE GUARD (one Colada entry per filter, W-3). Built
 // with TWO controlled (manually-resolved) promises: apply status filter A
 // (open->pending) via the real modal UI, then apply filter B (closed->resolved)
 // via the SAME UI before A's promise resolves, THEN resolve A last. The
@@ -23,7 +23,7 @@
 // there is no separate "Apply" button, closing IS applying, confirmed by
 // reading applyAndClose()), not by calling internal functions directly.
 //
-// (2) THE HONEST-STUB FILTER BOUNDARY. Only `apiStatus` (.vue:163-170) reaches
+// (2) THE HONEST-STUB FILTER BOUNDARY. Only `apiStatus` reaches
 // getReports: exactly one status selected maps open->pending / closed->
 // resolved; both or neither selected -> undefined. Category/priority/date are
 // DISPLAY-ONLY (categoryLabel/pillLabel/isPayments) -- selecting a category
@@ -258,7 +258,7 @@ describe('AdminReportsView', () => {
 
     it('failure (ApiResponseError): the toast carries the generic fallback (unmapped code)', async () => {
       // B8 (PROMPT №747): 'server_error' is not a real backend code --
-      // unmapped, lands on the call site's own fallback (.vue:194).
+      // unmapped, lands on the call site's own fallback.
       vi.mocked(adminApi.getReports).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
@@ -268,7 +268,7 @@ describe('AdminReportsView', () => {
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки обращений')
     })
 
-    it('"Повторить" calls loadInitial and recovers from error to content', async () => {
+    it('"Повторить" asks again and recovers from error to content', async () => {
       vi.mocked(adminApi.getReports).mockRejectedValueOnce(new Error('ECONNRESET'))
       mount()
       await flush()
@@ -292,10 +292,10 @@ describe('AdminReportsView', () => {
   })
 
   // ===========================================================================
-  describe('THE STALE-RESPONSE RACE GUARD (generation, .vue:172-198, W-3)', () => {
+  describe('THE STALE-RESPONSE RACE GUARD (one entry per filter, W-3)', () => {
     it('a late-arriving response from an earlier filter is discarded; the newer filter wins', async () => {
       mount()
-      await flush() // initial load (generation 1) settled
+      await flush() // initial load settled
 
       let resolveA!: (v: ReturnType<typeof paginated>) => void
       let resolveB!: (v: ReturnType<typeof paginated>) => void
@@ -312,12 +312,12 @@ describe('AdminReportsView', () => {
         )
 
       // Filter A: the open chip (i18n:moderation.statuses.open) only ->
-      // apiStatus 'pending' (generation 2, in flight).
+      // apiStatus 'pending' (in flight).
       await applyStatusFilter('Открытая')
       expect(callCount).toBe(1)
 
       // Filter B: switch to the closed chip (i18n:moderation.statuses.closed)
-      // only, BEFORE A resolves (generation 3, in flight). Toggle off the open
+      // only, BEFORE A resolves (in flight). Toggle off the open
       // chip, toggle on the closed one -- the sheet re-seeds its
       // draft from the currently APPLIED filter each time it opens (confirmed
       // by reading ModerationFilterModal's own watch(props.open, ...)), so
@@ -342,7 +342,7 @@ describe('AdminReportsView', () => {
   })
 
   // ===========================================================================
-  describe('THE HONEST-STUB FILTER BOUNDARY (.vue:148-170)', () => {
+  describe('THE HONEST-STUB FILTER BOUNDARY', () => {
     it('the filter trigger opens the modal; the X button closes it (closing IS applying)', async () => {
       mount()
       await flush()
@@ -364,6 +364,21 @@ describe('AdminReportsView', () => {
       await applyStatusFilter('Открытая')
 
       expect(adminApi.getReports).toHaveBeenLastCalledWith('pending', undefined, 20, 0)
+    })
+
+    it('applying the same filter again asks again, and shows the new answer', async () => {
+      mount()
+      await flush()
+      await applyStatusFilter('Открытая')
+      expect(adminApi.getReports).toHaveBeenCalledTimes(2)
+
+      vi.mocked(adminApi.getReports).mockResolvedValue(paginated([REPORT_C], 1))
+      // Open and close the filter without a change: the same filter, applied again.
+      await applyStatusFilter()
+
+      expect(adminApi.getReports).toHaveBeenCalledTimes(3)
+      expect(adminApi.getReports).toHaveBeenLastCalledWith('pending', undefined, 20, 0)
+      expect(cards()).toHaveLength(1)
     })
 
     it('status filter -> the api argument: "Закрытая" -> resolved', async () => {
@@ -403,7 +418,7 @@ describe('AdminReportsView', () => {
   })
 
   // ===========================================================================
-  describe('pagination (.vue:201-213) -- TWO DISTINCT fallback strings', () => {
+  describe('pagination -- TWO DISTINCT fallback strings', () => {
     it('loadMore requests the next offset and APPENDS (not replaces)', async () => {
       vi.mocked(adminApi.getReports).mockResolvedValueOnce(paginated([REPORT_A], 2))
       mount()
@@ -428,7 +443,7 @@ describe('AdminReportsView', () => {
       expect(moreBtn()).toBeUndefined()
     })
 
-    it('loadMore failure toasts its OWN fallback ("Ошибка загрузки"), DIFFERENT from loadInitial\'s ("Ошибка загрузки обращений")', async () => {
+    it('loadMore failure toasts its OWN fallback ("Ошибка загрузки"), DIFFERENT from the list fallback ("Ошибка загрузки обращений")', async () => {
       vi.mocked(adminApi.getReports).mockResolvedValueOnce(paginated([REPORT_A], 2))
       mount()
       await flush()
@@ -523,6 +538,21 @@ describe('AdminReportsView', () => {
       expect(replace).toHaveBeenCalledWith({ query: { tab: 'complaints' } })
       expect(adminApi.getReports).toHaveBeenCalledTimes(1)
       expect(cards()).toHaveLength(2)
+    })
+
+    it('every switch back to «Жалобы» asks for the reports again', async () => {
+      mount()
+      await flush()
+      expect(adminApi.getReports).toHaveBeenCalledTimes(1)
+
+      segment('Обращения')?.click()
+      await flush()
+      vi.mocked(adminApi.getReports).mockResolvedValue(paginated([REPORT_C], 1))
+      segment('Жалобы')?.click()
+      await flush()
+
+      expect(adminApi.getReports).toHaveBeenCalledTimes(2)
+      expect(cards()).toHaveLength(1)
     })
 
     it('switching back to «Обращения» keeps the other query keys', async () => {
