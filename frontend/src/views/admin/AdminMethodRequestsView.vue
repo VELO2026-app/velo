@@ -152,8 +152,8 @@ import { extractApiError } from '@/composables/useApiError'
 import {
   adminMethodRequestsQuery,
   dropMethodRequest,
-  onFailedRequest,
   useAdminMutation,
+  usePagedListFailures,
 } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { masterDisplayName, formatRelative } from '@/utils/adminHelpers'
@@ -173,7 +173,6 @@ const items = computed<AdminMethodChangeItem[]>(
 )
 const total = computed(() => requestsQuery.data.value?.pages.at(-1)?.total ?? 0)
 const { loading, failed: error } = screenQueryState(requestsQuery)
-const loadingMore = ref(false)
 const hasMore = requestsQuery.hasNextPage
 
 // The user_id currently being approved/rejected (disables that row's buttons).
@@ -210,28 +209,19 @@ function nameOf(item: AdminMethodChangeItem): string {
   return item.display_name || masterDisplayName(item)
 }
 
-// A failed first page is the error state and its toast; a failed next page
-// keeps the list and toasts on its own (loadMore).
-onFailedRequest(requestsQuery, (e) => {
-  if (requestsQuery.data.value === undefined)
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.loadFailedToast')))
-})
+// Every failed request is told: a next page with its own fallback, the
+// list itself (its first load, a refetch) with the list's.
+const { loadingMore, loadMore } = usePagedListFailures(requestsQuery, (e, nextPage) =>
+  toast.error(
+    extractApiError(
+      e,
+      nextPage ? t('common.loadError') : t('adminScreens.adminMethodRequests.loadFailedToast'),
+    ),
+  ),
+)
 
 function retry(): void {
   void requestsQuery.refetch()
-}
-
-async function loadMore(): Promise<void> {
-  loadingMore.value = true
-  try {
-    // cancelRefetch false: a tap during a reload joins it instead of gluing
-    // a stale page to a fresh one.
-    await requestsQuery.loadNextPage({ throwOnError: true, cancelRefetch: false })
-  } catch (e) {
-    toast.error(extractApiError(e, t('common.loadError')))
-  } finally {
-    loadingMore.value = false
-  }
 }
 
 // The verdicts (ADMIN_INVALIDATES): the decided request leaves the list (and

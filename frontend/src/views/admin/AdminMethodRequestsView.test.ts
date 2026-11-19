@@ -493,6 +493,31 @@ describe('AdminMethodRequestsView', () => {
       expect(adminApi.getMethodChangeRequests).toHaveBeenCalledTimes(1) // the queue is asked again
     })
 
+    it('with two pages loaded, a decision on the first lowers the count every page carries', async () => {
+      vi.mocked(adminApi.approveMethodChange).mockResolvedValue({
+        user_id: 'm_matched',
+        status: 'approved',
+      })
+      vi.mocked(adminApi.getMethodChangeRequests)
+        .mockReset()
+        .mockResolvedValueOnce(paginated([ITEM_MATCHED], 2))
+        .mockResolvedValueOnce({ ...paginated([ITEM_CUSTOM], 2), offset: 1 })
+      mount()
+      await flush()
+      moreBtn()?.click()
+      await flush()
+      expect(cards()).toHaveLength(2)
+      // The queue's refetch never answers here: the count is the local write.
+      vi.mocked(adminApi.getMethodChangeRequests).mockReturnValue(new Promise(() => {}))
+
+      btnByText(cardByName('Мастер Совпавший'), 'Одобрить')?.click()
+      await flush()
+
+      expect(cards()).toHaveLength(1)
+      expect(host?.querySelector('.amr__count')?.textContent).toBe('1')
+      expect(moreBtn()).toBeUndefined()
+    })
+
     it('failure: toasts the generic fallback (unmapped code) and the row STAYS', async () => {
       // B8 (PROMPT №747): 'already_decided' is not a real backend code --
       // unmapped, lands on the call site's own fallback (.vue:254).

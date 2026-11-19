@@ -59,8 +59,13 @@ export const adminKeys = {
   masterAll: () => ['admin', 'master'] as const,
   /** `GET /admin/masters/{id}` -- one master's full application / profile. */
   master: (userId: string) => ['admin', 'master', userId] as const,
-  /** `GET /admin/masters/{id}/revoke-preview` -- what revoking would leave behind. Under the master's prefix. */
-  revokePreview: (userId: string) => ['admin', 'master', userId, 'revokePreview'] as const,
+  /**
+   * `GET /admin/masters/{id}/revoke-preview` -- what revoking would leave
+   * behind. NOT under the master's prefix: a verdict invalidates the detail,
+   * and a preview refetched after the revoke would only answer 409 (the
+   * master is no longer verified).
+   */
+  revokePreview: (userId: string) => ['admin', 'revokePreview', userId] as const,
   /** `GET /admin/masters/method-change-requests` -- pending method-change requests, every page loaded so far. */
   methodRequests: () => ['admin', 'methodRequests'] as const,
 }

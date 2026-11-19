@@ -542,7 +542,12 @@ const queryCache = useQueryCache()
 const handedState = (host.history.state as { master?: AdminMasterListItem } | null)?.master
 const handed = handedState && handedState.id === masterId ? handedState : null
 const masterQuery = useQuery(() => adminMasterQuery(masterId))
-const master = computed<AdminMasterDetail | null>(() => masterQuery.data.value ?? handed)
+// What this screen wrote over the handed row while no detail is held (the
+// detail failed to load): shown on the row, never stored as a detail.
+const handedPatch = ref<Partial<AdminMasterDetail>>({})
+const master = computed<AdminMasterDetail | null>(
+  () => masterQuery.data.value ?? (handed ? { ...handed, ...handedPatch.value } : null),
+)
 const masterFailed = computed(
   () => masterQuery.error.value != null && masterQuery.asyncStatus.value === 'idle',
 )
@@ -668,16 +673,19 @@ function openRevoke(): void {
 
 // -- The writes (ADMIN_INVALIDATES): the page is patched at once from what
 // was sent or answered, then the lists, the detail and the badges refetch. --
+function writeMaster(patch: Partial<AdminMasterDetail>): void {
+  patchAdminMaster(queryCache, masterId, patch)
+  handedPatch.value = { ...handedPatch.value, ...patch }
+}
 const revoke = useAdminMutation('revokeMaster', () => revokeMaster(masterId), {
-  write: () => patchAdminMaster(queryCache, masterId, { master_status: 'suspended' }, master.value),
+  write: () => writeMaster({ master_status: 'suspended' }),
   waitForRefetch: false,
 })
 const saveMethodsMutation = useAdminMutation(
   'editMaster',
   (methods: string[]) => editMasterMethods(masterId, methods),
   {
-    write: (_res, methods) =>
-      patchAdminMaster(queryCache, masterId, { methods: [...methods] }, master.value),
+    write: (_res, methods) => writeMaster({ methods: [...methods] }),
     waitForRefetch: false,
   },
 )
@@ -685,7 +693,7 @@ const saveProfileMutation = useAdminMutation(
   'editMaster',
   (patch: AdminMasterProfileUpdate) => editMasterProfile(masterId, patch),
   {
-    write: (_res, patch) => patchAdminMaster(queryCache, masterId, patch, master.value),
+    write: (_res, patch) => writeMaster(patch),
     waitForRefetch: false,
   },
 )
@@ -693,13 +701,7 @@ const schoolRight = useAdminMutation(
   'editMaster',
   (grant: boolean) => setMasterSchoolRight(masterId, grant),
   {
-    write: (res) =>
-      patchAdminMaster(
-        queryCache,
-        masterId,
-        { can_create_schools: res.can_create_schools },
-        master.value,
-      ),
+    write: (res) => writeMaster({ can_create_schools: res.can_create_schools }),
     waitForRefetch: false,
   },
 )

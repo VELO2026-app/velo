@@ -109,7 +109,11 @@ import {
 } from '@/components/ui'
 import { makeMaster } from '@/api/admin'
 import type { UserResponse } from '@/api/admin'
-import { adminUsersQuery, onFailedRequest, useAdminMutation } from '@/composables/queries/admin'
+import {
+  adminUsersQuery,
+  useAdminMutation,
+  usePagedListFailures,
+} from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -126,7 +130,6 @@ const total = computed(() => usersQuery.data.value?.pages.at(-1)?.total ?? 0)
 // A failed first page is the error state; a failed next page keeps the
 // pages shown (the toast tells it).
 const { loading, failed: error } = screenQueryState(usersQuery)
-const loadingMore = ref(false)
 const search = ref('')
 const hasMore = usersQuery.hasNextPage
 
@@ -165,24 +168,13 @@ function roleVariant(role: string): 'success' | 'warning' | 'info' {
   return 'info'
 }
 
-onFailedRequest(usersQuery, (e) =>
+// Every failed request is told (a first page, a next page, a refetch).
+const { loadingMore, loadMore } = usePagedListFailures(usersQuery, (e) =>
   toast.error(extractApiError(e, t('adminScreens.adminUsers.usersLoadError'))),
 )
 
 function retry(): void {
   void usersQuery.refetch()
-}
-
-async function loadMore(): Promise<void> {
-  if (loadingMore.value) return
-  loadingMore.value = true
-  try {
-    // cancelRefetch false: a tap during a reload joins it. A failure is
-    // already told above.
-    await usersQuery.loadNextPage({ cancelRefetch: false })
-  } finally {
-    loadingMore.value = false
-  }
 }
 
 // -- Make-master confirm flow --

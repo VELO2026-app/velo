@@ -1054,6 +1054,24 @@ describe('AdminMasterReviewView', () => {
       // verified) before the detail's refetch answers.
       expect(footBtn('Отозвать мастера')).toBeUndefined()
       expect(adminApi.getMasterById).toHaveBeenCalledTimes(1) // the detail is asked again
+      // The preview is not asked again for a master no longer verified (409).
+      expect(adminApi.getRevokePreview).toHaveBeenCalledTimes(1)
+    })
+
+    it('over the handed list row (the detail failed): the status still flips on screen', async () => {
+      vi.mocked(adminApi.revokeMaster).mockResolvedValue(advisory())
+      vi.mocked(adminApi.getMasterById).mockRejectedValue(new Error('ECONNRESET'))
+      mount('m_verified', listItem({ id: 'm_verified', master_status: 'verified' }))
+      await flush()
+      expect(footBtn('Отозвать мастера')).toBeDefined()
+
+      footBtn('Отозвать мастера')?.click()
+      await flush()
+      modalBtn('Отозвать')?.click()
+      await flush()
+
+      expect(adminApi.revokeMaster).toHaveBeenCalledWith('m_verified')
+      expect(footBtn('Отозвать мастера')).toBeUndefined()
     })
 
     it('cancelling calls NOTHING -- revokeMaster is never reached', async () => {
@@ -1258,7 +1276,39 @@ describe('AdminMasterReviewView', () => {
       expect(adminApi.editMasterMethods).not.toHaveBeenCalled()
     })
 
-    it('success: editMasterMethods called with the (seeded, untouched) draft, local update, toast', async () => {
+    it('a changed draft shows at once, before the detail is read again', async () => {
+      vi.mocked(adminApi.editMasterMethods).mockResolvedValue({
+        user_id: 'm_pending',
+        status: 'ok',
+      })
+      mount('m_pending')
+      await flush()
+      // The invalidation's refetch never answers here: what the screen shows
+      // is the in-place write.
+      vi.mocked(adminApi.getMasterById)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
+
+      pencilBtn('Направления практик').click()
+      await flush()
+      const editor = host!.querySelector<HTMLElement>('.mreview__methods-edit')!
+      const added = Array.from(editor.querySelectorAll<HTMLElement>('.v-chip')).find(
+        (c) => c.textContent?.trim() && c.textContent.trim() !== 'Медитация',
+      )!
+      const addedLabel = added.textContent!.trim()
+      added.click()
+      await flush()
+      rowBtnByText('Направления практик', 'Сохранить')?.click()
+      await flush()
+
+      const sent = vi.mocked(adminApi.editMasterMethods).mock.calls[0]?.[1] ?? []
+      expect(sent.length).toBeGreaterThan(1)
+      expect(host?.querySelector('.mreview__methods-edit')).toBeNull()
+      expect(rowByKey('Направления практик').textContent).toContain(addedLabel)
+      expect(adminApi.getMasterById).toHaveBeenCalledTimes(1) // the detail is asked again
+    })
+
+    it('success: editMasterMethods called with the (seeded, untouched) draft, toast, editor closes', async () => {
       vi.mocked(adminApi.editMasterMethods).mockResolvedValue({
         user_id: 'm_pending',
         status: 'ok',

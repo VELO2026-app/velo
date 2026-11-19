@@ -295,7 +295,7 @@ describe('AdminUsersView', () => {
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки пользователей')
     })
 
-    it('"Повторить" calls load(true) and recovers from error to content', async () => {
+    it('"Повторить" asks again and recovers from error to content', async () => {
       vi.mocked(adminApi.getUsersList).mockRejectedValueOnce(new Error('ECONNRESET'))
       mount()
       await flush()
