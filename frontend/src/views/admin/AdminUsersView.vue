@@ -95,7 +95,7 @@
 import { t } from '@/locales'
 import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { useInfiniteQuery } from '@pinia/colada'
+import { useInfiniteQuery, useQueryCache } from '@pinia/colada'
 import {
   VBackButton,
   VInput,
@@ -111,6 +111,7 @@ import { makeMaster } from '@/api/admin'
 import type { UserResponse } from '@/api/admin'
 import {
   adminUsersQuery,
+  markUserMaster,
   useAdminMutation,
   usePagedListFailures,
 } from '@/composables/queries/admin'
@@ -202,9 +203,12 @@ function closeConfirm(): void {
   confirm.target = null
 }
 
-// The users list (the new role), the masters list and the detail go stale
-// (ADMIN_INVALIDATES.makeMaster); the list on screen refetches in place.
+// The row shows the new role at once; then the users and masters lists,
+// the detail, the badge and the schools go stale (ADMIN_INVALIDATES.makeMaster)
+// and the list on screen refetches in place.
+const queryCache = useQueryCache()
 const promote = useAdminMutation('makeMaster', (userId: string) => makeMaster(userId), {
+  write: (_res, userId) => markUserMaster(queryCache, userId),
   waitForRefetch: false,
 })
 

@@ -33,10 +33,16 @@ export const adminKeys = {
     ['admin', 'metric', { kind, period, offset }] as const,
   /** `GET /admin/practices?scope=` -- the platform's practices, first page. */
   practices: (scope: string) => ['admin', 'practices', { scope }] as const,
+  /** Prefix of every platform practices list. */
+  practicesAll: () => ['admin', 'practices'] as const,
   /** `GET /admin/participants?filter=` -- the platform's users, every page loaded so far. */
   participants: (filter: string) => ['admin', 'participants', { filter }] as const,
+  /** Prefix of every platform participants list. */
+  participantsAll: () => ['admin', 'participants'] as const,
   /** `GET /admin/practices/{id}` -- one practice with its roster. */
   practice: (practiceId: string) => ['admin', 'practice', practiceId] as const,
+  /** Prefix of every practice detail (and its attendance). */
+  practiceAll: () => ['admin', 'practice'] as const,
   /**
    * `GET /admin/practices/{id}/zoom-attendance` -- the practice's meeting
    * status and attendance match. Under the practice's prefix.

@@ -116,7 +116,7 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminMasterReviewView from '@/views/admin/AdminMasterReviewView.vue'
@@ -233,13 +233,17 @@ let host: HTMLElement | null = null
 /** Seed router state (or clear it), set the route param, then mount -- the
  *  screen reads history.state during setup (.vue:559), seeding after is too
  *  late (same order requirement as AdminWithdrawalDetailView/№480). */
-function mount(id: string, stateMaster: AdminMasterListItem | null = null): HTMLElement {
+/** Mount the screen; pass the previous mount's Pinia to revisit it (its Colada cache). */
+function mount(
+  id: string,
+  stateMaster: AdminMasterListItem | null = null,
+  pinia: Pinia = createPinia(),
+): HTMLElement {
   routeParams.id = id
   window.history.replaceState(stateMaster ? { master: stateMaster } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  // A fresh Pinia + Colada per mount, as in production.
-  const pinia = createPinia()
+  // A fresh Pinia + Colada per mount unless revisiting, as in production.
   setActivePinia(pinia)
   app = createApp(AdminMasterReviewView)
     .use(createTestI18n())
@@ -1072,6 +1076,28 @@ describe('AdminMasterReviewView', () => {
 
       expect(adminApi.revokeMaster).toHaveBeenCalledWith('m_verified')
       expect(footBtn('Отозвать мастера')).toBeUndefined()
+    })
+
+    it('that write is never stored as the detail: a later visit with no handed row shows the error rung', async () => {
+      vi.mocked(adminApi.revokeMaster).mockResolvedValue(advisory())
+      vi.mocked(adminApi.getMasterById).mockRejectedValue(new Error('ECONNRESET'))
+      const pinia = createPinia()
+      mount('m_verified', listItem({ id: 'm_verified', master_status: 'verified' }), pinia)
+      await flush()
+      footBtn('Отозвать мастера')?.click()
+      await flush()
+      modalBtn('Отозвать')?.click()
+      await flush()
+      app?.unmount()
+      host?.remove()
+      app = null
+
+      // A deep link back to the master, the detail still failing.
+      mount('m_verified', null, pinia)
+      await flush()
+
+      expect(text()).toContain('Ошибка загрузки')
+      expect(text()).not.toContain('Анна Мастерова')
     })
 
     it('cancelling calls NOTHING -- revokeMaster is never reached', async () => {

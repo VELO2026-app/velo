@@ -17,7 +17,8 @@
   reason collected in a DS bottom-sheet, operator fork p.1=A 2026-06-14).
 
   Footer only for master_status==='pending'; processed applications show a note. After
-  verify/reject → router.push({ name: 'admin-masters' }) (S-1/S-2: fresh list mount).
+  verify/reject → router.push({ name: 'admin-masters' }) (S-1/S-2: the list
+  remounts; the verdict invalidated it, so it reads the server again).
 
   PROMOTE-ON-VERIFY (PROMPT №505): a custom/unmatched method in the applicant's own
   methods pauses i18n:adminScreens.adminMasterReview.approve on a confirm dialog --
@@ -682,7 +683,7 @@ const revoke = useAdminMutation('revokeMaster', () => revokeMaster(masterId), {
   waitForRefetch: false,
 })
 const saveMethodsMutation = useAdminMutation(
-  'editMaster',
+  'editMasterFields',
   (methods: string[]) => editMasterMethods(masterId, methods),
   {
     write: (_res, methods) => writeMaster({ methods: [...methods] }),
@@ -690,7 +691,7 @@ const saveMethodsMutation = useAdminMutation(
   },
 )
 const saveProfileMutation = useAdminMutation(
-  'editMaster',
+  'editMasterFields',
   (patch: AdminMasterProfileUpdate) => editMasterProfile(masterId, patch),
   {
     write: (_res, patch) => writeMaster(patch),
@@ -698,7 +699,7 @@ const saveProfileMutation = useAdminMutation(
   },
 )
 const schoolRight = useAdminMutation(
-  'editMaster',
+  'setSchoolRight',
   (grant: boolean) => setMasterSchoolRight(masterId, grant),
   {
     write: (res) => writeMaster({ can_create_schools: res.can_create_schools }),
@@ -998,7 +999,8 @@ async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void
   try {
     await verify.mutateAsync({ promote, masterOnly, grantSchools: grantSchools.value })
     toast.success(t('adminScreens.adminMasterReview.toast.verified'))
-    // S-1/S-2: push to the list (fresh mount) instead of back().
+    // S-1/S-2: push to the list instead of back() -- it remounts over the
+    // entry the verdict invalidated.
     void router.push({ name: 'admin-masters' })
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminMasterReview.verificationError')))
@@ -1034,7 +1036,8 @@ async function onReject(): Promise<void> {
     await reject.mutateAsync(rejectReason.value.trim())
     toast.success(t('adminScreens.adminMasterReview.toast.requestRejected'))
     showReject.value = false
-    // S-1/S-2: push to the list (fresh mount) instead of back().
+    // S-1/S-2: push to the list instead of back() -- it remounts over the
+    // entry the verdict invalidated.
     void router.push({ name: 'admin-masters' })
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminMasterReview.toast.rejectFailed')))

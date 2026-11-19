@@ -109,6 +109,8 @@ export const keys = {
     /** `GET /masters/me/analytics?period=` -- the master's analytics for one calendar period. */
     analytics: (period: 'week' | 'month' | 'quarter') =>
       ['masters', 'me', 'analytics', period] as const,
+    /** Prefix of every master's public page (an admin's edit reaches them). */
+    publicAll: () => ['masters', 'public'] as const,
     /** `GET /masters/{id}` -- a master's public page. */
     public: (masterId: string) => ['masters', 'public', masterId] as const,
   },

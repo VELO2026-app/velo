@@ -52,6 +52,9 @@ const SAMPLE = {
   adminPractices: adminKeys.practices('all') as EntryKey,
   adminPractice: adminKeys.practice('p1') as EntryKey,
   masterPublic: keys.masters.public('m1') as EntryKey,
+  // The admin's own master profile: no admin edit of another master reaches it.
+  masterProfile: keys.masters.profile() as EntryKey,
+  adminParticipants: adminKeys.participants('all') as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -122,6 +125,8 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
     'adminMaster',
     'adminStats',
     'adminSchools',
+    'schools',
+    'schoolLists',
     'masterPublic',
   ],
   verifyMaster: [
@@ -129,12 +134,33 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
     'adminMaster',
     'adminStats',
     'adminSchools',
+    'schools',
+    'schoolLists',
     'adminTaxonomy',
     'masterPublic',
   ],
   rejectMaster: ['adminMasters', 'adminMaster', 'adminStats'],
-  revokeMaster: ['adminMasters', 'adminMaster', 'adminUsers', 'adminSchools', 'masterPublic'],
-  editMaster: ['adminMasters', 'adminMaster', 'adminUsers', 'masterPublic'],
+  revokeMaster: [
+    'adminMasters',
+    'adminMaster',
+    'adminUsers',
+    'adminSchools',
+    'schools',
+    'schoolLists',
+    'masterPublic',
+  ],
+  editMasterFields: [
+    'adminMasters',
+    'adminMaster',
+    'adminUsers',
+    'adminParticipants',
+    'adminMethodRequests',
+    'adminSchools',
+    'adminPractices',
+    'adminPractice',
+    'masterPublic',
+  ],
+  setSchoolRight: ['adminMasters', 'adminMaster'],
   approveMethodChange: [
     'adminMethodRequests',
     'adminStats',

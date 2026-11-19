@@ -205,10 +205,9 @@ export const ADMIN_INVALIDATES = {
    * verified profile (whatever its status was) -- their role in the users
    * list, their row in the masters list and their detail, the
    * pending-verification badge (a pending application is verified on the
-   * way), their schools (a curator's schools live with their verification),
-   * and their public master page (./keys.ts; the masters prefix also holds
-   * the admin's own master profile, which only goes stale -- its next guard
-   * read asks again).
+   * way), the schools they curate (a school is active only while its
+   * curator is verified: the admin list and the user zone's) and their
+   * public master page.
    */
   makeMaster: [
     adminKeys.users(),
@@ -216,44 +215,65 @@ export const ADMIN_INVALIDATES = {
     adminKeys.masterAll(),
     adminKeys.stats(),
     adminKeys.schools(),
-    keys.masters.root(),
+    keys.schools.root(),
+    keys.masters.publicAll(),
   ],
   /**
    * `POST /admin/masters/{id}/verify`: the application turns verified (the
    * role stays as it is: the user switches to master mode on their own) --
    * the masters list and the detail, the pending-verification badge, the
-   * curator's schools, the public master page; a method promoted on the way
-   * is a new catalog row.
+   * schools they curate (admin list and user zone), the public master page;
+   * a method promoted on the way is a new catalog row.
    */
   verifyMaster: [
     adminKeys.masters(),
     adminKeys.masterAll(),
     adminKeys.stats(),
     adminKeys.schools(),
+    keys.schools.root(),
     adminKeys.taxonomy(),
-    keys.masters.root(),
+    keys.masters.publicAll(),
   ],
   /** `POST /admin/masters/{id}/reject`: the application turns rejected -- the list, the detail, the badge. */
   rejectMaster: [adminKeys.masters(), adminKeys.masterAll(), adminKeys.stats()],
   /**
    * `POST /admin/masters/{id}/revoke`: the master is suspended and back to
-   * user -- the lists, the detail, the schools they own freeze, the public
-   * master page goes.
+   * user -- the lists, the detail, the schools they curate freeze (admin
+   * list and user zone), the public master page goes.
    */
   revokeMaster: [
     adminKeys.masters(),
     adminKeys.masterAll(),
     adminKeys.users(),
     adminKeys.schools(),
-    keys.masters.root(),
+    keys.schools.root(),
+    keys.masters.publicAll(),
   ],
   /**
-   * `PATCH /admin/masters/{id}/methods`, `PATCH /admin/masters/{id}/profile`,
-   * `PATCH /admin/masters/{id}/can-create-schools`: a master-authored field
-   * or the school right -- the detail, the masters list (its chips, names
-   * and flag), the users list (names) and the public master page.
+   * `PATCH /admin/masters/{id}/methods`, `PATCH /admin/masters/{id}/profile`:
+   * a master-authored field -- the detail and the public page, and every
+   * admin list that names or describes the master: the masters list (chips,
+   * names), the users and participants lists, the method queue, the schools
+   * (their curator), the platform practices (their master). The user zone's
+   * practice cards also carry the name; they are left to their staleness
+   * window -- an admin rarely holds them, and a name edit is not urgent.
    */
-  editMaster: [adminKeys.masters(), adminKeys.masterAll(), adminKeys.users(), keys.masters.root()],
+  editMasterFields: [
+    adminKeys.masters(),
+    adminKeys.masterAll(),
+    adminKeys.users(),
+    adminKeys.participantsAll(),
+    adminKeys.methodRequests(),
+    adminKeys.schools(),
+    adminKeys.practicesAll(),
+    adminKeys.practiceAll(),
+    keys.masters.publicAll(),
+  ],
+  /**
+   * `PATCH /admin/masters/{id}/can-create-schools`: the school-founding right
+   * -- the detail and the masters list (its flag). Nothing else shows it.
+   */
+  setSchoolRight: [adminKeys.masters(), adminKeys.masterAll()],
   /**
    * `POST /admin/masters/{id}/method-change-request/approve`: the methods go
    * live -- the request leaves the queue (and its badge), the master's
@@ -266,7 +286,7 @@ export const ADMIN_INVALIDATES = {
     adminKeys.masters(),
     adminKeys.masterAll(),
     adminKeys.taxonomy(),
-    keys.masters.root(),
+    keys.masters.publicAll(),
   ],
   /** `POST /admin/masters/{id}/method-change-request/reject`: the request leaves the queue and its badge. */
   rejectMethodChange: [adminKeys.methodRequests(), adminKeys.stats()],
@@ -610,17 +630,6 @@ export function markPromoInactive(queryCache: QueryCache, promoId: string): void
 // alongside its own answer -- a promoted custom method must already resolve
 // to a plain chip on first render (Bug 2, PROMPT №405).
 
-/**
- * Load the taxonomy catalog into utils/methodTaxonomy's cache. Imported on
- * demand: a static import would list its chunk in the preload of every
- * admin route (this module is shared by all of them), and that preload map
- * ships in the startup chunk.
- */
-async function primeTaxonomy(): Promise<void> {
-  const { primeMethodTaxonomyCatalog } = await import('@/utils/methodTaxonomy')
-  await primeMethodTaxonomyCatalog()
-}
-
 /** Users per page of `GET /admin/users` (the backend's cap). */
 export const ADMIN_USERS_PAGE_SIZE = 100
 
@@ -640,6 +649,22 @@ export const adminUsersQuery = defineInfiniteQueryOptions(() => ({
     nextOffset(last, pages),
   staleTime: 0,
 }))
+
+/**
+ * Show a user as a master in the users list held, at once -- before the
+ * invalidation's refetch answers: the make-master button leaves the row
+ * (a second tap would only meet 409 already_master).
+ */
+export function markUserMaster(queryCache: QueryCache, userId: string): void {
+  if (queryCache.getQueryData(adminKeys.users()) === undefined) return
+  setInfiniteQueryData<PaginatedUsersResponse, number>(queryCache, adminKeys.users(), (data) => ({
+    pageParams: data?.pageParams ?? [],
+    pages: (data?.pages ?? []).map((page) => ({
+      ...page,
+      items: page.items.map((u) => (u.id === userId ? { ...u, role: 'master' as const } : u)),
+    })),
+  }))
+}
 
 /**
  * Masters the list asks for: the backend's page cap (le=100; 200 was
@@ -734,10 +759,9 @@ export function dropMethodRequest(queryCache: QueryCache, userId: string): void 
     adminKeys.methodRequests(),
     (data) => {
       const pages = data?.pages ?? []
-      const dropped = pages.reduce(
-        (n, page) => n + page.items.filter((i) => i.user_id === userId).length,
-        0,
-      )
+      // A master has one pending request; a refetch between two pages can
+      // repeat its row, still one request off the queue.
+      const dropped = pages.some((page) => page.items.some((i) => i.user_id === userId)) ? 1 : 0
       // Every page carries the queue's total, and the header and "is there
       // more" read the last one: each loses what was dropped anywhere.
       return {

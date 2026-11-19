@@ -354,6 +354,21 @@ describe('AdminUsersView', () => {
       expect(adminApi.getUsersList).toHaveBeenCalledTimes(2)
     })
 
+    it('the row turns master at once, before the list is read again: no second make-master', async () => {
+      vi.mocked(adminApi.makeMaster).mockResolvedValue({ user_id: 'u_user', status: 'ok' })
+      mount()
+      await flush()
+      // The list's refetch never answers here: the row is the in-place write.
+      vi.mocked(adminApi.getUsersList).mockReturnValue(new Promise(() => {}))
+
+      makeMasterBtn(cardByName('Анна Пользователева')!)?.click()
+      await flush()
+      modalButtonByText('Назначить')?.click()
+      await flush()
+
+      expect(makeMasterBtn(cardByName('Анна Пользователева')!)).toBeUndefined()
+    })
+
     it('failure (ApiResponseError): toasts the mapped table phrase for a real code, dialog STAYS OPEN (deliberate, not fixed here)', async () => {
       // B8 (PROMPT №747): 'already_master' IS a real backend code --
       // extractApiError now returns its table phrase regardless of the
