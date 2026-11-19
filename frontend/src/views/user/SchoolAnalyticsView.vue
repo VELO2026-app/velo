@@ -141,49 +141,14 @@
         <section class="school-analytics__period-practices">
           <h2 class="velo-section-title">{{ periodSectionTitle }}</h2>
           <template v-if="periodPractices.length">
-            <VCard
+            <ConductedPracticeCard
               v-for="p in periodPractices"
               :key="p.practice_id"
               class="school-analytics__practice"
+              :practice="p"
               :clickable="inMasterZone"
-              @click="openPractice(p.practice_id)"
-            >
-              <div class="school-analytics__practice-head">
-                <component :is="practiceIconFor(p)" :size="40" aria-hidden="true" />
-                <div class="school-analytics__practice-main">
-                  <span class="school-analytics__practice-title">{{ p.title }}</span>
-                  <span class="school-analytics__practice-meta">
-                    <VAvatar
-                      :name="p.master_name"
-                      :url="p.master_avatar_url ?? undefined"
-                      size="sm"
-                    />
-                    {{ p.master_name }}
-                  </span>
-                </div>
-              </div>
-              <div class="school-analytics__practice-counts">
-                <span>{{ formatShortDate(p.scheduled_at, p.timezone) }}</span>
-                <span>{{
-                  t('user.screens.schoolAnalytics.studentsLine', { n: p.attendees_count })
-                }}</span>
-                <span>{{
-                  t('user.screens.schoolAnalytics.feedbacksLine', { n: p.reviews_count })
-                }}</span>
-              </div>
-              <!-- Bare five-color strip: proportional fills only. -->
-              <div
-                v-if="p.reviews_count > 0"
-                class="school-analytics__practice-strip"
-                aria-hidden="true"
-              >
-                <div
-                  v-for="segment in moodStripBars(p.rating).filter((bar) => bar.count > 0)"
-                  :key="segment.key"
-                  :style="{ flex: `${segment.count} 1 0`, background: segment.fill }"
-                />
-              </div>
-            </VCard>
+              @open="openPractice"
+            />
           </template>
           <VEmptyState
             v-else
@@ -207,13 +172,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolAnalyticsPeriod } from '@/api/schools'
 import type { SchoolAnalyticsResponse } from '@/api/types'
-import { VAvatar, VButton, VCard, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
+import { VButton, VEmptyState, VLoader, VSegmentTrack } from '@/components/ui'
+import ConductedPracticeCard from '@/components/shared/ConductedPracticeCard.vue'
+import { moodStripBars } from '@/components/shared/conductedPractice'
 import DistributionCard from '@/components/shared/DistributionCard.vue'
 import VHeader from '@/components/layout/VHeader.vue'
-import { MOOD_SCALE_KEYS, MOOD_SCALE_LABELS, type MoodScaleKey } from '@/utils/moodScale'
-import { MOOD_SCALE_FILLS, practiceIconFor } from '@/utils/displayHelpers'
-import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
-import { formatShortDate } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -267,16 +230,6 @@ const periodSectionTitle = computed(
     })[period.value],
 )
 const periodPractices = computed(() => data.value?.engagement?.conducted_practices ?? [])
-
-function moodStripBars(counts?: Partial<Record<MoodScaleKey, number>>) {
-  return MOOD_SCALE_KEYS.map((key) => ({
-    key,
-    label: MOOD_SCALE_LABELS[key],
-    count: counts?.[key] ?? 0,
-    fill: MOOD_SCALE_FILLS[key],
-    icon: MOOD_SCALE_ICON[key],
-  }))
-}
 
 // -- The analytics (Pinia Colada, FE-166 step 6: schoolAnalyticsQuery) --
 //
@@ -396,69 +349,5 @@ function goBack(): void {
   font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
   line-height: 1.35;
-}
-
-/* Part 3: the period's practice card (compact hero). */
-.school-analytics__practice {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.school-analytics__practice-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.school-analytics__practice-head > svg {
-  flex-shrink: 0;
-  color: var(--velo-text-primary);
-}
-
-.school-analytics__practice-main {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--velo-gap-2);
-}
-
-.school-analytics__practice-title {
-  font-size: var(--velo-fs-18);
-  color: var(--velo-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.school-analytics__practice-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--velo-fs-14);
-  color: var(--velo-text-secondary);
-}
-
-.school-analytics__practice-counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  font-size: var(--velo-fs-14);
-  color: var(--velo-text-secondary);
-}
-
-/* Bare five-color strip: proportional fills, no labels (the labeled
-   scales live in the blocks above). */
-.school-analytics__practice-strip {
-  display: flex;
-  gap: var(--velo-gap-3);
-  height: 10px;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-}
-
-.school-analytics__practice-strip > div {
-  min-width: 4px;
 }
 </style>

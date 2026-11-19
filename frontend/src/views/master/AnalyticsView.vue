@@ -1,65 +1,36 @@
 <!--
-  VELO Frontend -- AnalyticsView (Phase-3 Master DS rebuild)
+  VELO Frontend -- AnalyticsView (master analytics, FE-190)
 
-  Master analytics hub. Route: /master/analytics (inside MasterShell).
+  Master analytics hub. Route: /master/analytics (inside MasterShell). Built
+  after the school's analytics screen (SchoolAnalyticsView), one server
+  aggregate per calendar period (GET /masters/me/analytics?period=, BE-34;
+  the practices list is BE-222):
 
-  Two tabs (operator design 2026-06-11), each under a shared period toggle:
-    1. Reviews (i18n:masterScreens.analytics.sections.reviews) -- aggregate
-       stats (Check-in / Feedback / feedbacks total,
-       i18n:masterScreens.analytics.feedbacksStat) + overall rating
-       distribution bars + the needs-attention section + past-practice cards
-       with inline rating badges.
-    2. Payments (i18n:masterScreens.analytics.sections.payments) -- period
-       income + transactions list + link to full Finance.
+    1. Header + the period slider: week / month / quarter
+       (i18n:common.periodWeek, i18n:common.periodMonth,
+       i18n:user.screens.schoolAnalytics.period.quarter). A tap refetches; the
+       last selected period wins and an earlier period's numbers are never
+       left under the new label -- a failed request swaps the screen for the
+       retry state.
+    2. Check-in / Feedback rates (the server's percents).
+    3. The feedback share (i18n:user.screens.schoolAnalytics.feedbackPercent):
+       the shared DistributionCard, "N of M" on the heading line.
+    4. Needs attention (i18n:masterScreens.analytics.sections.attention):
+       students whose review the server flagged (attention=true, BE-77); the
+       section is not shown when there are none.
+    5. The period's conducted practices (the shared ConductedPracticeCard,
+       first PAST_PREVIEW then the reveal), each with its before / after /
+       came-left / reviews blocks. A tap opens the practice analytics screen.
 
-  Owner 2026-10-01: payments are not live yet, so the tab slider is PARKED
-  (PAYMENTS_TAB_ENABLED below) and the screen renders the Reviews tab only --
-  a single-option slider would be meaningless. The Payments pane and its E2
-  wiring stay intact for the flip-back. The period toggle moved up into the
-  header's action slot (owner 2026-10-01): title left, the week/month toggle
-  (i18n:common.periodWeek / i18n:common.periodMonth) right -- one line, no
-  second control row.
-
-  Controls are the track+thumb pattern (single glass track, active fill pill) --
-  the same shape as the master-dashboard period toggle, NOT the two-pill VSegment
-  (operator design; VSegment<->track+thumb unification is a SHELL task).
-
-  Data reality (decisions locked with operator 2026-06-11):
-    REAL: past completed practices (useMyPractices('past')) + per-practice insights
-          (GET /practices/{id}/insights -> anonymous rating/mood distributions).
-          Insights are eager-loaded for the visible page so the inline badges and
-          the aggregate are populated without a tap.
-    STUB (no backend yet -> master-ds-zod-roadmap.md):
-      - Period week/month toggle: no period-scoped API -> toggle is visual-only.
-      - Needs-attention section (i18n:masterScreens.analytics.sections.attention):
-        insights are anonymous (no names / comment texts), so the de-anonymised
-        attention feed has no source. Section is scaffolded and renders its
-        empty state until Zod adds a NON-anonymous endpoint.
-      - Payments (E2 wired 2026-06-16): getIncome(period) drives the revenue
-        heading (i18n:masterScreens.analytics.sections.revenue) + signed
-        delta_pct; getTransactions drives the feed. Currency canon = EUR;
-        €0.00 / empty while seed practices are free (seed-pricing task next).
-        Full finance (balance, payout, withdrawals) lives on /master/finance ->
-        link.
+  Payments tab: parked (owner 2026-10-01, PAYMENTS_TAB_ENABLED in
+  ./analyticsFlags.ts). Its pane keeps its income and transactions loads;
+  when the flag is switched on, the same period slider (above both panes)
+  drives its income, and the tab slider appears above it.
 -->
 
 <template>
   <div class="analytics">
-    <!-- Header (DS VHeader — uniform with the rest of the master zone, rides
-         MobileLayout's floating island; PROMPT №162). The period toggle shares
-         the header line (owner 2026-10-01): title left, week/month right --
-         with the tab slider parked there is no second control row to reserve.
-         Visual-only until a period-scoped analytics API exists. -->
-    <VHeader :title="t('masterScreens.analytics.title')">
-      <template #action>
-        <VSegmentTrack
-          v-model="period"
-          :options="PERIOD_OPTIONS"
-          variant="toggle"
-          :aria-label="t('analytics.statsPeriod')"
-        />
-      </template>
-    </VHeader>
+    <VHeader :title="t('masterScreens.analytics.title')" />
 
     <!-- Tab segment (track+thumb, DS primitive). Parked while payments are
          not live (owner 2026-10-01) -- a single-option slider is meaningless. -->
@@ -70,131 +41,113 @@
       variant="tabs"
     />
 
+    <!-- Full-width period slider (variant="tabs": equal segments), above BOTH panes:
+         the period drives the reviews numbers and, when the Payments tab is
+         switched on, its income too. -->
+    <VSegmentTrack
+      v-model="period"
+      class="analytics__period"
+      :options="PERIOD_OPTIONS"
+      variant="tabs"
+      :aria-label="t('analytics.statsPeriod')"
+    />
+
     <!-- ================================================================
          TAB: REVIEWS
          ================================================================ -->
     <div v-show="activeTab === 'reviews'" class="analytics__body">
-      <!-- Aggregate stats (over loaded insights; period scoping has no API). -->
-      <div class="analytics__stats">
-        <VStatCard :value="aggregateCheckinPct" label="Check-in" />
-        <VStatCard :value="aggregateFeedbackPct" label="Feedback" />
-        <VStatCard
-          :value="aggregateTotalFeedbacks"
-          :label="t('masterScreens.analytics.feedbacksStat')"
-        />
-      </div>
+      <div v-if="loading" class="analytics__loader"><VLoader size="lg" /></div>
 
-      <!-- Overall stats (i18n:masterScreens.analytics.sections.overall). -->
-      <section class="analytics__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.overall') }}</h2>
-        <VRatingDistribution :counts="ratingTotals" />
-      </section>
-
-      <!-- Needs attention (i18n:masterScreens.analytics.sections.attention):
-           students whose period review the server flagged for attention
-           (attention=true: ratings 1-4, zones bad and low, BE-77). The section
-           (heading included) is NOT shown when there are none. Card tap goes to
-           the student's profile (E1: user_id on MasterReviewItem); the message
-           button is @click.stop -- it sends a message without navigating
-           (PROMPT №229). -->
-      <section v-if="attentionItems.length > 0" class="analytics__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.attention') }}</h2>
-        <div
-          v-for="(item, i) in attentionItems"
-          :key="i"
-          class="analytics__attention"
-          role="button"
-          tabindex="0"
-          @click="goStudent(item)"
-          @keydown.enter.space.prevent="goStudent(item)"
-        >
-          <span class="analytics__attention-ident">
-            <component :is="MOOD_SCALE_ICON[item.rating]" :size="36" />
-          </span>
-          <div class="analytics__attention-body">
-            <div class="analytics__attention-name">{{ item.reviewer_name }}</div>
-            <div class="analytics__attention-pr">{{ item.practice_title }}</div>
-            <div v-if="item.comment" class="analytics__attention-quote">«{{ item.comment }}»</div>
-          </div>
-          <button
-            class="analytics__attention-msg"
-            :aria-label="t('common.writeMessage')"
-            @click.stop="openMessage(item.user_id, item.reviewer_name)"
-          >
-            <IconMessages :size="22" />
-          </button>
-        </div>
-      </section>
-
-      <!-- Past practices (i18n:masterScreens.analytics.sections.past). -->
-      <section class="analytics__section">
-        <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.past') }}</h2>
-
-        <div v-if="past.loading.value" class="analytics__loader">
-          <VLoader />
-        </div>
-
-        <!-- A failed load is not an empty period (FE-201). -->
-        <VEmptyState
-          v-else-if="past.failed.value"
-          icon="warning"
-          :title="t('common.loadFailed')"
-          :description="pastErrorText"
-        >
-          <VButton size="sm" variant="outline" @click="retryPast">
-            {{ t('common.retry') }}
-          </VButton>
-        </VEmptyState>
-
-        <VEmptyState
-          v-else-if="periodPractices.length === 0"
-          variant="note"
-          :title="t('masterScreens.analytics.empty.noPractices')"
-        />
-
-        <template v-else>
-          <button
-            v-for="p in visiblePast"
-            :key="p.id"
-            type="button"
-            class="analytics__pcard"
-            @click="openReviews(p.id)"
-          >
-            <div class="analytics__pcard-top">
-              <span class="analytics__pcard-icon">
-                <component :is="practiceIconFor(p)" :size="46" />
-              </span>
-              <div class="analytics__pcard-info">
-                <div class="analytics__pcard-title">{{ p.title }}</div>
-                <div class="analytics__pcard-meta">
-                  {{ formatShortDate(p.scheduled_at, p.timezone) }} ·
-                  {{ t('practice.participantsShort', { n: p.current_participants }) }}
-                </div>
-              </div>
-            </div>
-
-            <!-- Inline rating badges (insights eager-loaded for the page). -->
-            <VRatingBadges
-              v-if="insightsCache.has(p.id) && totalFeedbacks(p.id) > 0"
-              class="analytics__pcard-badges"
-              :pcts="ratingPcts(p.id)"
-            />
-          </button>
-
-          <!-- First 3 + the reveal control (i18n:masterScreens.analytics.morePractices, #5). -->
-          <VShowMore
-            v-if="!pastExpanded && hiddenPastCount > 0"
-            plus
-            :label="t('masterScreens.analytics.morePractices', hiddenPastCount)"
-            @click="pastExpanded = true"
-          />
-          <div v-else-if="pastExpanded && past.hasMore.value" class="analytics__more">
-            <VButton variant="ghost" :loading="past.fetching.value" @click="onLoadMore">
-              {{ t('common.showMore') }}
-            </VButton>
-          </div>
+      <!-- Transient failure: honest retry, no stale numbers. -->
+      <VEmptyState
+        v-else-if="failed"
+        icon="warning"
+        :title="t('common.loadFailed')"
+        :description="t('common.checkConnection')"
+      >
+        <template #action>
+          <VButton variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
         </template>
-      </section>
+      </VEmptyState>
+
+      <template v-else-if="data">
+        <div class="analytics__stats">
+          <VStatCard :value="`${data.checkin_rate_pct}%`" label="Check-in" />
+          <VStatCard :value="`${data.feedback_rate_pct}%`" label="Feedback" />
+        </div>
+
+        <DistributionCard
+          :title="t('user.screens.schoolAnalytics.feedbackPercent')"
+          :count-label="feedbackCountLabel"
+          :bars="feedbackBars"
+          :empty-text="t('user.screens.schoolAnalytics.noFeedbacks')"
+        />
+
+        <!-- Needs attention: the server already narrowed the page to the
+             attention reviews (attention=true: ratings 1-4, zones bad and low,
+             BE-77). The section (heading included) is NOT shown when there are
+             none. Card tap goes to the student's profile; the message button
+             is @click.stop -- it sends a message without navigating. -->
+        <section v-if="attentionItems.length > 0" class="analytics__section">
+          <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.attention') }}</h2>
+          <div
+            v-for="(item, i) in attentionItems"
+            :key="i"
+            class="analytics__attention"
+            role="button"
+            tabindex="0"
+            @click="goStudent(item)"
+            @keydown.enter.space.prevent="goStudent(item)"
+          >
+            <span class="analytics__attention-ident">
+              <component :is="MOOD_SCALE_ICON[item.rating]" :size="36" />
+            </span>
+            <div class="analytics__attention-body">
+              <div class="analytics__attention-name">{{ item.reviewer_name }}</div>
+              <div class="analytics__attention-pr">{{ item.practice_title }}</div>
+              <div v-if="item.comment" class="analytics__attention-quote">«{{ item.comment }}»</div>
+            </div>
+            <button
+              class="analytics__attention-msg"
+              :aria-label="t('common.writeMessage')"
+              @click.stop="openMessage(item.user_id, item.reviewer_name)"
+            >
+              <IconMessages :size="22" />
+            </button>
+          </div>
+        </section>
+
+        <!-- The period's conducted practices, newest first. -->
+        <section class="analytics__section">
+          <h2 class="velo-section-title">{{ periodSectionTitle }}</h2>
+
+          <VEmptyState
+            v-if="periodPractices.length === 0"
+            variant="note"
+            :title="t('masterScreens.analytics.empty.noPractices')"
+          />
+
+          <template v-else>
+            <ConductedPracticeCard
+              v-for="p in visiblePractices"
+              :key="p.practice.practice_id"
+              class="analytics__practice"
+              :practice="p.practice"
+              :detail="p.detail"
+              clickable
+              @open="openReviews"
+            />
+
+            <!-- First PAST_PREVIEW + the reveal (i18n:masterScreens.analytics.morePractices). -->
+            <VShowMore
+              v-if="!practicesExpanded && hiddenPracticesCount > 0"
+              plus
+              :label="t('masterScreens.analytics.morePractices', hiddenPracticesCount)"
+              @click="practicesExpanded = true"
+            />
+          </template>
+        </section>
+      </template>
     </div>
 
     <!-- ================================================================
@@ -270,40 +223,30 @@
 import { t, getLocale } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useMyPractices } from '@/composables/queries/master'
-import { usePracticeInsights } from '@/composables/queries/diary'
-import {
-  VLoader,
-  VButton,
-  VStatCard,
-  VCard,
-  VSegmentTrack,
-  VRatingBadges,
-  VEmptyState,
-} from '@/components/ui'
+import { useQuery } from '@pinia/colada'
+import { masterAnalyticsQuery } from '@/composables/queries/master'
+import { screenQueryState } from '@/composables/queries/screenState'
+import { VLoader, VButton, VStatCard, VCard, VSegmentTrack, VEmptyState } from '@/components/ui'
 import { VHeader } from '@/components/layout'
-import VRatingDistribution from '@/components/shared/VRatingDistribution.vue'
+import ConductedPracticeCard from '@/components/shared/ConductedPracticeCard.vue'
+import { masterPracticeCard, moodStripBars } from '@/components/shared/conductedPractice'
+import DistributionCard from '@/components/shared/DistributionCard.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { IconMessages } from '@/components/icons'
-import { practiceIconFor } from '@/utils/displayHelpers'
 import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
-import { MOOD_SCALE_KEYS, zonePercents, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 import { formatMoney, formatShortDate } from '@/utils/format'
-import { getIncome, getTransactions, getMasterReviews } from '@/api/masters'
+import {
+  getIncome,
+  getTransactions,
+  getMasterReviews,
+  type MasterAnalyticsPeriod,
+} from '@/api/masters'
 import { extractApiError } from '@/composables/useApiError'
 import { PAYMENTS_TAB_ENABLED } from '@/views/master/analyticsFlags'
-import type {
-  IncomeResponse,
-  MasterTransactionItem,
-  MasterReviewItem,
-  ScoreZoneCounts,
-} from '@/api/types'
+import type { IncomeResponse, MasterTransactionItem, MasterReviewItem } from '@/api/types'
 
 const router = useRouter()
-// Practices' insights in the Colada cache (composables/queries/diary.ts):
-// get/has read it reactively -- computeds below track arrivals.
-const insightsCache = usePracticeInsights()
 
 // =========================================================================
 // Tabs (track+thumb segment) + period toggle (visual-only)
@@ -317,105 +260,70 @@ const TAB_OPTIONS: Array<{ value: 'reviews' | 'payments'; label: string }> = [
   { value: 'payments', label: t('masterScreens.analytics.sections.payments') },
 ]
 
-// Period scoping has no backend yet -> the toggle only moves the active pill
-// (mirrors the master-dashboard pattern). Roadmap: period-scoped summary API.
-const period = ref<'week' | 'month'>('week')
-const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month'; label: string }> = [
+// The slider names the calendar period the server bounds in the master's own
+// timezone (GET /masters/me/analytics, BE-34); the screen sends the name only.
+const period = ref<MasterAnalyticsPeriod>('week')
+const PERIOD_OPTIONS: ReadonlyArray<{ value: MasterAnalyticsPeriod; label: string }> = [
   { value: 'week', label: t('common.periodWeek') },
   { value: 'month', label: t('common.periodMonth') },
+  { value: 'quarter', label: t('user.screens.schoolAnalytics.period.quarter') },
 ]
 
 // =========================================================================
-// Past practices (completed, newest first)
+// The period's analytics (Pinia Colada, one entry per period)
 // =========================================================================
 
-// T22-5 (PROMPT №561): the server owns the completed-only, most-recent-first
-// ordering -- no client-side filter/sort left to hide the next ordering bug
-// -- and this screen only ever needs the past list: the upcoming one is never
-// asked for here.
-const past = useMyPractices('past')
-const pastPractices = computed(() => past.practices.value)
-const pastErrorText = computed(() => extractApiError(past.error.value, t('common.checkConnection')))
-function retryPast(): void {
-  void past.refetch()
+// An entry per period and no placeholder from the previous one (see
+// masterAnalyticsQuery): while a period loads, the screen shows the loader --
+// never another period's numbers under this period's label. The last selected
+// period wins: a late answer lands in its own entry.
+const analyticsQuery = useQuery(() => masterAnalyticsQuery(period.value))
+const analyticsState = screenQueryState(analyticsQuery)
+const data = computed(() => analyticsQuery.data.value ?? null)
+const loading = computed(() => analyticsState.loading.value)
+const failed = computed(() => analyticsState.failed.value)
+
+function retry(): void {
+  void analyticsQuery.refetch()
 }
 
-// Period scoping (#1, fork V): until a period-scoped reviews API exists, filter
-// the loaded past practices client-side (week = 7 days, month = 30) so the
-// toggle moves real numbers. Swap to the Zod summary endpoint when it lands.
-const PERIOD_DAYS: Record<'week' | 'month', number> = { week: 7, month: 30 }
-const periodPractices = computed(() => {
-  const cutoff = Date.now() - PERIOD_DAYS[period.value] * 86_400_000
-  return pastPractices.value.filter((p) => new Date(p.scheduled_at).getTime() >= cutoff)
-})
-const periodInsights = computed(() =>
-  periodPractices.value.map((p) => insightsCache.get(p.id)).filter((i) => i != null),
+// The feedback block: reviews out of the period's bookings; the server owns the
+// percent and both numbers, the screen divides nothing.
+const feedbackCountLabel = computed((): string =>
+  t('user.screens.schoolAnalytics.conversion', {
+    pct: data.value?.feedback_rate_pct ?? 0,
+    reviews: data.value?.feedbacks_count ?? 0,
+    visits: data.value?.bookings_count ?? 0,
+  }),
+)
+const feedbackBars = computed(() => moodStripBars(data.value?.feedbacks))
+
+// =========================================================================
+// The period's conducted practices (BE-222), newest first
+// =========================================================================
+
+const periodSectionTitle = computed(
+  (): string =>
+    ({
+      week: t('user.screens.schoolAnalytics.practicesOfWeek'),
+      month: t('user.screens.schoolAnalytics.practicesOfMonth'),
+      quarter: t('user.screens.schoolAnalytics.practicesOfQuarter'),
+    })[period.value],
+)
+// The server's list (BE-222), newest first; an empty period is an empty list.
+const periodPractices = computed(() =>
+  (data.value?.conducted_practices ?? []).map(masterPracticeCard),
 )
 
-// Past list: first 3 + the reveal (i18n:masterScreens.analytics.morePractices, #5).
+// First PAST_PREVIEW + the reveal (i18n:masterScreens.analytics.morePractices).
 const PAST_PREVIEW = 3
-const pastExpanded = ref(false)
-const visiblePast = computed(() =>
-  pastExpanded.value ? periodPractices.value : periodPractices.value.slice(0, PAST_PREVIEW),
+const practicesExpanded = ref(false)
+const visiblePractices = computed(() =>
+  practicesExpanded.value ? periodPractices.value : periodPractices.value.slice(0, PAST_PREVIEW),
 )
-const hiddenPastCount = computed(() => Math.max(0, periodPractices.value.length - PAST_PREVIEW))
-
-// =========================================================================
-// Aggregate stats (over the selected period's loaded insights)
-// =========================================================================
-
-const aggregateTotalFeedbacks = computed((): number =>
-  periodInsights.value.reduce((t, ins) => t + zoneTotal(ins.feedbacks), 0),
+const hiddenPracticesCount = computed(() =>
+  Math.max(0, periodPractices.value.length - PAST_PREVIEW),
 )
-
-const aggregateTotalCheckins = computed((): number =>
-  periodInsights.value.reduce((t, ins) => t + zoneTotal(ins.checkins), 0),
-)
-
-const aggregateTotalParticipants = computed((): number =>
-  periodInsights.value.reduce((t, ins) => t + ins.participants, 0),
-)
-
-/** Check-in rate over loaded insights. "—" when there is no data yet. */
-const aggregateCheckinPct = computed((): string => {
-  if (aggregateTotalParticipants.value === 0) return '—'
-  return `${Math.round((aggregateTotalCheckins.value / aggregateTotalParticipants.value) * 100)}%`
-})
-
-/** Feedback rate over loaded insights. "—" when there is no data yet. */
-const aggregateFeedbackPct = computed((): string => {
-  if (aggregateTotalParticipants.value === 0) return '—'
-  return `${Math.round((aggregateTotalFeedbacks.value / aggregateTotalParticipants.value) * 100)}%`
-})
-
-// =========================================================================
-// Overall rating distribution (i18n:masterScreens.analytics.sections.overall):
-// VRatingDistribution owns the bar config/palettes/markup; we just feed it the
-// period's summed feedback counts.
-// =========================================================================
-
-const ratingTotals = computed((): ScoreZoneCounts => {
-  const totals: ScoreZoneCounts = { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }
-  periodInsights.value.forEach((ins) => {
-    for (const key of MOOD_SCALE_KEYS) totals[key] += ins.feedbacks[key]
-  })
-  return totals
-})
-
-// =========================================================================
-// Per-practice rating (inline badges)
-// =========================================================================
-
-function totalFeedbacks(practiceId: string): number {
-  const ins = insightsCache.get(practiceId)
-  if (!ins) return 0
-  return zoneTotal(ins.feedbacks)
-}
-
-// Rendered only under insightsCache.has(p.id), so the insights are cached.
-function ratingPcts(practiceId: string): Record<MoodScaleKey, number> {
-  return zonePercents(insightsCache.get(practiceId)!.feedbacks)
-}
 
 // =========================================================================
 // Latest reviews (#3: GET /masters/me/reviews — cross-practice named feed)
@@ -441,7 +349,9 @@ async function loadReviews(): Promise<void> {
 // Needs attention: the server already narrowed the page to the attention
 // reviews (attention=true) -- no zone check here, a second copy of the
 // threshold would drift. Only the active period's cutoff is applied
-// client-side (mirroring the past list). Empty ⇒ the section + title are hidden.
+// client-side (the endpoint has no period param). Empty ⇒ the section + title
+// are hidden.
+const PERIOD_DAYS: Record<MasterAnalyticsPeriod, number> = { week: 7, month: 30, quarter: 90 }
 const attentionItems = computed((): MasterReviewItem[] => {
   const cutoff = Date.now() - PERIOD_DAYS[period.value] * 86_400_000
   return reviews.value.filter((r) => new Date(r.created_at).getTime() >= cutoff)
@@ -536,8 +446,8 @@ async function loadMoreTx(): Promise<void> {
 
 // Period drives income only (transactions are not period-scoped).
 watch(period, () => {
-  // Collapse the past list back to the preview when the period changes (#5).
-  pastExpanded.value = false
+  // Collapse the practices back to the preview when the period changes.
+  practicesExpanded.value = false
   if (PAYMENTS_TAB_ENABLED) {
     void loadIncome().catch(() => {
       /* keep the previous income value on a transient refetch error */
@@ -549,22 +459,6 @@ watch(period, () => {
 // Helpers
 // =========================================================================
 
-// Eager-load insights for the visible page -- feeds both the aggregate stats and
-// the inline practice-card badges. The reader's load() skips ids already held, so
-// this is idempotent across re-runs and load-more.
-function loadVisibleInsights(): Promise<void[]> {
-  return Promise.all(pastPractices.value.map((p) => insightsCache.load(p.id)))
-}
-
-async function onLoadMore(): Promise<void> {
-  // A failed next page keeps the list and the button (a retry is the next
-  // tap), as before. The new page's badges: the pastPractices watch below.
-  await past.loadMore().catch(() => {})
-}
-
-// The rating badges follow the past list: its first page, a next page, a refetch.
-watch(pastPractices, () => void loadVisibleInsights())
-
 /** Open the per-practice reviews detail (G2: closes the card-tap from G4). */
 function openReviews(practiceId: string): void {
   void router.push({ name: 'master-practice-reviews', params: { id: practiceId } })
@@ -574,12 +468,9 @@ function openReviews(practiceId: string): void {
 // Lifecycle
 // =========================================================================
 
-onMounted(async () => {
+onMounted(() => {
   if (PAYMENTS_TAB_ENABLED) void loadPayments()
   void loadReviews()
-  // The past list loads itself (useMyPractices above); a cached one is
-  // already here and needs its badges now.
-  await loadVisibleInsights()
 })
 </script>
 
@@ -602,7 +493,7 @@ onMounted(async () => {
 /* ===== Stats grid ===== */
 .analytics__stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-3);
 }
 
@@ -699,74 +590,9 @@ onMounted(async () => {
   line-height: 1.5;
 }
 
-/* ===== Practice card (PracticeListCard canon padding + inline badges) ===== */
-.analytics__pcard {
+/* ===== Period slider ===== */
+.analytics__period {
   width: 100%;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  background: var(--velo-bg-card-solid);
-  border: 1px solid var(--velo-border-card);
-  border-radius: var(--radius-md);
-  padding: var(--velo-card-padding-y) var(--velo-card-padding-x);
-  display: flex;
-  flex-direction: column;
-  gap: var(--velo-card-meta-row-gap);
-  transition: opacity var(--transition-fast);
-}
-
-.analytics__pcard:active {
-  opacity: 0.85;
-}
-
-.analytics__pcard-top {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-}
-
-.analytics__pcard-icon {
-  width: var(--velo-size-46);
-  height: var(--velo-size-46);
-  flex-shrink: 0;
-  color: var(--velo-text-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.analytics__pcard-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.analytics__pcard-title {
-  font-size: var(--velo-fs-18);
-  color: var(--velo-text-primary);
-  letter-spacing: var(--velo-card-letter-spacing-title);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.analytics__pcard-meta {
-  font-size: var(--velo-fs-14);
-  color: var(--velo-text-secondary);
-  letter-spacing: 0.28px;
-}
-
-/* Spread the rating trio across the card (operator SVG: 3 equal-width pills,
-   gap 10) — analytics-only override; the shared VRatingBadges component layout
-   is untouched (other usages keep their left-aligned trio). The icon+% is
-   CENTERED within each pill (operator PROMPT №235: centered within the pill,
-   not flush left or spread across the card). */
-.analytics__pcard-badges {
-  gap: var(--velo-card-meta-row-gap);
-}
-
-.analytics__pcard-badges :deep(.v-rating-badges__badge) {
-  flex: 1;
-  justify-content: center;
 }
 
 /* ===== Load more ===== */

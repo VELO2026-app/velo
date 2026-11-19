@@ -14,16 +14,13 @@
       },
       "morePractices": "ще {count} практика | ще {count} практики | ще {count} практик",
       "sections": {
-        "overall": "Загальна статистика",
         "attention": "Потребують уваги",
-        "past": "Минулі практики",
         "revenue": "Дохід за період",
         "transactions": "Транзакції",
         "reviews": "Відгуки",
         "payments": "Платежі"
       },
-      "title": "Аналітика",
-      "feedbacksStat": "Відгуків"
+      "title": "Аналітика"
     },
     "attendanceRoster": {
       "empty": {

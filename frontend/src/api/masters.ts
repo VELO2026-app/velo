@@ -36,6 +36,7 @@ import type {
   PaginatedTransactionsResponse,
   MasterStatsResponse,
   PaginatedMasterReviewsResponse,
+  MasterAnalyticsResponse,
 } from '@/api/types'
 import { path } from '@/api/path'
 
@@ -209,7 +210,7 @@ export function getStudent(id: string): Promise<StudentDetailResponse> {
  * plus the previous-period total and the signed delta_pct (null when the
  * previous period had no net-positive turnover).
  */
-export function getIncome(period: 'week' | 'month' = 'week'): Promise<IncomeResponse> {
+export function getIncome(period: MasterAnalyticsPeriod = 'week'): Promise<IncomeResponse> {
   const query = buildQuery({ period })
   return api.get<IncomeResponse>(`/api/v1/masters/me/income${query}`)
 }
@@ -265,4 +266,19 @@ export function getMasterReviews(
   // them, not only those that fall in the first mixed page.
   const query = buildQuery({ limit, offset, attention: attention || undefined })
   return api.get<PaginatedMasterReviewsResponse>(`/api/v1/masters/me/reviews${query}`)
+}
+
+// =============================================================================
+// Analytics for one calendar period (BE-34, BE-222)
+// =============================================================================
+
+/** The analytics slider's vocabulary -- the three values core/periods.py bounds server-side. */
+export type MasterAnalyticsPeriod = 'week' | 'month' | 'quarter'
+
+/** The signed-in master's analytics for one calendar period (their own timezone). */
+export function getMasterAnalytics(
+  period: MasterAnalyticsPeriod = 'week',
+): Promise<MasterAnalyticsResponse> {
+  const query = buildQuery({ period })
+  return api.get<MasterAnalyticsResponse>(`/api/v1/masters/me/analytics${query}`)
 }

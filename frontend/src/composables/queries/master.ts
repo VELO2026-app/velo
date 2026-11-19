@@ -39,7 +39,12 @@ import {
   type QueryCache,
 } from '@pinia/colada'
 import { ApiResponseError } from '@/api/client'
-import { getMyMasterProfile, getMyPractices } from '@/api/masters'
+import {
+  getMasterAnalytics,
+  getMyMasterProfile,
+  getMyPractices,
+  type MasterAnalyticsPeriod,
+} from '@/api/masters'
 import type {
   MasterProfileResponse,
   PaginatedPracticesResponse,
@@ -273,3 +278,20 @@ export async function myPracticesChanged(queryCache: QueryCache): Promise<void> 
     .map((entry) => queryCache.fetch(entry))
   await Promise.allSettled([invalidation, ...offScreen])
 }
+
+/**
+ * Query options for the master's analytics of one calendar period
+ * (`GET /masters/me/analytics?period=`).
+ *
+ * @remarks
+ * One entry per period and NO placeholder from the previous one: the screen
+ * must never show an earlier period's numbers under the new period's label.
+ * A tap on another period reads its own entry (the last selected period wins,
+ * a late answer for an earlier one lands in its own entry). staleTime 0: the
+ * numbers move whenever a practice is completed or reviewed.
+ */
+export const masterAnalyticsQuery = defineQueryOptions((period: MasterAnalyticsPeriod) => ({
+  key: keys.masters.analytics(period),
+  query: () => getMasterAnalytics(period),
+  staleTime: 0,
+}))
