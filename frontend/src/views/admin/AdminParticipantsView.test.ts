@@ -2,17 +2,13 @@
 // VELO Frontend -- AdminParticipantsView Screen Tests (probekit-screen-test)
 // =============================================================================
 //
-// 304 lines. Global participants list -- filter + pagination + admin-store
-// thin read. ONE api seam: getParticipants (@/api/admin). Real Pinia,
-// AdminPracticesView.test.ts's harness (createPinia/setActivePinia, seed
-// useAdminStore().stats directly -- a plain writable ref, this screen never
-// calls fetchDashboard itself).
-//
-// useAdminStore ON THIS SCREEN: read for EXACTLY ONE value,
-// `adminStore.stats?.users_count` (.vue:103), feeding the header count badge
-// AND the "all" segment badge (i18n:common.all, .vue:104-112). It does NOT drive the list --
-// same thin-read shape as AdminPracticesView (№485's sibling precedent), not
-// assumed, confirmed by reading the whole script.
+// Global participants list -- filter + pagination + the platform total.
+// Since FE-181 both reads are Pinia Colada queries (composables/queries/
+// admin.ts): the list is an infinite query per filter over getParticipants,
+// the header count and the "all" segment badge (i18n:common.all) read the
+// admin counters (getAdminStats + getReports). Every seam is mocked at the
+// module boundary (@/api/admin); the screen mounts with a real Pinia +
+// Colada, a fresh pair per mount.
 //
 // THE LADDER IS NOT WHAT A GENERIC LIST SCREEN WOULD HAVE -- READ, NOT
 // ASSUMED: this screen has NO loading-spinner element at all (no VLoader
@@ -28,32 +24,16 @@
 // empty", not to show a spinner. Asserted below directly (a pending promise,
 // checked mid-flight).
 //
-// THE ERROR PATH IS ALSO A REAL DIVERGENCE FROM THIS PROJECT'S NEAR-UNIVERSAL
-// PATTERN -- READ, NOT ASSUMED: `catch { ... }` (.vue:123) has NO bound error
-// parameter at all -- no `ApiResponseError -> e.detail` discrimination is
-// even POSSIBLE here. Both the toast
-// (i18n:adminScreens.adminParticipants.toast.loadMembersFailed) and
-// the VEmptyState description (i18n:common.checkConnection,
-// .vue:61, a template-literal-free hardcoded string, NOT bound to any error
-// variable) are FIXED regardless of failure cause. Every other admin screen
-// covered this session discriminates ApiResponseError vs generic -- this one
-// doesn't, on purpose or not. Reported as a structural fact, not fixed.
+// THE ERROR PATH: the toast
+// (i18n:adminScreens.adminParticipants.toast.loadMembersFailed) and the
+// VEmptyState description (i18n:common.checkConnection) are FIXED strings,
+// whatever the failure cause -- no ApiResponseError discrimination here.
 //
-// LOAD-MORE DOES NOT BLANK THE LIST -- THE REAL ASSIGNMENT, MEASURED: the
-// catch block (.vue:123-129) only sets `error.value = true` `if (reset)` --
-// a failed loadMore (reset=false) touches NEITHER `error` NOR
-// `participants.value` at all, so the already-rendered page stays exactly as
-// it was, with only the toast firing. Asserted below directly: mount with a
-// full first page, trigger a REJECTING loadMore, assert the original rows
-// are still in the DOM afterward.
-//
-// TWO GUARDS, ONE REAL ONE NOT (contrast worth naming, not this screen's own
-// finding but relevant context): `load()`'s `if (loading.value) return`
-// (.vue:115) IS a real handler-level reentrancy guard -- confirmed with a
-// same-tick double loadMore click below, only ONE api call reaches the mock.
-// This is the correctly-guarded shape that AdminMasterInviteView.onCreate and
-// AdminProfileView.onLogout (this round's other two screens) are missing --
-// see their own files' banners.
+// LOAD-MORE DOES NOT BLANK THE LIST: a failed next page keeps the pages
+// already shown (Colada keeps the entry's data on error), only the toast
+// fires; the error state is for a failed FIRST page. A same-tick double
+// "show more" tap reaches the api once (loadNextPage joins the request in
+// flight).
 //
 // joinedLabel (.vue:143-149) is a PURE function of its ISO input -- `new
 // Date(iso)` + a fixed `timeZone: 'UTC'` Intl call, no `new Date()` (no
@@ -78,10 +58,11 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { setActivePinia, createPinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminParticipantsView from '@/views/admin/AdminParticipantsView.vue'
 import * as adminApi from '@/api/admin'
-import { useAdminStore } from '@/stores/admin'
 import type { AdminParticipant, AdminStatsResponse } from '@/api/types'
 
 vi.mock('@/api/admin')
@@ -137,19 +118,24 @@ function stats(overrides: Partial<AdminStatsResponse> = {}): AdminStatsResponse 
 
 let app: App | null = null
 let host: HTMLElement | null = null
-let pinia: Pinia
 
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminParticipantsView).use(createTestI18n())
-  app.use(pinia)
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminParticipantsView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
   for (let i = 0; i < 6; i++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function rows(): HTMLElement[] {
@@ -177,9 +163,10 @@ function buttonByText(t: string): HTMLButtonElement | undefined {
 // -----------------------------------------------------------------------------
 
 beforeEach(() => {
-  pinia = createPinia()
-  setActivePinia(pinia)
-
+  vi.mocked(adminApi.getAdminStats).mockReset().mockResolvedValue(stats())
+  vi.mocked(adminApi.getReports)
+    .mockReset()
+    .mockResolvedValue({ items: [], total: 0, limit: 1, offset: 0 })
   vi.mocked(adminApi.getParticipants)
     .mockReset()
     .mockResolvedValue(paginated([participant()], 1))
@@ -276,7 +263,7 @@ describe('AdminParticipantsView', () => {
   })
 
   // ===========================================================================
-  describe('filter (watch(filter, load), .vue:93,136)', () => {
+  describe('filter', () => {
     it('initial load: getParticipants("all", "week", 0, 100, 0)', async () => {
       mount()
       await flush()
@@ -295,6 +282,44 @@ describe('AdminParticipantsView', () => {
       segmentItem('Активные').click()
       await flush()
       expect(adminApi.getParticipants).toHaveBeenLastCalledWith('active', 'week', 0, 100, 0)
+    })
+
+    it('while the new filter loads, the previous filter rows stay on screen', async () => {
+      vi.mocked(adminApi.getParticipants).mockResolvedValueOnce(
+        paginated([participant({ id: 'u_all', name: 'Все-фильтр Юзер' })], 1),
+      )
+      mount()
+      await flush()
+      vi.mocked(adminApi.getParticipants).mockReturnValue(new Promise(() => {}))
+
+      segmentItem('Новые').click()
+      await flush()
+
+      expect(rowByName('Все-фильтр Юзер')).toBeDefined()
+    })
+
+    // Owner decision 19.11: a failed switch shows the failure, never the
+    // previous filter's rows.
+    it('a failed filter switch: the error state (never the previous filter rows), told once even when picked back and failing again', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getParticipants).mockRejectedValueOnce(new Error('down'))
+      segmentItem('Новые').click()
+      await flush()
+      expect(rows()).toHaveLength(0)
+      expect(host?.querySelector('.v-empty__title')?.textContent?.trim()).toBe(
+        'Не удалось загрузить участников',
+      )
+      expect(toastError).toHaveBeenCalledTimes(1)
+
+      segmentItem('Все').click()
+      await flush()
+      vi.mocked(adminApi.getParticipants).mockRejectedValueOnce(new Error('down again'))
+      segmentItem('Новые').click()
+      await flush()
+
+      // One more failed request, one more toast -- not two.
+      expect(toastError).toHaveBeenCalledTimes(2)
     })
 
     it('switching filter REPLACES the list (reset), not appends -- a stale page from the old filter does not linger', async () => {
@@ -318,7 +343,7 @@ describe('AdminParticipantsView', () => {
   })
 
   // ===========================================================================
-  describe('pagination (load(reset)/loadMore, .vue:114-140)', () => {
+  describe('pagination', () => {
     it('loadMore APPENDS with pageOffset = current participants.length', async () => {
       vi.mocked(adminApi.getParticipants).mockResolvedValueOnce(
         paginated([participant({ id: 'u_1' }), participant({ id: 'u_2' })], 5),
@@ -358,11 +383,11 @@ describe('AdminParticipantsView', () => {
       await flush()
 
       expect(rowByName('Уже Загружен')).toBeDefined() // still there, not blanked
-      expect(host?.querySelector('.v-empty')).toBeNull() // no error rung either -- reset stayed false
+      expect(host?.querySelector('.v-empty')).toBeNull() // no error rung: the first page is held
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить участников')
     })
 
-    it('a same-tick double loadMore click reaches the api ONCE -- if(loading.value) return is a real, working guard here', async () => {
+    it('a same-tick double loadMore click reaches the api ONCE', async () => {
       let resolveMore!: (v: ReturnType<typeof paginated>) => void
       vi.mocked(adminApi.getParticipants).mockResolvedValueOnce(paginated([participant()], 5))
       mount()
@@ -426,6 +451,18 @@ describe('AdminParticipantsView', () => {
       expect(Array.from(metas ?? []).some((m) => m.textContent?.includes('10 июня'))).toBe(true)
     })
 
+    it('an avatar url renders the photo instead of the placeholder icon', async () => {
+      vi.mocked(adminApi.getParticipants).mockResolvedValue(
+        paginated([participant({ avatar_url: 'https://cdn.example/a.png' })], 1),
+      )
+      mount()
+      await flush()
+
+      expect(rows()[0]?.querySelector('img.prow__avatar-img')?.getAttribute('src')).toBe(
+        'https://cdn.example/a.png',
+      )
+    })
+
     it('telegram_id/last_login_at absent: their own row lines simply do not render', async () => {
       vi.mocked(adminApi.getParticipants).mockResolvedValue(
         paginated([participant({ telegram_id: null, last_login_at: null })], 1),
@@ -441,19 +478,19 @@ describe('AdminParticipantsView', () => {
   })
 
   // ===========================================================================
-  describe('header + store badge (.vue:103-112)', () => {
-    it('seeding adminStore.stats.users_count shows it in the header AND the "Все" badge', async () => {
+  describe('header + the platform total badge (/admin/stats)', () => {
+    it('users_count shows in the header AND the "Все" badge', async () => {
+      vi.mocked(adminApi.getAdminStats).mockResolvedValue(stats({ users_count: 342 }))
       mount()
-      useAdminStore().stats = stats({ users_count: 342 })
       await flush()
 
       expect(host?.querySelector('.admin-list__count')?.textContent?.trim()).toBe('342')
       expect(segmentBadge('Все')).toBe('342')
     })
 
-    it('adminStore.stats = null: header shows "—", no badge on "Все"', async () => {
+    it('no counters yet: header shows "—", no badge on "Все"', async () => {
+      vi.mocked(adminApi.getAdminStats).mockReturnValue(new Promise(() => {}))
       mount()
-      useAdminStore().stats = null
       await flush()
 
       expect(host?.querySelector('.admin-list__count')?.textContent?.trim()).toBe('—')
@@ -462,7 +499,7 @@ describe('AdminParticipantsView', () => {
   })
 
   // ===========================================================================
-  describe('messageStub (.vue:157-159)', () => {
+  describe('messageStub', () => {
     it('clicking the message button toasts the stub, no navigation', async () => {
       mount()
       await flush()
