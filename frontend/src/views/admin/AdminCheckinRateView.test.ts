@@ -17,9 +17,10 @@
 //   A missing offset -> Number.parseInt('') -> NaN -> Number.isFinite(NaN) is
 //   false -> falls back to 0. Present, byte-identical, in ALL THREE files.
 //
-//   THE FULL SKELETON -- period/offset parsing, rangeLabel, the data/loading/
-//   error refs, the load() try/catch/finally shape, the error fallback string
-//   (i18n:common.loadError / ApiResponseError -> e.detail), onMounted(load), and
+//   THE FULL SKELETON -- period/offset parsing, rangeLabel, the window query
+//   read through adminFigures (composables/queries/admin.ts, FE-181: the
+//   dashboard's entry for the same window), the error fallback string
+//   (i18n:common.loadError), and
 //   the 3-rung ladder markup (loading / VEmptyState error + i18n:common.retry /
 //   content, IDENTICAL VEmptyState title i18n:adminScreens.adminCommon.loadMetricFailed
 //   in all three)
@@ -62,7 +63,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache, type QueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminCheckinRateView from '@/views/admin/AdminCheckinRateView.vue'
 import * as adminApi from '@/api/admin'
@@ -70,6 +72,11 @@ import { ApiResponseError } from '@/api/client'
 import type { CheckinMetricResponse, SeriesPoint, LowCheckinPractice } from '@/api/types'
 
 vi.mock('@/api/admin')
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
+}))
 
 const back = vi.fn()
 let routeQuery: Record<string, string> = {}
@@ -116,7 +123,11 @@ function checkinMetric(overrides: Partial<CheckinMetricResponse> = {}): CheckinM
 let app: App | null = null
 let host: HTMLElement | null = null
 
-function mount(query: Record<string, string> = {}): HTMLElement {
+/** Mount the screen; `seed` writes the Colada cache first (what the dashboard left there). */
+function mount(
+  query: Record<string, string> = {},
+  seed?: (queryCache: QueryCache) => void,
+): HTMLElement {
   routeQuery = query
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -127,6 +138,7 @@ function mount(query: Record<string, string> = {}): HTMLElement {
     .use(createTestI18n())
     .use(pinia)
     .use(PiniaColada, coladaOptions)
+  if (seed) app.runWithContext(() => seed(useQueryCache()))
   app.mount(host)
   return host
 }
@@ -212,7 +224,7 @@ describe('AdminCheckinRateView', () => {
 
     it('failure (ApiResponseError): shows the generic fallback (unmapped code)', async () => {
       // B8 (PROMPT №747): 'server_error' is not a real backend code --
-      // unmapped, lands on the call site's own fallback (.vue:103).
+      // unmapped, lands on the call site's own fallback.
       vi.mocked(adminApi.getCheckinMetric).mockRejectedValue(
         new ApiResponseError(500, 'Сервис метрик недоступен', 'server_error'),
       )
@@ -239,7 +251,39 @@ describe('AdminCheckinRateView', () => {
   })
 
   // ===========================================================================
-  describe('query-driven fetch args (.vue:76-78) -- exact (period, offset) reaching the api mock', () => {
+  describe('the dashboard window entry (FE-181)', () => {
+    it('a drill-in from the dashboard paints its figures at once, no loader, while it asks again', async () => {
+      vi.mocked(adminApi.getCheckinMetric).mockReturnValue(new Promise(() => {}))
+      mount({ period: 'week', offset: '-1' }, (queryCache) =>
+        queryCache.setQueryData(
+          adminKeys.metric('checkin', 'week', -1),
+          checkinMetric({ rate_pct: 55 }),
+        ),
+      )
+      await flush()
+
+      expect(heroValue()).toBe('55%')
+      expect(host?.querySelector('.v-loader')).toBeNull()
+      expect(adminApi.getCheckinMetric).toHaveBeenCalledWith('week', -1)
+    })
+
+    it('a failed read over the shown figures keeps them and tells the admin', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getCheckinMetric).mockRejectedValue(new Error('ECONNRESET'))
+
+      useQueryCache()
+        .invalidateQueries({ key: adminKeys.metric('checkin', 'week', 0) })
+        .catch(() => {})
+      await flush()
+
+      expect(heroValue()).toBe('76%')
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить метрику')
+    })
+  })
+
+  // ===========================================================================
+  describe('query-driven fetch args -- exact (period, offset) reaching the api mock', () => {
     it('?period=month&offset=3 -> getCheckinMetric("month", 3)', async () => {
       mount({ period: 'month', offset: '3' })
       await flush()
@@ -289,7 +333,7 @@ describe('AdminCheckinRateView', () => {
   })
 
   // ===========================================================================
-  describe('weekBars (.vue:88) and lowPractices (.vue:89-95)', () => {
+  describe('weekBars and lowPractices', () => {
     it('weekBars renders one .v-bar-chart__col per series point, with the right labels', async () => {
       vi.mocked(adminApi.getCheckinMetric).mockResolvedValue(
         checkinMetric({

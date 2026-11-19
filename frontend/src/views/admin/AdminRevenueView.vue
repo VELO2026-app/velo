@@ -96,6 +96,8 @@ import type { SegmentOption } from '@/components/ui'
 import { IconFinance } from '@/components/icons'
 import { adminFigures, revenueQuery } from '@/composables/queries/admin'
 import { formatMoney } from '@/utils/format'
+import { extractApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 
@@ -111,11 +113,14 @@ const revenueHeroLabel = computed<string>(() =>
     : t('adminScreens.adminRevenue.titleMonth'),
 )
 
-// The period's figures (Pinia Colada, composables/queries/admin.ts): the
-// current window, the entry the dashboard's revenue line reads. A period
+// The period's figures (Pinia Colada, composables/queries/admin.ts) for the
+// current week or month (offset 0) -- the dashboard's revenue line reads the
+// same entry while its stepper stands on the current period. A period
 // switch shows the loader until the new window answers.
+const toast = useToast()
 const { data, loading, error, retry } = adminFigures(
   useQuery(() => revenueQuery({ period: period.value, offset: 0 })),
+  (e) => toast.error(extractApiError(e, t('adminScreens.adminRevenue.revenueLoadFailed'))),
 )
 
 // VSegment emits a plain string; narrow it back to the period union.

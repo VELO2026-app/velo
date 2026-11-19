@@ -74,6 +74,8 @@ import {
 import { IconFeedback } from '@/components/icons'
 import { adminFigures, feedbackMetricQuery } from '@/composables/queries/admin'
 import { formatPeriodRange } from '@/utils/periodRange'
+import { extractApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
 import { MOOD_SCALE_FILLS } from '@/utils/displayHelpers'
 import { MOOD_SCALE_KEYS, MOOD_SCALE_LABELS, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
 import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
@@ -90,8 +92,10 @@ const rangeLabel = formatPeriodRange(period, offset)
 
 // The window's figures (Pinia Colada, composables/queries/admin.ts) -- the
 // entry the dashboard's row reads, so a drill-in from it paints at once.
+const toast = useToast()
 const { data, loading, error, retry } = adminFigures(
   useQuery(() => feedbackMetricQuery({ period, offset })),
+  (e) => toast.error(extractApiError(e, t('adminScreens.adminCommon.loadMetricFailed'))),
 )
 
 const leaveRate = computed((): string => (data.value ? `${Math.round(data.value.rate_pct)}%` : '—'))

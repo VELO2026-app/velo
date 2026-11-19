@@ -10,24 +10,24 @@
 // siblings (AdminCheckinRateView, AdminFeedbackRateView) is written out in
 // AdminCheckinRateView.test.ts's banner; summarized here, independently
 // re-verified against THIS file, not copy-pasted from the sibling's banner:
-//   - THE NaN SUSPICION: CLEAN NEGATIVE. This file's .vue:74-75 --
+//   - THE NaN SUSPICION: CLEAN NEGATIVE. This file's .vue --
 //     `Number.isFinite(rawOffset) ? rawOffset : 0` -- byte-identical to both
 //     siblings. A missing offset -> NaN -> falls back to 0, present here too.
-//   - THE FULL SKELETON (.vue:68-107: period/offset parsing, rangeLabel, the
-//     data/loading/error refs, load()'s try/catch/finally, the error
-//     fallback string, onMounted(load), the 3-rung ladder markup) is
+//   - THE FULL SKELETON (period/offset parsing, rangeLabel, the window query
+//     through adminFigures, the error fallback string, the 3-rung ladder
+//     markup) is
 //     byte-identical to both siblings modulo the type name and which
 //     getXMetric is called. Another confirmed instance of the clean
 //     negative -- THE HABIT did NOT repeat a sixth time in this batch.
 //   - STRUCTURAL SHAPE: this screen matches AdminCheckinRateView, not
 //     AdminFeedbackRateView -- a client list (loyalUsers) with its OWN
 //     `v-if="list.length"` / `v-else` no-data branch (i18n:common.noData,
-//     .vue:41-44), same shape as lowPractices. (AdminFeedbackRateView has no such list at
+//     .vue), same shape as lowPractices. (AdminFeedbackRateView has no such list at
 //     all -- three always-rendering VRatingBar rows instead.)
 //   - NO v-else-if="data": same as both siblings, content renders
 //     unconditionally past loading/error even if data.value stays null.
 //
-// loyalUsers (.vue:87-93) HAS NO CLIENT-SIDE PREDICATE either, same as
+// loyalUsers HAS NO CLIENT-SIDE PREDICATE either, same as
 // Checkin's lowPractices: `(data.value?.top_users ?? []).map(...)` -- a pure
 // `.map()`, no `.filter()`/threshold. "Top"/"loyal" is decided server-side;
 // nothing to test on the frontend beyond the display mapping itself.
@@ -40,7 +40,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminReturnRateView from '@/views/admin/AdminReturnRateView.vue'
 import * as adminApi from '@/api/admin'
@@ -48,6 +49,11 @@ import { ApiResponseError } from '@/api/client'
 import type { ReturnMetricResponse, TopUser } from '@/api/types'
 
 vi.mock('@/api/admin')
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
+}))
 
 const back = vi.fn()
 let routeQuery: Record<string, string> = {}
@@ -178,7 +184,7 @@ describe('AdminReturnRateView', () => {
 
     it('failure (ApiResponseError): shows the generic fallback (unmapped code)', async () => {
       // B8 (PROMPT №747): 'server_error' is not a real backend code --
-      // unmapped, lands on the call site's own fallback (.vue:101).
+      // unmapped, lands on the call site's own fallback.
       vi.mocked(adminApi.getReturnMetric).mockRejectedValue(
         new ApiResponseError(500, 'Сервис метрик недоступен', 'server_error'),
       )
@@ -205,7 +211,24 @@ describe('AdminReturnRateView', () => {
   })
 
   // ===========================================================================
-  describe('query-driven fetch args (.vue:73-75) -- exact (period, offset) reaching the api mock', () => {
+  describe('a failed read over shown figures', () => {
+    it('keeps the figures and tells the admin', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getReturnMetric).mockRejectedValue(new Error('ECONNRESET'))
+
+      // A return to the app: the window is asked again.
+      useQueryCache()
+        .invalidateQueries({ key: adminKeys.metric('return', 'week', 0) })
+        .catch(() => {})
+      await flush()
+
+      expect(heroValue()).toContain('45%')
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить метрику')
+    })
+  })
+
+  describe('query-driven fetch args -- exact (period, offset) reaching the api mock', () => {
     it('?period=month&offset=3 -> getReturnMetric("month", 3)', async () => {
       mount({ period: 'month', offset: '3' })
       await flush()
@@ -254,7 +277,7 @@ describe('AdminReturnRateView', () => {
   })
 
   // ===========================================================================
-  describe('loyalUsers (.vue:87-93)', () => {
+  describe('loyalUsers', () => {
     it('maps name + a "practices_count практик" subtitle', async () => {
       vi.mocked(adminApi.getReturnMetric).mockResolvedValue(
         returnMetric({

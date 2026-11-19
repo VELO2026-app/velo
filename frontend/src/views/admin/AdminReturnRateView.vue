@@ -70,6 +70,8 @@ import {
 import { IconRepeat } from '@/components/icons'
 import { adminFigures, returnMetricQuery } from '@/composables/queries/admin'
 import { formatPeriodRange } from '@/utils/periodRange'
+import { extractApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 
@@ -83,8 +85,10 @@ const rangeLabel = formatPeriodRange(period, offset)
 
 // The window's figures (Pinia Colada, composables/queries/admin.ts) -- the
 // entry the dashboard's row reads, so a drill-in from it paints at once.
+const toast = useToast()
 const { data, loading, error, retry } = adminFigures(
   useQuery(() => returnMetricQuery({ period, offset })),
+  (e) => toast.error(extractApiError(e, t('adminScreens.adminCommon.loadMetricFailed'))),
 )
 
 const returnRate = computed((): string =>

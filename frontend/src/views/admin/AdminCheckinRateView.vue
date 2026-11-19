@@ -73,6 +73,8 @@ import {
 import { IconCheck } from '@/components/icons'
 import { adminFigures, checkinMetricQuery } from '@/composables/queries/admin'
 import { formatPeriodRange } from '@/utils/periodRange'
+import { extractApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
 import type { SeriesPoint } from '@/api/types'
 
 const router = useRouter()
@@ -87,8 +89,10 @@ const rangeLabel = formatPeriodRange(period, offset)
 
 // The window's figures (Pinia Colada, composables/queries/admin.ts) -- the
 // entry the dashboard's row reads, so a drill-in from it paints at once.
+const toast = useToast()
 const { data, loading, error, retry } = adminFigures(
   useQuery(() => checkinMetricQuery({ period, offset })),
+  (e) => toast.error(extractApiError(e, t('adminScreens.adminCommon.loadMetricFailed'))),
 )
 
 const avgRate = computed((): string => (data.value ? `${Math.round(data.value.rate_pct)}%` : '—'))

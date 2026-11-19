@@ -466,14 +466,22 @@ export interface AdminFiguresState<T> {
  * the selected window has no answer of its own -- a period switch shows it
  * too, the previous window's numbers (the dashboard's placeholder) never
  * stand in -- the error with its message, then the figures.
+ *
+ * @param tellStale - Told when a read fails over figures already shown (a
+ *   revisit, a return to the app): the figures stay, the admin must know
+ *   they may be old. A failure with nothing shown is the error rung.
  */
 export function adminFigures<T>(
   query: Pick<
     UseQueryReturn<T, unknown, undefined>,
     'data' | 'error' | 'asyncStatus' | 'isPlaceholderData' | 'refetch'
   >,
+  tellStale?: (error: unknown) => void,
 ): AdminFiguresState<T> {
   const answer = computed(() => (query.isPlaceholderData.value ? undefined : query.data.value))
+  onFailedRequest(query, (error) => {
+    if (answer.value !== undefined) tellStale?.(error)
+  })
   const failed = computed(
     () =>
       answer.value === undefined && query.error.value != null && query.asyncStatus.value === 'idle',
