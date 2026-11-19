@@ -338,6 +338,32 @@ describe('AdminSupportDetailView', () => {
       expect(text()).toContain('Обращение не найдено')
     })
 
+    it('the not-found screen and the header both lead back', async () => {
+      vi.mocked(supportApi.getAdminTicket).mockRejectedValue(
+        new ApiResponseError(404, 'Ticket not found'),
+      )
+      mount('t_missing', null)
+      await flush()
+
+      btnByText('Назад')?.click()
+      host?.querySelector<HTMLButtonElement>('.v-header button')?.click()
+
+      expect(back).toHaveBeenCalledTimes(2)
+    })
+
+    it('a failed feed is the feed error rung; «Повторить» reads it again', async () => {
+      vi.mocked(supportApi.getAdminSupportMessages).mockRejectedValueOnce(new Error('down'))
+      mount('t_1', ticket())
+      await flush()
+      expect(text()).toContain('Не удалось загрузить сообщения')
+
+      btnByText('Повторить')?.click()
+      await flush()
+
+      expect(text()).not.toContain('Не удалось загрузить сообщения')
+      expect(text()).toContain('Помогите пожалуйста')
+    })
+
     it('«Обновить» reads the feed again behind the loader, then shows the new messages', async () => {
       mount('t_1', ticket())
       await flush()
@@ -691,6 +717,20 @@ describe('AdminSupportDetailView', () => {
       expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
     })
 
+    it('any other failure of the hand-over toasts the generic fallback and keeps the sheet', async () => {
+      getUsersList.mockResolvedValue(roster(OLGA_USER))
+      vi.mocked(supportApi.assignTicket).mockRejectedValue(new ApiResponseError(502, 'down'))
+      mount('t_1', ticket())
+      await flush()
+
+      await pickStatus('Назначить')
+      assignRows()[0]?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось передать обращение')
+      expect(assignSheetOpen()).toBe(true)
+    })
+
     it('a 409 (handed over meanwhile) toasts, closes the sheet and reads the ticket again', async () => {
       getUsersList.mockResolvedValue(roster(OLGA_USER))
       vi.mocked(supportApi.assignTicket).mockRejectedValue(conflict())
@@ -756,6 +796,17 @@ describe('AdminSupportDetailView', () => {
       expect(btnByText('Взять в работу')).toBeDefined()
     })
 
+    it('any other failure toasts the generic fallback; the ticket stays held', async () => {
+      vi.mocked(supportApi.releaseTicket).mockRejectedValue(new ApiResponseError(502, 'down'))
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      await pickStatus('Освободить')
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось освободить обращение')
+      expect(composer()).not.toBeNull()
+    })
+
     it('a 409 (handed over meanwhile) toasts and reads the ticket again', async () => {
       vi.mocked(supportApi.releaseTicket).mockRejectedValue(conflict())
       vi.mocked(supportApi.getAdminTicket).mockResolvedValue(ticket({ claimed_by: OTHER }))
@@ -797,6 +848,17 @@ describe('AdminSupportDetailView', () => {
       expect(badge()).toBe('Открыта')
       expect(host?.querySelector('.support-detail__processed')).toBeNull()
       expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
+    })
+
+    it('a failed «Вернуть в работу» toasts the generic fallback and keeps the card as it was', async () => {
+      vi.mocked(supportApi.reopenTicket).mockRejectedValue(new ApiResponseError(502, 'down'))
+      mount('t_1', ticket({ status: 'resolved', claimed_by: ME }))
+      await flush()
+
+      await pickStatus('Вернуть в работу')
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось вернуть обращение в работу')
+      expect(badge()).toBe('Решена')
     })
 
     it('«Не спам» on a FRESH spam ticket -- the same route, the card is open again', async () => {
@@ -1090,6 +1152,48 @@ describe('AdminSupportDetailView', () => {
   // themselves are SupportMessageBubble's (its own file); here the card's
   // part: which thread a retry goes to, what a retry answer does, and the
   // poll while a message is on its way.
+  describe('message time', () => {
+    it('a message with an unreadable timestamp shows no time rather than «Invalid Date»', async () => {
+      vi.mocked(supportApi.getAdminSupportMessages).mockResolvedValue({
+        messages: [message({ created_at: 'not-a-date' })],
+        next_cursor: null,
+      })
+      mount('t_1', ticket())
+      await flush()
+
+      expect(text()).toContain('Помогите пожалуйста')
+      expect(text()).not.toContain('Invalid')
+      expect(text()).not.toContain('NaN')
+    })
+  })
+
+  describe('translation -- the original on demand', () => {
+    it("«Показать оригинал» shows the person's own words, «Показать перевод» brings the translation back", async () => {
+      vi.mocked(supportApi.getAdminSupportMessages).mockResolvedValue({
+        messages: [
+          message({
+            body: 'Привет',
+            original: 'Hello',
+            translation: { locale: 'ru', state: 'ready', source_locale: 'en', retryable: false },
+          }),
+        ],
+        next_cursor: null,
+      })
+      mount('t_1', ticket())
+      await flush()
+      expect(text()).toContain('Привет')
+
+      host?.querySelector<HTMLButtonElement>('.bubble__link')?.click()
+      await flush()
+      expect(text()).toContain('Hello')
+      expect(text()).not.toContain('Привет')
+
+      host?.querySelector<HTMLButtonElement>('.bubble__link')?.click()
+      await flush()
+      expect(text()).toContain('Привет')
+    })
+  })
+
   describe('translation -- retry and the poll (FE-100)', () => {
     function inFlight(state: 'preparing' | 'not_requested' = 'preparing'): SupportMessage {
       return message({

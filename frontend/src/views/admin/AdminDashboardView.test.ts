@@ -353,6 +353,38 @@ describe('AdminDashboardView', () => {
   })
 
   // ===========================================================================
+  describe('navigation', () => {
+    it('the engagement rows open their drill-in for the SELECTED window (P1)', async () => {
+      mount()
+      await flush()
+      prevBtn()?.click()
+      await flush()
+
+      progressRow('Check-in rate')?.click()
+      progressRow('Feedback rate')?.click()
+      progressRow('Return rate')?.click()
+
+      const window = { period: 'week', offset: '-1' }
+      expect(push).toHaveBeenCalledWith({ name: 'admin-checkin-rate', query: window })
+      expect(push).toHaveBeenCalledWith({ name: 'admin-feedback-rate', query: window })
+      expect(push).toHaveBeenCalledWith({ name: 'admin-return-rate', query: window })
+    })
+
+    it('the stat cards open the platform lists', async () => {
+      mount()
+      await flush()
+
+      statCard('Практик')?.click()
+      statCard('Мастеров')?.click()
+      statCard('Участников')?.click()
+
+      expect(push).toHaveBeenCalledWith({ name: 'admin-practices' })
+      expect(push).toHaveBeenCalledWith({ name: 'admin-masters' })
+      expect(push).toHaveBeenCalledWith({ name: 'admin-participants' })
+    })
+  })
+
+  // ===========================================================================
   describe('the period window', () => {
     it('selecting "Месяц" asks for the month window: the overview and all 4 figures', async () => {
       mount()

@@ -15,7 +15,7 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import { DateTime } from 'luxon'
 import AdminSupportStatsView from '@/views/admin/AdminSupportStatsView.vue'
@@ -23,6 +23,11 @@ import * as supportApi from '@/api/support'
 import type { SupportStats } from '@/api/support'
 
 vi.mock('@/api/support')
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
+}))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
@@ -165,6 +170,22 @@ describe('AdminSupportStatsView', () => {
     // Back at the current month, › is disabled -- the future has no appeals.
     const capped = host?.querySelector<HTMLButtonElement>('[data-testid="stats-next"]')
     expect(capped?.disabled).toBe(true)
+  })
+
+  it('a failed read over the shown month keeps the figures and tells the admin', async () => {
+    mount()
+    await flush()
+    const before = text()
+    vi.mocked(supportApi.getSupportStats).mockRejectedValue(new Error('down'))
+
+    // A return to the app: the month is asked again.
+    useQueryCache()
+      .invalidateQueries({ key: ['admin', 'support', 'stats'] })
+      .catch(() => {})
+    await flush()
+
+    expect(text()).toBe(before)
+    expect(toastError).toHaveBeenCalledWith('Ошибка загрузки')
   })
 
   it('a failed load shows the error state with a retry', async () => {

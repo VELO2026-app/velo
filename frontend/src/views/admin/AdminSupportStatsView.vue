@@ -115,10 +115,13 @@ import { DateTime } from 'luxon'
 import { useAuthStore } from '@/stores/auth'
 import type { SupportStatsFigures } from '@/api/support'
 import { adminFigures, adminSupportStatsQuery } from '@/composables/queries/admin'
+import { extractApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
 import { supportCategoryLabel } from '@/utils/supportTopics'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const toast = useToast()
 
 /** 0 = the current month; each step is one month further back. */
 const monthOffset = ref(0)
@@ -149,7 +152,11 @@ const {
   loading,
   error,
   retry,
-} = adminFigures(useQuery(() => adminSupportStatsQuery(statsWindow.value)))
+} = adminFigures(
+  useQuery(() => adminSupportStatsQuery(statsWindow.value)),
+  // A failed read over the shown month (a return to the app) is told.
+  (e) => toast.error(extractApiError(e, t('common.loadError'))),
+)
 
 /** One row's figures: a "12 tickets · 3 rated · avg 4.33 · 4–5: 67%" line
  *  built from the adminScreens.adminSupportStats ticketsCount / ratedCount /
