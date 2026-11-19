@@ -394,9 +394,8 @@ describe('AdminPromosView', () => {
     })
 
     it('«Деактивир.» filters by is_active=false, NOT by a type', async () => {
-      // currentParams returns { isActive: false } with no type
-      // (AdminPromosView.vue:165) -- sending a type here would hide half the
-      // deactivated codes.
+      // The inactive tab asks for is_active=false with no type -- sending a
+      // type here would hide half the deactivated codes.
       mount()
       await flush()
 
@@ -537,6 +536,24 @@ describe('AdminPromosView', () => {
     })
   })
 
+  describe('load more guard', () => {
+    it('a same-tick double «Показать ещё» asks for the next page once', async () => {
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1')], 5))
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminPromos)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
+
+      const more = button('Показать ещё')!
+      more.click()
+      more.click()
+      await flush()
+
+      expect(adminApi.getAdminPromos).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('deactivate', () => {
     it('«Деактивировать» asks first -- it does NOT deactivate on the first click', async () => {
       // Killing a live promo is irreversible (there is no re-activate endpoint).
@@ -597,6 +614,31 @@ describe('AdminPromosView', () => {
       expect(cards()[1]?.className).toContain('pcard--inactive')
       expect(cards()[0]?.className).not.toContain('pcard--inactive')
       expect(adminApi.getAdminPromos).toHaveBeenCalledTimes(1)
+    })
+
+    it('a promo deactivated on «Все» is already inactive on a held «Мастеров» tab', async () => {
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1', { code: 'FIRST' })]))
+      vi.mocked(adminApi.deactivateAdminPromo).mockResolvedValue(
+        promo('p1', { is_active: false }) as never,
+      )
+      mount()
+      await flush()
+      tab('Мастеров')?.click()
+      await flush()
+      tab('Все')?.click()
+      await flush()
+      // From here on the server never answers: what the tabs show is the
+      // in-place write over every held tab.
+      vi.mocked(adminApi.getAdminPromos).mockReturnValue(new Promise(() => {}))
+
+      button('Деактивировать')?.click()
+      await flush()
+      dialogButton('Деактивировать')?.click()
+      await flush()
+      tab('Мастеров')?.click()
+      await flush()
+
+      expect(cards()[0]?.className).toContain('pcard--inactive')
     })
 
     it('a FAILED deactivate leaves the promo ACTIVE -- it is still live on the backend', async () => {

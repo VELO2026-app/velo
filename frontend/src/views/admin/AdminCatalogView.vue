@@ -186,7 +186,11 @@ import {
 import { IconPen, IconClose, IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
-import { adminTaxonomyQuery, onFailedRequest, useAdminMutation } from '@/composables/queries/admin'
+import {
+  adminTaxonomyQuery,
+  onFailedRequest,
+  useTaxonomyMutation,
+} from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import {
   createTaxonomyDirection,
@@ -221,21 +225,18 @@ function retry(): void {
 
 // Every write invalidates the catalog (ADMIN_INVALIDATES.changeTaxonomy);
 // mutateAsync resolves once the tree on screen caught up.
-const createDirection = useAdminMutation('changeTaxonomy', (body: CreateDirectionRequest) =>
+const createDirection = useTaxonomyMutation((body: CreateDirectionRequest) =>
   createTaxonomyDirection(body),
 )
-const createStyle = useAdminMutation(
-  'changeTaxonomy',
+const createStyle = useTaxonomyMutation(
   ({ directionId, body }: { directionId: string; body: CreateStyleRequest }) =>
     createTaxonomyStyle(directionId, body),
 )
-const updateDirection = useAdminMutation(
-  'changeTaxonomy',
+const updateDirection = useTaxonomyMutation(
   ({ id, body }: { id: string; body: UpdateTaxonomyItemRequest }) =>
     updateTaxonomyDirection(id, body),
 )
-const updateStyle = useAdminMutation(
-  'changeTaxonomy',
+const updateStyle = useTaxonomyMutation(
   ({ id, body }: { id: string; body: UpdateTaxonomyItemRequest }) => updateTaxonomyStyle(id, body),
 )
 

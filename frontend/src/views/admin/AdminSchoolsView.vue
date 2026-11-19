@@ -13,7 +13,8 @@
   where that lever already is.
 
   The list is a Pinia Colada infinite query (composables/queries/admin.ts,
-  FE-181); a revoke elsewhere invalidates it.
+  FE-181); a verdict on a master elsewhere (verify, make-master, revoke)
+  invalidates it.
 -->
 
 <template>
@@ -76,7 +77,7 @@
       </div>
 
       <div v-if="hasMore" class="admin-list__more">
-        <VButton variant="outline" :loading="loading" @click="loadMore">{{
+        <VButton variant="outline" :loading="loadingMore" @click="loadMore">{{
           t('common.showMore')
         }}</VButton>
       </div>
@@ -97,7 +98,7 @@ import { useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VBadge, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
 import type { AdminSchoolListItem } from '@/api/types'
-import { adminSchoolsQuery, onFailedRequest } from '@/composables/queries/admin'
+import { adminSchoolsQuery, usePagedListFailures } from '@/composables/queries/admin'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -116,17 +117,13 @@ const error = computed(
 )
 const hasMore = schoolsQuery.hasNextPage
 
-// Every failed request is told once (a first page's and a next page's).
-onFailedRequest(schoolsQuery, () => toast.error(t('school.loadFailed')))
+// Every failed request is told (a first page, a next page, a refetch).
+const { loadingMore, loadMore } = usePagedListFailures(schoolsQuery, () =>
+  toast.error(t('school.loadFailed')),
+)
 
 function retry(): void {
   void schoolsQuery.refetch()
-}
-
-function loadMore(): void {
-  // cancelRefetch false: a tap during a reload joins it instead of gluing a
-  // stale page to a fresh one. A failure is already told above.
-  schoolsQuery.loadNextPage({ cancelRefetch: false }).catch(() => {})
 }
 
 // school creation month, from created_at (UTC).

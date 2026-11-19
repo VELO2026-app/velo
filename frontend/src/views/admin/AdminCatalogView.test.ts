@@ -295,7 +295,7 @@ describe('AdminCatalogView', () => {
       expect(dirCards()).toHaveLength(0)
     })
 
-    it('failure: shows the error rung with a STATIC description (load() never calls toast.error)', async () => {
+    it('a failed first load: the error rung with a STATIC description, no toast', async () => {
       vi.mocked(taxonomyApi.getFullTaxonomy).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
@@ -308,8 +308,8 @@ describe('AdminCatalogView', () => {
       expect(host?.querySelector('.v-empty__desc')?.textContent).toBe(
         'Проверьте соединение и попробуйте ещё раз',
       )
-      // Confirmed: load()'s catch block never toasts, unlike the other admin
-      // list screens -- this is the real behavior, not an oversight to "fix".
+      // A failed load with nothing shown is the error rung alone; a failed
+      // reload over a shown tree is told (see the addDirection tests).
       expect(toastError).not.toHaveBeenCalled()
     })
 
@@ -349,6 +349,9 @@ describe('AdminCatalogView', () => {
       expect(toastSuccess).toHaveBeenCalledWith('Направление добавлено')
       // RELOAD confirmed: getFullTaxonomy called a second time (mount + this).
       expect(taxonomyApi.getFullTaxonomy).toHaveBeenCalledTimes(2)
+      // Legacy: the active catalog the rest of the app reads is loaded again.
+      // (loaded on demand, so it lands a module load later).
+      await vi.waitFor(() => expect(taxonomyApi.getActiveTaxonomy).toHaveBeenCalled())
       expect(addDirectionInput().value).toBe('') // input cleared
     })
 

@@ -385,6 +385,36 @@ export const adminParticipantsQuery = defineInfiniteQueryOptions(
 // The method catalog editor, the platform's schools, the promo oversight
 // list and one practice's oversight detail.
 
+/**
+ * Load the taxonomy catalog into utils/methodTaxonomy's module cache. Imported
+ * on demand: a static import would list its chunk in the preload of every
+ * admin route (this module is shared by all of them), and that preload map
+ * ships in the startup chunk. Never rejects: a failed load leaves the cache
+ * as it was (the hardcoded maps stand in, utils/methodTaxonomy).
+ */
+async function primeTaxonomy(): Promise<void> {
+  try {
+    const { primeMethodTaxonomyCatalog } = await import('@/utils/methodTaxonomy')
+    await primeMethodTaxonomyCatalog()
+  } catch {
+    // The chunk did not load (offline): the cache keeps what it held.
+  }
+}
+
+/**
+ * A write to the method catalog (ADMIN_INVALIDATES.changeTaxonomy).
+ *
+ * @remarks
+ * Legacy: the active catalog the rest of the app reads (the calendar filter,
+ * the practice forms, the method pickers) is utils/methodTaxonomy's module
+ * cache, not a Colada entry, so the row cannot reach it -- it is loaded again
+ * here, next to the invalidation (./invalidation.ts header). The line leaves
+ * when that cache moves to Colada.
+ */
+export function useTaxonomyMutation<TVars, TData>(mutation: (vars: TVars) => Promise<TData>) {
+  return useAdminMutation('changeTaxonomy', mutation, { write: () => void primeTaxonomy() })
+}
+
 /** Query options for the full method catalog, inactive items included (`GET /admin/taxonomy`). */
 export const adminTaxonomyQuery = defineQueryOptions(() => ({
   key: adminKeys.taxonomy(),

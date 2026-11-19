@@ -49,10 +49,20 @@ function setup() {
   return { queryCache, written, run: () => run(), answer: () => answer() }
 }
 
+/** A held catalog, fresh for good: only an invalidation makes it stale. */
+function holdCatalog(queryCache: QueryCache): void {
+  queryCache.ensure({
+    key: adminKeys.taxonomy(),
+    query: async () => [],
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+  queryCache.setQueryData(adminKeys.taxonomy(), [])
+}
+
 describe('useAdminMutation', () => {
   it('writes and invalidates in the session it started in', async () => {
     const { queryCache, written, run, answer } = setup()
-    queryCache.setQueryData(adminKeys.taxonomy(), [])
+    holdCatalog(queryCache)
 
     const done = run()
     await nextTick()
@@ -60,7 +70,7 @@ describe('useAdminMutation', () => {
     await done
 
     expect(written).toEqual(['answered'])
-    expect(queryCache.get(adminKeys.taxonomy())?.when).toBe(0)
+    expect(queryCache.get(adminKeys.taxonomy())?.stale).toBe(true)
   })
 
   it('an answer after the session ended writes nothing and invalidates nothing', async () => {
@@ -71,11 +81,11 @@ describe('useAdminMutation', () => {
     // Logout / 401: resetAccountScope calls every member's $reset.
     useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
     // The next session's catalog, loaded before the old answer lands.
-    queryCache.setQueryData(adminKeys.taxonomy(), [])
+    holdCatalog(queryCache)
     answer()
     await done
 
     expect(written).toEqual([])
-    expect(queryCache.get(adminKeys.taxonomy())?.when).not.toBe(0)
+    expect(queryCache.get(adminKeys.taxonomy())?.stale).toBe(false)
   })
 })

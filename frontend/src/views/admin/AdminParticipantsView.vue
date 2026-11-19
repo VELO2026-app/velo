@@ -100,7 +100,7 @@ import { IconProfile, IconMessages } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import {
   adminParticipantsQuery,
-  onFailedRequest,
+  usePagedListFailures,
   useAdminStats,
   type AdminParticipantFilter,
 } from '@/composables/queries/admin'
@@ -156,21 +156,14 @@ const segOptions = computed<SegmentOption[]>(() => [
   { value: 'active', label: t('adminScreens.adminParticipants.active') },
 ])
 
-// Every failed request is told, the first page's and a next page's alike --
-// once, not again when a filter whose last answer failed is picked back.
-onFailedRequest(participantsQuery, () =>
+// Every failed request is told, the first page's and a next page's alike
+// (the first failure in a row, onFailedRequest).
+const { loadMore } = usePagedListFailures(participantsQuery, () =>
   toast.error(t('adminScreens.adminParticipants.toast.loadMembersFailed')),
 )
 
 function retry(): void {
   void participantsQuery.refetch()
-}
-
-function loadMore(): void {
-  // cancelRefetch false: a tap during a reload joins it (the tap itself is
-  // dropped) instead of gluing a stale page to a fresh one. A failure is
-  // already told above.
-  participantsQuery.loadNextPage({ cancelRefetch: false }).catch(() => {})
 }
 
 // t('adminScreens.adminParticipants.dek-2025') — registration month, from created_at (UTC).

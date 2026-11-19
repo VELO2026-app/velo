@@ -69,7 +69,7 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminPracticeDetailView from '@/views/admin/AdminPracticeDetailView.vue'
 import * as adminApi from '@/api/admin'
@@ -77,6 +77,11 @@ import { ApiResponseError } from '@/api/client'
 import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
 
 vi.mock('@/api/admin')
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
+}))
 
 const back = vi.fn()
 const routeParams: { id: string } = { id: 'p_upcoming' }
@@ -309,6 +314,25 @@ describe('AdminPracticeDetailView', () => {
       expect(host?.querySelector('.v-loader')).toBeNull()
       expect(host?.querySelector('.v-empty')).toBeNull() // NOT the error rung -- no throw happened
       expect(text()).toContain('Практика недоступна')
+    })
+  })
+
+  // ===========================================================================
+  describe('a failed refetch over a shown practice', () => {
+    it('keeps the practice and tells the admin', async () => {
+      mount('p_upcoming')
+      await flush()
+      expect(text()).toContain('Свободно')
+
+      vi.mocked(adminApi.getAdminPracticeDetail).mockRejectedValue(new Error('ECONNRESET'))
+      // A return to the app: the practice is asked again.
+      useQueryCache()
+        .invalidateQueries({ key: ['admin', 'practice'] })
+        .catch(() => {})
+      await flush()
+
+      expect(text()).toContain('Свободно')
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить практику')
     })
   })
 
