@@ -40,7 +40,7 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { setActivePinia, createPinia } from 'pinia'
+import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminPracticesView from '@/views/admin/AdminPracticesView.vue'
@@ -121,10 +121,10 @@ function stats(overrides: Partial<AdminStatsResponse> = {}): AdminStatsResponse 
 let app: App | null = null
 let host: HTMLElement | null = null
 
-function mount(): HTMLElement {
+/** Mount the screen; pass the previous mount's Pinia to revisit it (its Colada cache). */
+function mount(pinia: Pinia = createPinia()): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  const pinia = createPinia()
   setActivePinia(pinia)
   app = createApp(AdminPracticesView)
     .use(createTestI18n())
@@ -325,6 +325,51 @@ describe('AdminPracticesView', () => {
       await flush()
       expect(cards()).toHaveLength(1)
       expect(host?.querySelector('.admin-list__count')?.textContent).toBe('1')
+    })
+
+    // Owner decision 19.11: a failed switch shows the failure, never the
+    // previous scope's rows or total.
+    it('a failed switch: the error rung and "—" in the header, never the previous scope', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminPractices).mockRejectedValue(new Error('down'))
+
+      segmentItem('Предстоящие').click()
+      await flush()
+
+      expect(cards()).toHaveLength(0)
+      expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
+        'Не удалось загрузить практики',
+      )
+      expect(host?.querySelector('.admin-list__count')?.textContent).toBe('—')
+    })
+  })
+
+  // ===========================================================================
+  describe('revisit', () => {
+    it('a second visit shows the cached list at once, no loader, while it asks again', async () => {
+      const pinia = createPinia()
+      mount(pinia)
+      await flush()
+      app?.unmount()
+      host?.remove()
+      vi.mocked(adminApi.getAdminPractices).mockReturnValue(new Promise(() => {}))
+
+      app = null
+      // The same Pinia: the Colada cache outlives the screen.
+      const second = createApp(AdminPracticesView)
+        .use(createTestI18n())
+        .use(pinia)
+        .use(PiniaColada, coladaOptions)
+      app = second
+      host = document.createElement('div')
+      document.body.appendChild(host)
+      second.mount(host)
+      await flush()
+
+      expect(host.querySelector('.v-loader')).toBeNull()
+      expect(cards()).toHaveLength(3)
+      expect(adminApi.getAdminPractices).toHaveBeenCalledTimes(2)
     })
   })
 

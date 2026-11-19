@@ -26,8 +26,8 @@
     - Alert banners + tab badges come from /admin/stats (cumulative pending
       counts), the entry the shell's badges read.
     - Revenue and the engagement rates (Check-in/Feedback/Return) come from
-      /admin/revenue and the per-metric endpoints for the same window -- the
-      entries the drill-in screens read.
+      /admin/revenue and the per-metric endpoints for the same window, one
+      entry per figure and window.
 -->
 
 <template>
@@ -361,7 +361,7 @@ const revenueDelta = computed((): string => '')
 
 // Engagement headline rates (E9), best-effort: each is its own query, so a
 // failed metric leaves only its row at an empty track + "—". The detail
-// screens carry the breakdown (and read the same entries).
+// screens carry the breakdown.
 const checkin = useQuery(() => checkinMetricQuery(periodWindow.value))
 const feedback = useQuery(() => feedbackMetricQuery(periodWindow.value))
 const returning = useQuery(() => returnMetricQuery(periodWindow.value))

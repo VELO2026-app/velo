@@ -430,6 +430,21 @@ describe('AdminDashboardView', () => {
       expect(statCard('Практик')?.querySelector('.v-stat__value')?.textContent).toBe('45')
     })
 
+    // Owner decision 19.11: a failed window shows the failure, never the
+    // previous window's numbers.
+    it('a failed overview for the new window shows "—" on the cards, never the previous window', async () => {
+      mount()
+      await flush()
+      expect(statCard('Практик')?.querySelector('.v-stat__value')?.textContent).toBe('45')
+
+      vi.mocked(adminApi.getAdminStatsOverview).mockRejectedValue(new Error('down'))
+      prevBtn()?.click()
+      await flush()
+
+      expect(statCard('Практик')?.querySelector('.v-stat__value')?.textContent).toBe('—')
+      expect(statCard('Участников')?.querySelector('.v-stat__value')?.textContent).toBe('—')
+    })
+
     it('a failed figure for the new window shows "—", never the previous window value', async () => {
       mount()
       await flush()

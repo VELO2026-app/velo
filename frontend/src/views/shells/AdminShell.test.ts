@@ -259,7 +259,9 @@ describe('AdminShell', () => {
     })
 
     it('failing again and again is told once, until an answer arrives', async () => {
-      vi.mocked(adminApi.getAdminStats).mockRejectedValue(new Error('down'))
+      // A new error per request, as the network gives: the rule under test is
+      // "one toast per run of failures", not "one toast per error object".
+      vi.mocked(adminApi.getAdminStats).mockImplementation(() => Promise.reject(new Error('down')))
       await mount('admin-dashboard')
       await flush()
       // Every screen that reads the counters asks again while they failed.
@@ -276,7 +278,9 @@ describe('AdminShell', () => {
 
       vi.mocked(adminApi.getAdminStats).mockResolvedValue(stats())
       await askAgain()
-      vi.mocked(adminApi.getAdminStats).mockRejectedValue(new Error('down again'))
+      vi.mocked(adminApi.getAdminStats).mockImplementation(() =>
+        Promise.reject(new Error('down again')),
+      )
       await askAgain()
 
       expect(toastError).toHaveBeenCalledTimes(2)

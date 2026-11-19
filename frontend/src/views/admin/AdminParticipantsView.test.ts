@@ -284,6 +284,22 @@ describe('AdminParticipantsView', () => {
       expect(adminApi.getParticipants).toHaveBeenLastCalledWith('active', 'week', 0, 100, 0)
     })
 
+    it('while the new filter loads, the previous filter rows stay on screen', async () => {
+      vi.mocked(adminApi.getParticipants).mockResolvedValueOnce(
+        paginated([participant({ id: 'u_all', name: 'Все-фильтр Юзер' })], 1),
+      )
+      mount()
+      await flush()
+      vi.mocked(adminApi.getParticipants).mockReturnValue(new Promise(() => {}))
+
+      segmentItem('Новые').click()
+      await flush()
+
+      expect(rowByName('Все-фильтр Юзер')).toBeDefined()
+    })
+
+    // Owner decision 19.11: a failed switch shows the failure, never the
+    // previous filter's rows.
     it('a failed filter switch: the error state (never the previous filter rows), told once even when picked back and failing again', async () => {
       mount()
       await flush()

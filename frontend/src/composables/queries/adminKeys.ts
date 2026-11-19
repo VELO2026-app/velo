@@ -10,7 +10,7 @@
 //
 // The admin views (`/admin/*`) answer with their own payloads, shaped for
 // oversight, never the user zone's entities -- so they live under one domain
-// of their own, and a user-zone mutation never reaches them (nor they it).
+// of their own, and a user-zone mutation never reaches them.
 // =============================================================================
 
 /** Query-key factory for the admin zone. */
@@ -26,8 +26,8 @@ export const adminKeys = {
   overview: (period: string, offset: number) => ['admin', 'overview', { period, offset }] as const,
   /**
    * One engagement metric or the revenue (`GET /admin/metrics/{kind}`,
-   * `GET /admin/revenue`) for one period window -- the dashboard's rows and
-   * the drill-in screens share it.
+   * `GET /admin/revenue`) for one period window -- any screen showing the
+   * same figures for the same window shares the entry.
    */
   metric: (kind: 'checkin' | 'feedback' | 'return' | 'revenue', period: string, offset: number) =>
     ['admin', 'metric', { kind, period, offset }] as const,

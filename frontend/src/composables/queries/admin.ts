@@ -57,21 +57,19 @@ interface RequestState {
 }
 
 /**
- * Call `tell` once for every request of the query that failed -- the moment
- * it settles -- and never for an error the entry already held: switching
- * back to a period or a filter whose last answer failed shows that error,
- * it does not tell it again.
+ * Call `tell` when a request of the query settles failed -- the first
+ * failure in a row only: the next one is told after a request succeeded
+ * again.
  *
- * @param untilSuccess - Tell only the first failure in a row: the next one
- *   is told after a request succeeded again (the counters, asked by every
- *   screen and every return to the app, while the server is down).
+ * @remarks
+ * Only a request that settles is told: switching back to a period or a
+ * filter whose last answer failed shows that error, it does not tell it
+ * again. And one run of failures is one toast: while the server is down,
+ * every return to the app (Colada refetches on focus and reconnect), every
+ * screen reading the same entry and every retry asks again -- the screen
+ * already shows the failure (an error rung, "—"), the admin was told once.
  */
-export function onFailedRequest(
-  query: RequestState,
-  tell: (error: unknown) => void,
-  { untilSuccess = false }: { untilSuccess?: boolean } = {},
-): void {
-  const told = new WeakSet<object>()
+export function onFailedRequest(query: RequestState, tell: (error: unknown) => void): void {
   let failing = false
   watch(query.asyncStatus, (now, before) => {
     if (before !== 'loading' || now !== 'idle') return
@@ -80,9 +78,7 @@ export function onFailedRequest(
       failing = false
       return
     }
-    if (typeof error !== 'object' || told.has(error)) return
-    told.add(error)
-    if (untilSuccess && failing) return
+    if (failing) return
     failing = true
     tell(error)
   })

@@ -97,11 +97,10 @@ const isDetailRoute = computed(() => DETAIL_ROUTES.includes(route.name as string
 // The counters behind the badges (queries/admin.ts): this shell wraps every
 // /admin/* route, so it is the one that tells the admin a load failed
 // (W14, PROMPT №409: it used to fail silently), whichever screen asked; the
-// screens reading the same entry stay quiet. Once per run of failures: every
-// screen and every return to the app asks again while the server is down.
-onFailedRequest(
-  adminStats.query,
-  (error) => toast.error(extractApiError(error, t('storeErrors.admin.dashboard'))),
-  { untilSuccess: true },
+// screens reading the same entry stay quiet. Once per run of failures
+// (onFailedRequest): every screen and every return to the app asks again
+// while the server is down.
+onFailedRequest(adminStats.query, (error) =>
+  toast.error(extractApiError(error, t('storeErrors.admin.dashboard'))),
 )
 </script>
