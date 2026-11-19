@@ -41,7 +41,7 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminPracticesView from '@/views/admin/AdminPracticesView.vue'
 import * as adminApi from '@/api/admin'
@@ -49,6 +49,11 @@ import { ApiResponseError } from '@/api/client'
 import type { AdminPracticeListItem, AdminStatsResponse } from '@/api/types'
 
 vi.mock('@/api/admin')
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
+}))
 
 const back = vi.fn()
 const push = vi.fn()
@@ -342,6 +347,23 @@ describe('AdminPracticesView', () => {
         'Не удалось загрузить практики',
       )
       expect(host?.querySelector('.admin-list__count')?.textContent).toBe('—')
+    })
+  })
+
+  // ===========================================================================
+  describe('a failed refetch over a shown list', () => {
+    it('keeps the cards and tells the admin', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminPractices).mockRejectedValue(new Error('ECONNRESET'))
+
+      useQueryCache()
+        .invalidateQueries({ key: ['admin', 'practices'] })
+        .catch(() => {})
+      await flush()
+
+      expect(cards()).toHaveLength(3)
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить практики')
     })
   })
 

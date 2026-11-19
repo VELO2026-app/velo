@@ -7,11 +7,12 @@
 // absorbed by VELO (generated.ts:161) -- so mislabelling an owner, or failing to
 // kill a code the admin deactivated, keeps discounting someone's real money.
 //
-// PATTERN B (local-ref): items/loading/error/hasMore are refs fed by a direct
-// getAdminPromos() in onMounted + a watch on `filter` (AdminPromosView.vue:143-263).
-// No store, so no pinia -- the seam is @/api/admin.
+// Since FE-181 each tab is a Pinia Colada infinite query over getAdminPromos
+// (composables/queries/admin.ts) and the deactivation runs through
+// useAdminMutation. The seam is @/api/admin; the screen mounts with a real
+// Pinia + Colada, a fresh pair per mount.
 //
-// THE TABS ARE SERVER-SIDE FILTERS, NOT CLIENT-SIDE (AdminPromosView.vue:159-167).
+// THE TABS ARE SERVER-SIDE FILTERS, NOT CLIENT-SIDE.
 // So the assertions are about the PARAMS the screen sends, not about which rows
 // it hides -- asserting a client-side filter here would be testing a layer this
 // screen deliberately does not have.
@@ -27,6 +28,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminPromosView from '@/views/admin/AdminPromosView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -77,14 +81,17 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminPromosView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminPromosView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  await nextTick()
-  await nextTick()
+  for (let n = 0; n < 6; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
   await nextTick()
 }
 
@@ -387,9 +394,8 @@ describe('AdminPromosView', () => {
     })
 
     it('«Деактивир.» filters by is_active=false, NOT by a type', async () => {
-      // currentParams returns { isActive: false } with no type
-      // (AdminPromosView.vue:165) -- sending a type here would hide half the
-      // deactivated codes.
+      // The inactive tab asks for is_active=false with no type -- sending a
+      // type here would hide half the deactivated codes.
       mount()
       await flush()
 
@@ -400,8 +406,8 @@ describe('AdminPromosView', () => {
     })
 
     it("switching tabs clears the previous tab's rows before the new ones land", async () => {
-      // loadInitial resets items/total/hasMore up front (AdminPromosView.vue:192-194).
-      // Without that, company promos would flash under the i18n:adminScreens.adminPromos.filterMasters tab.
+      // Each tab is its own entry, with no placeholder from another tab.
+      // Otherwise company promos would flash under the i18n:adminScreens.adminPromos.filterMasters tab.
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1', { code: 'FIRST' })]))
       mount()
       await flush()
@@ -434,9 +440,9 @@ describe('AdminPromosView', () => {
     })
 
     it('a STALE tab response is discarded rather than painted over the current tab', async () => {
-      // The generation counter (AdminPromosView.vue:186-198). On a rapid switch
-      // the first tab's response can land last; without the guard it would
-      // overwrite the tab the admin is actually looking at.
+      // On a rapid switch the first tab's response can land last; it lands in
+      // that tab's own entry and must not overwrite the tab the admin is
+      // actually looking at.
       let resolveFirst!: (v: ReturnType<typeof page>) => void
       vi.mocked(adminApi.getAdminPromos).mockReturnValueOnce(
         new Promise<ReturnType<typeof page>>((r) => {
@@ -478,8 +484,7 @@ describe('AdminPromosView', () => {
     })
 
     it('load-more APPENDS, pages from the loaded count, and KEEPS the tab filter', async () => {
-      // currentParams() is re-read inside loadMore (AdminPromosView.vue:215) --
-      // dropping the filter on page 2 would mix other masters' codes in.
+      // Dropping the filter on page 2 would mix other masters' codes in.
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1')], 2))
       mount()
       await flush()
@@ -512,6 +517,41 @@ describe('AdminPromosView', () => {
       expect(text()).not.toContain('Не удалось загрузить промокоды')
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки')
     })
+
+    it('a failed refetch of the shown list keeps the rows and says the list failed', async () => {
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1')], 1))
+      mount()
+      await flush()
+
+      vi.mocked(adminApi.getAdminPromos).mockRejectedValue(new TypeError('boom'))
+      // A return to the app, a revisit: the list is asked again.
+      useQueryCache()
+        .invalidateQueries({ key: ['admin', 'promos'] })
+        .catch(() => {})
+      await flush()
+
+      expect(cards()).toHaveLength(1)
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки промокодов')
+    })
+  })
+
+  describe('load more guard', () => {
+    it('a same-tick double «Показать ещё» asks for the next page once', async () => {
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1')], 5))
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminPromos)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
+
+      const more = button('Показать ещё')!
+      more.click()
+      more.click()
+      await flush()
+
+      expect(adminApi.getAdminPromos).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('deactivate', () => {
@@ -543,7 +583,7 @@ describe('AdminPromosView', () => {
       expect(text()).toContain('Активен')
     })
 
-    it('confirming deactivates THAT promo by id and flips its badge in place', async () => {
+    it('confirming deactivates THAT promo by id, flips its badge at once and refetches the list', async () => {
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(
         page([promo('p1', { code: 'FIRST' }), promo('p2', { code: 'SECOND' })]),
       )
@@ -552,6 +592,11 @@ describe('AdminPromosView', () => {
       )
       mount()
       await flush()
+      // The refetch the deactivation triggers never answers here: the flip
+      // on screen is the in-place write, not the server's next page.
+      vi.mocked(adminApi.getAdminPromos)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
 
       // The SECOND card's button -- the id must follow the card, not the list head.
       const secondBtn = Array.from(cards()[1]?.querySelectorAll('button') ?? []).find((b) =>
@@ -568,14 +613,39 @@ describe('AdminPromosView', () => {
       expect(cards()).toHaveLength(2)
       expect(cards()[1]?.className).toContain('pcard--inactive')
       expect(cards()[0]?.className).not.toContain('pcard--inactive')
+      expect(adminApi.getAdminPromos).toHaveBeenCalledTimes(1)
+    })
+
+    it('a promo deactivated on «Все» is already inactive on a held «Мастеров» tab', async () => {
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1', { code: 'FIRST' })]))
+      vi.mocked(adminApi.deactivateAdminPromo).mockResolvedValue(
+        promo('p1', { is_active: false }) as never,
+      )
+      mount()
+      await flush()
+      tab('Мастеров')?.click()
+      await flush()
+      tab('Все')?.click()
+      await flush()
+      // From here on the server never answers: what the tabs show is the
+      // in-place write over every held tab.
+      vi.mocked(adminApi.getAdminPromos).mockReturnValue(new Promise(() => {}))
+
+      button('Деактивировать')?.click()
+      await flush()
+      dialogButton('Деактивировать')?.click()
+      await flush()
+      tab('Мастеров')?.click()
+      await flush()
+
+      expect(cards()[0]?.className).toContain('pcard--inactive')
     })
 
     it('a FAILED deactivate leaves the promo ACTIVE -- it is still live on the backend', async () => {
-      // is_active is only flipped after the await succeeds (AdminPromosView.vue:246-248).
-      // An optimistic flip would tell the admin a code is dead while it keeps
+      // is_active is only flipped after the request succeeds. An optimistic flip would tell the admin a code is dead while it keeps
       // discounting every purchase.
       // B8 (PROMPT №747): 'already' is not a real backend code -- unmapped,
-      // lands on the call site's own fallback (.vue:256).
+      // lands on the call site's own fallback.
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1')]))
       vi.mocked(adminApi.deactivateAdminPromo).mockRejectedValue(
         new ApiResponseError(409, 'Промокод уже деактивирован', 'already'),
@@ -594,9 +664,9 @@ describe('AdminPromosView', () => {
     })
 
     it('a failure releases the in-flight lock, so the admin can try again', async () => {
-      // `finally` clears deactivatingId AND confirmTarget (AdminPromosView.vue:256-259).
-      // If either stuck, the re-entry guard at :243 would swallow every later
-      // attempt and the promo could never be killed.
+      // `finally` clears deactivatingId AND confirmTarget. If either stuck,
+      // the re-entry guard would swallow every later attempt and the promo
+      // could never be killed.
       //
       // NOTE: "the dialog visually closed" is deliberately NOT asserted -- a
       // closed teleported modal leaks in happy-dom (see afterEach), so its
@@ -614,6 +684,10 @@ describe('AdminPromosView', () => {
 
       vi.mocked(adminApi.deactivateAdminPromo).mockResolvedValue(
         promo('p1', { is_active: false }) as never,
+      )
+      // The server now lists it inactive too (the deactivation's refetch).
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(
+        page([promo('p1', { is_active: false })]),
       )
       button('Деактивировать')?.click()
       await flush()

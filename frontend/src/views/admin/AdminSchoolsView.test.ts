@@ -11,6 +11,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminSchoolsView from '@/views/admin/AdminSchoolsView.vue'
 import * as cgApi from '@/api/schools'
 
@@ -34,14 +37,17 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminSchoolsView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminSchoolsView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  await nextTick()
-  await nextTick()
+  for (let n = 0; n < 6; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
   await nextTick()
 }
 

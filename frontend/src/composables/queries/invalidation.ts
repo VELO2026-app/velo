@@ -8,6 +8,10 @@
 // handler. A row lists key PREFIXES (./keys.ts); every Colada entry under a
 // prefix goes stale, and the ones on screen refetch at once.
 //
+// The admin zone's mutations have their own map, ADMIN_INVALIDATES in
+// ./admin.ts, with the same rules: the admin zone loads lazily and this module is part
+// of the startup chunk (FE-181). Both maps run through invalidateKeys.
+//
 // While the migration runs, some of the same data still lives in Pinia
 // stores. Each mutation composable refreshes those
 // holders next to its `invalidateAfter()` call, marked as legacy; a line
@@ -90,6 +94,14 @@ export type MutationName = keyof typeof INVALIDATES
 
 /**
  * Mark every entry under the mutation's prefixes stale and refetch the ones
+ * that matter now (see `invalidateKeys`).
+ */
+export function invalidateAfter(queryCache: QueryCache, mutation: MutationName): Promise<void> {
+  return invalidateKeys(queryCache, INVALIDATES[mutation])
+}
+
+/**
+ * Mark every entry under the given prefixes stale and refetch the ones
  * that matter now: those on screen, and the persisted ones off screen (small,
  * and their copy must not outlive the change). A persisted copy of an entry
  * not on screen is dropped first (./persist.ts, forgetPersisted).
@@ -103,12 +115,12 @@ export type MutationName = keyof typeof INVALIDATES
  * read failed. Entries off screen and not persisted only go stale: their next
  * reader refetches them.
  */
-export async function invalidateAfter(
+export async function invalidateKeys(
   queryCache: QueryCache,
-  mutation: MutationName,
+  prefixes: readonly EntryKey[],
 ): Promise<void> {
   const entries = new Set<UseQueryEntry>()
-  for (const key of INVALIDATES[mutation]) {
+  for (const key of prefixes) {
     forgetPersisted(queryCache, key)
     for (const entry of queryCache.getEntries({ key })) entries.add(entry)
   }

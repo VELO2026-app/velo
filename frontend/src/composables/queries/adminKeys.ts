@@ -35,4 +35,20 @@ export const adminKeys = {
   practices: (scope: string) => ['admin', 'practices', { scope }] as const,
   /** `GET /admin/participants?filter=` -- the platform's users, every page loaded so far. */
   participants: (filter: string) => ['admin', 'participants', { filter }] as const,
+  /** `GET /admin/practices/{id}` -- one practice with its roster. */
+  practice: (practiceId: string) => ['admin', 'practice', practiceId] as const,
+  /**
+   * `GET /admin/practices/{id}/zoom-attendance` -- the practice's meeting
+   * status and attendance match. Under the practice's prefix.
+   */
+  practiceAttendance: (practiceId: string) =>
+    ['admin', 'practice', practiceId, 'attendance'] as const,
+  /** `GET /admin/taxonomy` -- the method catalog with its inactive items (the catalog editor). */
+  taxonomy: () => ['admin', 'taxonomy'] as const,
+  /** `GET /admin/schools` -- every school of the platform, every page loaded so far. */
+  schools: () => ['admin', 'schools'] as const,
+  /** Prefix of every promo list. */
+  promosAll: () => ['admin', 'promos'] as const,
+  /** `GET /admin/promos?type=&is_active=` -- one tab of the promo oversight list, every page loaded so far. */
+  promos: (filter: string) => ['admin', 'promos', { filter }] as const,
 }

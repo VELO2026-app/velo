@@ -4,9 +4,10 @@
 //
 // 424 lines. The GLOBAL taxonomy catalog -- the same catalog AdminMethodRequestsView's
 // i18n:adminScreens.adminMethodRequests.addToCatalog promote path (№476) writes
-// into. PATTERN = local-refs +
-// a reactive Record (`newStyleLabel`, keyed per direction id) + FIVE mutating
-// CRUD operations. No store, confirmed by reading every import. Seams mocked:
+// into. PATTERN = a Pinia Colada query for the catalog (FE-181, mounted with
+// a real Pinia + Colada) + a reactive Record (`newStyleLabel`, keyed per
+// direction id) + FIVE mutating CRUD operations through useAdminMutation.
+// Seams mocked:
 // @/api/taxonomy's getFullTaxonomy / createTaxonomyDirection /
 // createTaxonomyStyle / updateTaxonomyDirection / updateTaxonomyStyle.
 // ApiResponseError kept REAL (importOriginal). NO teleported dialogs on this
@@ -20,19 +21,15 @@
 // by asserting zero cards render for an empty fixture, not by asserting any
 // dedicated empty-state markup (there isn't one).
 //
-// CORRECTION/CLARIFICATION TO RECON: `load()`'s catch block (.vue:182-183) is
-// SILENT -- `catch { error.value = true }`, no toast.error, no e.detail
-// extraction at all, unlike AdminMethodRequestsView/AdminPracticesView's
-// load() functions. The VEmptyState's description is a hardcoded string, not
-// driven by the error. Confirmed by reading the exact lines; asserted below
-// as the real (if surprising) behavior, not assumed.
+// A failed catalog load is SILENT -- the error rung only, no toast, and
+// the VEmptyState's description is a hardcoded string, not driven by the
+// error.
 //
-// POST-MUTATION REFRESH: all FIVE mutations call `await load()` on success
-// (RELOAD from the server), NOT local-state patching -- confirmed at
-// .vue:208,228,257,271,284, and stated in the file's own header comment
-// (.vue:23-25, "Every mutation refetches the full catalog rather than
-// patching local state"). Every success-path test below asserts
-// getFullTaxonomy called a SECOND time, not a locally-mutated array.
+// POST-MUTATION REFRESH: all FIVE mutations invalidate the catalog
+// (ADMIN_INVALIDATES.changeTaxonomy) and RELOAD it from the server, NOT
+// local-state patching (the screen's header comment). Every success-path
+// test below asserts getFullTaxonomy called a SECOND time, not a
+// locally-mutated array.
 //
 // FIVE FALLBACK STRINGS, confirmed distinct where the code makes them
 // distinct: addDirection -> i18n:adminScreens.adminCatalog.addDirectionFailed
@@ -76,6 +73,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminCatalogView from '@/views/admin/AdminCatalogView.vue'
 import * as taxonomyApi from '@/api/taxonomy'
 import { ApiResponseError } from '@/api/client'
@@ -159,13 +159,18 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminCatalogView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminCatalogView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 6; i++) await nextTick()
+  for (let n = 0; n < 6; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function dirCards(): HTMLElement[] {
@@ -290,7 +295,7 @@ describe('AdminCatalogView', () => {
       expect(dirCards()).toHaveLength(0)
     })
 
-    it('failure: shows the error rung with a STATIC description (load() never calls toast.error)', async () => {
+    it('a failed first load: the error rung with a STATIC description, no toast', async () => {
       vi.mocked(taxonomyApi.getFullTaxonomy).mockRejectedValue(
         new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
       )
@@ -303,8 +308,8 @@ describe('AdminCatalogView', () => {
       expect(host?.querySelector('.v-empty__desc')?.textContent).toBe(
         'Проверьте соединение и попробуйте ещё раз',
       )
-      // Confirmed: load()'s catch block never toasts, unlike the other admin
-      // list screens -- this is the real behavior, not an oversight to "fix".
+      // A failed load with nothing shown is the error rung alone; a failed
+      // reload over a shown tree is told (see the addDirection tests).
       expect(toastError).not.toHaveBeenCalled()
     })
 
@@ -344,6 +349,9 @@ describe('AdminCatalogView', () => {
       expect(toastSuccess).toHaveBeenCalledWith('Направление добавлено')
       // RELOAD confirmed: getFullTaxonomy called a second time (mount + this).
       expect(taxonomyApi.getFullTaxonomy).toHaveBeenCalledTimes(2)
+      // Legacy: the active catalog the rest of the app reads is loaded again.
+      // (loaded on demand, so it lands a module load later).
+      await vi.waitFor(() => expect(taxonomyApi.getActiveTaxonomy).toHaveBeenCalled())
       expect(addDirectionInput().value).toBe('') // input cleared
     })
 

@@ -22,7 +22,9 @@
 
   Every mutation refetches the full catalog rather than patching local state
   -- simplest correct approach for a low-traffic admin screen with a nested
-  direction->styles shape.
+  direction->styles shape. The catalog is a Pinia Colada query and the
+  writes run through useAdminMutation (composables/queries/admin.ts,
+  FE-181): the tree stays on screen while it refetches.
 -->
 
 <template>
@@ -63,7 +65,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="load">{{ t('common.retry') }}</VButton></template
+        ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -168,8 +170,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuery } from '@pinia/colada'
 import {
   VBackButton,
   VCard,
@@ -184,34 +187,58 @@ import { IconPen, IconClose, IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import {
-  getFullTaxonomy,
+  adminTaxonomyQuery,
+  onFailedRequest,
+  useTaxonomyMutation,
+} from '@/composables/queries/admin'
+import { screenQueryState } from '@/composables/queries/screenState'
+import {
   createTaxonomyDirection,
   createTaxonomyStyle,
   updateTaxonomyDirection,
   updateTaxonomyStyle,
+  type CreateDirectionRequest,
+  type CreateStyleRequest,
   type TaxonomyDirectionItem,
   type TaxonomyStyleItem,
+  type UpdateTaxonomyItemRequest,
 } from '@/api/taxonomy'
 
 const router = useRouter()
 const toast = useToast()
 
-const directions = ref<TaxonomyDirectionItem[]>([])
-const loading = ref(false)
-const error = ref(false)
+const catalog = useQuery(adminTaxonomyQuery)
+const directions = computed<TaxonomyDirectionItem[]>(() => catalog.data.value ?? [])
+const { loading, failed: error } = screenQueryState(catalog)
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = false
-  try {
-    const res = await getFullTaxonomy()
-    directions.value = res.directions
-  } catch {
-    error.value = true
-  } finally {
-    loading.value = false
-  }
+// A failed load with no tree is the error rung; a failed refetch over a
+// tree shown (after a write, a return to the app) is told -- the tree may
+// lack what was just written.
+onFailedRequest(catalog, () => {
+  if (catalog.data.value !== undefined)
+    toast.error(t('adminScreens.adminCatalog.catalogLoadFailed'))
+})
+
+function retry(): void {
+  void catalog.refetch()
 }
+
+// Every write invalidates the catalog (ADMIN_INVALIDATES.changeTaxonomy);
+// mutateAsync resolves once the tree on screen caught up.
+const createDirection = useTaxonomyMutation((body: CreateDirectionRequest) =>
+  createTaxonomyDirection(body),
+)
+const createStyle = useTaxonomyMutation(
+  ({ directionId, body }: { directionId: string; body: CreateStyleRequest }) =>
+    createTaxonomyStyle(directionId, body),
+)
+const updateDirection = useTaxonomyMutation(
+  ({ id, body }: { id: string; body: UpdateTaxonomyItemRequest }) =>
+    updateTaxonomyDirection(id, body),
+)
+const updateStyle = useTaxonomyMutation(
+  ({ id, body }: { id: string; body: UpdateTaxonomyItemRequest }) => updateTaxonomyStyle(id, body),
+)
 
 // -- Add direction --
 const newDirectionLabel = ref('')
@@ -229,10 +256,9 @@ async function addDirection(): Promise<void> {
   if (!label || addingDirection.value) return
   addingDirection.value = true
   try {
-    await createTaxonomyDirection({ value: genSlug(), label })
+    await createDirection.mutateAsync({ value: genSlug(), label })
     newDirectionLabel.value = ''
     toast.success(t('adminScreens.adminCatalog.directionAdded'))
-    await load()
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.addDirectionFailed')))
   } finally {
@@ -249,10 +275,9 @@ async function addStyle(dir: TaxonomyDirectionItem): Promise<void> {
   if (!label || addingStyleFor.value) return
   addingStyleFor.value = dir.id
   try {
-    await createTaxonomyStyle(dir.id, { value: genSlug(), label })
+    await createStyle.mutateAsync({ directionId: dir.id, body: { value: genSlug(), label } })
     newStyleLabel[dir.id] = ''
     toast.success(t('adminScreens.adminCatalog.styleAdded'))
-    await load()
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.addStyleFailed')))
   } finally {
@@ -280,10 +305,9 @@ async function saveDirectionLabel(dir: TaxonomyDirectionItem): Promise<void> {
   if (!label || savingDirectionId.value) return
   savingDirectionId.value = dir.id
   try {
-    await updateTaxonomyDirection(dir.id, { label })
+    await updateDirection.mutateAsync({ id: dir.id, body: { label } })
     editingDirectionId.value = null
     toast.success(t('ui.saved'))
-    await load()
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.saveFailed')))
   } finally {
@@ -298,8 +322,7 @@ async function toggleDirectionActive(dir: TaxonomyDirectionItem): Promise<void> 
   if (togglingId.value) return
   togglingId.value = dir.id
   try {
-    await updateTaxonomyDirection(dir.id, { is_active: !dir.is_active })
-    await load()
+    await updateDirection.mutateAsync({ id: dir.id, body: { is_active: !dir.is_active } })
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.statusChangeFailed')))
   } finally {
@@ -311,16 +334,13 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
   if (togglingId.value) return
   togglingId.value = st.id
   try {
-    await updateTaxonomyStyle(st.id, { is_active: !st.is_active })
-    await load()
+    await updateStyle.mutateAsync({ id: st.id, body: { is_active: !st.is_active } })
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminCatalog.statusChangeFailed')))
   } finally {
     togglingId.value = null
   }
 }
-
-onMounted(load)
 </script>
 
 <style scoped>
