@@ -35,7 +35,8 @@
 // never for an old error an entry still holds.
 // =============================================================================
 
-import { computed, ref, watch, type Ref } from 'vue'
+import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { t } from '@/locales'
 import {
   defineInfiniteQueryOptions,
   defineQueryOptions,
@@ -45,6 +46,7 @@ import {
   useQueryCache,
   type EntryKey,
   type QueryCache,
+  type UseQueryReturn,
 } from '@pinia/colada'
 import {
   getAdminPracticeDetail,
@@ -85,6 +87,7 @@ import type {
 } from '@/api/types'
 import { adminKeys } from '@/composables/queries/adminKeys'
 import { keys } from '@/composables/queries/keys'
+import { extractApiError } from '@/composables/useApiError'
 import { invalidateKeys } from '@/composables/queries/invalidation'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useQueryScopeStore } from '@/composables/queries/setup'
@@ -445,6 +448,45 @@ export const revenueQuery = defineQueryOptions(({ period, offset }: AdminPeriodW
   staleTime: 0,
   placeholderData: (previous: AdminRevenueResponse | undefined) => previous,
 }))
+
+/** A screen's view of one period window's figures (the drill-in screens). */
+export interface AdminFiguresState<T> {
+  /** The selected window's answer, or null while there is none. */
+  data: ComputedRef<T | null>
+  /** No answer for the selected window and none failed yet: the loader. */
+  loading: ComputedRef<boolean>
+  /** The selected window failed and nothing is being tried: its message. */
+  error: ComputedRef<string | null>
+  /** Ask again (the error rung's retry). */
+  retry: () => void
+}
+
+/**
+ * The drill-in screens' rungs over one window query: the loader whenever
+ * the selected window has no answer of its own -- a period switch shows it
+ * too, the previous window's numbers (the dashboard's placeholder) never
+ * stand in -- the error with its message, then the figures.
+ */
+export function adminFigures<T>(
+  query: Pick<
+    UseQueryReturn<T, unknown, undefined>,
+    'data' | 'error' | 'asyncStatus' | 'isPlaceholderData' | 'refetch'
+  >,
+): AdminFiguresState<T> {
+  const answer = computed(() => (query.isPlaceholderData.value ? undefined : query.data.value))
+  const failed = computed(
+    () =>
+      answer.value === undefined && query.error.value != null && query.asyncStatus.value === 'idle',
+  )
+  return {
+    data: computed(() => answer.value ?? null),
+    loading: computed(() => answer.value === undefined && !failed.value),
+    error: computed(() =>
+      failed.value ? extractApiError(query.error.value, t('common.loadError')) : null,
+    ),
+    retry: () => void query.refetch(),
+  }
+}
 
 /** Practices the platform list asks for (one page, no "show more"). */
 export const ADMIN_PRACTICES_LIMIT = 100

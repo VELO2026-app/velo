@@ -29,6 +29,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminRevenueView from '@/views/admin/AdminRevenueView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -67,14 +70,17 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminRevenueView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminRevenueView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  await nextTick()
-  await nextTick()
+  for (let n = 0; n < 8; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
   await nextTick()
 }
 
@@ -247,13 +253,12 @@ describe('AdminRevenueView', () => {
       mount()
       await flush()
 
-      expect(adminApi.getAdminRevenue).toHaveBeenCalledWith('week')
+      expect(adminApi.getAdminRevenue).toHaveBeenCalledWith('week', 0)
       expect(text()).toContain('Выручка за неделю')
     })
 
     it('switching to «Месяц» re-fetches for that period and relabels the hero', async () => {
-      // The label is driven by the SAME ref as the fetch (AdminRevenueView.vue:103-105),
-      // so the hero cannot say the week title (i18n:adminScreens.adminRevenue.titleWeek)
+      // The label is driven by the SAME ref as the query key, so the hero cannot say the week title (i18n:adminScreens.adminRevenue.titleWeek)
       // over month data.
       mount()
       await flush()
@@ -261,13 +266,24 @@ describe('AdminRevenueView', () => {
       button('Месяц')?.click()
       await flush()
 
-      expect(adminApi.getAdminRevenue).toHaveBeenLastCalledWith('month')
+      expect(adminApi.getAdminRevenue).toHaveBeenLastCalledWith('month', 0)
       expect(text()).toContain('Выручка за месяц')
       expect(text()).not.toContain('Выручка за неделю')
     })
 
+    it('while the new period loads, the loader stands -- never the previous period figures', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminRevenue).mockReturnValue(new Promise(() => {}))
+
+      button('Месяц')?.click()
+      await flush()
+
+      expect(host?.querySelector('.v-loader')).not.toBeNull()
+    })
+
     it('re-picking the CURRENT period does not re-fetch', async () => {
-      // watch(period, load) fires on CHANGE only (AdminRevenueView.vue:137).
+      // The query key changes on a CHANGE of period only.
       mount()
       await flush()
       expect(adminApi.getAdminRevenue).toHaveBeenCalledTimes(1)

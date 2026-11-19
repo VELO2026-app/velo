@@ -61,6 +61,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminCheckinRateView from '@/views/admin/AdminCheckinRateView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -117,13 +120,21 @@ function mount(query: Record<string, string> = {}): HTMLElement {
   routeQuery = query
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminCheckinRateView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminCheckinRateView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 6; i++) await nextTick()
+  for (let n = 0; n < 8; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function text(): string {
