@@ -8,7 +8,7 @@
 // kill a code the admin deactivated, keeps discounting someone's real money.
 //
 // Since FE-181 each tab is a Pinia Colada infinite query over getAdminPromos
-// (composables/queries/adminCatalogs.ts) and the deactivation runs through
+// (composables/queries/admin.ts) and the deactivation runs through
 // useAdminMutation. The seam is @/api/admin; the screen mounts with a real
 // Pinia + Colada, a fresh pair per mount.
 //

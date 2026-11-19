@@ -192,10 +192,7 @@ import {
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import { IconCalendar, IconProfile, IconCheck, IconClose } from '@/components/icons'
 import type { AdminZoomAttendanceResponse } from '@/api/admin'
-import {
-  adminPracticeAttendanceQuery,
-  adminPracticeQuery,
-} from '@/composables/queries/adminCatalogs'
+import { adminPracticeAttendanceQuery, adminPracticeQuery } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort } from '@/utils/format'
@@ -205,7 +202,7 @@ const route = useRoute()
 const router = useRouter()
 const practiceId = route.params.id as string
 
-// Pinia Colada queries (composables/queries/adminCatalogs.ts, FE-181).
+// Pinia Colada queries (composables/queries/admin.ts, FE-181).
 const practiceQuery = useQuery(() => adminPracticeQuery(practiceId))
 const practice = computed<AdminPracticeDetailResponse | null>(
   () => practiceQuery.data.value ?? null,

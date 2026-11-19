@@ -12,8 +12,8 @@
   of a curator's schools at once; a tap opens the curator's own review page
   where that lever already is.
 
-  The list is a Pinia Colada infinite query (composables/queries/
-  adminCatalogs.ts, FE-181); a revoke elsewhere invalidates it.
+  The list is a Pinia Colada infinite query (composables/queries/admin.ts,
+  FE-181); a revoke elsewhere invalidates it.
 -->
 
 <template>
@@ -97,8 +97,7 @@ import { useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VBadge, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
 import type { AdminSchoolListItem } from '@/api/types'
-import { onFailedRequest } from '@/composables/queries/admin'
-import { adminSchoolsQuery } from '@/composables/queries/adminCatalogs'
+import { adminSchoolsQuery, onFailedRequest } from '@/composables/queries/admin'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()

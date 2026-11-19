@@ -8,8 +8,8 @@
 // handler. A row lists key PREFIXES (./keys.ts); every Colada entry under a
 // prefix goes stale, and the ones on screen refetch at once.
 //
-// The admin zone's mutations have their own map, ./adminInvalidation.ts,
-// with the same rules: the admin zone loads lazily and this module is part
+// The admin zone's mutations have their own map, ADMIN_INVALIDATES in
+// ./admin.ts, with the same rules: the admin zone loads lazily and this module is part
 // of the startup chunk (FE-181). Both maps run through invalidateKeys.
 //
 // While the migration runs, some of the same data still lives in Pinia

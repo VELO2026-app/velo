@@ -24,7 +24,7 @@ import {
   invalidateKeys,
   type MutationName,
 } from '@/composables/queries/invalidation'
-import { ADMIN_INVALIDATES, type AdminMutationName } from '@/composables/queries/adminInvalidation'
+import { ADMIN_INVALIDATES, type AdminMutationName } from '@/composables/queries/admin'
 
 let app: App | null = null
 let queryCache: QueryCache
@@ -100,7 +100,7 @@ describe('INVALIDATES', () => {
   }
 })
 
-/** Expected stale domains per admin row (./adminInvalidation.ts), written out by hand. */
+/** Expected stale domains per admin row (ADMIN_INVALIDATES, ./admin.ts), written out by hand. */
 const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
   changeTaxonomy: ['adminTaxonomy'],
   deactivatePromo: ['adminPromos'],

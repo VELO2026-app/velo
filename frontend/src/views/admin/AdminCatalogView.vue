@@ -23,8 +23,8 @@
   Every mutation refetches the full catalog rather than patching local state
   -- simplest correct approach for a low-traffic admin screen with a nested
   direction->styles shape. The catalog is a Pinia Colada query and the
-  writes run through useAdminMutation (composables/queries/adminCatalogs.ts,
-  adminInvalidation.ts, FE-181): the tree stays on screen while it refetches.
+  writes run through useAdminMutation (composables/queries/admin.ts,
+  FE-181): the tree stays on screen while it refetches.
 -->
 
 <template>
@@ -186,8 +186,7 @@ import {
 import { IconPen, IconClose, IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
-import { adminTaxonomyQuery } from '@/composables/queries/adminCatalogs'
-import { useAdminMutation } from '@/composables/queries/adminInvalidation'
+import { adminTaxonomyQuery, useAdminMutation } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import {
   createTaxonomyDirection,

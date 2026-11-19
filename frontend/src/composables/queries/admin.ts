@@ -1,23 +1,32 @@
 // =============================================================================
-// VELO Frontend -- the admin zone's shared reads on Pinia Colada (FE-181)
+// VELO Frontend -- the admin zone on Pinia Colada (FE-181)
 // =============================================================================
 //
-// What stores/admin.ts used to hold, and what the dashboard and the two
-// platform lists fetched by hand:
+// Every query and mutation an admin screen uses, by area:
 //
-//   - the counters (`GET /admin/stats` + the count of reports awaiting
-//     moderation): the shell's tab badges, the dashboard's banners, the
-//     lists' "all" badges -- one entry, so the shell and the screens read
-//     the same answer;
-//   - the dashboard's period window: the overview cards and the four
-//     engagement / revenue figures, one entry per (period, offset);
-//   - the platform's practices and participants lists.
+//   - shared: onFailedRequest (how a screen tells a failed request) and the
+//     admin mutation map with useAdminMutation;
+//   - the shell and the dashboard: the counters (`GET /admin/stats` + the
+//     count of reports awaiting moderation: the tab badges, the banners,
+//     the lists' "all" badges -- one entry, so the shell and the screens
+//     read the same answer) and the period window (the overview cards and
+//     the four engagement / revenue figures, one entry per (period, offset));
+//   - the platform's practices and participants lists;
+//   - the catalogs: the method catalog editor, the schools, the promo
+//     oversight list, one practice's oversight detail.
 //
-// Freshness: the counters keep the default window (queries/setup.ts); the
-// admin's own actions will invalidate them (the admin mutation map, later
-// FE-181 parts). Everything else
-// is asked again on every visit (staleTime 0) -- other people move these
-// numbers all the time -- while the cached answer stays on screen.
+// ONE module on purpose, not one per area: Rollup puts every module into a
+// chunk by the set of routes that import it, and each extra shared chunk
+// adds its name and its importers' indices to the preload map shipped in
+// the startup chunk every user loads. A screen importing one area file
+// directly (a re-export does not help -- Rollup traces it to the source)
+// made the start heavier for everyone. The keys are in ./adminKeys.ts,
+// imported only from here, so they share this chunk.
+//
+// Freshness: the counters keep the default window (queries/setup.ts) and
+// the admin's own actions invalidate them (ADMIN_INVALIDATES). Everything
+// else is asked again on every visit (staleTime 0) -- other people move
+// these numbers all the time -- while the cached answer stays on screen.
 //
 // Errors stay raw on the query (ADR); the screens turn them into text, and
 // tell the admin through onFailedRequest -- once per request that failed,
@@ -25,31 +34,53 @@
 // =============================================================================
 
 import { computed, watch, type Ref } from 'vue'
-import { defineInfiniteQueryOptions, defineQueryOptions, useQuery } from '@pinia/colada'
 import {
+  defineInfiniteQueryOptions,
+  defineQueryOptions,
+  setInfiniteQueryData,
+  useMutation,
+  useQuery,
+  useQueryCache,
+  type EntryKey,
+  type QueryCache,
+} from '@pinia/colada'
+import {
+  getAdminPracticeDetail,
   getAdminPractices,
+  getAdminPromos,
   getAdminRevenue,
   getAdminStats,
   getAdminStatsOverview,
+  getAdminZoomAttendance,
   getCheckinMetric,
   getFeedbackMetric,
   getParticipants,
   getReports,
   getReturnMetric,
+  type AdminPaginatedPromosResponse,
   type AdminPracticeScope,
+  type AdminPromoTypeFilter,
 } from '@/api/admin'
+import { getAdminSchools } from '@/api/schools'
+import { getFullTaxonomy } from '@/api/taxonomy'
 import type {
   AdminRevenueResponse,
   AdminStatsOverviewResponse,
   AdminStatsResponse,
   CheckinMetricResponse,
   FeedbackMetricResponse,
+  PaginatedAdminSchoolsResponse,
   PaginatedParticipantsResponse,
   ReturnMetricResponse,
 } from '@/api/types'
 import { adminKeys } from '@/composables/queries/adminKeys'
+import { invalidateKeys } from '@/composables/queries/invalidation'
 import { screenQueryState } from '@/composables/queries/screenState'
+import { useQueryScopeStore } from '@/composables/queries/setup'
 
+// =============================================================================
+// Shared: telling a failed request
+// =============================================================================
 /** The parts of a Colada query that tell whether a request failed. */
 interface RequestState {
   error: Readonly<Ref<unknown>>
@@ -83,6 +114,97 @@ export function onFailedRequest(query: RequestState, tell: (error: unknown) => v
     tell(error)
   })
 }
+
+// =============================================================================
+// Shared: the admin mutation map
+// =============================================================================
+//
+// What each admin mutation makes stale, written down once per mutation, with
+// a test per row (./invalidation.test.ts) -- the admin half of
+// ./invalidation.ts, kept here for the startup chunk's sake (see the
+// header). A row may name user-zone prefixes too (./keys.ts) when an admin
+// action changes what the admin's own user zone shows.
+//
+// useAdminMutation is the one way an admin screen runs a mutation: the
+// request, then -- for the session it was started in only -- the row's
+// invalidation.
+
+//
+// The admin half of ./invalidation.ts: what each admin mutation makes stale,
+// written down once per mutation, with a test per row
+// (./invalidation.test.ts). Kept apart for the same reason as ./adminKeys.ts
+// -- the admin zone loads lazily, ./invalidation.ts is in the startup chunk.
+// A row may name user-zone prefixes too (./keys.ts) when an admin action
+// changes what the admin's own user zone shows.
+//
+// useAdminMutation is the one way an admin screen runs a mutation: the
+// request, then -- for the session it was started in only -- the row's
+// invalidation.
+// =============================================================================
+
+/** Each admin mutation and the query-key prefixes it makes stale. */
+export const ADMIN_INVALIDATES = {
+  /**
+   * `POST /admin/taxonomy/directions`, `POST /admin/taxonomy/directions/{id}/styles`,
+   * `PATCH /admin/taxonomy/directions/{id}`, `PATCH /admin/taxonomy/styles/{id}`:
+   * an item added, renamed, switched off or on -- the catalog editor's tree.
+   */
+  changeTaxonomy: [adminKeys.taxonomy()],
+  /** `PATCH /admin/promos/{id}/deactivate`: the promo turns inactive -- every tab of the promo list. */
+  deactivatePromo: [adminKeys.promosAll()],
+} as const satisfies Record<string, readonly EntryKey[]>
+
+/** Name of an admin mutation that has a row in `ADMIN_INVALIDATES`. */
+export type AdminMutationName = keyof typeof ADMIN_INVALIDATES
+
+/** Options of `useAdminMutation`. */
+export interface AdminMutationOptions<TVars, TData> {
+  /**
+   * Write the answer into the cache at once, before the invalidation's
+   * refetch answers (a card that must flip under the toast).
+   */
+  write?: (data: TData, vars: TVars) => void
+  /**
+   * Whether `mutateAsync` waits for the refetches on screen (default true:
+   * the control's spinner covers the list catching up). Off when the screen
+   * already shows the outcome through `write`.
+   */
+  waitForRefetch?: boolean
+}
+
+/**
+ * An admin mutation for a screen: runs `mutation`, then, when it succeeded
+ * in the session it was started in, `write` and the invalidation of the
+ * mutation's row.
+ *
+ * @remarks
+ * `mutateAsync` rejects with the raw API error (the screen turns it into
+ * text) and then nothing is invalidated. A session that ended while the
+ * request was in flight gets nothing: its caches are already emptied
+ * (queries/setup.ts).
+ */
+export function useAdminMutation<TVars, TData>(
+  name: AdminMutationName,
+  mutation: (vars: TVars) => Promise<TData>,
+  { write, waitForRefetch = true }: AdminMutationOptions<TVars, TData> = {},
+) {
+  const queryCache = useQueryCache()
+  const scope = useQueryScopeStore()
+  return useMutation({
+    onMutate: () => ({ sessionGeneration: scope.generation() }),
+    mutation,
+    async onSuccess(data: TData, vars: TVars, { sessionGeneration }) {
+      if (sessionGeneration !== scope.generation()) return
+      write?.(data, vars)
+      const invalidation = invalidateKeys(queryCache, ADMIN_INVALIDATES[name])
+      if (waitForRefetch) await invalidation
+    },
+  })
+}
+
+// =============================================================================
+// The shell, the dashboard and the platform lists
+// =============================================================================
 
 /** The period window of the dashboard and its drill-ins. */
 export type AdminPeriod = 'week' | 'month'
@@ -223,3 +345,111 @@ export const adminParticipantsQuery = defineInfiniteQueryOptions(
     staleTime: 0,
   }),
 )
+
+// =============================================================================
+// The catalogs
+// =============================================================================
+//
+// The method catalog editor, the platform's schools, the promo oversight
+// list and one practice's oversight detail.
+
+//
+// Each screen used to fetch on mount into its own refs; the reads now live
+// here, the writes go through useAdminMutation.
+// =============================================================================
+
+/** Query options for the full method catalog, inactive items included (`GET /admin/taxonomy`). */
+export const adminTaxonomyQuery = defineQueryOptions(() => ({
+  key: adminKeys.taxonomy(),
+  query: async () => (await getFullTaxonomy()).directions,
+  staleTime: 0,
+}))
+
+/** Schools per page of `GET /admin/schools`. */
+export const ADMIN_SCHOOLS_PAGE_SIZE = 100
+
+/** Infinite query options for every school of the platform (`GET /admin/schools`). */
+export const adminSchoolsQuery = defineInfiniteQueryOptions(() => ({
+  key: adminKeys.schools(),
+  query: ({ pageParam }: { pageParam: number }) =>
+    getAdminSchools(ADMIN_SCHOOLS_PAGE_SIZE, pageParam),
+  initialPageParam: 0,
+  getNextPageParam: (
+    last: PaginatedAdminSchoolsResponse,
+    pages: PaginatedAdminSchoolsResponse[],
+  ) => {
+    const loaded = pages.reduce((n, page) => n + page.items.length, 0)
+    return loaded < last.total ? loaded : null
+  },
+  staleTime: 0,
+}))
+
+/** A tab of the promo oversight list. */
+export type AdminPromoFilter = 'all' | 'master' | 'company' | 'inactive'
+
+/** Promos per page of `GET /admin/promos`. */
+export const ADMIN_PROMOS_PAGE_SIZE = 20
+
+/**
+ * The request parameters of one tab -- server-side filtered (type /
+ * is_active): a promo list can grow past one page per master.
+ */
+function promoParams(filter: AdminPromoFilter): {
+  type?: AdminPromoTypeFilter
+  isActive?: boolean
+} {
+  if (filter === 'master') return { type: 'master' }
+  if (filter === 'company') return { type: 'company' }
+  if (filter === 'inactive') return { isActive: false }
+  return {}
+}
+
+/** Infinite query options for one tab of the promo oversight list (`GET /admin/promos`). */
+export const adminPromosQuery = defineInfiniteQueryOptions((filter: AdminPromoFilter) => ({
+  key: adminKeys.promos(filter),
+  query: ({ pageParam }: { pageParam: number }) => {
+    const { type, isActive } = promoParams(filter)
+    return getAdminPromos(type, isActive, ADMIN_PROMOS_PAGE_SIZE, pageParam)
+  },
+  initialPageParam: 0,
+  getNextPageParam: (last: AdminPaginatedPromosResponse, pages: AdminPaginatedPromosResponse[]) => {
+    const loaded = pages.reduce((n, page) => n + page.items.length, 0)
+    return loaded < last.total ? loaded : null
+  },
+  staleTime: 0,
+}))
+
+/** Query options for one practice with its roster (`GET /admin/practices/{id}`). */
+export const adminPracticeQuery = defineQueryOptions((practiceId: string) => ({
+  key: adminKeys.practice(practiceId),
+  query: () => getAdminPracticeDetail(practiceId),
+  staleTime: 0,
+}))
+
+/**
+ * Query options for a practice's meeting status and attendance match
+ * (`GET /admin/practices/{id}/zoom-attendance`). Best-effort: the screen
+ * shows it only once it answered.
+ */
+export const adminPracticeAttendanceQuery = defineQueryOptions((practiceId: string) => ({
+  key: adminKeys.practiceAttendance(practiceId),
+  query: () => getAdminZoomAttendance(practiceId),
+  staleTime: 0,
+}))
+
+/**
+ * Show a promo as inactive in every promo list held, at once -- before the
+ * invalidation's refetch answers (the card's badge flips under the toast).
+ */
+export function markPromoInactive(queryCache: QueryCache, promoId: string): void {
+  for (const entry of queryCache.getEntries({ key: adminKeys.promosAll() })) {
+    if (entry.state.value.data === undefined) continue
+    setInfiniteQueryData<AdminPaginatedPromosResponse, number>(queryCache, entry.key, (data) => ({
+      pageParams: data?.pageParams ?? [],
+      pages: (data?.pages ?? []).map((page) => ({
+        ...page,
+        items: page.items.map((p) => (p.id === promoId ? { ...p, is_active: false } : p)),
+      })),
+    }))
+  }
+}

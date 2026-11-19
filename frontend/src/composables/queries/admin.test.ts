@@ -14,7 +14,7 @@ import { createPinia } from 'pinia'
 import { PiniaColada, useQueryCache, type QueryCache } from '@pinia/colada'
 import { coladaOptions, useQueryScopeStore } from '@/composables/queries/setup'
 import { adminKeys } from '@/composables/queries/adminKeys'
-import { useAdminMutation } from '@/composables/queries/adminInvalidation'
+import { useAdminMutation } from '@/composables/queries/admin'
 
 let app: App | null = null
 

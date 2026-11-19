@@ -17,8 +17,7 @@
   operator asked for see + deactivate, not a creation screen.
 
   Each tab is a Pinia Colada infinite query; deactivation runs through
-  useAdminMutation (composables/queries/adminCatalogs.ts,
-  adminInvalidation.ts, FE-181).
+  useAdminMutation (composables/queries/admin.ts, FE-181).
 -->
 
 <template>
@@ -142,14 +141,14 @@ import type { SegmentOption } from '@/components/ui'
 import { IconPromo } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { deactivateAdminPromo } from '@/api/admin'
-import { onFailedRequest } from '@/composables/queries/admin'
-import type { AdminPromoResponse } from '@/api/admin'
 import {
+  type AdminPromoFilter,
   adminPromosQuery,
   markPromoInactive,
-  type AdminPromoFilter,
-} from '@/composables/queries/adminCatalogs'
-import { useAdminMutation } from '@/composables/queries/adminInvalidation'
+  onFailedRequest,
+  useAdminMutation,
+} from '@/composables/queries/admin'
+import type { AdminPromoResponse } from '@/api/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { formatShortDate } from '@/utils/format'
