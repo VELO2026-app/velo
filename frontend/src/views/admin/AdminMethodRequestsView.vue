@@ -38,7 +38,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action>
-        <VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton>
+        <VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton>
       </template>
     </VEmptyState>
 
@@ -130,8 +130,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useInfiniteQuery, useQueryCache } from '@pinia/colada'
 import {
   VBackButton,
   VButton,
@@ -145,23 +146,34 @@ import {
   VConfirmDialog,
 } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
-import { getMethodChangeRequests, approveMethodChange, rejectMethodChange } from '@/api/admin'
+import { approveMethodChange, rejectMethodChange } from '@/api/admin'
 import type { AdminMethodChangeItem } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
+import {
+  adminMethodRequestsQuery,
+  dropMethodRequest,
+  useAdminMutation,
+  usePagedListFailures,
+} from '@/composables/queries/admin'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { masterDisplayName, formatRelative } from '@/utils/adminHelpers'
-import { parseMethods, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
-
-const LIMIT = 20
+import { parseMethods } from '@/utils/methodTaxonomy'
 
 const router = useRouter()
 const toast = useToast()
 
-const items = ref<AdminMethodChangeItem[]>([])
-const total = ref(0)
-const loading = ref(false)
-const loadingMore = ref(false)
-const hasMore = ref(false)
-const error = ref(false)
+// The pending requests, page by page (Pinia Colada,
+// composables/queries/admin.ts); the taxonomy catalog loads with the
+// first page (Bug 2, PROMPT №405), so a method promoted by an earlier
+// approval renders as a recognized chip instead of "custom".
+const queryCache = useQueryCache()
+const requestsQuery = useInfiniteQuery(adminMethodRequestsQuery)
+const items = computed<AdminMethodChangeItem[]>(
+  () => requestsQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
+)
+const total = computed(() => requestsQuery.data.value?.pages.at(-1)?.total ?? 0)
+const { loading, failed: error } = screenQueryState(requestsQuery)
+const hasMore = requestsQuery.hasNextPage
 
 // The user_id currently being approved/rejected (disables that row's buttons).
 const busyId = ref<string | null>(null)
@@ -197,49 +209,36 @@ function nameOf(item: AdminMethodChangeItem): string {
   return item.display_name || masterDisplayName(item)
 }
 
-async function loadInitial(): Promise<void> {
-  loading.value = true
-  error.value = false
-  items.value = []
-  total.value = 0
-  hasMore.value = false
-  try {
-    // Bug 2 fix (PROMPT №405): prime the taxonomy catalog cache alongside the
-    // requests fetch, so a proposed method already promoted from an earlier
-    // approval renders as a recognized chip instead of "custom".
-    const [res] = await Promise.all([
-      getMethodChangeRequests(LIMIT, 0),
-      primeMethodTaxonomyCatalog(),
-    ])
-    items.value = res.items
-    total.value = res.total
-    hasMore.value = res.items.length < res.total
-  } catch (e) {
-    error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.loadFailedToast')))
-  } finally {
-    loading.value = false
-  }
+// Every failed request is told: a next page with its own fallback, the
+// list itself (its first load, a refetch) with the list's.
+const { loadingMore, loadMore } = usePagedListFailures(requestsQuery, (e, nextPage) =>
+  toast.error(
+    extractApiError(
+      e,
+      nextPage ? t('common.loadError') : t('adminScreens.adminMethodRequests.loadFailedToast'),
+    ),
+  ),
+)
+
+function retry(): void {
+  void requestsQuery.refetch()
 }
 
-async function loadMore(): Promise<void> {
-  loadingMore.value = true
-  try {
-    const res = await getMethodChangeRequests(LIMIT, items.value.length)
-    items.value.push(...res.items)
-    hasMore.value = items.value.length < res.total
-  } catch (e) {
-    toast.error(extractApiError(e, t('common.loadError')))
-  } finally {
-    loadingMore.value = false
-  }
-}
-
-// Drop a decided request from the list + decrement the header count.
-function removeItem(userId: string): void {
-  items.value = items.value.filter((i) => i.user_id !== userId)
-  total.value = Math.max(0, total.value - 1)
-}
+// The verdicts (ADMIN_INVALIDATES): the decided request leaves the list (and
+// the header count) at once; then the queue, its dashboard badge, the
+// master's detail and list chips refetch; a promoted method is a new
+// catalog row.
+const approve = useAdminMutation(
+  'approveMethodChange',
+  (vars: { userId: string; promote?: string[]; masterOnly?: string[] }) =>
+    approveMethodChange(vars.userId, vars.promote, vars.masterOnly),
+  { write: (_res, vars) => dropMethodRequest(queryCache, vars.userId), waitForRefetch: false },
+)
+const reject = useAdminMutation(
+  'rejectMethodChange',
+  (vars: { userId: string; reason: string }) => rejectMethodChange(vars.userId, vars.reason),
+  { write: (_res, vars) => dropMethodRequest(queryCache, vars.userId), waitForRefetch: false },
+)
 
 /** Tap t('adminScreens.adminMethodRequests.odobrit'): pause on a confirm if any proposed method doesn't match
  *  the taxonomy (custom/unmatched), else approve immediately (unchanged).
@@ -265,9 +264,8 @@ async function doApprove(
   if (busyId.value) return
   busyId.value = item.user_id
   try {
-    await approveMethodChange(item.user_id, promote, masterOnly)
+    await approve.mutateAsync({ userId: item.user_id, promote, masterOnly })
     toast.success(t('adminScreens.adminMethodRequests.methodsUpdated'))
-    removeItem(item.user_id)
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.approveError')))
   } finally {
@@ -317,9 +315,8 @@ async function onReject(): Promise<void> {
   }
   busyId.value = target.user_id
   try {
-    await rejectMethodChange(target.user_id, rejectReason.value.trim())
+    await reject.mutateAsync({ userId: target.user_id, reason: rejectReason.value.trim() })
     toast.success(t('adminScreens.adminMethodRequests.toast.requestRejected'))
-    removeItem(target.user_id)
     rejectTarget.value = null
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.toast.rejectFailed')))
@@ -327,8 +324,6 @@ async function onReject(): Promise<void> {
     busyId.value = null
   }
 }
-
-onMounted(loadInitial)
 </script>
 
 <style scoped>

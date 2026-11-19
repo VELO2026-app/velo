@@ -52,6 +52,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminMethodRequestsView from '@/views/admin/AdminMethodRequestsView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -132,13 +135,21 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminMethodRequestsView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminMethodRequestsView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 6; i++) await nextTick()
+  for (let n = 0; n < 8; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function cards(): HTMLElement[] {
@@ -467,6 +478,11 @@ describe('AdminMethodRequestsView', () => {
       mount()
       await flush()
       expect(host?.querySelector('.amr__count')?.textContent).toBe('2')
+      // The invalidation's refetch never answers here: the row leaves at
+      // once, before the queue's next answer.
+      vi.mocked(adminApi.getMethodChangeRequests)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
 
       btnByText(cardByName('Мастер Совпавший'), 'Одобрить')?.click()
       await flush()
@@ -474,6 +490,32 @@ describe('AdminMethodRequestsView', () => {
       expect(cards()).toHaveLength(1)
       expect(() => cardByName('Мастер Совпавший')).toThrow()
       expect(host?.querySelector('.amr__count')?.textContent).toBe('1')
+      expect(adminApi.getMethodChangeRequests).toHaveBeenCalledTimes(1) // the queue is asked again
+    })
+
+    it('with two pages loaded, a decision on the first lowers the count every page carries', async () => {
+      vi.mocked(adminApi.approveMethodChange).mockResolvedValue({
+        user_id: 'm_matched',
+        status: 'approved',
+      })
+      vi.mocked(adminApi.getMethodChangeRequests)
+        .mockReset()
+        .mockResolvedValueOnce(paginated([ITEM_MATCHED], 2))
+        .mockResolvedValueOnce({ ...paginated([ITEM_CUSTOM], 2), offset: 1 })
+      mount()
+      await flush()
+      moreBtn()?.click()
+      await flush()
+      expect(cards()).toHaveLength(2)
+      // The queue's refetch never answers here: the count is the local write.
+      vi.mocked(adminApi.getMethodChangeRequests).mockReturnValue(new Promise(() => {}))
+
+      btnByText(cardByName('Мастер Совпавший'), 'Одобрить')?.click()
+      await flush()
+
+      expect(cards()).toHaveLength(1)
+      expect(host?.querySelector('.amr__count')?.textContent).toBe('1')
+      expect(moreBtn()).toBeUndefined()
     })
 
     it('failure: toasts the generic fallback (unmapped code) and the row STAYS', async () => {
@@ -627,6 +669,11 @@ describe('AdminMethodRequestsView', () => {
       })
       mount()
       await flush()
+      // The invalidation's refetch never answers here: the row leaves at
+      // once, before the queue's next answer.
+      vi.mocked(adminApi.getMethodChangeRequests)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
 
       btnByText(cardByName('Мастер Совпавший'), 'Отклонить')?.click()
       await flush()

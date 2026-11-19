@@ -48,6 +48,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminUsersView from '@/views/admin/AdminUsersView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -140,13 +143,18 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminUsersView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminUsersView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 6; i++) await nextTick()
+  for (let n = 0; n < 8; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function cards(): HTMLElement[] {
@@ -287,7 +295,7 @@ describe('AdminUsersView', () => {
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки пользователей')
     })
 
-    it('"Повторить" calls load(true) and recovers from error to content', async () => {
+    it('"Повторить" asks again and recovers from error to content', async () => {
       vi.mocked(adminApi.getUsersList).mockRejectedValueOnce(new Error('ECONNRESET'))
       mount()
       await flush()
@@ -344,6 +352,21 @@ describe('AdminUsersView', () => {
       // Re-fetch from scratch (offset 0) -- the LAST call, after the initial mount fetch.
       expect(adminApi.getUsersList).toHaveBeenLastCalledWith(undefined, 100, 0)
       expect(adminApi.getUsersList).toHaveBeenCalledTimes(2)
+    })
+
+    it('the row turns master at once, before the list is read again: no second make-master', async () => {
+      vi.mocked(adminApi.makeMaster).mockResolvedValue({ user_id: 'u_user', status: 'ok' })
+      mount()
+      await flush()
+      // The list's refetch never answers here: the row is the in-place write.
+      vi.mocked(adminApi.getUsersList).mockReturnValue(new Promise(() => {}))
+
+      makeMasterBtn(cardByName('Анна Пользователева')!)?.click()
+      await flush()
+      modalButtonByText('Назначить')?.click()
+      await flush()
+
+      expect(makeMasterBtn(cardByName('Анна Пользователева')!)).toBeUndefined()
     })
 
     it('failure (ApiResponseError): toasts the mapped table phrase for a real code, dialog STAYS OPEN (deliberate, not fixed here)', async () => {
@@ -470,6 +493,20 @@ describe('AdminUsersView', () => {
       expect(adminApi.getUsersList).toHaveBeenLastCalledWith(undefined, 100, 1)
       expect(cards()).toHaveLength(3) // accumulated, not replaced
       expect(cardByName('Анна Пользователева')).toBeDefined() // page 1 survived
+    })
+
+    it('a failed "Показать ещё" keeps the loaded page and toasts -- no error state (W12)', async () => {
+      vi.mocked(adminApi.getUsersList).mockResolvedValueOnce(paginated([U_USER], 3))
+      mount()
+      await flush()
+
+      vi.mocked(adminApi.getUsersList).mockRejectedValueOnce(new Error('down'))
+      moreBtn()?.click()
+      await flush()
+
+      expect(cardByName('Анна Пользователева')).toBeDefined()
+      expect(host?.querySelector('.v-empty')).toBeNull()
+      expect(toastError).toHaveBeenCalledTimes(1)
     })
 
     it('hasMore is false once every user has been fetched: no "Показать ещё"', async () => {

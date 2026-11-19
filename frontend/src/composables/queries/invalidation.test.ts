@@ -41,6 +41,20 @@ const SAMPLE = {
   adminStats: adminKeys.stats() as EntryKey,
   adminTaxonomy: adminKeys.taxonomy() as EntryKey,
   adminPromos: adminKeys.promos('master') as EntryKey,
+  adminSchools: adminKeys.schools() as EntryKey,
+  adminUsers: adminKeys.users() as EntryKey,
+  adminMasters: adminKeys.masters() as EntryKey,
+  adminMaster: adminKeys.master('m1') as EntryKey,
+  adminMethodRequests: adminKeys.methodRequests() as EntryKey,
+  adminRevokePreview: adminKeys.revokePreview('m1') as EntryKey,
+  adminOverview: adminKeys.overview('week', 0) as EntryKey,
+  adminMetric: adminKeys.metric('checkin', 'week', 0) as EntryKey,
+  adminPractices: adminKeys.practices('all') as EntryKey,
+  adminPractice: adminKeys.practice('p1') as EntryKey,
+  masterPublic: keys.masters.public('m1') as EntryKey,
+  // The admin's own master profile: no admin edit of another master reaches it.
+  masterProfile: keys.masters.profile() as EntryKey,
+  adminParticipants: adminKeys.participants('all') as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -104,11 +118,63 @@ describe('INVALIDATES', () => {
 const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
   changeTaxonomy: ['adminTaxonomy'],
   deactivatePromo: ['adminPromos'],
+  inviteMaster: [],
+  makeMaster: [
+    'adminUsers',
+    'adminMasters',
+    'adminMaster',
+    'adminStats',
+    'adminSchools',
+    'schools',
+    'schoolLists',
+    'masterPublic',
+  ],
+  verifyMaster: [
+    'adminMasters',
+    'adminMaster',
+    'adminStats',
+    'adminSchools',
+    'schools',
+    'schoolLists',
+    'adminTaxonomy',
+    'masterPublic',
+  ],
+  rejectMaster: ['adminMasters', 'adminMaster', 'adminStats'],
+  revokeMaster: [
+    'adminMasters',
+    'adminMaster',
+    'adminUsers',
+    'adminSchools',
+    'schools',
+    'schoolLists',
+    'masterPublic',
+  ],
+  editMasterFields: [
+    'adminMasters',
+    'adminMaster',
+    'adminUsers',
+    'adminParticipants',
+    'adminMethodRequests',
+    'adminSchools',
+    'adminPractices',
+    'adminPractice',
+    'masterPublic',
+  ],
+  setSchoolRight: ['adminMasters', 'adminMaster'],
+  approveMethodChange: [
+    'adminMethodRequests',
+    'adminStats',
+    'adminMasters',
+    'adminMaster',
+    'adminTaxonomy',
+    'masterPublic',
+  ],
+  rejectMethodChange: ['adminMethodRequests', 'adminStats'],
 }
 
 describe('ADMIN_INVALIDATES', () => {
   for (const mutation of Object.keys(ADMIN_EXPECTED) as AdminMutationName[]) {
-    it(`${mutation}: makes ${ADMIN_EXPECTED[mutation].join(', ')} stale, nothing else`, async () => {
+    it(`${mutation}: makes ${ADMIN_EXPECTED[mutation].join(', ') || 'nothing'} stale, nothing else`, async () => {
       await invalidateKeys(queryCache, ADMIN_INVALIDATES[mutation])
 
       for (const domain of Object.keys(SAMPLE) as Domain[]) {

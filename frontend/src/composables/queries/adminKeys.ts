@@ -33,10 +33,16 @@ export const adminKeys = {
     ['admin', 'metric', { kind, period, offset }] as const,
   /** `GET /admin/practices?scope=` -- the platform's practices, first page. */
   practices: (scope: string) => ['admin', 'practices', { scope }] as const,
+  /** Prefix of every platform practices list. */
+  practicesAll: () => ['admin', 'practices'] as const,
   /** `GET /admin/participants?filter=` -- the platform's users, every page loaded so far. */
   participants: (filter: string) => ['admin', 'participants', { filter }] as const,
+  /** Prefix of every platform participants list. */
+  participantsAll: () => ['admin', 'participants'] as const,
   /** `GET /admin/practices/{id}` -- one practice with its roster. */
   practice: (practiceId: string) => ['admin', 'practice', practiceId] as const,
+  /** Prefix of every practice detail (and its attendance). */
+  practiceAll: () => ['admin', 'practice'] as const,
   /**
    * `GET /admin/practices/{id}/zoom-attendance` -- the practice's meeting
    * status and attendance match. Under the practice's prefix.
@@ -51,4 +57,21 @@ export const adminKeys = {
   promosAll: () => ['admin', 'promos'] as const,
   /** `GET /admin/promos?type=&is_active=` -- one tab of the promo oversight list, every page loaded so far. */
   promos: (filter: string) => ['admin', 'promos', { filter }] as const,
+  /** `GET /admin/users` -- every user of the platform (any role), every page loaded so far. */
+  users: () => ['admin', 'users'] as const,
+  /** `GET /admin/masters/list` -- every master with its status, counts and methods. */
+  masters: () => ['admin', 'masters'] as const,
+  /** Prefix of every master's detail (and what hangs under it). */
+  masterAll: () => ['admin', 'master'] as const,
+  /** `GET /admin/masters/{id}` -- one master's full application / profile. */
+  master: (userId: string) => ['admin', 'master', userId] as const,
+  /**
+   * `GET /admin/masters/{id}/revoke-preview` -- what revoking would leave
+   * behind. NOT under the master's prefix: a verdict invalidates the detail,
+   * and a preview refetched after the revoke would only answer 409 (the
+   * master is no longer verified).
+   */
+  revokePreview: (userId: string) => ['admin', 'revokePreview', userId] as const,
+  /** `GET /admin/masters/method-change-requests` -- pending method-change requests, every page loaded so far. */
+  methodRequests: () => ['admin', 'methodRequests'] as const,
 }
