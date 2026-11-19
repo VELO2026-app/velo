@@ -7,16 +7,16 @@
 // it earned -- a wrong figure here is a wrong decision, and a SILENT one, since
 // nothing downstream contradicts it.
 //
-// PATTERN B (local-ref): data/loading/error are refs fed by a direct
-// getAdminRevenue() in onMounted + a watch on `period`
-// (AdminRevenueView.vue:124-137). No store, so no pinia -- the seam is @/api/admin.
+// The figures are a Pinia Colada window query (revenueQuery through
+// adminFigures, composables/queries/admin.ts, FE-181), one entry per period;
+// the seam is @/api/admin and the screen mounts with a real Pinia + Colada.
 //
-// This screen binds :description="error" (AdminRevenueView.vue:37), so the REAL
+// This screen binds :description="error" (AdminRevenueView.vue), so the REAL
 // backend message reaches the card rather than only a toast -- asserted below.
 // Several sibling admin screens swallow it into a toast instead; this is the
 // behaviour they should be repaired TO.
 //
-// Its retry button sits in VEmptyState's DEFAULT slot (AdminRevenueView.vue:39).
+// Its retry button sits in VEmptyState's DEFAULT slot (AdminRevenueView.vue).
 // That is one of 24 such sites and it has always worked. The 11 sites that used
 // `<template #action>` did NOT -- VEmptyState never declared that slot and Vue
 // dropped it silently (found PROMPT №432, fixed №433: `action` is now declared,
@@ -29,12 +29,21 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminRevenueView from '@/views/admin/AdminRevenueView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import type { AdminRevenueResponse, AdminRevenuePerMaster } from '@/api/types'
 
 vi.mock('@/api/admin')
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
+}))
 
 const back = vi.fn()
 vi.mock('vue-router', () => ({
@@ -67,14 +76,17 @@ let host: HTMLElement | null = null
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminRevenueView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminRevenueView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  await nextTick()
-  await nextTick()
+  for (let n = 0; n < 8; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
   await nextTick()
 }
 
@@ -128,7 +140,7 @@ describe('AdminRevenueView', () => {
     })
 
     it('error: surfaces the generic fallback in the card (unmapped code)', async () => {
-      // :description="error" (AdminRevenueView.vue:37) + error.value =
+      // :description="error" (AdminRevenueView.vue) + error.value =
       // extractApiError(e, t('common.loadError')) (:130). B8 (PROMPT №747):
       // 'reports_down' is not a real backend code -- unmapped, lands on that
       // fallback; extractApiError no longer reads e.detail at all, so this
@@ -185,6 +197,24 @@ describe('AdminRevenueView', () => {
     })
   })
 
+  describe('a failed read over shown figures', () => {
+    it('keeps the figures and tells the admin', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminRevenue).mockRejectedValue(new Error('ECONNRESET'))
+
+      // A return to the app: the window is asked again.
+      useQueryCache()
+        .invalidateQueries({ key: adminKeys.metric('revenue', 'week', 0) })
+        .catch(() => {})
+      await flush()
+
+      expect(text()).toContain('800,00') // the payout of the shown figures
+      expect(host?.querySelector('.v-empty')).toBeNull()
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить выручку')
+    })
+  })
+
   describe('money', () => {
     it('renders revenue, commission and payout from the API', async () => {
       vi.mocked(adminApi.getAdminRevenue).mockResolvedValue(
@@ -199,7 +229,7 @@ describe('AdminRevenueView', () => {
     })
 
     it('zero totals render as €0,00, NOT «Бесплатно»', async () => {
-      // money() passes allowZero=true (AdminRevenueView.vue:113-116) precisely
+      // money() passes allowZero=true (AdminRevenueView.vue) precisely
       // because the seed practices are free, so real totals ARE 0. Without it
       // the revenue hero would read the free label (i18n:common.free;
       // utils/format.ts:33).
@@ -242,18 +272,17 @@ describe('AdminRevenueView', () => {
 
   describe('period toggle', () => {
     it('defaults to «Неделя», matching the backend default', async () => {
-      // AdminRevenueView.vue:98. Diverging from the backend default would label
+      // AdminRevenueView.vue. Diverging from the backend default would label
       // a week's revenue as a month's.
       mount()
       await flush()
 
-      expect(adminApi.getAdminRevenue).toHaveBeenCalledWith('week')
+      expect(adminApi.getAdminRevenue).toHaveBeenCalledWith('week', 0)
       expect(text()).toContain('Выручка за неделю')
     })
 
     it('switching to «Месяц» re-fetches for that period and relabels the hero', async () => {
-      // The label is driven by the SAME ref as the fetch (AdminRevenueView.vue:103-105),
-      // so the hero cannot say the week title (i18n:adminScreens.adminRevenue.titleWeek)
+      // The label is driven by the SAME ref as the query key, so the hero cannot say the week title (i18n:adminScreens.adminRevenue.titleWeek)
       // over month data.
       mount()
       await flush()
@@ -261,13 +290,27 @@ describe('AdminRevenueView', () => {
       button('Месяц')?.click()
       await flush()
 
-      expect(adminApi.getAdminRevenue).toHaveBeenLastCalledWith('month')
+      expect(adminApi.getAdminRevenue).toHaveBeenLastCalledWith('month', 0)
       expect(text()).toContain('Выручка за месяц')
       expect(text()).not.toContain('Выручка за неделю')
     })
 
+    it('while the new period loads, the loader stands -- never the previous period figures', async () => {
+      vi.mocked(adminApi.getAdminRevenue).mockResolvedValue(revenue({ revenue_cents: 123456 }))
+      mount()
+      await flush()
+      expect(text()).toContain('234,56')
+      vi.mocked(adminApi.getAdminRevenue).mockReturnValue(new Promise(() => {}))
+
+      button('Месяц')?.click()
+      await flush()
+
+      expect(host?.querySelector('.v-loader')).not.toBeNull()
+      expect(text()).not.toContain('234,56')
+    })
+
     it('re-picking the CURRENT period does not re-fetch', async () => {
-      // watch(period, load) fires on CHANGE only (AdminRevenueView.vue:137).
+      // The query key changes on a CHANGE of period only.
       mount()
       await flush()
       expect(adminApi.getAdminRevenue).toHaveBeenCalledTimes(1)
@@ -291,7 +334,7 @@ describe('AdminRevenueView', () => {
       expect(text()).toContain('44 444,00')
     })
 
-    // selectPeriod's union-narrowing guard (AdminRevenueView.vue:108-111) is
+    // selectPeriod's union-narrowing guard (AdminRevenueView.vue) is
     // deliberately NOT tested: no DOM path can emit a third value today, so any
     // test of it would have to call the internal directly and would assert the
     // test's own setup rather than the screen. It becomes worth covering the day

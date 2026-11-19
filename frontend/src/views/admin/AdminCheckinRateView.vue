@@ -24,7 +24,7 @@
       :title="t('adminScreens.adminCommon.loadMetricFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
+      <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else>
@@ -56,8 +56,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useQuery } from '@pinia/colada'
 import {
   VBackButton,
   VMetricHero,
@@ -70,10 +71,11 @@ import {
   VButton,
 } from '@/components/ui'
 import { IconCheck } from '@/components/icons'
-import { getCheckinMetric } from '@/api/admin'
-import { extractApiError } from '@/composables/useApiError'
+import { adminFigures, checkinMetricQuery } from '@/composables/queries/admin'
 import { formatPeriodRange } from '@/utils/periodRange'
-import type { CheckinMetricResponse, SeriesPoint } from '@/api/types'
+import { extractApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
+import type { SeriesPoint } from '@/api/types'
 
 const router = useRouter()
 
@@ -85,9 +87,13 @@ const rawOffset = Number.parseInt(String(route.query.offset ?? ''), 10)
 const offset = Number.isFinite(rawOffset) ? rawOffset : 0
 const rangeLabel = formatPeriodRange(period, offset)
 
-const data = ref<CheckinMetricResponse | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
+// The window's figures (Pinia Colada, composables/queries/admin.ts) -- the
+// entry the dashboard's row reads, so a drill-in from it paints at once.
+const toast = useToast()
+const { data, loading, error, retry } = adminFigures(
+  useQuery(() => checkinMetricQuery({ period, offset })),
+  (e) => toast.error(extractApiError(e, t('adminScreens.adminCommon.loadMetricFailed'))),
+)
 
 const avgRate = computed((): string => (data.value ? `${Math.round(data.value.rate_pct)}%` : '—'))
 const totalRecords = computed((): string | number => data.value?.total_records ?? '—')
@@ -103,20 +109,6 @@ const lowPractices = computed(() =>
     }),
   })),
 )
-
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
-    data.value = await getCheckinMetric(period, offset)
-  } catch (e) {
-    error.value = extractApiError(e, t('common.loadError'))
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(load)
 </script>
 
 <style scoped>

@@ -11,12 +11,13 @@
 // AdminCheckinRateView.test.ts's banner; summarized here, not re-derived:
 //   - THE NaN SUSPICION: CLEAN NEGATIVE, byte-identical fallback in all three
 //     (`Number.isFinite(rawOffset) ? rawOffset : 0`) -- confirmed again by
-//     reading THIS file's .vue:101-102, matches.
+//     reading THIS file's .vue matches.
 //   - THE FULL SKELETON (period/offset parsing, rangeLabel, ladder markup,
-//     error fallback, onMounted(load)) is byte-identical across all three,
+//     error fallback, the window query through adminFigures) is the same
+//     across all three,
 //     modulo the type name and which getXMetric is called -- another
 //     instance of the clean negative, not just copied from the sibling's
-//     banner: independently re-verified against THIS file's .vue:99-138.
+//     banner: independently re-verified against THIS file's .vue.
 //   - THE ONE STRUCTURAL DIVERGENCE: unlike Checkin/Return, THIS screen has
 //     NO client-side list with its own empty-state branch -- its content is
 //     five VRatingBar rows (one per zone, BE-77) that always render (their null-vs-number
@@ -59,12 +60,21 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminFeedbackRateView from '@/views/admin/AdminFeedbackRateView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import type { FeedbackMetricResponse } from '@/api/types'
 
 vi.mock('@/api/admin')
+
+const toastError = vi.fn()
+vi.mock('@/composables/useToast', () => ({
+  useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
+}))
 
 const back = vi.fn()
 let routeQuery: Record<string, string> = {}
@@ -99,13 +109,21 @@ function mount(query: Record<string, string> = {}): HTMLElement {
   routeQuery = query
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminFeedbackRateView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminFeedbackRateView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 6; i++) await nextTick()
+  for (let n = 0; n < 8; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function retryBtn(): HTMLButtonElement | undefined {
@@ -199,7 +217,7 @@ describe('AdminFeedbackRateView', () => {
 
     it('failure (ApiResponseError): shows the generic fallback (unmapped code)', async () => {
       // B8 (PROMPT №747): 'server_error' is not a real backend code --
-      // unmapped, lands on the call site's own fallback (.vue:132).
+      // unmapped, lands on the call site's own fallback.
       vi.mocked(adminApi.getFeedbackMetric).mockRejectedValue(
         new ApiResponseError(500, 'Сервис метрик недоступен', 'server_error'),
       )
@@ -226,7 +244,24 @@ describe('AdminFeedbackRateView', () => {
   })
 
   // ===========================================================================
-  describe('query-driven fetch args (.vue:100-102) -- exact (period, offset) reaching the api mock', () => {
+  describe('a failed read over shown figures', () => {
+    it('keeps the figures and tells the admin', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getFeedbackMetric).mockRejectedValue(new Error('ECONNRESET'))
+
+      // A return to the app: the window is asked again.
+      useQueryCache()
+        .invalidateQueries({ key: adminKeys.metric('feedback', 'week', 0) })
+        .catch(() => {})
+      await flush()
+
+      expect(heroValue()).toContain('61%')
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить метрику')
+    })
+  })
+
+  describe('query-driven fetch args -- exact (period, offset) reaching the api mock', () => {
     it('?period=month&offset=3 -> getFeedbackMetric("month", 3)', async () => {
       mount({ period: 'month', offset: '3' })
       await flush()

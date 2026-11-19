@@ -38,7 +38,7 @@
       :title="t('adminScreens.adminRevenue.revenueLoadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
+      <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="data">
@@ -78,8 +78,9 @@
 
 <script setup lang="ts">
 import { t, getLocale } from '@/locales'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuery } from '@pinia/colada'
 import {
   VBackButton,
   VSegment,
@@ -93,16 +94,12 @@ import {
 } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import { IconFinance } from '@/components/icons'
-import { getAdminRevenue } from '@/api/admin'
-import { extractApiError } from '@/composables/useApiError'
+import { adminFigures, revenueQuery } from '@/composables/queries/admin'
 import { formatMoney } from '@/utils/format'
-import type { AdminRevenueResponse } from '@/api/types'
+import { extractApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
-
-const data = ref<AdminRevenueResponse | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
 
 // Period (i18n:common.periodWeek / i18n:common.periodMonth), default 'week' matches the backend default.
 const period = ref<'week' | 'month'>('week')
@@ -114,6 +111,16 @@ const revenueHeroLabel = computed<string>(() =>
   period.value === 'week'
     ? t('adminScreens.adminRevenue.titleWeek')
     : t('adminScreens.adminRevenue.titleMonth'),
+)
+
+// The period's figures (Pinia Colada, composables/queries/admin.ts) for the
+// current week or month (offset 0) -- the dashboard's revenue line reads the
+// same entry while its stepper stands on the current period. A period
+// switch shows the loader until the new window answers.
+const toast = useToast()
+const { data, loading, error, retry } = adminFigures(
+  useQuery(() => revenueQuery({ period: period.value, offset: 0 })),
+  (e) => toast.error(extractApiError(e, t('adminScreens.adminRevenue.revenueLoadFailed'))),
 )
 
 // VSegment emits a plain string; narrow it back to the period union.
@@ -132,21 +139,6 @@ const commissionLabel = computed<string>(() =>
   data.value ? money(data.value.commission_cents) : '—',
 )
 const payoutLabel = computed<string>(() => (data.value ? money(data.value.payout_cents) : '—'))
-
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
-    data.value = await getAdminRevenue(period.value)
-  } catch (e) {
-    error.value = extractApiError(e, t('common.loadError'))
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(load)
-watch(period, load)
 </script>
 
 <style scoped>
