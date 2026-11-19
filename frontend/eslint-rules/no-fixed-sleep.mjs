@@ -15,7 +15,9 @@
 //   - a namespace or default import of node:timers/promises
 //     (`import * as timers`, `timers.setTimeout(500)`);
 //   - `scheduler.wait(ms)` and `promisify(setTimeout)`;
-//   - a sleep helper defined outside *.test.ts and imported by the test;
+//   - a sleep helper defined outside *.test.ts and imported by the test
+//     (in e2e/: outside *.spec.ts / *.setup.ts -- the support/ harness is
+//     not linted, see e2eRulesConfig in index.mjs);
 //   - `vi.waitFor` / `expect.poll` with a raised `{ timeout }` (they poll a
 //     condition, so they are bounded waits, but the bound is not checked);
 //   - no-flake-masking: a skip marker in a comment at the END of a multi-line

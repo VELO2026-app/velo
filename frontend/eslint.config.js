@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
 import pluginTsdoc from 'eslint-plugin-tsdoc'
 import globals from 'globals'
-import { testRulesConfig } from './eslint-rules/index.mjs'
+import { e2eRulesConfig, testRulesConfig } from './eslint-rules/index.mjs'
 
 // Timezone-hygiene selectors (see the rule below); shared with the platform
 // block, which must repeat them (flat config replaces same-rule options).
@@ -290,6 +290,9 @@ export default [
   // (eslint-rules/test-lint-allowlist.json). vitest.config.ts is checked for
   // a raised testTimeout / retry.
   ...testRulesConfig(['src/**/*.test.ts'], ['vitest.config.ts']),
+  // FE-211: the same for the Playwright suite -- no waitForTimeout anywhere
+  // in e2e/, no timer-in-a-Promise pause in its specs and setup projects.
+  ...e2eRulesConfig(['e2e/**/*.ts'], ['e2e/**/*.spec.ts', 'e2e/**/*.setup.ts']),
 
   {
     // The barrels and the components themselves may use deep paths internally
