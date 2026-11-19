@@ -17,7 +17,8 @@
 //   docker = true | false  -- build the frontend image + smoke it (FE-159)
 //   visual = true | false  -- the PR touches what the screens are drawn from
 //                             (FE-162): styles, tokens, velo-ui, public
-//                             assets, the lockfile
+//                             assets, the lockfile -- or the comparison
+//                             itself (FE-212)
 //
 // Every file lands in exactly one class; the PR takes the strongest one.
 //   docs          -- prose nobody executes: docs/**, diagrams/**,
@@ -93,6 +94,19 @@ const VISUAL = [
   /^packages\/velo-ui\//,
   /^frontend\/public\//,
   /^pnpm-lock\.yaml$/,
+  // FE-212: the comparison itself, so a PR that changes it also runs it.
+  // Only what decides how the shots are taken and that no other job runs the
+  // way visual does: the workflow, the visual scenarios (compare.ts, run.sh,
+  // screens, HARs), the Playwright config (the `visual` project, device,
+  // locale, the server that serves VISUAL_DIST) and settle.ts (when a shot is
+  // taken). Left out on purpose: the rest of e2e/support (crash detector,
+  // fixtures -- the smoke e2e job runs them the same way) and
+  // e2e/sweep/routes.ts (changes with every new route; typecheck and the
+  // sweep cover it, and screens.ts throws on a row it cannot open).
+  /^\.github\/workflows\/visual\.yml$/,
+  /^frontend\/e2e\/visual\//,
+  /^frontend\/playwright\.config\.ts$/,
+  /^frontend\/e2e\/support\/settle\.ts$/,
 ]
 const DOCKER = [
   /^frontend\/Dockerfile$/,
