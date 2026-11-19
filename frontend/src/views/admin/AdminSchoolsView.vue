@@ -11,6 +11,9 @@
   for schools is the existing master-verification revoke, which freezes all
   of a curator's schools at once; a tap opens the curator's own review page
   where that lever already is.
+
+  The list is a Pinia Colada infinite query (composables/queries/
+  adminCatalogs.ts, FE-181); a revoke elsewhere invalidates it.
 -->
 
 <template>
@@ -30,7 +33,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
+        ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -73,7 +76,7 @@
       </div>
 
       <div v-if="hasMore" class="admin-list__more">
-        <VButton variant="outline" :loading="loading" @click="load(false)">{{
+        <VButton variant="outline" :loading="loading" @click="loadMore">{{
           t('common.showMore')
         }}</VButton>
       </div>
@@ -89,41 +92,41 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted } from 'vue'
+import { computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VBadge, VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
-import { getAdminSchools } from '@/api/schools'
 import type { AdminSchoolListItem } from '@/api/types'
+import { adminSchoolsQuery } from '@/composables/queries/adminCatalogs'
 import { useToast } from '@/composables/useToast'
-
-const PAGE = 100
 
 const router = useRouter()
 const toast = useToast()
 
-const schools = ref<AdminSchoolListItem[]>([])
-const total = ref(0)
-const loading = ref(false)
-const error = ref(false)
-const hasMore = computed(() => schools.value.length < total.value)
+const schoolsQuery = useInfiniteQuery(adminSchoolsQuery)
+const schools = computed<AdminSchoolListItem[]>(
+  () => schoolsQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
+)
+const total = computed(() => schoolsQuery.data.value?.pages.at(-1)?.total ?? 0)
+const loading = computed(() => schoolsQuery.asyncStatus.value === 'loading')
+// W12 discipline: only a failed FIRST page is an error state; a failed
+// loadMore keeps the loaded pages and toasts.
+const error = computed(
+  () => schoolsQuery.data.value === undefined && !loading.value && schoolsQuery.error.value != null,
+)
+const hasMore = schoolsQuery.hasNextPage
 
-async function load(reset: boolean): Promise<void> {
-  if (loading.value) return
-  loading.value = true
-  if (reset) error.value = false
-  try {
-    const offset = reset ? 0 : schools.value.length
-    const res = await getAdminSchools(PAGE, offset)
-    total.value = res.total
-    schools.value = reset ? res.items : [...schools.value, ...res.items]
-  } catch {
-    toast.error(t('school.loadFailed'))
-    // W12 discipline: only a failed FIRST page is an error state; a failed
-    // loadMore keeps the loaded page and toasts.
-    if (reset) error.value = true
-  } finally {
-    loading.value = false
-  }
+watch(schoolsQuery.error, (e) => {
+  if (e) toast.error(t('school.loadFailed'))
+})
+
+function retry(): void {
+  void schoolsQuery.refetch()
+}
+
+function loadMore(): void {
+  // cancelRefetch false: a tap during a reload waits for it.
+  void schoolsQuery.loadNextPage({ cancelRefetch: false })
 }
 
 // school creation month, from created_at (UTC).
@@ -134,8 +137,6 @@ function createdLabel(iso: string): string {
     .replace('.', '')
   return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${d.getUTCFullYear()}`
 }
-
-onMounted(() => load(true))
 </script>
 
 <style scoped>

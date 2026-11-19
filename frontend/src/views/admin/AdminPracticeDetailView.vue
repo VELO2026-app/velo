@@ -34,7 +34,7 @@
       :title="t('practice.loadFailed')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="load">{{ t('common.retry') }}</VButton>
+      <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="practice">
@@ -176,8 +176,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useQuery } from '@pinia/colada'
 import {
   VBackButton,
   VStatCard,
@@ -190,8 +191,12 @@ import {
 } from '@/components/ui'
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import { IconCalendar, IconProfile, IconCheck, IconClose } from '@/components/icons'
-import { getAdminPracticeDetail, getAdminZoomAttendance } from '@/api/admin'
 import type { AdminZoomAttendanceResponse } from '@/api/admin'
+import {
+  adminPracticeAttendanceQuery,
+  adminPracticeQuery,
+} from '@/composables/queries/adminCatalogs'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort } from '@/utils/format'
 import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
@@ -200,14 +205,29 @@ const route = useRoute()
 const router = useRouter()
 const practiceId = route.params.id as string
 
-const practice = ref<AdminPracticeDetailResponse | null>(null)
-// true from the start: load() runs in onMounted, i.e. AFTER the first render,
-// and false here would paint the "unavailable" rung for one frame (FE-199).
-const loading = ref(true)
-const error = ref<string | null>(null)
+// Pinia Colada queries (composables/queries/adminCatalogs.ts, FE-181).
+const practiceQuery = useQuery(() => adminPracticeQuery(practiceId))
+const practice = computed<AdminPracticeDetailResponse | null>(
+  () => practiceQuery.data.value ?? null,
+)
+const practiceState = screenQueryState(practiceQuery)
+// No answer and nothing failed yet: the loader. Never the "unavailable"
+// rung before the first request settled (FE-199).
+const loading = computed(
+  () => practiceQuery.data.value === undefined && !practiceState.failed.value,
+)
+const error = computed<string | null>(() =>
+  practiceState.failed.value
+    ? extractApiError(practiceQuery.error.value, t('common.loadError'))
+    : null,
+)
 // T21-1: best-effort, separate from the main loading/error state above -- a
-// failure here must never block the rest of the (already-working) page.
-const zoomAttendance = ref<AdminZoomAttendanceResponse | null>(null)
+// failure here (or an old pre-E21 practice with nothing to show) must never
+// block or blank the rest of the (already-working) page.
+const attendanceQuery = useQuery(() => adminPracticeAttendanceQuery(practiceId))
+const zoomAttendance = computed<AdminZoomAttendanceResponse | null>(() =>
+  attendanceQuery.error.value ? null : (attendanceQuery.data.value ?? null),
+)
 
 const isPast = computed<boolean>(() => practice.value?.status === 'past')
 
@@ -272,33 +292,9 @@ const absent = computed<AdminRosterEntry[]>(() =>
   roster.value.filter((r) => r.status !== 'attended'),
 )
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
-    practice.value = await getAdminPracticeDetail(practiceId)
-  } catch (e) {
-    error.value = extractApiError(e, t('common.loadError'))
-  } finally {
-    loading.value = false
-  }
+function retry(): void {
+  void practiceQuery.refetch()
 }
-
-// T21-1: fetched separately from load() above and never touches loading/
-// error -- a failure here (or on an old pre-E21 practice with nothing to
-// show) must not block or blank the page that already works.
-async function loadZoomAttendance(): Promise<void> {
-  try {
-    zoomAttendance.value = await getAdminZoomAttendance(practiceId)
-  } catch {
-    zoomAttendance.value = null
-  }
-}
-
-onMounted(() => {
-  void load()
-  void loadZoomAttendance()
-})
 </script>
 
 <style scoped>

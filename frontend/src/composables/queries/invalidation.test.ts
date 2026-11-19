@@ -18,7 +18,13 @@ import { PiniaColada, useQueryCache, type EntryKey, type QueryCache } from '@pin
 import { coladaOptions } from '@/composables/queries/setup'
 import { keys } from '@/composables/queries/keys'
 import { adminKeys } from '@/composables/queries/adminKeys'
-import { INVALIDATES, invalidateAfter, type MutationName } from '@/composables/queries/invalidation'
+import {
+  INVALIDATES,
+  invalidateAfter,
+  invalidateKeys,
+  type MutationName,
+} from '@/composables/queries/invalidation'
+import { ADMIN_INVALIDATES, type AdminMutationName } from '@/composables/queries/adminInvalidation'
 
 let app: App | null = null
 let queryCache: QueryCache
@@ -33,6 +39,8 @@ const SAMPLE = {
   groupMembers: keys.groups.members('g1', '') as EntryKey,
   // The admin zone (FE-181): no user-zone mutation may reach it.
   adminStats: adminKeys.stats() as EntryKey,
+  adminTaxonomy: adminKeys.taxonomy() as EntryKey,
+  adminPromos: adminKeys.promos('master') as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -87,6 +95,28 @@ describe('INVALIDATES', () => {
 
       for (const domain of Object.keys(SAMPLE) as Domain[]) {
         expect(stale(domain), domain).toBe(EXPECTED[mutation].includes(domain))
+      }
+    })
+  }
+})
+
+/** Expected stale domains per admin row (./adminInvalidation.ts), written out by hand. */
+const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
+  changeTaxonomy: ['adminTaxonomy'],
+  deactivatePromo: ['adminPromos'],
+}
+
+describe('ADMIN_INVALIDATES', () => {
+  it('has a test row for every admin mutation of the map', () => {
+    expect(Object.keys(ADMIN_EXPECTED).sort()).toEqual(Object.keys(ADMIN_INVALIDATES).sort())
+  })
+
+  for (const mutation of Object.keys(ADMIN_EXPECTED) as AdminMutationName[]) {
+    it(`${mutation}: makes ${ADMIN_EXPECTED[mutation].join(', ')} stale, nothing else`, async () => {
+      await invalidateKeys(queryCache, ADMIN_INVALIDATES[mutation])
+
+      for (const domain of Object.keys(SAMPLE) as Domain[]) {
+        expect(stale(domain), domain).toBe(ADMIN_EXPECTED[mutation].includes(domain))
       }
     })
   }

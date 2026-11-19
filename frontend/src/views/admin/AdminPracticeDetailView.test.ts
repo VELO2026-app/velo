@@ -2,10 +2,10 @@
 // VELO Frontend -- AdminPracticeDetailView Screen Tests (probekit-screen-test)
 // =============================================================================
 //
-// 282 lines. Read-only admin oversight of a single practice -- NO mutating
-// actions, no store, no dialogs. PATTERN = route-param read-only detail
-// screen, confirmed by reading every import: ONE seam from @/api/admin
-// (getAdminPracticeDetail), plus ApiResponseError (@/api/client, kept REAL
+// Read-only admin oversight of a single practice -- NO mutating actions, no
+// dialogs. PATTERN = route-param read-only detail screen over two Pinia
+// Colada queries (FE-181, mounted with a real Pinia + Colada): the seams are
+// @/api/admin's getAdminPracticeDetail and getAdminZoomAttendance, plus ApiResponseError (@/api/client, kept REAL
 // via importOriginal -- not mocked) and formatDateShort (@/utils/format,
 // Date.now-dependent for its "today"/"tomorrow" labels (i18n:common.today,
 // i18n:common.tomorrow) -- display only, not
@@ -24,19 +24,9 @@
 // fetch collapsed into the same not-found rung) / content (.vue:36) / a
 // final v-else practice-unavailable card (i18n:adminScreens.adminPracticeDetail.unavailable,
 // .vue:100-102). That fourth rung
-// is reachable TWO ways, both measured below, not assumed:
-//   (1) TRANSIENT, on every mount: `loading` starts as `ref(false)`, and
-//       Vue's initial render/patch (inside the synchronous `app.mount()`
-//       call) happens BEFORE `onMounted`'s `load()` gets a chance to flip
-//       `loading.value = true` -- and that flip itself only SCHEDULES a
-//       re-render (Vue's reactivity is microtask-batched), it doesn't force
-//       one synchronously. So for one microtask, right after `app.mount()`
-//       returns and before any `await`, the DOM is showing the
-//       practice-unavailable card, not the loader. Asserted below with a synchronous
-//       (pre-`flush()`) DOM check.
-//   (2) a genuinely malformed/empty success response (`practice.value`
-//       stays falsy after `loading.value = false` because the resolved
-//       body itself was falsy) would strand the screen here PERMANENTLY --
+// is reachable on one path only (the loader covers the first render, FE-199):
+//   a genuinely malformed/empty success response (the resolved body
+//       itself was falsy) would strand the screen here PERMANENTLY --
 //       the API's declared return type is non-null, so this is a defensive/
 //       contract-violation path, not a normal error or empty-list case
 //       (empty roster is a DIFFERENT, correctly-labelled empty state, see
@@ -78,6 +68,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminPracticeDetailView from '@/views/admin/AdminPracticeDetailView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -161,13 +154,21 @@ function mount(id: string): HTMLElement {
   routeParams.id = id
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminPracticeDetailView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminPracticeDetailView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 6; i++) await nextTick()
+  for (let n = 0; n < 6; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function text(): string {

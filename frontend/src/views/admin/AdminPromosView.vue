@@ -15,6 +15,10 @@
 
   Create (POST /admin/promos, company-only) is out of this batch's scope --
   operator asked for see + deactivate, not a creation screen.
+
+  Each tab is a Pinia Colada infinite query; deactivation runs through
+  useAdminMutation (composables/queries/adminCatalogs.ts,
+  adminInvalidation.ts, FE-181).
 -->
 
 <template>
@@ -40,7 +44,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
+        ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -120,8 +124,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useInfiniteQuery, useQueryCache } from '@pinia/colada'
 import {
   VBackButton,
   VButton,
@@ -136,18 +141,22 @@ import {
 import type { SegmentOption } from '@/components/ui'
 import { IconPromo } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
-import { getAdminPromos, deactivateAdminPromo } from '@/api/admin'
-import type { AdminPromoResponse, AdminPromoTypeFilter } from '@/api/admin'
+import { deactivateAdminPromo } from '@/api/admin'
+import type { AdminPromoResponse } from '@/api/admin'
+import {
+  adminPromosQuery,
+  markPromoInactive,
+  type AdminPromoFilter,
+} from '@/composables/queries/adminCatalogs'
+import { useAdminMutation } from '@/composables/queries/adminInvalidation'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { formatShortDate } from '@/utils/format'
-
-const LIMIT = 20
 
 const router = useRouter()
 const toast = useToast()
 
-type Filter = 'all' | 'master' | 'company' | 'inactive'
-const filter = ref<Filter>('all')
+const filter = ref<AdminPromoFilter>('all')
 
 const segOptions: SegmentOption[] = [
   { value: 'all', label: t('common.all') },
@@ -156,12 +165,16 @@ const segOptions: SegmentOption[] = [
   { value: 'inactive', label: t('adminScreens.adminPromos.deactivatedShort') },
 ]
 
-const items = ref<AdminPromoResponse[]>([])
-const total = ref(0)
-const loading = ref(false)
+// One entry per tab (server-side filtered by type / is_active). A tab
+// switch starts from the loader: another tab's promos never stand in.
+const promosQuery = useInfiniteQuery(() => adminPromosQuery(filter.value))
+const items = computed<AdminPromoResponse[]>(
+  () => promosQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
+)
+const total = computed(() => promosQuery.data.value?.pages.at(-1)?.total ?? 0)
+const { loading, failed: error } = screenQueryState(promosQuery)
 const loadingMore = ref(false)
-const hasMore = ref(false)
-const error = ref(false)
+const hasMore = promosQuery.hasNextPage
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
 
@@ -171,16 +184,6 @@ const emptyTitle = computed<string>(() => {
   if (filter.value === 'inactive') return t('adminScreens.adminPromos.empty.inactive')
   return t('adminScreens.adminPromos.empty.title')
 })
-
-/** Query params for the current tab -- server-side filtered (type/is_active),
- *  mirroring getAdminWithdrawals' approach rather than AdminMastersView's
- *  client-side filter (a promo list can grow past one page per master). */
-function currentParams(): { type?: AdminPromoTypeFilter; isActive?: boolean } {
-  if (filter.value === 'master') return { type: 'master' }
-  if (filter.value === 'company') return { type: 'company' }
-  if (filter.value === 'inactive') return { isActive: false }
-  return {}
-}
 
 /** Owner display: master's "First Last" (falls back to t('adminScreens.adminPromos.ownerFallback') like
  *  masterDisplayName), or "VELO" for a company promo (master_id=null). */
@@ -197,40 +200,22 @@ function untilLabel(p: AdminPromoResponse): string {
   return p.valid_until ? formatShortDate(p.valid_until) : t('adminScreens.adminPromos.noExpiry')
 }
 
-// -- Fetch (generation counter discards stale responses on rapid tab-switch,
-//    same pattern as AdminWithdrawalsView/AdminReportsView). --
-let generation = 0
-async function loadInitial(): Promise<void> {
-  generation += 1
-  const myGeneration = generation
-  loading.value = true
-  error.value = false
-  items.value = []
-  total.value = 0
-  hasMore.value = false
-  try {
-    const { type, isActive } = currentParams()
-    const res = await getAdminPromos(type, isActive, LIMIT, 0)
-    if (myGeneration !== generation) return
-    items.value = res.items
-    total.value = res.total
-    hasMore.value = res.items.length < res.total
-  } catch (e) {
-    if (myGeneration !== generation) return
-    error.value = true
+// -- Fetch. A failed first page is the error state and its toast; a failed
+//    next page keeps the list and toasts on its own (loadMore). --
+watch(promosQuery.error, (e) => {
+  if (e && promosQuery.data.value === undefined)
     toast.error(extractApiError(e, t('adminScreens.adminPromos.promocodesLoadError')))
-  } finally {
-    if (myGeneration === generation) loading.value = false
-  }
+})
+
+function retry(): void {
+  void promosQuery.refetch()
 }
 
 async function loadMore(): Promise<void> {
   loadingMore.value = true
   try {
-    const { type, isActive } = currentParams()
-    const res = await getAdminPromos(type, isActive, LIMIT, items.value.length)
-    items.value.push(...res.items)
-    hasMore.value = items.value.length < res.total
+    // cancelRefetch false: a tap during a reload waits for it.
+    await promosQuery.loadNextPage({ throwOnError: true, cancelRefetch: false })
   } catch (e) {
     toast.error(extractApiError(e, t('common.loadError')))
   } finally {
@@ -241,6 +226,19 @@ async function loadMore(): Promise<void> {
 // -- Deactivate + confirm --
 const confirmTarget = ref<AdminPromoResponse | null>(null)
 const deactivatingId = ref<string | null>(null)
+
+// The card flips to inactive in every tab held at once; the invalidation
+// (ADMIN_INVALIDATES.deactivatePromo) then refetches the tab on screen --
+// the "inactive" tab, server-filtered, picks the promo up on its next read.
+const queryCache = useQueryCache()
+const deactivate = useAdminMutation(
+  'deactivatePromo',
+  (promoId: string) => deactivateAdminPromo(promoId),
+  {
+    write: (_promo, promoId) => markPromoInactive(queryCache, promoId),
+    waitForRefetch: false,
+  },
+)
 
 const confirmMessage = computed<string>(() =>
   confirmTarget.value
@@ -257,12 +255,7 @@ async function onConfirmDeactivate(): Promise<void> {
   if (!target || deactivatingId.value) return
   deactivatingId.value = target.id
   try {
-    await deactivateAdminPromo(target.id)
-    const item = items.value.find((p) => p.id === target.id)
-    if (item) item.is_active = false
-    // The "inactive" tab is server-filtered on is_active=false -- a promo
-    // deactivated while that tab is open already satisfies the filter, so no
-    // removal needed there. Any other tab just flips the badge in place.
+    await deactivate.mutateAsync(target.id)
     toast.success(t('adminScreens.adminPromos.promocodeDeactivated'))
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminPromos.deactivateFailedToast')))
@@ -271,9 +264,6 @@ async function onConfirmDeactivate(): Promise<void> {
     confirmTarget.value = null
   }
 }
-
-watch(filter, loadInitial)
-onMounted(loadInitial)
 </script>
 
 <style scoped>
