@@ -51,7 +51,9 @@ jobs:
   #   label put on or taken off         -> yes
   #   opened / synchronize / reopened   -> the `visual` or `no-visual-change`
   #                                        label, or a PR that touches styles,
-  #                                        tokens, velo-ui, public/, the lockfile
+  #                                        tokens, velo-ui, public/, the
+  #                                        lockfile, or the comparison itself
+  #                                        (FE-212; VISUAL in ci-scope.mjs)
   # `strict` = the PR carries `no-visual-change`: a non-empty report fails.
   visual-scope:
     name: visual — scope
