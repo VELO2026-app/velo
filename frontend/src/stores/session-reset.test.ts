@@ -25,7 +25,6 @@ import { createPinia, setActivePinia, type Pinia, type StoreGeneric } from 'pini
 import { accountScopePlugin, resetAccountScope } from '@/platform/session'
 import { api } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
-import { useAdminStore } from '@/stores/admin'
 import { useDiaryStore } from '@/stores/diary'
 import { usePracticesStore } from '@/stores/practices'
 
@@ -112,7 +111,6 @@ describe('the store set', () => {
     expect([...stores.keys()]).toEqual(
       expect.arrayContaining([
         'auth',
-        'admin',
         'balance',
         'bookings',
         'calendar',
@@ -233,8 +231,6 @@ describe('the end of a session leaves every store in its initial state', () => {
         )
       })
     const inFlight = [
-      useAdminStore().fetchDashboard(true),
-      useAdminStore().fetchOverview('week'),
       // The diary's optimistic send: its row is the store's state.
       useDiaryStore().sendEntry({ content: 'previous account' }),
       useDiaryStore().updateEntry('entry_1', { content: 'previous account' }),
@@ -242,7 +238,8 @@ describe('the end of a session leaves every store in its initial state', () => {
       // The bookings and calendar stores hold no server data since FE-166
       // steps 3-4, and neither do the schools hub (no store at all) and the
       // master store since step 5, nor the bell's badge since step 6, nor the
-      // diary's feed, entry and insights since step 8; their queries are
+      // diary's feed, entry and insights since step 8, nor the admin zone's
+      // counters and dashboard since FE-181; their queries are
       // Colada entries, emptied by the account scope
       // (composables/queries/setup.test.ts, schoolsHub.test.ts,
       // master.test.ts, notifications.test.ts, diary.test.ts).
@@ -258,8 +255,6 @@ describe('the end of a session leaves every store in its initial state', () => {
   // The store's own request is the one answered 401: the reset happens
   // inside it, and its catch must not write into the next account's store.
   const ownRequests: Array<[string, () => Promise<unknown>]> = [
-    ['admin dashboard', () => useAdminStore().fetchDashboard(true)],
-    ['admin overview', () => useAdminStore().fetchOverview('week')],
     ['diary send', () => useDiaryStore().sendEntry({ content: 'x' })],
     ['diary check-in', () => useDiaryStore().submitCheckin('practice_1', { mood: 3 } as never)],
     ['practice detail', () => usePracticesStore().fetchPractice('practice_1')],

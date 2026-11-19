@@ -17,6 +17,10 @@
 // Invalidation is by prefix: `keys.practices.root()` covers every practice
 // detail and list. The mutation -> keys map lives in ./invalidation.ts.
 //
+// The admin zone's keys are not here but in ./adminKeys.ts, same rules: the
+// admin zone loads lazily, and this module is part of the startup chunk
+// every user pays for (FE-181).
+//
 // =============================================================================
 
 /** Query-key factory for Pinia Colada, grouped by data domain. */

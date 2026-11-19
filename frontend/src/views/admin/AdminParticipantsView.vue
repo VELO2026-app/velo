@@ -15,6 +15,7 @@
   FE from created_at / last_login_at). Header count + the all badge
   (i18n:common.all) still show the
   platform total from /admin/stats. admin->user messaging is still a stub toast.
+  Both reads are Pinia Colada queries (composables/queries/admin.ts, FE-181).
 -->
 
 <template>
@@ -78,7 +79,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
+        ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -90,37 +91,56 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VSegment, VButton, VCard, VEmptyState } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import { IconProfile, IconMessages } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
-import { useAdminStore } from '@/stores/admin'
-import { getParticipants } from '@/api/admin'
+import {
+  adminParticipantsQuery,
+  useAdminStats,
+  type AdminParticipantFilter,
+} from '@/composables/queries/admin'
 import type { AdminParticipant } from '@/api/types'
 import { dayLabelOf } from '@/utils/format'
 
-const PAGE = 100
-
 const router = useRouter()
 const toast = useToast()
-const adminStore = useAdminStore()
+const { stats } = useAdminStats()
 
 // all / new / active. new+active window on the current week (backend
-// filter over created_at / last_login_at). Changing it refetches from page 0.
-type ParticipantFilter = 'all' | 'new' | 'active'
-const filter = ref<ParticipantFilter>('all')
+// filter over created_at / last_login_at). One entry per filter, every page
+// loaded so far.
+const filter = ref<AdminParticipantFilter>('all')
 
-const participants = ref<AdminParticipant[]>([])
-const total = ref(0)
-const loading = ref(false)
-const error = ref(false)
-const hasMore = computed<boolean>(() => participants.value.length < total.value)
+// A filter switch keeps the previous filter's rows on screen until the new
+// first page lands (placeholderData); a failed one shows the error state.
+const participantsQuery = useInfiniteQuery(() => ({
+  ...adminParticipantsQuery(filter.value),
+  placeholderData: <T,>(previous: T | undefined) => previous,
+}))
+const participants = computed<AdminParticipant[]>(
+  () => participantsQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
+)
+const loading = computed(() => participantsQuery.asyncStatus.value === 'loading')
+// A failed first page: the list below is genuinely unknown, not empty --
+// the real error state (W12), never t('common.noData'). A failed next page
+// keeps the pages already shown; the toast is enough there.
+const error = computed(
+  () =>
+    participantsQuery.data.value === undefined &&
+    !loading.value &&
+    participantsQuery.error.value != null,
+)
+const hasMore = computed<boolean>(
+  () => !participantsQuery.isPlaceholderData.value && participantsQuery.hasNextPage.value,
+)
 
 // Header + the all badge (i18n:common.all) show the real platform total from /admin/stats (loaded
 // by AdminShell) — a stable count independent of the current filter/page.
-const totalCount = computed<number | null>(() => adminStore.stats?.users_count ?? null)
+const totalCount = computed<number | null>(() => stats.value?.users_count ?? null)
 const headerCount = computed<string>(() =>
   totalCount.value !== null ? String(totalCount.value) : '—',
 )
@@ -135,32 +155,19 @@ const segOptions = computed<SegmentOption[]>(() => [
   { value: 'active', label: t('adminScreens.adminParticipants.active') },
 ])
 
-async function load(reset: boolean): Promise<void> {
-  if (loading.value) return
-  loading.value = true
-  if (reset) error.value = false
-  try {
-    const pageOffset = reset ? 0 : participants.value.length
-    const res = await getParticipants(filter.value, 'week', 0, PAGE, pageOffset)
-    total.value = res.total
-    participants.value = reset ? res.items : [...participants.value, ...res.items]
-  } catch {
-    toast.error(t('adminScreens.adminParticipants.toast.loadMembersFailed'))
-    // A failed initial/filter load (reset) means the list below is genuinely
-    // unknown, not empty -- render the real error state (W12) instead of
-    // falling through to t('common.noData'). A failed loadMore leaves the
-    // already-loaded page visible; the toast is enough there.
-    if (reset) error.value = true
-  } finally {
-    loading.value = false
-  }
+// Every failed request is told, the first page's and a next page's alike.
+watch(participantsQuery.error, (e) => {
+  if (e) toast.error(t('adminScreens.adminParticipants.toast.loadMembersFailed'))
+})
+
+function retry(): void {
+  void participantsQuery.refetch()
 }
 
-onMounted(() => load(true))
-watch(filter, () => load(true))
-
 function loadMore(): void {
-  void load(false)
+  // cancelRefetch false: a tap during a reload waits for it instead of
+  // gluing a stale page to a fresh one.
+  void participantsQuery.loadNextPage({ cancelRefetch: false })
 }
 
 // t('adminScreens.adminParticipants.dek-2025') — registration month, from created_at (UTC).

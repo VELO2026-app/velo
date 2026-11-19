@@ -11,11 +11,11 @@
 // so this file tests exactly the four things AdminShell computes: which tab
 // lights up, which routes get the live badge counts, which routes get the fog
 // mask, and which routes hide the tab bar -- plus the one real side effect,
-// the dashboard-stats fetch + its error toast.
+// the counters fetch + its error toast.
 //
-// PATTERN: real Pinia + real useAdminStore (the badges are its own computed
-// properties, pendingVerifications/pendingModeration -- real derivation, only
-// @/api/admin mocked underneath). A FRESH real vue-router (memory history) per
+// PATTERN: real Pinia + Pinia Colada (the badges read the admin counters
+// query, composables/queries/admin.ts -- real derivation, only @/api/admin
+// mocked underneath). A FRESH real vue-router (memory history) per
 // mount, NOT mocked -- <RouterView/> needs an actually-installed router to
 // resolve at all, and useRoute()/useRouter() inside the shell read from
 // whatever this test's own tiny router is currently on. Route NAMES below are
@@ -38,8 +38,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminShell from '@/views/shells/AdminShell.vue'
-import { useAdminStore } from '@/stores/admin'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import type { AdminStatsResponse, PaginatedReportsResponse } from '@/api/types'
@@ -96,16 +97,16 @@ async function mount(routeName: string): Promise<HTMLElement> {
   document.body.appendChild(host)
   app = createApp(AdminShell).use(createTestI18n())
   app.use(pinia)
+  app.use(PiniaColada, coladaOptions)
   app.use(router)
   app.mount(host)
   return host
 }
 
-// fetchDashboard: await Promise.all(...) (1) -> onMounted's own .then()
-// continuation is chained onto that promise, one more microtask hop (1) ->
-// possible toast + re-render (1). 5 leaves margin.
 async function flush(): Promise<void> {
   for (let i = 0; i < 5; i++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function mainEl(): HTMLElement {
@@ -235,34 +236,24 @@ describe('AdminShell', () => {
     })
   })
 
-  describe('the dashboard-stats fetch (W14: no more silent failure)', () => {
-    it('fetches once on mount through the REAL store action', async () => {
-      const adminStore = useAdminStore()
+  describe('the counters fetch (W14: no more silent failure)', () => {
+    it('fetches once on mount and never toasts on success', async () => {
       await mount('admin-dashboard')
       await flush()
 
       expect(adminApi.getAdminStats).toHaveBeenCalledTimes(1)
-      expect(adminStore.loaded).toBe(true)
-    })
-
-    it('a successful fetch never toasts', async () => {
-      await mount('admin-dashboard')
-      await flush()
-
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('a failed fetch toasts the generic store-derived fallback (unmapped code)', async () => {
+    it('a failed fetch toasts the generic fallback (unmapped code)', async () => {
       // B8 (PROMPT №747): 'server_error' is not a real backend code --
-      // unmapped, lands on admin.ts's fetchDashboard fallback (:60).
+      // unmapped, lands on the storeErrors.admin.dashboard fallback.
       vi.mocked(adminApi.getAdminStats).mockRejectedValue(
         new ApiResponseError(500, 'Сеть недоступна', 'server_error'),
       )
-      const adminStore = useAdminStore()
       await mount('admin-dashboard')
       await flush()
 
-      expect(adminStore.dashboardError).toBe('Не удалось загрузить статистику')
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить статистику')
     })
   })

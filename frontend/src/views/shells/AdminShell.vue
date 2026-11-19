@@ -22,17 +22,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { t } from '@/locales'
+import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AdminLayout } from '@/components/layout'
 import { ADMIN_TABS } from '@/router/tabs'
 import type { TabItem } from '@/router/tabs'
-import { useAdminStore } from '@/stores/admin'
+import { useAdminStats } from '@/composables/queries/admin'
+import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
-const adminStore = useAdminStore()
+const { pendingVerifications, pendingModeration, error: statsError } = useAdminStats()
 const toast = useToast()
 
 const activeTab = computed(() => {
@@ -46,10 +48,10 @@ const activeTab = computed(() => {
 // Moderation tab (i18n:tabs.moderation). 0 -> no badge.
 const tabItems = computed<TabItem[]>(() =>
   ADMIN_TABS.map((tab) => {
-    if (tab.to === '/admin/masters' && adminStore.pendingVerifications > 0)
-      return { ...tab, badge: adminStore.pendingVerifications }
-    if (tab.to === '/admin/reports' && adminStore.pendingModeration > 0)
-      return { ...tab, badge: adminStore.pendingModeration }
+    if (tab.to === '/admin/masters' && pendingVerifications.value > 0)
+      return { ...tab, badge: pendingVerifications.value }
+    if (tab.to === '/admin/reports' && pendingModeration.value > 0)
+      return { ...tab, badge: pendingModeration.value }
     return tab
   }),
 )
@@ -91,14 +93,11 @@ const DETAIL_ROUTES = [
 ]
 const isDetailRoute = computed(() => DETAIL_ROUTES.includes(route.name as string))
 
-onMounted(() => {
-  // W14 fix (PROMPT №409): fetchDashboard used to be an unhandled rejection on
-  // failure -- badges just silently never updated. Toast here since this shell
-  // wraps every /admin/* route and is always the first to actually run the
-  // fetch (AdminDashboardView's own onMounted call is a no-op while this one
-  // is in flight or already succeeded).
-  void adminStore.fetchDashboard().then(() => {
-    if (adminStore.dashboardError) toast.error(adminStore.dashboardError)
-  })
+// The counters behind the badges (queries/admin.ts): this shell wraps every
+// /admin/* route, so it is the one that tells the admin a load failed
+// (W14, PROMPT №409: it used to fail silently) -- once per failed request,
+// whichever screen asked; the screens reading the same entry stay quiet.
+watch(statsError, (error) => {
+  if (error) toast.error(extractApiError(error, t('storeErrors.admin.dashboard')))
 })
 </script>
