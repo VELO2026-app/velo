@@ -6,8 +6,9 @@
 // and only when the mark can be held; inside the window stay out of the way so
 // a failure that survives a reload cannot become a reload loop. After the
 // window (the next deploy in the same long-lived session, FE-157) reload
-// again. Twin axes: REPEAT (second event, two events in one tick), EMPTY
-// (event without payload), SHORTAGE (storage that throws), WINDOW.
+// again. Twin axes: REPEAT (second event, two events in one tick -- both
+// without a payload, which covers that case too), SHORTAGE (storage that
+// throws), WINDOW.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'

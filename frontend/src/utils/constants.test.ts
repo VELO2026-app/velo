@@ -13,15 +13,12 @@
 // through router/guards.test.ts's roleRedirect-style scenarios.
 // =============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { masterApprovedSeenKey } from '@/utils/constants'
 
 describe('masterApprovedSeenKey (W18 -- per-user isolation)', () => {
-  beforeEach(() => {
-    localStorage.clear()
-  })
-
-  it('produces a distinct key per user', () => {
-    expect(masterApprovedSeenKey('user_a')).not.toBe(masterApprovedSeenKey('user_b'))
+  it('is the stable per-user key (a changed key would re-show the screen to everyone)', () => {
+    expect(masterApprovedSeenKey('user_a')).toBe('velo:master-approved-seen:user_a')
+    expect(masterApprovedSeenKey('user_b')).toBe('velo:master-approved-seen:user_b')
   })
 })
