@@ -49,11 +49,16 @@ vi.mock('../../platform/dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../platform/dom')>()
   return {
     ...actual,
-    onDocumentEvent: vi.fn((type: string, listener: (ev: Event) => unknown) =>
-      document.addEventListener(type, listener as EventListener),
+    onDocumentEvent: vi.fn(
+      (
+        type: string,
+        listener: (ev: Event) => unknown,
+        options?: boolean | AddEventListenerOptions,
+      ) => document.addEventListener(type, listener as EventListener, options),
     ),
-    offDocumentEvent: vi.fn((type: string, listener: (ev: Event) => unknown) =>
-      document.removeEventListener(type, listener as EventListener),
+    offDocumentEvent: vi.fn(
+      (type: string, listener: (ev: Event) => unknown, options?: boolean | EventListenerOptions) =>
+        document.removeEventListener(type, listener as EventListener, options),
     ),
   }
 })

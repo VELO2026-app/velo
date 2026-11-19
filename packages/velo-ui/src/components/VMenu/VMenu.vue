@@ -30,7 +30,8 @@
   Enter/Space opens it on the first item (a pointer tap leaves focus where it
   was). Inside the panel: ArrowDown/ArrowUp wrap, Home/End jump, Escape
   closes and returns focus to the trigger, Tab closes and moves on from the
-  trigger. Focus leaving the menu for another element (Tab after a pointer
+  trigger. Escape on an open menu is the menu's alone (FE-213): inside a
+  VModal or VBottomSheet it closes the menu and leaves the overlay open. Focus leaving the menu for another element (Tab after a pointer
   open, screen-reader swipe navigation) closes it too.
 -->
 <template>
@@ -200,23 +201,31 @@ function onDocPointerDown(event: PointerEvent): void {
   if (root && !root.contains(event.target as Node)) dismiss()
 }
 
+// An open menu owns Escape (FE-213): VModal and VBottomSheet close on a
+// document keydown too, and they attach it on mount -- before this menu
+// opens -- so a bubble-phase stopPropagation here would run too late. The
+// listener sits in the CAPTURE phase, which reaches the document before the
+// key goes down to its target and back up, and stops the event there: one
+// press closes the menu and leaves the overlay under it open.
 function onDocKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') close()
+  if (event.key !== 'Escape' || !open.value) return
+  event.stopPropagation()
+  close()
 }
 
 watch(open, (isOpen) => {
   if (isOpen) {
     onDocumentEvent('pointerdown', onDocPointerDown)
-    onDocumentEvent('keydown', onDocKeydown)
+    onDocumentEvent('keydown', onDocKeydown, true)
   } else {
     offDocumentEvent('pointerdown', onDocPointerDown)
-    offDocumentEvent('keydown', onDocKeydown)
+    offDocumentEvent('keydown', onDocKeydown, true)
   }
 })
 
 onBeforeUnmount(() => {
   offDocumentEvent('pointerdown', onDocPointerDown)
-  offDocumentEvent('keydown', onDocKeydown)
+  offDocumentEvent('keydown', onDocKeydown, true)
 })
 
 // Allow the parent to close the menu programmatically if needed.

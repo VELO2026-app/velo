@@ -3,11 +3,11 @@
 // =============================================================================
 //
 // The one table "category -> icon" and the five filter chips over the six
-// categories. Asserted as a whole: five glyphs, both complaints one glyph
-// (owner ruling 25.10), colours from the owner's mockup as existing tokens,
-// every category in exactly one chip. The temporary glyphs (practices,
-// complaints -- see the module header) are pinned too, so their replacement
-// is a visible change of this file.
+// categories: the exact glyph and colour per category (both complaints share
+// one glyph, owner ruling 25.10), every colour a token for any category the
+// module knows, and every category in exactly one chip. The temporary glyphs
+// (practices, complaints -- see the module header) are pinned too, so their
+// replacement is a visible change of this file.
 // =============================================================================
 
 import { describe, it, expect } from 'vitest'
@@ -44,6 +44,15 @@ describe('category -> icon', () => {
     ['other', IconQuestion, 'var(--velo-blue-200)'],
   ] as const)('%s -> its glyph and colour', (category, icon, color) => {
     expect(supportCategoryIcon(category)).toEqual({ icon, color })
+  })
+
+  // Over the categories the module itself lists, so a category added later
+  // without a row above still cannot ship a raw colour (rgb(), a name):
+  // token-law only catches hex.
+  it('every category the chips know is coloured by a token', () => {
+    for (const c of SUPPORT_CATEGORY_GROUPS.flatMap((g) => [...g.categories])) {
+      expect(supportCategoryIcon(c).color).toMatch(/^var\(--velo-[a-z0-9-]+\)$/)
+    }
   })
 })
 
