@@ -5,6 +5,15 @@
 import { expect, test } from './support/test'
 import { mockApi } from './support/api'
 import { makeUser, mockSignedIn, seedSession, stubTelegram } from './support/fixtures'
+import { settle, trackApi } from './support/settle'
+
+/**
+ * How far the late-traffic check runs the app's clock ahead: two ticks of the
+ * 30 s role-freshness poll (useRoleFreshness.ts), the longest timer the app
+ * arms without a session, and past every one-shot delay (the data prefetch's
+ * delay and idle cap, the 15 s request timeout). Fake time: costs no wall time.
+ */
+const APP_TIMERS_HORIZON_MS = 60_000
 
 test.describe('browser tab', () => {
   test('returning user: splash, then the dashboard', async ({ page }) => {
@@ -38,15 +47,19 @@ test.describe('browser tab', () => {
   // the login screen must not call bookings, notifications, practices or diary.
   test('no session: no late API traffic once the network settles', async ({ page }) => {
     const api = await mockApi(page)
+    const tracker = trackApi(page)
     await page.addInitScript(() => localStorage.setItem('velo.locale', 'en'))
+    // The page's timers run on Playwright's clock: real time until runFor.
+    await page.clock.install()
 
     await page.goto('/')
 
     await expect(page.getByRole('button', { name: 'Log in with Telegram' })).toBeVisible()
-    // A late request (deferred prefetch, retry timer) lands after the button:
-    // wait for the network to go quiet, then a fixed settle past the idle window.
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(1_000)
+    // A late request (deferred prefetch, retry timer, poll) is armed on a timer:
+    // fire every timer due within the horizon now, then wait for the API to go
+    // quiet so a request those timers sent is counted before the assertion.
+    await page.clock.runFor(APP_TIMERS_HORIZON_MS)
+    await settle(page, tracker)
     expect(api.calls).toEqual([])
   })
 })

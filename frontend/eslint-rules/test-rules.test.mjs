@@ -11,6 +11,7 @@ import { findRuleDisables } from './directives.mjs'
 import { loadAllowlist } from './index.mjs'
 import noFixedSleep from './no-fixed-sleep.mjs'
 import noFlakeMasking from './no-flake-masking.mjs'
+import noWaitForTimeout from './no-wait-for-timeout.mjs'
 import { REPO_ROOT } from './ratchet.mjs'
 
 RuleTester.describe = describe
@@ -72,6 +73,44 @@ tester.run('no-fixed-sleep', noFixedSleep, {
       filename: FILE,
       code: 'await flush()',
       options: [{ allow: { [KEY]: 1 } }],
+      errors: [{ messageId: 'shrinkAllowlist' }],
+    },
+  ],
+})
+
+const SPEC = path.join(REPO_ROOT, 'frontend/e2e/sample.spec.ts')
+const SPEC_KEY = 'frontend/e2e/sample.spec.ts'
+
+tester.run('no-wait-for-timeout', noWaitForTimeout, {
+  valid: [
+    // Waits that name what they wait for.
+    { filename: SPEC, code: 'await expect(page.getByRole("button")).toBeVisible()' },
+    { filename: SPEC, code: 'await page.clock.runFor(60_000)' },
+    { filename: SPEC, code: 'await page.waitForResponse("**/api/v1/users/me")' },
+    // A detached method is a known gap (see the rule's header), not caught.
+    { filename: SPEC, code: 'waitForTimeout(500)' },
+    {
+      filename: SPEC,
+      code: 'await page.waitForTimeout(500)',
+      options: [{ allow: { [SPEC_KEY]: 1 } }],
+    },
+  ],
+  invalid: [
+    {
+      filename: SPEC,
+      code: 'await page.waitForTimeout(1_000)',
+      errors: [{ messageId: 'pause' }],
+    },
+    {
+      // Whatever the argument and the receiver: the method only sleeps.
+      filename: SPEC,
+      code: 'await frame.waitForTimeout(delay); await page["waitForTimeout"](0)',
+      errors: [{ messageId: 'pause' }, { messageId: 'pause' }],
+    },
+    {
+      filename: SPEC,
+      code: 'await page.clock.runFor(1)',
+      options: [{ allow: { [SPEC_KEY]: 1 } }],
       errors: [{ messageId: 'shrinkAllowlist' }],
     },
   ],
@@ -191,6 +230,14 @@ describe('the exception list', () => {
     expect(loadAllowlist(list({ [REAL]: { 'no-fixed-sleep': 2 } }))).toEqual({
       'no-fixed-sleep': { [REAL]: 2 },
       'no-flake-masking': {},
+      'no-wait-for-timeout': {},
+    })
+  })
+
+  it('takes an e2e file as a key (FE-211)', () => {
+    const spec = 'frontend/e2e/entry.spec.ts'
+    expect(loadAllowlist(list({ [spec]: { 'no-wait-for-timeout': 1 } }))).toMatchObject({
+      'no-wait-for-timeout': { [spec]: 1 },
     })
   })
 

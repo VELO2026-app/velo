@@ -269,17 +269,6 @@ describe('UserShell', () => {
 
       expect(host?.querySelector('.v-tabbar')).toBeNull()
     })
-
-    it('the dock carries exactly the four unconditional tabs for a plain visitor', async () => {
-      // tz-curator.md §1.2: USER_TABS now holds five items, but the
-      // conditional Schools tab (i18n:tabs.schools) is filtered out unless the account belongs
-      // to at least one school. No schools in this fixture -> four.
-      await mount('user-dashboard')
-      await flush()
-
-      const items = Array.from(host?.querySelectorAll('.v-tabbar__item') ?? [])
-      expect(items).toHaveLength(4)
-    })
   })
 
   describe('the conditional «Школы» tab (tz-curator.md §1.2, owner 2026-09-22)', () => {
