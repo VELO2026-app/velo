@@ -1,1312 +1,311 @@
 // =============================================================================
-// VELO Frontend -- AnalyticsView Screen Tests
+// VELO Frontend -- AnalyticsView Screen Tests (master analytics, FE-190)
 // =============================================================================
 //
-// The master's analytics hub: what their practices scored, and what they earned.
-// It computes rather than displays -- 16 computeds turn two raw distributions and
-// a ledger into the percentages a master reads to judge their own work and their
-// own income. Every number on this screen is DERIVED, so a wrong one is silent:
-// nothing downstream contradicts it. That is why these tests assert VALUES the
-// computeds produce (50% / «1 234,56» / «+23%»), not that a fetch fired.
+// The master's analytics screen, built after the school's: one server aggregate
+// per calendar period (GET /masters/me/analytics, BE-34; the practices list is
+// BE-222). Every number is the server's -- the screen divides nothing -- so the
+// tests assert what the screen PUTS ON SCREEN for a given payload, and the
+// rules the ticket sets for the period slider:
+//   - the slider names the period and refetches; the first fetch is the week;
+//   - while another period loads, no earlier period's numbers stay under the
+//     new label (the loader stands in), and a failed request is the retry state;
+//   - the practices of the period come as cards with their four blocks, the
+//     first three shown and the rest behind the reveal;
+//   - the needs-attention section is gone when there is nobody to show.
 //
-// PATTERN C (hybrid) -- and both halves are driven, per the skill's warning that
-// mocking one layer for both guts the test:
-//   - DATA HALF (Reviews tab): past practices come from the REAL Colada list
-//     (useMyPractices('past')), and
-//     per-practice insights from a REAL useDiaryStore's reactive insightsCache
-//     (.vue:268-272). Real stores, not mocked ones: the screen's aggregates hang
-//     off that reactive Map, and a hand-rolled fake Map is exactly the kind of
-//     thing that is quietly non-reactive -- the test would then prove the
-//     fixture, not the screen. Both stores read their data from `@/api/masters`
-//     and `@/api/diary`, so mocking those two modules seams BOTH halves at once.
-//   - LOCAL-REF HALF (Payments tab): income / transactions / paymentsLoading /
-//     paymentsError are the screen's own refs, fed by direct getIncome +
-//     getTransactions calls (.vue:449-499). Same `@/api/masters` seam.
-// One real Pinia instance goes to setActivePinia AND app.use (SC-03).
-//
-// TIME IS PINNED to 2026-07-20T12:00:00Z. The screen reads the WALL CLOCK twice
-// -- `periodPractices` (.vue:307) and `attentionItems` (.vue:418) both cut on
-// `Date.now() - PERIOD_DAYS[period] * 86_400_000`. Unpinned, every period
-// assertion below is a test that passes today and fails at some future midnight,
-// differently in CI (SC-04). All fixtures are LITERAL dates chosen relative to
-// that frozen instant, never `Date.now() + n`. The timezone cannot leak either:
-// every fixture carries `timezone: 'UTC'`, formatShortDate defaults to 'UTC'
-// (utils/format.ts:118), and formatMoney is called with an explicit 'ru'.
-//
-// TRAP -- v-show, not v-if: BOTH tab panes are permanently in the DOM
-// (.vue:54,175). `host.textContent` therefore contains the Payments pane's text
-// while the Reviews tab is on screen, and `.analytics__loader` matches in either
-// pane. So
-// every assertion here is scoped to reviewsPane() / paymentsPane(), and
-// "is this tab showing?" is `style.display !== 'none'`. A whole-host toContain()
-// on this screen is a test that cannot fail.
-//
-// TRAP -- the aggregates do NOT cover what is cached: loadVisibleInsights()
-// (.vue:524-526) eager-loads insights for ALL past practices, but `periodInsights`
-// (.vue:310-312) only maps the ones inside the period. P_ANCIENT below carries
-// deliberately enormous insights (100 participants / 100 fires) precisely so a
-// broken period filter cannot hide -- it would blow every percentage apart.
-//
-// NBSP: formatMoney is Intl ru currency (utils/format.ts:27-40), which groups
-// thousands with U+00A0 -- «1 234,56 €» is not the space on your keyboard, and a
-// normally-typed assertion fails on every amount over 999. norm() flattens it.
-// U+2212 (MINUS SIGN, not the ASCII hyphen) and U+2014 (EM DASH) are matched
-// through the MINUS / DASH constants for the same reason: written as escapes,
-// because the glyphs are indistinguishable from their lookalikes in a diff.
-//
-// SC-13: SendMessageModal (.vue:228) wraps VModal, which teleports
-// `.v-modal__overlay` to document.body -- a CLOSED one outlives app.unmount().
-// afterEach purges it unconditionally.
+// TIME IS PINNED to 2026-07-20T12:00:00Z: the attention section cuts reviews on
+// the period's days from the wall clock. Fixtures carry LITERAL dates.
+// The payments tab is parked (PAYMENTS_TAB_ENABLED = false): not rendered.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { setActivePinia, createPinia, type Pinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import AnalyticsView from '@/views/master/AnalyticsView.vue'
 import * as mastersApi from '@/api/masters'
-import * as diaryApi from '@/api/diary'
-import { ApiResponseError } from '@/api/client'
-import { PAYMENTS_TAB_ENABLED } from '@/views/master/analyticsFlags'
 import type {
-  PracticeResponse,
-  PracticeInsightsResponse,
+  MasterAnalyticsResponse,
   MasterReviewItem,
-  MasterTransactionItem,
-  IncomeResponse,
+  PracticeAnalyticsSummary,
   ScoreZoneCounts,
 } from '@/api/types'
 
-// Both stores under this screen read from these two modules, so mocking them
-// seams the store-backed half and the local-ref half in one move.
 vi.mock('@/api/masters')
-vi.mock('@/api/diary')
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, back: vi.fn() }),
+  useRouter: () => ({ push }),
+  useRoute: () => ({ params: {}, name: 'master-analytics' }),
 }))
-
-// -----------------------------------------------------------------------------
-// The frozen instant, and the characters that lie in a diff
-// -----------------------------------------------------------------------------
-
-const NOW = new Date('2026-07-20T12:00:00Z')
-
-// -----------------------------------------------------------------------------
-// Payments are PARKED (owner 2026-10-01): the Reviews/Payments slider and the
-// Payments pane are hidden until payments go live, their data loads gated with
-// them. The flag is the screen's own (./analyticsFlags.ts) -- the describes
-// exercising the parked UI skip themselves while it is false.
-// -----------------------------------------------------------------------------
-/** Runs the describe body only when the parked payments UI is restored.
- * skip: FE-201 -- payments are parked behind PAYMENTS_TAB_ENABLED. */
-const whenPaymentsLive = describe.skipIf(!PAYMENTS_TAB_ENABLED)
-
-/** U+2212 MINUS SIGN -- the screen's negative sign (.vue:465,470), NOT '-'. */
-const MINUS = '\u2212'
-/** U+2014 EM DASH -- the "no data yet" placeholder (.vue:346,352,458). */
-const DASH = '—'
-
-// -----------------------------------------------------------------------------
-// Fixtures. Dates are literals picked against NOW: week cuts at 2026-07-13T12:00Z
-// (7d), month at 2026-06-20T12:00Z (30d).
-// -----------------------------------------------------------------------------
-
-function practice(id: string, overrides: Partial<PracticeResponse> = {}): PracticeResponse {
-  return {
-    id,
-    master_id: 'm1',
-    practice_type: 'live',
-    status: 'completed',
-    title: `Практика ${id}`,
-    description: null,
-    scheduled_at: '2026-07-18T12:00:00Z',
-    duration_minutes: 60,
-    timezone: 'UTC',
-    max_participants: 20,
-    current_participants: 10,
-    parent_practice_id: null,
-    is_free: true,
-    price_cents: 0,
-    currency: 'EUR',
-    created_at: '2026-07-01T00:00:00Z',
-    updated_at: null,
-    ...overrides,
-  }
-}
-
-// 2 days back -- inside week and month.
-const P_NEW = practice('p1', {
-  title: 'Утренняя практика',
-  scheduled_at: '2026-07-18T12:00:00Z',
-  current_participants: 10,
-})
-// 5 days back -- inside week and month.
-const P_MID = practice('p2', {
-  title: 'Вечерняя практика',
-  scheduled_at: '2026-07-15T12:00:00Z',
-  current_participants: 10,
-})
-// 15 days back -- month ONLY. The lever that makes the period toggle observable.
-const P_MONTH = practice('p3', {
-  title: 'Дыхание',
-  scheduled_at: '2026-07-05T12:00:00Z',
-  current_participants: 5,
-})
-// Tomorrow, and not completed -- must never reach the past list.
-const P_FUTURE = practice('p4', {
-  title: 'Завтрашняя практика',
-  status: 'scheduled',
-  scheduled_at: '2026-07-21T12:00:00Z',
-})
-// 45 days back -- outside BOTH periods, with absurd insights (below) so that a
-// broken period filter is unmissable rather than a plausible-looking number.
-const P_ANCIENT = practice('p5', {
-  title: 'Древняя практика',
-  scheduled_at: '2026-06-05T12:00:00Z',
-  current_participants: 100,
-})
-
-// Deliberately unsorted: the screen must sort newest-first itself (.vue:296-300).
-const PRACTICES = [P_MONTH, P_NEW, P_ANCIENT, P_FUTURE, P_MID]
-
-function insights(
-  practiceId: string,
-  participants: number,
-  checkins: ScoreZoneCounts,
-  feedbacks: ScoreZoneCounts,
-): PracticeInsightsResponse {
-  return {
-    practice_id: practiceId,
-    participants,
-    checkins,
-    feedbacks,
-    comments_count: 0,
-  }
-}
-
-// Week (p1+p2): 20 participants, 10 check-ins -> 50%; 8 feedbacks -> 40%.
-//               fire 4 / good 1 / neutral 2 / low 0 / bad 1  (total 8)
-// Month (+p3):  25 participants, 15 check-ins -> 60%; 11 feedbacks -> 44%.
-//               fire 4 / good 2 / neutral 2 / low 1 / bad 2  (total 11)
-// BE-77: five zones (was fire/good/confused). Totals per practice are kept
-// (5 / 3 / 3 feedbacks, 7 / 3 / 5 check-ins) so the rate figures stay; the
-// zones are spread so every one of the five carries a distinct number in
-// some period -- a crossed zone would show up as a wrong bar.
-// The two periods differ on EVERY figure on purpose -- equal numbers would let a
-// toggle that does nothing pass.
-const INSIGHTS: Record<string, PracticeInsightsResponse> = {
-  p1: insights(
-    'p1',
-    10,
-    { bad: 1, low: 0, neutral: 2, good: 0, fire: 4 },
-    { bad: 1, low: 0, neutral: 0, good: 1, fire: 3 },
-  ),
-  p2: insights(
-    'p2',
-    10,
-    { bad: 0, low: 0, neutral: 1, good: 0, fire: 2 },
-    { bad: 0, low: 0, neutral: 2, good: 0, fire: 1 },
-  ),
-  p3: insights(
-    'p3',
-    5,
-    { bad: 0, low: 0, neutral: 0, good: 0, fire: 5 },
-    { bad: 1, low: 1, neutral: 0, good: 1, fire: 0 },
-  ),
-  p5: insights(
-    'p5',
-    100,
-    { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 },
-    { bad: 0, low: 0, neutral: 0, good: 0, fire: 100 },
-  ),
-}
-
-function review(overrides: Partial<MasterReviewItem> = {}): MasterReviewItem {
-  return {
-    user_id: 'u1',
-    reviewer_name: 'Анна',
-    avatar_url: null,
-    rating: 'low',
-    comment: null,
-    practice_title: 'Утренняя практика',
-    created_at: '2026-07-19T12:00:00Z',
-    ...overrides,
-  }
-}
-
-// 1 day back -- inside week and month.
-const RV_RECENT = review({
-  user_id: 'u1',
-  reviewer_name: 'Анна',
-  comment: 'Было сложно успевать',
-  created_at: '2026-07-19T12:00:00Z',
-})
-// 20 days back -- month ONLY.
-const RV_OLD = review({
-  user_id: 'u2',
-  reviewer_name: 'Борис',
-  comment: null,
-  practice_title: 'Дыхание',
-  created_at: '2026-06-30T12:00:00Z',
-})
-// A second recent review, in the OTHER attention zone (bad). BE-77: this was
-// RV_HAPPY, a positive rating the screen used to re-filter out client-side.
-// The owner removed that filter -- attention=true is the server's answer and
-// the threshold lives only there -- so the fixture now pins the opposite: what
-// the server returns inside the period is rendered, whatever its zone.
-const RV_BAD = review({
-  user_id: 'u3',
-  reviewer_name: 'Вера',
-  rating: 'bad',
-  comment: 'Отлично',
-  practice_title: 'Вечерняя практика',
-  created_at: '2026-07-19T12:00:00Z',
-})
-
-const INCOME_WEEK: IncomeResponse = {
-  income_cents: 123456,
-  prev_income_cents: 100000,
-  delta_pct: 23.456,
-}
-const INCOME_MONTH: IncomeResponse = {
-  income_cents: 500000,
-  prev_income_cents: 600000,
-  delta_pct: -16.7,
-}
-
-function txn(overrides: Partial<MasterTransactionItem> = {}): MasterTransactionItem {
-  return {
-    title: 'Оплата за практику',
-    practice_title: null,
-    created_at: '2026-07-19T10:00:00Z',
-    counterparty_name: null,
-    amount_cents: 1000,
-    ...overrides,
-  }
-}
-
-const TX_SALE = txn({
-  title: 'Оплата за практику',
-  practice_title: 'Утренняя практика',
-  counterparty_name: 'Анна',
-  amount_cents: 250000,
-})
-const TX_FEE = txn({
-  title: 'Комиссия платформы',
-  practice_title: null,
-  created_at: '2026-07-18T10:00:00Z',
-  counterparty_name: null,
-  amount_cents: -50000,
-})
-
-function practicesPage(items: PracticeResponse[], total = items.length, offset = 0) {
-  return { items, total, limit: 20, offset }
-}
-
-// T22-5 (PROMPT №561): the server now owns the completed-only, most-recent-
-// first ordering -- pastPractices no longer re-sorts client-side (.vue), so
-// the fake server must actually behave like one. This screen only ever
-// fetches the "past" bucket (useMyPractices('past')), but the helper mirrors
-// both bucket semantics from listing_service.py for consistency with the
-// other master test files.
-function mockBucketedPractices(items: PracticeResponse[]): void {
-  vi.mocked(mastersApi.getMyPractices).mockImplementation(
-    async (bucket: 'upcoming' | 'past', limit = 20, offset = 0) => {
-      const filtered = items
-        .filter((p) =>
-          bucket === 'upcoming'
-            ? p.status === 'draft' || p.status === 'scheduled' || p.status === 'live'
-            : p.status === 'completed',
-        )
-        .sort((a, b) => {
-          const diff = new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
-          return bucket === 'upcoming' ? diff : -diff
-        })
-      return practicesPage(filtered.slice(offset, offset + limit), filtered.length, offset)
-    },
-  )
-}
-function txPage(items: MasterTransactionItem[], total = items.length, offset = 0) {
-  return { items, total, limit: 20, offset }
-}
-function reviewsPage(items: MasterReviewItem[], total = items.length) {
-  return { items, total, limit: 20, offset: 0 }
-}
-
-// -----------------------------------------------------------------------------
-// Mount
-// -----------------------------------------------------------------------------
 
 let app: App | null = null
 let host: HTMLElement | null = null
-let pinia: Pinia
 
-// The SAME pinia instance goes to setActivePinia and app.use (SC-03): two
-// instances means the test drives one store while the screen renders another,
-// and every assertion passes while proving nothing.
 function mount(): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AnalyticsView).use(createTestI18n())
-  app.use(pinia).use(PiniaColada, coladaOptions)
+  const pinia = createPinia()
+  app = createApp(AnalyticsView).use(createTestI18n()).use(pinia).use(PiniaColada, coladaOptions)
+  setActivePinia(pinia)
   app.mount(host)
   return host
 }
 
-// COUNTED, not copied (velo-idiom §3, SC-08). The deepest chain onMounted
-// (.vue:542-547) kicks off is the SEQUENTIAL practices -> insights one:
-//   (1) await getMyPractices inside the Colada infinite query
-//   (2)-(4) the entry's state lands -> the pastPractices watch
-//   (5) calls loadVisibleInsights
-//   (6) await getPracticeInsights -> (7) loadInsights resolves
-//   (8) the Promise.all over them -> (9) onMounted resumes -> (10) re-render.
-// The fire-and-forget loadPayments()/loadReviews() run alongside and are
-// shallower (~5). Twelve, not ten: over-counting is free, and this chain grows
-// the moment anything joins that onMounted.
 async function flush(): Promise<void> {
-  for (let i = 0; i < 12; i++) await nextTick()
+  for (let i = 0; i < 6; i++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
-// Intl groups thousands with U+00A0 / U+202F / U+2009 depending on the Node/ICU
-// build, so all three are flattened rather than pinning one and breaking on a
-// runtime upgrade. Written as ESCAPES, never as literal characters: a literal
-// NBSP is invisible in a diff and the next editor "tidies" it into a plain space
-// without ever seeing what they broke.
-function norm(s: string | null | undefined): string {
-  return (s ?? '').replace(/[\u00A0\u202F\u2009]/g, ' ')
+function text(): string {
+  return (host?.textContent ?? '').replace(/\u00a0/g, ' ')
 }
 
-// -----------------------------------------------------------------------------
-// Scoped queries. MANDATORY on this screen: both panes are v-show, so they are
-// BOTH always in the DOM and a host-wide query silently spans both tabs.
-// -----------------------------------------------------------------------------
-
-function panes(): HTMLElement[] {
-  return Array.from(host?.querySelectorAll<HTMLElement>('.analytics__body') ?? [])
-}
-function reviewsPane(): HTMLElement {
-  const pane = panes()[0]
-  if (!pane) throw new Error('the Отзывы pane did not render')
-  return pane
-}
-function paymentsPane(): HTMLElement {
-  const pane = panes()[1]
-  if (!pane) throw new Error('the Платежи pane did not render')
-  return pane
-}
-/** v-show writes `display:none` inline, so the inline style IS the observable. */
-function shown(el: HTMLElement): boolean {
-  return el.style.display !== 'none'
-}
-function paneText(el: HTMLElement): string {
-  return norm(el.textContent)
+function clickText(label: string): void {
+  const el = Array.from(
+    host?.querySelectorAll<HTMLElement>('button, [role="tab"], [role="radio"]') ?? [],
+  ).find((b) => b.textContent?.trim() === label)
+  if (!el) throw new Error(`no control labelled ${label}`)
+  el.click()
 }
 
-/** A control in the chrome (tab strip / period toggle), outside both panes. */
-function chromeButton(label: string): HTMLButtonElement | undefined {
-  return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-segment-track__btn') ?? []).find(
-    (b) => b.textContent?.trim() === label,
-  )
-}
-
-function buttonIn(root: ParentNode, label: string): HTMLButtonElement | undefined {
-  return Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
-    b.textContent?.includes(label),
-  )
-}
-
-/** A stat card's value, found by its LABEL -- the three cards are positional otherwise. */
-function stat(label: string): string {
-  const card = Array.from(reviewsPane().querySelectorAll<HTMLElement>('.v-stat')).find(
-    (c) => c.querySelector('.v-stat__label')?.textContent?.trim() === label,
-  )
-  return norm(card?.querySelector('.v-stat__value')?.textContent).trim()
-}
-
-/** An overall-stats bar's "NN% (count)" meta, found by its bucket label. */
-
-function pcards(): HTMLElement[] {
-  return Array.from(reviewsPane().querySelectorAll<HTMLElement>('.analytics__pcard'))
-}
-function pcardTitles(): string[] {
-  return pcards().map((c) => c.querySelector('.analytics__pcard-title')?.textContent?.trim() ?? '')
-}
-/** Every distribution bar as `label -> meta`: a missing/extra bar fails toEqual. */
-function distAll(): Record<string, string> {
-  return Object.fromEntries(
-    Array.from(reviewsPane().querySelectorAll<HTMLElement>('.v-rating-dist__row')).map((r) => [
-      norm(r.querySelector('.v-rating-dist__head')?.textContent).trim(),
-      norm(r.querySelector('.v-rating-dist__meta')?.textContent).trim(),
-    ]),
-  )
-}
-function badgesOf(card: HTMLElement): string[] {
-  return Array.from(card.querySelectorAll('.v-rating-badges__badge')).map((b) =>
-    norm(b.textContent).trim(),
-  )
-}
-
-function attentionCards(): HTMLElement[] {
-  return Array.from(reviewsPane().querySelectorAll<HTMLElement>('.analytics__attention'))
-}
-function attentionNames(): string[] {
-  return attentionCards().map(
-    (c) => c.querySelector('.analytics__attention-name')?.textContent?.trim() ?? '',
-  )
-}
-
-function txnRows(): HTMLElement[] {
-  return Array.from(paymentsPane().querySelectorAll<HTMLElement>('.analytics__txn'))
-}
-function incomeValue(): string {
-  return norm(paymentsPane().querySelector('.analytics__income-value')?.textContent).trim()
-}
-function incomeDeltaEl(): HTMLElement | null {
-  return paymentsPane().querySelector<HTMLElement>('.analytics__income-delta')
-}
-
-/**
- * Whether the send-message modal has been DISMISSED.
- *
- * Deliberately not `querySelector('.v-modal__overlay') === null` (SC-13b): that
- * is the obvious assertion and it fails while the product is correct. VModal's
- * overlay is `v-if="open"` inside a <Transition> (VModal.vue:21-22), so flipping
- * `open` to false starts a LEAVE that Vue finishes on a transitionend happy-dom
- * never fires -- the node lingers, stamped `v-modal-leave-active`. The real
- * observable is the leave STARTING. Pinned false while open below, so the
- * assertion cannot vacuously always-pass.
- */
-function modalDismissed(): boolean {
-  const overlay = document.body.querySelector('.v-modal__overlay')
-  return overlay === null || overlay.classList.contains('v-modal-leave-active')
-}
-function modalText(): string {
-  return norm(document.body.querySelector('.v-modal__overlay')?.textContent)
-}
-
-// -----------------------------------------------------------------------------
-
-beforeEach(() => {
-  vi.setSystemTime(NOW)
-  pinia = createPinia()
-  setActivePinia(pinia)
-
-  vi.mocked(mastersApi.getMyPractices).mockReset()
-  mockBucketedPractices(PRACTICES)
-  vi.mocked(mastersApi.getMasterReviews)
-    .mockReset()
-    .mockResolvedValue(reviewsPage([RV_RECENT, RV_OLD]))
-  vi.mocked(mastersApi.getIncome)
-    .mockReset()
-    .mockImplementation(async (period) => (period === 'month' ? INCOME_MONTH : INCOME_WEEK))
-  vi.mocked(mastersApi.getTransactions)
-    .mockReset()
-    .mockResolvedValue(txPage([TX_SALE, TX_FEE]))
-
-  // The real insights reader (composables/queries/diary.ts) puts whatever this
-  // resolves into the Colada cache; a practice with no fixture rejects, which is
-  // the honest shape of an insights fetch that failed (load() swallows it and
-  // the practice stays absent).
-  vi.mocked(diaryApi.getPracticeInsights)
-    .mockReset()
-    .mockImplementation(async (id: string) => {
-      const found = INSIGHTS[id]
-      if (!found) throw new ApiResponseError(404, 'Нет данных', 'insights_not_found')
-      return found
-    })
-
-  push.mockReset()
+const zones = (bad = 0, low = 0, neutral = 0, good = 0, fire = 0): ScoreZoneCounts => ({
+  bad,
+  low,
+  neutral,
+  good,
+  fire,
 })
 
-afterEach(() => {
-  app?.unmount()
-  host?.remove()
-  app = null
-  host = null
+function practice(id: string, title: string, day: string): PracticeAnalyticsSummary {
+  return {
+    practice_id: id,
+    title,
+    direction: 'meditation',
+    scheduled_at: `2026-07-${day}T10:00:00+00:00`,
+    timezone: 'UTC',
+    attended: 10,
+    before: zones(0, 1, 3, 2, 0),
+    // `after` holds every review left: its sum (5) is the card's "feedbacks".
+    after: zones(0, 0, 1, 2, 2),
+    pairs_total: 6,
+    // Reviews with text only: fewer than the five ratings.
+    reviews_total: 3,
+  }
+}
 
-  // SC-13. A CLOSED teleported overlay outlives app.unmount(): the <Transition>
-  // leave waits on a transitionend happy-dom never fires, so the overlay stays
-  // parked on document.body, is found FIRST in document order by the next test,
-  // and that test then clicks a dead node owned by an unmounted app -- the first
-  // modal test passes and every later one fails while the screen is healthy.
-  // Unconditional and idempotent: free when unnecessary, load-bearing when not.
-  document.body.querySelectorAll('.v-modal__overlay').forEach((el) => el.remove())
+function analytics(over: Partial<MasterAnalyticsResponse> = {}): MasterAnalyticsResponse {
+  return {
+    practices_count: 2,
+    practices_delta_pct: null,
+    bookings_count: 20,
+    bookings_delta_pct: null,
+    checkins_count: 16,
+    checkins_delta_pct: null,
+    feedbacks_count: 8,
+    feedbacks_delta_pct: null,
+    checkin_rate_pct: 80,
+    checkin_rate_delta_pp: null,
+    feedback_rate_pct: 40,
+    feedback_rate_delta_pp: null,
+    checkins: zones(0, 1, 5, 6, 4),
+    feedbacks: zones(1, 0, 2, 3, 2),
+    conducted_practices: [practice('p2', 'Медитация', '19'), practice('p1', 'Дыхание', '18')],
+    ...over,
+  }
+}
 
-  vi.useRealTimers()
-  vi.clearAllMocks()
-})
+function attentionReview(): MasterReviewItem {
+  return {
+    user_id: 'u1',
+    reviewer_name: 'Анна',
+    practice_title: 'Дыхание',
+    rating: 'low',
+    comment: 'Было тяжело',
+    created_at: '2026-07-18T10:00:00+00:00',
+  } as unknown as MasterReviewItem
+}
 
-describe('AnalyticsView', () => {
-  // ===========================================================================
-  describe('the parked slider (owner 2026-10-01: payments are not live)', () => {
-    it('renders no tab chrome and keeps the Отзывы pane as the screen', async () => {
-      mount()
-      await flush()
-
-      expect(chromeButton('Отзывы')).toBeUndefined()
-      expect(chromeButton('Платежи')).toBeUndefined()
-      expect(shown(reviewsPane())).toBe(true)
-    })
-
-    it('fires no payments traffic: no income or transactions calls on mount', async () => {
-      mount()
-      await flush()
-
-      expect(mastersApi.getIncome).not.toHaveBeenCalled()
-      expect(mastersApi.getTransactions).not.toHaveBeenCalled()
-    })
-
-    it('the period toggle rides the header line, the freed control row is gone', async () => {
-      mount()
-      await flush()
-
-      const header = host?.querySelector('.v-header')
-      expect(header?.querySelector('.v-segment-track--toggle')).not.toBeNull()
-      expect(header?.querySelector('.v-segment-track__btn')?.textContent?.trim()).toBe('Неделя')
-    })
+describe('AnalyticsView (master)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-07-20T12:00:00Z'))
+    vi.mocked(mastersApi.getMasterAnalytics).mockReset().mockResolvedValue(analytics())
+    vi.mocked(mastersApi.getMasterReviews)
+      .mockReset()
+      .mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 } as never)
   })
 
-  // ===========================================================================
-  whenPaymentsLive('the two tabs (v-show, so both panes are always mounted)', () => {
-    it('opens on Отзывы, with the Платежи pane present but hidden', async () => {
-      mount()
-      await flush()
-
-      expect(shown(reviewsPane())).toBe(true)
-      expect(shown(paymentsPane())).toBe(false)
-      expect(chromeButton('Отзывы')?.getAttribute('aria-selected')).toBe('true')
-      expect(chromeButton('Платежи')?.getAttribute('aria-selected')).toBe('false')
-    })
-
-    it('switching to Платежи shows that pane and hides Отзывы', async () => {
-      mount()
-      await flush()
-
-      chromeButton('Платежи')?.click()
-      await flush()
-
-      expect(shown(paymentsPane())).toBe(true)
-      expect(shown(reviewsPane())).toBe(false)
-      expect(chromeButton('Платежи')?.getAttribute('aria-selected')).toBe('true')
-    })
+  afterEach(() => {
+    app?.unmount()
+    app = null
+    host?.remove()
+    host = null
+    vi.useRealTimers()
+    vi.clearAllMocks()
   })
 
-  // ===========================================================================
-  describe('Отзывы -- the past-practice ladder', () => {
-    it('loading: shows the loader in the Отзывы pane, and no cards', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockReturnValue(new Promise(() => {}))
-      mount()
-      await flush()
+  it('asks for the week first and shows the server rates and the feedback share', async () => {
+    mount()
+    await flush()
 
-      expect(reviewsPane().querySelector('.analytics__loader')).not.toBeNull()
-      expect(pcards()).toHaveLength(0)
-      expect(paneText(reviewsPane())).not.toContain('За выбранный период практик нет')
-    })
-
-    it('empty: a master with only FUTURE practices is told the period is empty', async () => {
-      mockBucketedPractices([P_FUTURE])
-      mount()
-      await flush()
-
-      expect(pcards()).toHaveLength(0)
-      expect(paneText(reviewsPane())).toContain('За выбранный период практик нет')
-    })
-
-    it('empty: completed practices that all fall OUTSIDE the period read as empty', async () => {
-      // P_ANCIENT is completed and loaded -- it is the 7-day cut that hides it,
-      // which is a different thing from having no practices at all.
-      mockBucketedPractices([P_ANCIENT])
-      mount()
-      await flush()
-
-      expect(pcards()).toHaveLength(0)
-      expect(paneText(reviewsPane())).toContain('За выбранный период практик нет')
-    })
-
-    it('content: renders each in-period practice with its date and participant count', async () => {
-      mount()
-      await flush()
-
-      expect(pcardTitles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
-      const meta = pcards()[0]?.querySelector('.analytics__pcard-meta')?.textContent ?? ''
-      expect(meta).toContain('18 июля')
-      expect(meta).toContain('10 участников')
-    })
-
-    it('a FAILED practices load shows an error with «Повторить», not the empty period (FE-201)', async () => {
-      vi.mocked(mastersApi.getMyPractices).mockRejectedValue(new TypeError('network down'))
-      mount()
-      await flush()
-
-      const pane = paneText(reviewsPane())
-      expect(pane).not.toContain('За выбранный период практик нет')
-      expect(pane).toContain('Не удалось загрузить')
-      expect(reviewsPane().querySelector('.analytics__loader')).toBeNull()
-
-      // The retry button (i18n:common.retry) asks again, and a recovered list replaces the error.
-      vi.mocked(mastersApi.getMyPractices).mockReset()
-      mockBucketedPractices([P_NEW])
-      const retry = Array.from(reviewsPane().querySelectorAll('button')).find((b) =>
-        b.textContent?.includes('Повторить'),
-      )
-      expect(retry).toBeDefined()
-      retry?.click()
-      await flush()
-
-      expect(paneText(reviewsPane())).not.toContain('Не удалось загрузить')
-      expect(pcardTitles()).toContain('Утренняя практика')
-    })
+    expect(vi.mocked(mastersApi.getMasterAnalytics)).toHaveBeenCalledWith('week')
+    expect(text()).toContain('80%')
+    expect(text()).toContain('Check-in')
+    expect(text()).toContain('Feedback')
+    // "N of M" on the heading line: 8 reviews out of 20 bookings, the server's percent.
+    expect(text()).toContain('Процент фидбеков')
+    expect(text()).toContain('40% · 8 из 20')
   })
 
-  // ===========================================================================
-  describe('Отзывы -- aggregate derivations (the point of the screen)', () => {
-    it('week: check-in 50%, feedback 40%, 8 отзывов -- over the period, not the cache', async () => {
-      // p1 (10 participants, 7 check-ins, 5 feedbacks) + p2 (10, 3, 3).
-      // P_ANCIENT's insights ARE cached -- loadVisibleInsights eager-loads every
-      // past practice (.vue:524-526) -- and carry 100 participants / 100 fires.
-      // If periodInsights leaked them, none of these numbers would survive.
-      mount()
-      await flush()
+  it('does not show the old reviews tile or the old rating distribution', async () => {
+    mount()
+    await flush()
 
-      // Proof, not prose: p5 really IS fetched into the cache. Without this the
-      // exclusion claim above is untested -- the numbers would look identical if
-      // loadVisibleInsights simply never loaded it, and the test would be
-      // asserting a coincidence.
-      expect(diaryApi.getPracticeInsights).toHaveBeenCalledWith('p5')
-
-      expect(stat('Check-in')).toBe('50%')
-      expect(stat('Feedback')).toBe('40%')
-      expect(stat('Отзывов')).toBe('8')
-    })
-
-    it('month: every figure moves -- check-in 60%, feedback 44%, 11 отзывов', async () => {
-      mount()
-      await flush()
-
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(stat('Check-in')).toBe('60%')
-      expect(stat('Feedback')).toBe('44%')
-      expect(stat('Отзывов')).toBe('11')
-    })
-
-    it('reads «—» rather than «0%» when the period holds no participants at all', async () => {
-      // aggregateTotalParticipants === 0 (.vue:345-348,351-354). 0% would be a
-      // claim that nobody checked in; the em dash says there is nothing to rate.
-      mockBucketedPractices([P_FUTURE])
-      mount()
-      await flush()
-
-      expect(stat('Check-in')).toBe(DASH)
-      expect(stat('Feedback')).toBe(DASH)
-      expect(stat('Отзывов')).toBe('0')
-    })
-
-    it('«—» too when in-period practices exist but their insights never arrived', async () => {
-      // A cache miss must not be reported as a zero score.
-      vi.mocked(diaryApi.getPracticeInsights).mockRejectedValue(new TypeError('boom'))
-      mount()
-      await flush()
-
-      expect(pcards()).toHaveLength(2)
-      expect(stat('Check-in')).toBe(DASH)
-      expect(stat('Отзывов')).toBe('0')
-    })
-
-    it('the distribution bars sum the period feedbacks over all five zones', async () => {
-      // fire 3+1, good 1+0, neutral 0+2, low 0+0, bad 1+0 over a total of 8.
-      mount()
-      await flush()
-
-      expect(distAll()).toEqual({
-        Огонь: '50% (4)',
-        Хорошо: '13% (1)',
-        Нормально: '25% (2)',
-        'Не очень': '0% (0)',
-        Плохо: '13% (1)',
-      })
-    })
-
-    it('the distribution follows the period: month moves every zone', async () => {
-      mount()
-      await flush()
-
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(distAll()).toEqual({
-        Огонь: '36% (4)',
-        Хорошо: '18% (2)',
-        Нормально: '18% (2)',
-        'Не очень': '9% (1)',
-        Плохо: '18% (2)',
-      })
-    })
-
-    it('renders 0% bars rather than nothing when the period has no feedback', async () => {
-      mockBucketedPractices([P_FUTURE])
-      mount()
-      await flush()
-
-      expect(distAll()).toEqual({
-        Огонь: '0% (0)',
-        Хорошо: '0% (0)',
-        Нормально: '0% (0)',
-        'Не очень': '0% (0)',
-        Плохо: '0% (0)',
-      })
-    })
+    expect(text()).not.toContain('Общая статистика')
+    expect(text()).not.toContain('Прошедшие практики')
+    expect(host?.querySelector('.analytics__stats')?.children).toHaveLength(2)
   })
 
-  // ===========================================================================
-  describe('Отзывы -- the inline per-practice badges', () => {
-    it('renders each card its OWN percentages, not the aggregate', async () => {
-      // Best zone first (fire, good, neutral, low, bad).
-      // p1: 3/1/0/0/1 of 5 -> 60/20/0/0/20.  p2: 1/0/2/0/0 of 3 -> 33/0/67/0/0.
-      mount()
-      await flush()
+  it('lists the period practices with the four blocks, each "N из M"', async () => {
+    mount()
+    await flush()
 
-      expect(badgesOf(pcards()[0]!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
-      expect(badgesOf(pcards()[1]!)).toEqual(['33%', '0%', '67%', '0%', '0%'])
-    })
+    expect(text()).toContain('Практики недели')
+    expect(text()).toContain('Медитация')
+    expect(text()).toContain('Дыхание')
+    expect(text()).toContain('До практики')
+    expect(text()).toContain('После практики')
+    expect(text()).toContain('Пришел → ушел')
+    expect(text()).toContain('Отзывы')
+    // before: 6 check-ins of 10 who came; after: 5 of 10; came -> left: 6 of 10;
+    // reviews with text: 3 of 10 (not the 5 ratings -- the server counts texts).
+    expect(text()).toContain('6 из 10')
+    expect(text()).toContain('5 из 10')
+    expect(text()).toContain('3 из 10')
+    // The summary line: who came, and every review left.
+    expect(text()).toContain('Ученики: 10')
+    expect(text()).toContain('Фидбеки: 5')
+  })
 
-    it('shows no badges on a practice whose insights failed to load', async () => {
-      // `insightsCache.has(p.id)` (.vue:148). An absent fetch must not render as
-      // a 0/0/0 verdict on the practice.
-      vi.mocked(diaryApi.getPracticeInsights).mockImplementation(async (id: string) => {
-        const found = INSIGHTS[id]
-        if (!found || id === 'p2') throw new ApiResponseError(404, 'Нет данных', 'nope')
-        return found
-      })
-      mount()
-      await flush()
+  it('the slider refetches with the selected period and renames the section', async () => {
+    mount()
+    await flush()
 
-      expect(badgesOf(pcards()[0]!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
-      expect(badgesOf(pcards()[1]!)).toEqual([])
-    })
+    clickText('Квартал')
+    await flush()
 
-    it('shows no badges when insights arrived but nobody left feedback', async () => {
-      // `totalFeedbacks(p.id) > 0` (.vue:148) -- a practice with check-ins but
-      // zero feedback would otherwise show a confident row of 0% badges.
-      vi.mocked(diaryApi.getPracticeInsights).mockResolvedValue(
-        insights(
-          'p1',
-          10,
-          { bad: 0, low: 0, neutral: 0, good: 0, fire: 4 },
-          { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 },
+    expect(vi.mocked(mastersApi.getMasterAnalytics)).toHaveBeenLastCalledWith('quarter')
+    expect(text()).toContain('Практики квартала')
+  })
+
+  it('while another period loads, the earlier numbers do not stay under the new label', async () => {
+    mount()
+    await flush()
+    expect(text()).toContain('Медитация')
+
+    let answer: (v: MasterAnalyticsResponse) => void = () => {}
+    vi.mocked(mastersApi.getMasterAnalytics).mockImplementation(
+      () => new Promise<MasterAnalyticsResponse>((resolve) => (answer = resolve)),
+    )
+    clickText('Месяц')
+    await flush()
+
+    expect(text()).not.toContain('Медитация')
+    expect(text()).not.toContain('80%')
+
+    answer(analytics({ checkin_rate_pct: 55, conducted_practices: [practice('p9', 'Йога', '10')] }))
+    await flush()
+    expect(text()).toContain('Практики месяца')
+    expect(text()).toContain('55%')
+    expect(text()).toContain('Йога')
+  })
+
+  it('a failed request is the retry state, and retry brings the numbers back', async () => {
+    vi.mocked(mastersApi.getMasterAnalytics).mockRejectedValueOnce(new Error('boom'))
+    mount()
+    await flush()
+
+    expect(text()).toContain('Не удалось загрузить')
+    expect(text()).not.toContain('80%')
+
+    clickText('Повторить')
+    await flush()
+    expect(text()).toContain('80%')
+  })
+
+  it('an empty period shows the empty state', async () => {
+    vi.mocked(mastersApi.getMasterAnalytics).mockResolvedValue(
+      analytics({ conducted_practices: [] }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('За выбранный период практик нет')
+  })
+
+  it('rounds the feedback percent on the heading line', async () => {
+    vi.mocked(mastersApi.getMasterAnalytics).mockResolvedValue(
+      analytics({ feedback_rate_pct: 33.333333, feedbacks_count: 1, bookings_count: 3 }),
+    )
+    mount()
+    await flush()
+
+    expect(text()).toContain('33% · 1 из 3')
+    expect(text()).not.toContain('33.33')
+  })
+
+  it('shows three practices, the rest behind the reveal', async () => {
+    vi.mocked(mastersApi.getMasterAnalytics).mockResolvedValue(
+      analytics({
+        conducted_practices: ['01', '02', '03', '04', '05'].map((d) =>
+          practice(`p${d}`, `Практика ${d}`, d),
         ),
-      )
-      mount()
-      await flush()
+      }),
+    )
+    mount()
+    await flush()
 
-      expect(pcards()).toHaveLength(2)
-      expect(badgesOf(pcards()[0]!)).toEqual([])
-    })
+    expect(text()).toContain('Практика 03')
+    expect(text()).not.toContain('Практика 04')
+    expect(text()).toContain('ещё 2 практики')
+
+    clickText('+ ещё 2 практики')
+    await flush()
+    expect(text()).toContain('Практика 05')
   })
 
-  // ===========================================================================
-  describe('Отзывы -- the 3-card preview and its reveal', () => {
-    const FIVE = [
-      practice('a1', { title: 'Практика A', scheduled_at: '2026-07-19T12:00:00Z' }),
-      practice('a2', { title: 'Практика B', scheduled_at: '2026-07-18T12:00:00Z' }),
-      practice('a3', { title: 'Практика C', scheduled_at: '2026-07-17T12:00:00Z' }),
-      practice('a4', { title: 'Практика D', scheduled_at: '2026-07-16T12:00:00Z' }),
-      practice('a5', { title: 'Практика E', scheduled_at: '2026-07-15T12:00:00Z' }),
-    ]
+  it('a tap on a practice opens its analytics; a tap inside its blocks does not', async () => {
+    mount()
+    await flush()
 
-    it('caps the list at 3 and offers «+ ещё 2 практики»', async () => {
-      mockBucketedPractices(FIVE)
-      mount()
-      await flush()
+    host!.querySelector<HTMLElement>('.conducted-practice__detail')!.click()
+    expect(push).not.toHaveBeenCalled()
 
-      expect(pcards()).toHaveLength(3)
-      expect(pcardTitles()).toEqual(['Практика A', 'Практика B', 'Практика C'])
-      expect(paneText(reviewsPane())).toContain('+ ещё 2 практики')
-    })
-
-    it('the reveal expands to the whole period', async () => {
-      mockBucketedPractices(FIVE)
-      mount()
-      await flush()
-
-      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
-      await flush()
-
-      expect(pcards()).toHaveLength(5)
-      expect(paneText(reviewsPane())).not.toContain('+ ещё 2 практики')
-    })
-
-    it('offers no reveal when the period fits in the preview', async () => {
-      mount()
-      await flush()
-
-      expect(pcards()).toHaveLength(2)
-      expect(paneText(reviewsPane())).not.toContain('+ ещё')
-    })
-
-    it('once expanded, «Показать ещё» pages the list AND loads the new insights', async () => {
-      // The new page must re-run loadVisibleInsights (the pastPractices watch), or the newly
-      // paged-in cards render with no badges until something else re-triggers it.
-      // A custom mock (not mockBucketedPractices) here: total=6 while only 5
-      // are loaded, to simulate a 6th completed practice still on the server.
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage(FIVE, 6, 0))
-      mount()
-      await flush()
-      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
-      await flush()
-
-      const NEXT = practice('a6', { title: 'Практика F', scheduled_at: '2026-07-14T12:00:00Z' })
-      vi.mocked(mastersApi.getMyPractices).mockResolvedValue(practicesPage([NEXT], 6, 5))
-      vi.mocked(diaryApi.getPracticeInsights).mockClear()
-
-      buttonIn(reviewsPane(), 'Показать ещё')?.click()
-      await flush()
-
-      expect(mastersApi.getMyPractices).toHaveBeenLastCalledWith('past', 20, 5)
-      expect(pcards()).toHaveLength(6)
-      expect(pcardTitles()).toContain('Практика F')
-      expect(diaryApi.getPracticeInsights).toHaveBeenCalledWith('a6')
-    })
-
-    it('changing the period collapses the reveal back to the preview', async () => {
-      // watch(period) resets pastExpanded (.vue:509-515): a month's worth of
-      // cards left expanded from a week's reveal (i18n:masterScreens.analytics.morePractices)
-      // is a different list.
-      mockBucketedPractices(FIVE)
-      mount()
-      await flush()
-      buttonIn(reviewsPane(), '+ ещё 2 практики')?.click()
-      await flush()
-      expect(pcards()).toHaveLength(5)
-
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(pcards()).toHaveLength(3)
-      expect(paneText(reviewsPane())).toContain('+ ещё 2 практики')
-    })
+    host!.querySelector<HTMLElement>('.conducted-practice__summary')!.click()
+    expect(push).toHaveBeenCalledWith({ name: 'master-practice-reviews', params: { id: 'p2' } })
   })
 
-  // ===========================================================================
-  describe('Требуют внимания', () => {
-    it('lists the attention reviews inside the period', async () => {
-      // RV_RECENT (low) is recent; RV_OLD is 20 days old -> the week shows the
-      // RV_RECENT reviewer only.
-      mount()
-      await flush()
+  it('the needs-attention section appears only with someone to show', async () => {
+    mount()
+    await flush()
+    expect(text()).not.toContain('Требуют внимания')
 
-      expect(attentionNames()).toEqual(['Анна'])
-      expect(paneText(reviewsPane())).toContain('Требуют внимания')
-    })
-
-    it('month widens the window to the older attention review', async () => {
-      mount()
-      await flush()
-
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(attentionNames()).toEqual(['Анна', 'Борис'])
-    })
-
-    it('renders the reviewer, the practice and the quoted comment', async () => {
-      mount()
-      await flush()
-
-      const card = attentionCards()[0]!
-      expect(card.querySelector('.analytics__attention-pr')?.textContent).toContain(
-        'Утренняя практика',
-      )
-      expect(card.querySelector('.analytics__attention-quote')?.textContent).toContain(
-        'Было сложно успевать',
-      )
-    })
-
-    it('renders no quote line when the review carried no comment', async () => {
-      vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(reviewsPage([RV_OLD]))
-      mount()
-      await flush()
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(attentionNames()).toEqual(['Борис'])
-      expect(attentionCards()[0]?.querySelector('.analytics__attention-quote')).toBeNull()
-    })
-
-    it('renders every review the server returned for attention, of either zone (no client zone filter)', async () => {
-      // BE-77, owner decision: the server owns the threshold (attention=true,
-      // ratings 1-4). A bad and a low review inside the week both render; the
-      // screen restates no zone check of its own.
-      vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(reviewsPage([RV_RECENT, RV_BAD]))
-      mount()
-      await flush()
-
-      expect(attentionNames()).toEqual(['Анна', 'Вера'])
-    })
-
-    it('hides the section AND its heading when nothing needs attention', async () => {
-      vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(reviewsPage([]))
-      mount()
-      await flush()
-
-      expect(attentionCards()).toHaveLength(0)
-      expect(paneText(reviewsPane())).not.toContain('Требуют внимания')
-    })
-
-    it('a failed reviews fetch leaves the section silent, and the rest of the tab alive', async () => {
-      // loadReviews swallows (.vue:410-412). The past-practice list and the
-      // aggregates are unrelated data and must survive.
-      vi.mocked(mastersApi.getMasterReviews).mockRejectedValue(new TypeError('boom'))
-      mount()
-      await flush()
-
-      expect(attentionCards()).toHaveLength(0)
-      expect(paneText(reviewsPane())).not.toContain('Требуют внимания')
-      expect(pcards()).toHaveLength(2)
-      expect(stat('Check-in')).toBe('50%')
-    })
-
-    it('asks the backend for the attention reviews, not a mixed page', async () => {
-      // attention=true -- a mixed page can be all-positive and leave the block
-      // empty while attention reviews exist further down the feed. The
-      // ONE call-shape assertion in this file, because the argument is the
-      // behaviour: nothing rendered can distinguish it.
-      mount()
-      await flush()
-
-      expect(mastersApi.getMasterReviews).toHaveBeenCalledWith(20, 0, true)
-    })
+    app?.unmount()
+    host?.remove()
+    vi.mocked(mastersApi.getMasterReviews).mockResolvedValue({
+      items: [attentionReview()],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    } as never)
+    mount()
+    await flush()
+    expect(text()).toContain('Требуют внимания')
+    expect(text()).toContain('Анна')
   })
-
-  // ===========================================================================
-  describe('Требуют внимания -- navigation and the message modal', () => {
-    it("tapping a card opens that reviewer's student profile", async () => {
-      mount()
-      await flush()
-
-      attentionCards()[0]?.click()
-      await flush()
-
-      expect(push).toHaveBeenCalledWith({
-        name: 'master-student-profile',
-        params: { id: 'u1' },
-        query: { name: 'Анна' },
-      })
-    })
-
-    it('the message button opens the modal WITHOUT navigating', async () => {
-      // @click.stop (.vue:102). Without it the card's own handler also fires and
-      // the master is thrown to the profile instead of the message sheet.
-      mount()
-      await flush()
-
-      expect(modalDismissed()).toBe(true)
-
-      attentionCards()[0]?.querySelector<HTMLButtonElement>('.analytics__attention-msg')?.click()
-      await flush()
-
-      expect(push).not.toHaveBeenCalled()
-      expect(modalText()).toContain('Анна')
-      expect(modalDismissed()).toBe(false)
-    })
-
-    it('«Отмена» dismisses the modal', async () => {
-      mount()
-      await flush()
-      attentionCards()[0]?.querySelector<HTMLButtonElement>('.analytics__attention-msg')?.click()
-      await flush()
-      // Pinned open first, so modalDismissed() cannot always-pass (SC-13b).
-      expect(modalDismissed()).toBe(false)
-
-      const overlay = document.body.querySelector('.v-modal__overlay')!
-      Array.from(overlay.querySelectorAll<HTMLButtonElement>('button'))
-        .find((b) => b.textContent?.includes('Отмена'))
-        ?.click()
-      await flush()
-
-      expect(modalDismissed()).toBe(true)
-    })
-  })
-
-  // ===========================================================================
-  whenPaymentsLive('Платежи -- the ladder', () => {
-    it('loading: shows the loader in the Платежи pane and no income yet', async () => {
-      vi.mocked(mastersApi.getIncome).mockReturnValue(new Promise(() => {}))
-      mount()
-      await flush()
-
-      expect(paymentsPane().querySelector('.analytics__loader')).not.toBeNull()
-      expect(paymentsPane().querySelector('.analytics__income')).toBeNull()
-    })
-
-    it('error: falls back to the generic message (unmapped code)', async () => {
-      // B8 (PROMPT №747): the old comment said paymentsError = e.detail --
-      // that mechanism is gone. 'ledger_down' is not a real backend code,
-      // so it lands on the call site's own fallback (.vue:487).
-      vi.mocked(mastersApi.getTransactions).mockRejectedValue(
-        new ApiResponseError(503, 'Реестр платежей недоступен', 'ledger_down'),
-      )
-      mount()
-      await flush()
-
-      expect(paymentsPane().querySelector('.analytics__pay-error')).not.toBeNull()
-      expect(paneText(paymentsPane())).toContain('Ошибка загрузки')
-    })
-
-    it('error: falls back to a generic message on a non-API error', async () => {
-      vi.mocked(mastersApi.getIncome).mockRejectedValue(new TypeError('boom'))
-      mount()
-      await flush()
-
-      expect(paneText(paymentsPane())).toContain('Ошибка загрузки')
-      expect(paneText(paymentsPane())).not.toContain('boom')
-    })
-
-    it('error: «Повторить» recovers the tab into real content', async () => {
-      vi.mocked(mastersApi.getIncome).mockRejectedValueOnce(new TypeError('boom'))
-      mount()
-      await flush()
-      expect(paneText(paymentsPane())).toContain('Ошибка загрузки')
-
-      buttonIn(paymentsPane(), 'Повторить')?.click()
-      await flush()
-
-      expect(paymentsPane().querySelector('.analytics__pay-error')).toBeNull()
-      expect(incomeValue()).toContain('1 234,56')
-      expect(txnRows()).toHaveLength(2)
-    })
-
-    it('empty: no transactions is not an error -- the income still stands', async () => {
-      vi.mocked(mastersApi.getTransactions).mockResolvedValue(txPage([]))
-      mount()
-      await flush()
-
-      expect(txnRows()).toHaveLength(0)
-      expect(paneText(paymentsPane())).toContain('Данных пока нет')
-      expect(incomeValue()).toContain('1 234,56')
-    })
-  })
-
-  // ===========================================================================
-  whenPaymentsLive('Платежи -- money', () => {
-    it('renders the period income (NBSP-grouped) with its signed delta', async () => {
-      mount()
-      await flush()
-
-      expect(mastersApi.getIncome).toHaveBeenCalledWith('week')
-      expect(incomeValue()).toContain('1 234,56')
-      expect(norm(incomeDeltaEl()?.textContent).trim()).toBe('+23%')
-      expect(incomeDeltaEl()?.className).toContain('analytics__income-delta--up')
-    })
-
-    it('a zero income reads «0,00 €», NOT «Бесплатно»', async () => {
-      // formatMoney is called with allowZero=true (.vue:458) precisely because a
-      // real master really can earn nothing this week -- and the free-price
-      // fallback (i18n:common.free, utils/format.ts:33) is a price label, not an
-      // income of zero.
-      vi.mocked(mastersApi.getIncome).mockResolvedValue({
-        income_cents: 0,
-        prev_income_cents: 0,
-        delta_pct: null,
-      })
-      mount()
-      await flush()
-
-      expect(incomeValue()).toContain('0,00')
-      expect(paneText(paymentsPane())).not.toContain('Бесплатно')
-    })
-
-    it('hides the delta entirely when the backend sends null', async () => {
-      // delta_pct is null when the previous period had no turnover (.vue:462-467).
-      // Rendering «+0%» there would claim flat, when the truth is "no baseline".
-      vi.mocked(mastersApi.getIncome).mockResolvedValue({
-        income_cents: 500,
-        prev_income_cents: 0,
-        delta_pct: null,
-      })
-      mount()
-      await flush()
-
-      expect(incomeDeltaEl()).toBeNull()
-    })
-
-    it('renders «+0%» for a flat period, and tags it as up', async () => {
-      // `d >= 0` (.vue:460,465) -- zero is not a decline.
-      vi.mocked(mastersApi.getIncome).mockResolvedValue({
-        income_cents: 500,
-        prev_income_cents: 500,
-        delta_pct: 0,
-      })
-      mount()
-      await flush()
-
-      expect(norm(incomeDeltaEl()?.textContent).trim()).toBe('+0%')
-      expect(incomeDeltaEl()?.className).toContain('analytics__income-delta--up')
-    })
-
-    it('renders each transaction signed, tagged, and named after its practice', async () => {
-      // M5 (.vue:478-481): practice_title wins over the generic stored label.
-      mount()
-      await flush()
-
-      const [sale, fee] = txnRows()
-      expect(sale?.querySelector('.analytics__txn-title')?.textContent).toBe('Утренняя практика')
-      expect(norm(sale?.querySelector('.analytics__txn-amt')?.textContent).trim()).toBe(
-        '+2 500,00 €',
-      )
-      expect(sale?.querySelector('.analytics__txn-amt')?.className).toContain(
-        'analytics__txn-amt--in',
-      )
-      expect(norm(sale?.querySelector('.analytics__txn-meta')?.textContent)).toContain('19 июля')
-      expect(norm(sale?.querySelector('.analytics__txn-meta')?.textContent)).toContain('Анна')
-
-      expect(fee?.querySelector('.analytics__txn-title')?.textContent).toBe('Комиссия платформы')
-      expect(norm(fee?.querySelector('.analytics__txn-amt')?.textContent).trim()).toBe(
-        `${MINUS}500,00 €`,
-      )
-      expect(fee?.querySelector('.analytics__txn-amt')?.className).toContain(
-        'analytics__txn-amt--out',
-      )
-    })
-
-    it('a platform-side row shows no counterparty separator', async () => {
-      mount()
-      await flush()
-
-      expect(norm(txnRows()[1]?.querySelector('.analytics__txn-meta')?.textContent).trim()).toBe(
-        '18 июля',
-      )
-    })
-
-    it('offers «Показать ещё» only while loaded < total, and appends from the offset', async () => {
-      vi.mocked(mastersApi.getTransactions).mockResolvedValue(txPage([TX_SALE], 2))
-      mount()
-      await flush()
-      expect(buttonIn(paymentsPane(), 'Показать ещё')).toBeDefined()
-
-      vi.mocked(mastersApi.getTransactions).mockResolvedValue(txPage([TX_FEE], 2, 1))
-      buttonIn(paymentsPane(), 'Показать ещё')?.click()
-      await flush()
-
-      expect(mastersApi.getTransactions).toHaveBeenLastCalledWith(20, 1)
-      expect(txnRows()).toHaveLength(2)
-      expect(buttonIn(paymentsPane(), 'Показать ещё')).toBeUndefined()
-    })
-
-    it('hides «Показать ещё» when the first page is everything', async () => {
-      mount()
-      await flush()
-
-      expect(buttonIn(paymentsPane(), 'Показать ещё')).toBeUndefined()
-    })
-  })
-
-  // ===========================================================================
-  whenPaymentsLive('the period toggle drives income, and only income', () => {
-    it('re-fetches income for the new period and renders ITS figures', async () => {
-      mount()
-      await flush()
-      expect(incomeValue()).toContain('1 234,56')
-
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(mastersApi.getIncome).toHaveBeenLastCalledWith('month')
-      expect(incomeValue()).toContain('5 000,00')
-      expect(norm(incomeDeltaEl()?.textContent).trim()).toBe(`${MINUS}17%`)
-      expect(incomeDeltaEl()?.className).toContain('analytics__income-delta--down')
-    })
-
-    it('does NOT re-fetch the transaction feed -- it is not period-scoped', async () => {
-      // watch(period) calls loadIncome only (.vue:509-515). Re-paging the ledger
-      // on a toggle would silently reset a master's show-more progress
-      // (i18n:common.showMore).
-      mount()
-      await flush()
-      expect(mastersApi.getTransactions).toHaveBeenCalledTimes(1)
-
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(mastersApi.getTransactions).toHaveBeenCalledTimes(1)
-      expect(txnRows()).toHaveLength(2)
-    })
-
-    it('re-picking the CURRENT period does nothing', async () => {
-      // The watch fires on CHANGE only.
-      mount()
-      await flush()
-      expect(mastersApi.getIncome).toHaveBeenCalledTimes(1)
-
-      chromeButton('Неделя')?.click()
-      await flush()
-
-      expect(mastersApi.getIncome).toHaveBeenCalledTimes(1)
-    })
-
-    it('a failed income refetch KEEPS the previous figure rather than blanking it', async () => {
-      // The watch's `.catch(() => {})` (.vue:512-514) is deliberate. Note what it
-      // costs: the number on screen is now the WEEK's while the toggle reads
-      // month (i18n:common.periodMonth), and nothing says so. Asserted as the
-      // behaviour it is.
-      mount()
-      await flush()
-      expect(incomeValue()).toContain('1 234,56')
-
-      vi.mocked(mastersApi.getIncome).mockRejectedValue(new TypeError('boom'))
-      chromeButton('Месяц')?.click()
-      await flush()
-
-      expect(incomeValue()).toContain('1 234,56')
-      expect(paymentsPane().querySelector('.analytics__pay-error')).toBeNull()
-    })
-  })
-
-  // ===========================================================================
-  describe('navigation', () => {
-    it('tapping a past practice opens its reviews', async () => {
-      mount()
-      await flush()
-
-      pcards()[1]?.click()
-      await flush()
-
-      expect(push).toHaveBeenCalledWith({
-        name: 'master-practice-reviews',
-        params: { id: 'p2' },
-      })
-    })
-  })
-
-  // ===========================================================================
-  // NOT COVERED, deliberately
-  //
-  // - The Payments link to the full finance screen: the template has no such
-  //   control. The header comment (.vue:29) promises one ("Full finance ... lives
-  //   on /master/finance -> link"), and it is not there. A comment, not a
-  //   behaviour -- reported, not faked.
-  // - VStatCard / VRatingDistribution / VRatingBadges / VShowMore / VSegmentTrack
-  //   internals: DS primitives with their own homes. Asserted here only through
-  //   the values this screen feeds them.
-  // - The insights "skip if already held" guard: the query's behaviour, covered
-  //   in composables/queries/diary.test.ts.
-  // - The send button (i18n:common.submitSend) in the send-message modal: that
-  //   component's own open-then-send
-  //   behaviour (SendMessageModal.test.ts). It belongs to that component's own
-  //   test, not to a screen test that would be re-asserting a child (SC-09).
-  // - The income «—» placeholder (.vue:457-459): unreachable honestly. The
-  //   backend always returns an IncomeResponse, so incomeData is null only on the
-  //   pre-onMounted first paint -- which app.mount() flushes past synchronously,
-  //   before any assertion can see it. Forcing it through with a null cast
-  //   would assert the cast, not the screen. It becomes testable the day
-  //   income gets its own independent loading state.
-  // - Keyboard activation of the attention card (@keydown.enter.space): the
-  //   handler is the same goStudent already covered through the click path;
-  //   a second test would assert Vue's modifier, not this screen.
-  // ===========================================================================
 })

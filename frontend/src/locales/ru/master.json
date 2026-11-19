@@ -14,16 +14,13 @@
       },
       "morePractices": "ещё {count} практика | ещё {count} практики | ещё {count} практик",
       "sections": {
-        "overall": "Общая статистика",
         "attention": "Требуют внимания",
-        "past": "Прошедшие практики",
         "revenue": "Доход за период",
         "transactions": "Транзакции",
         "reviews": "Отзывы",
         "payments": "Платежи"
       },
-      "title": "Аналитика",
-      "feedbacksStat": "Отзывов"
+      "title": "Аналитика"
     },
     "attendanceRoster": {
       "empty": {

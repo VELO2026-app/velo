@@ -5,8 +5,7 @@
   Route: /master/analytics/practice/:id (nested under analytics so the
   analytics tab, i18n:tabs.analytics, stays active). Reached by tapping a
   practice card in
-  AnalyticsView -> the past-practices section
-  (i18n:masterScreens.analytics.sections.past).
+  AnalyticsView -> the period's conducted practices (FE-190).
 
   One screen for every entitled reader, on the server's data
   (GET /practices/{id}/analytics + /analytics/pairs + /analytics/reviews):

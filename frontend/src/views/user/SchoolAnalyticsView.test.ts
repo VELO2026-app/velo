@@ -182,7 +182,7 @@ describe('SchoolAnalyticsView', () => {
     expect(text()).toContain('Ученики: 3')
     expect(text()).toContain('Фидбеки: 1')
     // Bare five-color strips: one per practice, nothing else on them.
-    expect(host?.querySelectorAll('.school-analytics__practice-strip')).toHaveLength(2)
+    expect(host?.querySelectorAll('.conducted-practice__strip')).toHaveLength(2)
   })
 
   it('a period switch keeps the previous numbers on screen (aria-busy) until the new ones land', async () => {
@@ -473,7 +473,9 @@ describe('SchoolAnalyticsView', () => {
     mount()
     await flush()
 
-    host!.querySelectorAll<HTMLElement>('.school-analytics__practice')[1]!.click()
+    host!
+      .querySelectorAll<HTMLElement>('.school-analytics__practice .conducted-practice__summary')[1]!
+      .click()
     await flush()
     expect(push).toHaveBeenCalledWith({ name: 'master-practice-reviews', params: { id: 'p1' } })
   })
@@ -483,7 +485,9 @@ describe('SchoolAnalyticsView', () => {
     mount()
     await flush()
 
-    host!.querySelectorAll<HTMLElement>('.school-analytics__practice')[0]!.click()
+    host!
+      .querySelectorAll<HTMLElement>('.school-analytics__practice .conducted-practice__summary')[0]!
+      .click()
     await flush()
     expect(push).not.toHaveBeenCalled()
   })

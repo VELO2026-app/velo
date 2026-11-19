@@ -14,16 +14,13 @@
       },
       "morePractices": "{count} more practice | {count} more practices",
       "sections": {
-        "overall": "Overall statistics",
         "attention": "Needs attention",
-        "past": "Past practices",
         "revenue": "Revenue for the period",
         "transactions": "Transactions",
         "reviews": "Reviews",
         "payments": "Payments"
       },
-      "title": "Analytics",
-      "feedbacksStat": "Feedbacks"
+      "title": "Analytics"
     },
     "attendanceRoster": {
       "empty": {
