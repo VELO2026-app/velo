@@ -9,7 +9,6 @@ describe('resetKeyboardViewportState', () => {
   beforeEach(() => {
     document.documentElement.className = ''
     document.documentElement.style.removeProperty('--velo-vvh')
-    document.body.innerHTML = ''
   })
 
   it('drops is-keyboard-open and clears --velo-vvh', () => {
