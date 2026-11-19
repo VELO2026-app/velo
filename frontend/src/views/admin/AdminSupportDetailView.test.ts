@@ -23,6 +23,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminSupportDetailView from '@/views/admin/AdminSupportDetailView.vue'
 import * as supportApi from '@/api/support'
 import type { AdminSupportTicket, SupportMessage, SupportPerson } from '@/api/support'
@@ -151,13 +154,23 @@ function mount(id: string, stateTicket: AdminSupportTicket | null = null): HTMLE
   window.history.replaceState(stateTicket ? { ticket: stateTicket } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminSupportDetailView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminSupportDetailView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 6; i++) await nextTick()
+  for (let i = 0; i < 8; i++) await nextTick()
+  // One macrotask for Colada's settled requests (fake timers advance it).
+  if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0)
+  else await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function text(): string {
@@ -323,6 +336,26 @@ describe('AdminSupportDetailView', () => {
       await flush()
 
       expect(text()).toContain('Обращение не найдено')
+    })
+
+    it('«Обновить» reads the feed again behind the loader, then shows the new messages', async () => {
+      mount('t_1', ticket())
+      await flush()
+      let answer!: (v: { messages: SupportMessage[]; next_cursor: null }) => void
+      vi.mocked(supportApi.getAdminSupportMessages).mockReturnValue(
+        new Promise((r) => {
+          answer = r
+        }),
+      )
+
+      host?.querySelector<HTMLButtonElement>('.support-detail__refresh')?.click()
+      await flush()
+      expect(host?.querySelector('.support-detail__loader')).not.toBeNull()
+
+      answer({ messages: [message({ id: 'm_new', body: 'Новое сообщение' })], next_cursor: null })
+      await flush()
+      expect(host?.querySelector('.support-detail__loader')).toBeNull()
+      expect(text()).toContain('Новое сообщение')
     })
 
     it('FE-157: the ticket and the feed are requested together, not one after the other', async () => {
@@ -564,6 +597,19 @@ describe('AdminSupportDetailView', () => {
       // The refreshed ticket: still held by the other admin, closed -> the
       // handover entries, no closing statuses.
       expect(await statusOffer()).toEqual(['Назначить', 'Освободить', 'Вернуть в работу'])
+    })
+
+    it('a 409 whose re-read fails: the card stays as shown and the failed read is told', async () => {
+      vi.mocked(supportApi.setTicketStatus).mockRejectedValue(conflict())
+      vi.mocked(supportApi.getAdminTicket).mockRejectedValue(new ApiResponseError(502, 'down'))
+      mount('t_1', ticket())
+      await flush()
+
+      await pickStatus('Спам')
+
+      expect(toastError).toHaveBeenCalledWith('Обращение изменилось — проверьте статус')
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки обращения')
+      expect(text()).toContain('Дана')
     })
 
     it('a 409 on a ticket that is STILL open (a person wrote meanwhile) leaves the buttons for a retry', async () => {

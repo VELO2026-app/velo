@@ -27,8 +27,9 @@
   a feed call per ticket (known gap, BE-162).
 
   Tapping a row opens the ticket card with the row as a state hand-off.
-  Stale answers from fast filter or tab changes are dropped by a generation
-  counter (same as AdminReportsView).
+  The list is a Pinia Colada infinite query, one entry per tab and filter
+  (composables/queries/admin.ts, FE-181): a slow answer for an earlier
+  filter lands in its own entry, never over the shown list.
 -->
 
 <template>
@@ -60,7 +61,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="loadInitial">{{ t('common.retry') }}</VButton></template
+        ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -114,7 +115,7 @@
         </VCard>
       </div>
 
-      <div v-if="nextCursor" class="tickets__more">
+      <div v-if="hasMore" class="tickets__more">
         <VButton variant="outline" block :loading="loadingMore" @click="loadMore">
           {{ t('common.showMore') }}
         </VButton>
@@ -134,13 +135,16 @@
 <script setup lang="ts">
 import { t, getLocale } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useInfiniteQuery } from '@pinia/colada'
 import { VButton, VLoader, VEmptyState, VCard, VBadge, VSegment } from '@/components/ui'
 import { IconFilter, IconStar } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'
-import { listAdminTickets, type AdminSupportTicket, type SupportRatingFilter } from '@/api/support'
+import type { AdminSupportTicket, SupportRatingFilter } from '@/api/support'
+import { adminSupportTicketsQuery, usePagedListFailures } from '@/composables/queries/admin'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { formatRelative } from '@/utils/adminHelpers'
 import {
@@ -158,8 +162,6 @@ import {
   type SupportTicketsTab,
 } from './supportTicketsFilter'
 
-const LIMIT = 20
-
 /** The rating's five stars, one row value at a time. */
 const STAR_VALUES = [1, 2, 3, 4, 5] as const
 
@@ -175,12 +177,6 @@ const tabOptions = computed(() => [
 
 const filter = ref<SupportTicketsFilter>({ ...EMPTY_SUPPORT_FILTER })
 const showFilter = ref(false)
-
-const items = ref<AdminSupportTicket[]>([])
-const nextCursor = ref<string | null>(null)
-const loading = ref(false)
-const loadingMore = ref(false)
-const error = ref(false)
 
 /** The pill echoes the chosen category (as the complaints side,
  *  i18n:adminScreens.adminReports.tabComplaints, does); the filter label
@@ -237,52 +233,39 @@ function query() {
   return supportTicketQuery(tab.value, filter.value, authStore.user?.timezone)
 }
 
-// Fast tab/filter changes: only the newest request may write the list.
-let generation = 0
+// The tickets of the current tab and filter, page by page (Pinia Colada,
+// composables/queries/admin.ts) -- one entry per tab and filter, so a slow
+// answer for an earlier one lands in its own entry, never over the shown
+// list. A switch starts from the loader: another filter's tickets never
+// stand in.
+const ticketsQuery = useInfiniteQuery(() => adminSupportTicketsQuery(query()))
+const items = computed<AdminSupportTicket[]>(
+  () => ticketsQuery.data.value?.pages.flatMap((page) => page.tickets) ?? [],
+)
+const { loading, failed: error } = screenQueryState(ticketsQuery)
+const hasMore = ticketsQuery.hasNextPage
 
-async function loadInitial(): Promise<void> {
-  generation += 1
-  const mine = generation
-  loading.value = true
-  error.value = false
-  items.value = []
-  nextCursor.value = null
-  try {
-    const res = await listAdminTickets({ ...query(), limit: LIMIT })
-    if (mine !== generation) return
-    items.value = res.tickets
-    nextCursor.value = res.next_cursor
-  } catch (e) {
-    if (mine !== generation) return
-    error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminSupport.ticketsLoadError')))
-  } finally {
-    if (mine === generation) loading.value = false
-  }
-}
+// Every failed request is told: a next page with its own fallback, the
+// list itself (its first load, a refetch) with the list's.
+const { loadingMore, loadMore } = usePagedListFailures(ticketsQuery, (e, nextPage) =>
+  toast.error(
+    extractApiError(
+      e,
+      nextPage ? t('common.loadError') : t('adminScreens.adminSupport.ticketsLoadError'),
+    ),
+  ),
+)
 
-async function loadMore(): Promise<void> {
-  if (!nextCursor.value || loadingMore.value) return
-  const mine = generation
-  loadingMore.value = true
-  try {
-    const res = await listAdminTickets({ ...query(), limit: LIMIT, cursor: nextCursor.value })
-    if (mine !== generation) return
-    items.value.push(...res.tickets)
-    nextCursor.value = res.next_cursor
-  } catch (e) {
-    if (mine === generation) toast.error(extractApiError(e, t('common.loadError')))
-  } finally {
-    loadingMore.value = false
-  }
+function retry(): void {
+  void ticketsQuery.refetch()
 }
 
 function onApply(next: SupportTicketsFilter): void {
+  const before = JSON.stringify(query())
   filter.value = next
-  void loadInitial()
+  // Applying the same filter again asks again, as it always did.
+  if (JSON.stringify(query()) === before) void ticketsQuery.refetch()
 }
-
-watch(tab, () => void loadInitial())
 
 function openDetail(item: AdminSupportTicket): void {
   void router.push({
@@ -295,8 +278,6 @@ function openDetail(item: AdminSupportTicket): void {
 function openStats(): void {
   void router.push({ name: 'admin-support-stats' })
 }
-
-onMounted(loadInitial)
 </script>
 
 <style scoped>

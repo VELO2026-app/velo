@@ -59,6 +59,11 @@ const SAMPLE = {
   adminReports: adminKeys.reports('pending') as EntryKey,
   adminReport: adminKeys.report('r1') as EntryKey,
   adminWithdrawals: adminKeys.withdrawals() as EntryKey,
+  adminSupportTickets: adminKeys.supportTickets({ status: 'open' }) as EntryKey,
+  adminSupportTicket: adminKeys.supportTicket('t1') as EntryKey,
+  adminSupportMessages: adminKeys.supportMessages('t1') as EntryKey,
+  adminSupportStats: adminKeys.supportStats('2026-11-01', '2026-12-01') as EntryKey,
+  adminAdmins: adminKeys.admins() as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -182,6 +187,9 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
     'adminRevokePreview',
     'adminRevenue',
   ],
+  changeTicket: ['adminSupportTickets', 'adminSupportStats'],
+  replySupport: ['adminSupportTickets'],
+  retryTranslation: [],
 }
 
 describe('ADMIN_INVALIDATES', () => {

@@ -20,6 +20,8 @@
 //     read through adminFigures;
 //   - reports and payouts: the complaints tab, one report, the payout
 //     requests.
+//   - support: the ticket lists, one ticket, the thread feeds, the admins
+//     a ticket can be handed to, the support stats.
 //
 // ONE module on purpose, not one per area: Rollup puts every module into a
 // chunk by the set of routes that import it, and each extra shared chunk
@@ -80,6 +82,16 @@ import {
   type AdminPromoTypeFilter,
 } from '@/api/admin'
 import { getAdminSchools } from '@/api/schools'
+import {
+  getAdminSupportMessages,
+  getAdminTicket,
+  getSupportStats,
+  listAdminTickets,
+  type AdminSupportTicket,
+  type AdminSupportTicketList,
+  type AdminTicketQuery,
+  type SupportMessage,
+} from '@/api/support'
 import { getFullTaxonomy } from '@/api/taxonomy'
 import type {
   AdminRevenueResponse,
@@ -323,6 +335,25 @@ export const ADMIN_INVALIDATES = {
     adminKeys.revokePreviewAll(),
     adminKeys.revenueAll(),
   ],
+  /**
+   * A support ticket taken, handed over, released, reopened or closed with a
+   * status: every ticket list (its status, its taker) and the support stats.
+   * Not the ticket itself: the screen writes the answer into it (or reads
+   * it again where the answer carries none, the take).
+   */
+  changeTicket: [adminKeys.supportTicketsAll(), adminKeys.supportStatsAll()],
+  /**
+   * `POST /support/threads/{id}/messages`: a reply -- the ticket lists (their
+   * last activity). The thread's feed is read again by the screen, which
+   * polls it while translations are on their way.
+   */
+  replySupport: [adminKeys.supportTicketsAll()],
+  /**
+   * `POST /support/threads/{id}/messages/{id}/translation/retry`: queued
+   * again -- nothing to read now; the screen marks the message as being
+   * prepared and its polling picks up the result.
+   */
+  retryTranslation: [],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of an admin mutation that has a row in `ADMIN_INVALIDATES`. */
@@ -932,4 +963,93 @@ export function setWithdrawal(queryCache: QueryCache, decided: AdminWithdrawalRe
       })),
     }),
   )
+}
+
+// =============================================================================
+// Support
+// =============================================================================
+
+/** Tickets per page of the support tab. */
+export const ADMIN_SUPPORT_TICKETS_PAGE_SIZE = 20
+
+/**
+ * Infinite query options for the support tickets of one tab and filter
+ * (`GET /admin/support/tickets`), newest appeal first, cursor-paged.
+ */
+export const adminSupportTicketsQuery = defineInfiniteQueryOptions((query: AdminTicketQuery) => ({
+  key: adminKeys.supportTickets(query),
+  query: ({ pageParam }: { pageParam: string | null }) =>
+    listAdminTickets({
+      ...query,
+      limit: ADMIN_SUPPORT_TICKETS_PAGE_SIZE,
+      ...(pageParam ? { cursor: pageParam } : {}),
+    }),
+  initialPageParam: null as string | null,
+  getNextPageParam: (last: AdminSupportTicketList) => last.next_cursor,
+  staleTime: 0,
+}))
+
+/**
+ * Query options for one support ticket (`GET /admin/support/tickets/{id}`).
+ * The default staleness window: the list hands its row (seeded into the
+ * entry), and the screen reads the ticket again itself where it must (a
+ * conflict, the take).
+ */
+export const adminSupportTicketQuery = defineQueryOptions((ticketId: string) => ({
+  key: adminKeys.supportTicket(ticketId),
+  query: () => getAdminTicket(ticketId),
+}))
+
+/**
+ * Query options for one support thread's feed, oldest first (the API
+ * answers newest first). Asked again on every visit; the detail screen
+ * polls it while translations are on their way.
+ */
+export const adminSupportMessagesQuery = defineQueryOptions(
+  ({ threadId, enabled }: { threadId: string; enabled: boolean }) => ({
+    key: adminKeys.supportMessages(threadId),
+    query: async (): Promise<SupportMessage[]> =>
+      [...(await getAdminSupportMessages(threadId)).messages].reverse(),
+    staleTime: 0,
+    enabled,
+  }),
+)
+
+/** Write a thread's feed held in the cache (a sent reply, a retried translation). No-op while none is held. */
+export function updateSupportFeed(
+  queryCache: QueryCache,
+  threadId: string,
+  update: (messages: SupportMessage[]) => SupportMessage[],
+): void {
+  const held = queryCache.getQueryData<SupportMessage[]>(adminKeys.supportMessages(threadId))
+  if (held) queryCache.setQueryData(adminKeys.supportMessages(threadId), update(held))
+}
+
+/**
+ * Query options for the admins a ticket can be handed to
+ * (`GET /admin/users?role=admin`), read when the hand-over sheet opens.
+ */
+export const adminAdminsQuery = defineQueryOptions((enabled: boolean) => ({
+  key: adminKeys.admins(),
+  query: async () => (await getUsersList('admin')).items,
+  staleTime: 0,
+  enabled,
+}))
+
+/** Query options for the support figures of the tickets created in one window (`GET /admin/support/stats`). */
+export const adminSupportStatsQuery = defineQueryOptions(
+  ({ createdFrom, createdTo }: { createdFrom: string; createdTo: string }) => ({
+    key: adminKeys.supportStats(createdFrom, createdTo),
+    query: () => getSupportStats(createdFrom, createdTo),
+    staleTime: 0,
+  }),
+)
+
+/**
+ * Write a ticket into its entry: the row the list handed (the card paints
+ * at once, no request within the staleness window), or the answer of a
+ * ticket mutation.
+ */
+export function setSupportTicket(queryCache: QueryCache, ticket: AdminSupportTicket): void {
+  queryCache.setQueryData(adminKeys.supportTicket(ticket.id), ticket)
 }

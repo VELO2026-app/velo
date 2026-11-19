@@ -88,4 +88,21 @@ export const adminKeys = {
   report: (reportId: string) => ['admin', 'report', reportId] as const,
   /** `GET /admin/withdrawals` -- every payout request, every page loaded so far. */
   withdrawals: () => ['admin', 'withdrawals'] as const,
+  /** `GET /admin/users?role=admin` -- the admins a support ticket can be handed to. */
+  admins: () => ['admin', 'admins'] as const,
+  /** Prefix of every support ticket list. */
+  supportTicketsAll: () => ['admin', 'support', 'tickets'] as const,
+  /** `GET /admin/support/tickets` for one tab and filter, every page loaded so far. */
+  supportTickets: (query: object) => ['admin', 'support', 'tickets', query] as const,
+  /** `GET /admin/support/tickets/{id}` -- one ticket. */
+  supportTicket: (ticketId: string) => ['admin', 'support', 'ticket', ticketId] as const,
+  /** Prefix of every support thread feed. */
+  supportMessagesAll: () => ['admin', 'support', 'messages'] as const,
+  /** `GET /support/threads/{id}/messages` -- one thread's feed (a ticket, or a person's history). */
+  supportMessages: (threadId: string) => ['admin', 'support', 'messages', threadId] as const,
+  /** Prefix of every support stats window. */
+  supportStatsAll: () => ['admin', 'support', 'stats'] as const,
+  /** `GET /admin/support/stats` -- the figures of the tickets created in one window. */
+  supportStats: (createdFrom: string, createdTo: string) =>
+    ['admin', 'support', 'stats', { createdFrom, createdTo }] as const,
 }
