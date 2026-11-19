@@ -13,15 +13,18 @@
 //     engagement / revenue figures, one entry per (period, offset);
 //   - the platform's practices and participants lists.
 //
-// Freshness: the counters keep the default window (queries/setup.ts) and the
-// admin's own actions invalidate them (./invalidation.ts). Everything else
+// Freshness: the counters keep the default window (queries/setup.ts); the
+// admin's own actions will invalidate them (the admin mutation map, later
+// FE-181 parts). Everything else
 // is asked again on every visit (staleTime 0) -- other people move these
 // numbers all the time -- while the cached answer stays on screen.
 //
-// Errors stay raw on the query (ADR); the screens turn them into text.
+// Errors stay raw on the query (ADR); the screens turn them into text, and
+// tell the admin through onFailedRequest -- once per request that failed,
+// never for an old error an entry still holds.
 // =============================================================================
 
-import { computed } from 'vue'
+import { computed, watch, type Ref } from 'vue'
 import { defineInfiniteQueryOptions, defineQueryOptions, useQuery } from '@pinia/colada'
 import {
   getAdminPractices,
@@ -46,6 +49,44 @@ import type {
 } from '@/api/types'
 import { adminKeys } from '@/composables/queries/adminKeys'
 import { screenQueryState } from '@/composables/queries/screenState'
+
+/** The parts of a Colada query that tell whether a request failed. */
+interface RequestState {
+  error: Readonly<Ref<unknown>>
+  asyncStatus: Readonly<Ref<'idle' | 'loading'>>
+}
+
+/**
+ * Call `tell` once for every request of the query that failed -- the moment
+ * it settles -- and never for an error the entry already held: switching
+ * back to a period or a filter whose last answer failed shows that error,
+ * it does not tell it again.
+ *
+ * @param untilSuccess - Tell only the first failure in a row: the next one
+ *   is told after a request succeeded again (the counters, asked by every
+ *   screen and every return to the app, while the server is down).
+ */
+export function onFailedRequest(
+  query: RequestState,
+  tell: (error: unknown) => void,
+  { untilSuccess = false }: { untilSuccess?: boolean } = {},
+): void {
+  const told = new WeakSet<object>()
+  let failing = false
+  watch(query.asyncStatus, (now, before) => {
+    if (before !== 'loading' || now !== 'idle') return
+    const error = query.error.value
+    if (error == null) {
+      failing = false
+      return
+    }
+    if (typeof error !== 'object' || told.has(error)) return
+    told.add(error)
+    if (untilSuccess && failing) return
+    failing = true
+    tell(error)
+  })
+}
 
 /** The period window of the dashboard and its drill-ins. */
 export type AdminPeriod = 'week' | 'month'
@@ -99,6 +140,8 @@ export function useAdminStats() {
     loading: screenQueryState(query).loading,
     /** The raw error of the last request, or null. */
     error: query.error,
+    /** The query itself, for onFailedRequest. */
+    query,
   }
 }
 

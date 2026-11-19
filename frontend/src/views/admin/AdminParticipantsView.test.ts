@@ -284,6 +284,28 @@ describe('AdminParticipantsView', () => {
       expect(adminApi.getParticipants).toHaveBeenLastCalledWith('active', 'week', 0, 100, 0)
     })
 
+    it('a failed filter switch: the error state (never the previous filter rows), told once even when picked back and failing again', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getParticipants).mockRejectedValueOnce(new Error('down'))
+      segmentItem('Новые').click()
+      await flush()
+      expect(rows()).toHaveLength(0)
+      expect(host?.querySelector('.v-empty__title')?.textContent?.trim()).toBe(
+        'Не удалось загрузить участников',
+      )
+      expect(toastError).toHaveBeenCalledTimes(1)
+
+      segmentItem('Все').click()
+      await flush()
+      vi.mocked(adminApi.getParticipants).mockRejectedValueOnce(new Error('down again'))
+      segmentItem('Новые').click()
+      await flush()
+
+      // One more failed request, one more toast -- not two.
+      expect(toastError).toHaveBeenCalledTimes(2)
+    })
+
     it('switching filter REPLACES the list (reset), not appends -- a stale page from the old filter does not linger', async () => {
       vi.mocked(adminApi.getParticipants).mockResolvedValueOnce(
         paginated([participant({ id: 'u_all', name: 'Все-фильтр Юзер' })], 1),

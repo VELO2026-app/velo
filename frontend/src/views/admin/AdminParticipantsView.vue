@@ -91,7 +91,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VSegment, VButton, VCard, VEmptyState } from '@/components/ui'
@@ -100,6 +100,7 @@ import { IconProfile, IconMessages } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import {
   adminParticipantsQuery,
+  onFailedRequest,
   useAdminStats,
   type AdminParticipantFilter,
 } from '@/composables/queries/admin'
@@ -155,19 +156,21 @@ const segOptions = computed<SegmentOption[]>(() => [
   { value: 'active', label: t('adminScreens.adminParticipants.active') },
 ])
 
-// Every failed request is told, the first page's and a next page's alike.
-watch(participantsQuery.error, (e) => {
-  if (e) toast.error(t('adminScreens.adminParticipants.toast.loadMembersFailed'))
-})
+// Every failed request is told, the first page's and a next page's alike --
+// once, not again when a filter whose last answer failed is picked back.
+onFailedRequest(participantsQuery, () =>
+  toast.error(t('adminScreens.adminParticipants.toast.loadMembersFailed')),
+)
 
 function retry(): void {
   void participantsQuery.refetch()
 }
 
 function loadMore(): void {
-  // cancelRefetch false: a tap during a reload waits for it instead of
-  // gluing a stale page to a fresh one.
-  void participantsQuery.loadNextPage({ cancelRefetch: false })
+  // cancelRefetch false: a tap during a reload joins it (the tap itself is
+  // dropped) instead of gluing a stale page to a fresh one. A failure is
+  // already told above.
+  participantsQuery.loadNextPage({ cancelRefetch: false }).catch(() => {})
 }
 
 // t('adminScreens.adminParticipants.dek-2025') — registration month, from created_at (UTC).

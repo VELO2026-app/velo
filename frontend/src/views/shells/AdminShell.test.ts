@@ -38,7 +38,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminShell from '@/views/shells/AdminShell.vue'
 import * as adminApi from '@/api/admin'
@@ -255,6 +256,30 @@ describe('AdminShell', () => {
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить статистику')
+    })
+
+    it('failing again and again is told once, until an answer arrives', async () => {
+      vi.mocked(adminApi.getAdminStats).mockRejectedValue(new Error('down'))
+      await mount('admin-dashboard')
+      await flush()
+      // Every screen that reads the counters asks again while they failed.
+      const askAgain = async () => {
+        // A failed refetch rejects here; the screen hears of it through the entry.
+        useQueryCache()
+          .invalidateQueries({ key: adminKeys.stats() })
+          .catch(() => {})
+        await flush()
+      }
+      await askAgain()
+      expect(adminApi.getAdminStats).toHaveBeenCalledTimes(2)
+      expect(toastError).toHaveBeenCalledTimes(1)
+
+      vi.mocked(adminApi.getAdminStats).mockResolvedValue(stats())
+      await askAgain()
+      vi.mocked(adminApi.getAdminStats).mockRejectedValue(new Error('down again'))
+      await askAgain()
+
+      expect(toastError).toHaveBeenCalledTimes(2)
     })
   })
 })

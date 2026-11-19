@@ -23,18 +23,19 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AdminLayout } from '@/components/layout'
 import { ADMIN_TABS } from '@/router/tabs'
 import type { TabItem } from '@/router/tabs'
-import { useAdminStats } from '@/composables/queries/admin'
+import { onFailedRequest, useAdminStats } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
 const router = useRouter()
-const { pendingVerifications, pendingModeration, error: statsError } = useAdminStats()
+const adminStats = useAdminStats()
+const { pendingVerifications, pendingModeration } = adminStats
 const toast = useToast()
 
 const activeTab = computed(() => {
@@ -95,9 +96,12 @@ const isDetailRoute = computed(() => DETAIL_ROUTES.includes(route.name as string
 
 // The counters behind the badges (queries/admin.ts): this shell wraps every
 // /admin/* route, so it is the one that tells the admin a load failed
-// (W14, PROMPT №409: it used to fail silently) -- once per failed request,
-// whichever screen asked; the screens reading the same entry stay quiet.
-watch(statsError, (error) => {
-  if (error) toast.error(extractApiError(error, t('storeErrors.admin.dashboard')))
-})
+// (W14, PROMPT №409: it used to fail silently), whichever screen asked; the
+// screens reading the same entry stay quiet. Once per run of failures: every
+// screen and every return to the app asks again while the server is down.
+onFailedRequest(
+  adminStats.query,
+  (error) => toast.error(extractApiError(error, t('storeErrors.admin.dashboard'))),
+  { untilSuccess: true },
+)
 </script>

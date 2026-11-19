@@ -22,7 +22,8 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminDashboardView from '@/views/admin/AdminDashboardView.vue'
 import * as adminApi from '@/api/admin'
@@ -218,6 +219,23 @@ describe('AdminDashboardView', () => {
       expect(host?.querySelector('.v-loader')).toBeNull()
       expect(host?.querySelector('.admin-dashboard__stats')).not.toBeNull()
     })
+
+    it('a background refetch of the counters keeps the dashboard, no loader', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminStats).mockReturnValue(new Promise(() => {}))
+
+      // Another screen asks for the counters again (or the window expired).
+      // A failed refetch rejects here; the screen hears of it through the entry.
+      useQueryCache()
+        .invalidateQueries({ key: adminKeys.stats() })
+        .catch(() => {})
+      await flush()
+      expect(adminApi.getAdminStats).toHaveBeenCalledTimes(2)
+
+      expect(host?.querySelector('.v-loader')).toBeNull()
+      expect(host?.querySelector('.admin-dashboard__stats')).not.toBeNull()
+    })
   })
 
   // ===========================================================================
@@ -313,6 +331,15 @@ describe('AdminDashboardView', () => {
         '842,50 €',
       )
     })
+
+    it('a failed revenue shows "—" and leaves the rates alone', async () => {
+      vi.mocked(adminApi.getAdminRevenue).mockRejectedValue(new Error('revenue down'))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.admin-dashboard__revenue-amount')?.textContent).toBe('—')
+      expect(rateText('Check-in rate')).toBe('80%')
+    })
   })
 
   // ===========================================================================
@@ -346,6 +373,31 @@ describe('AdminDashboardView', () => {
       expect(periodRangeText()).toBeTruthy()
       expect(periodRangeText()).not.toBe(before)
       expect(nextBtn()?.disabled).toBe(false)
+
+      nextBtn()?.click()
+      await flush()
+
+      expect(periodRangeText()).toBe(before)
+      expect(nextBtn()?.disabled).toBe(true)
+    })
+
+    it('a window switch keeps the previous cards until the new answer lands', async () => {
+      mount()
+      await flush()
+      let answer!: (v: AdminStatsOverviewResponse) => void
+      vi.mocked(adminApi.getAdminStatsOverview).mockReturnValue(
+        new Promise((resolve) => {
+          answer = resolve
+        }),
+      )
+
+      prevBtn()?.click()
+      await flush()
+      expect(statCard('Практик')?.querySelector('.v-stat__value')?.textContent).toBe('45')
+
+      answer(overview({ practices_count: 7 }))
+      await flush()
+      expect(statCard('Практик')?.querySelector('.v-stat__value')?.textContent).toBe('7')
     })
 
     it('switching period resets the offset to 0 even after stepping back', async () => {
@@ -359,6 +411,23 @@ describe('AdminDashboardView', () => {
 
       expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('month', 0)
       expect(nextBtn()?.disabled).toBe(true) // back to offset 0
+    })
+
+    it('a window whose answer failed is told once; picked back and answered, it is not told again', async () => {
+      mount()
+      await flush()
+      vi.mocked(adminApi.getAdminStatsOverview).mockRejectedValueOnce(new Error('down'))
+      segmentItem('Месяц').click()
+      await flush()
+      expect(toastError).toHaveBeenCalledTimes(1)
+
+      segmentItem('Неделя').click()
+      await flush()
+      segmentItem('Месяц').click() // asked again, answers this time
+      await flush()
+
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(statCard('Практик')?.querySelector('.v-stat__value')?.textContent).toBe('45')
     })
 
     it('a failed figure for the new window shows "—", never the previous window value', async () => {

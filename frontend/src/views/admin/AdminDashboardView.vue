@@ -234,7 +234,7 @@
 
 <script setup lang="ts">
 import { t, getLocale } from '@/locales'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useQuery } from '@pinia/colada'
 import { useRouter } from 'vue-router'
 import {
@@ -254,6 +254,7 @@ import {
   adminOverviewQuery,
   checkinMetricQuery,
   feedbackMetricQuery,
+  onFailedRequest,
   returnMetricQuery,
   revenueQuery,
   useAdminStats,
@@ -382,9 +383,9 @@ const engagementQuery = computed(() => ({
 // W14 fix (PROMPT №409): a failed overview used to leave the stat cards
 // silently stale. Toast it -- once per failed request (the shell toasts
 // the counters, so no double toast).
-watch(overviewQuery.error, (error) => {
-  if (error) toast.error(extractApiError(error, t('storeErrors.admin.overview')))
-})
+onFailedRequest(overviewQuery, (error) =>
+  toast.error(extractApiError(error, t('storeErrors.admin.overview'))),
+)
 </script>
 
 <style scoped>
