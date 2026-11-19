@@ -2,7 +2,9 @@
 // Two rules modeled on Landmines' no-fixed-sleep / no-flake-masking, built
 // on our own ESLint instead of a second linter, plus the shrink-only
 // exception list (test-lint-allowlist.json). Both eslint.config.js files
-// (the app's and packages/velo-ui's) spread `testRulesConfig()`.
+// (the app's and packages/velo-ui's) spread `testRulesConfig()`; the app's
+// also spreads `e2eRulesConfig()` (FE-211: no-wait-for-timeout on the
+// Playwright suite, no-fixed-sleep on its specs).
 //
 // Cache: ESLint fingerprints a plugin by name and meta.version only, not by
 // its code. meta.version is therefore a hash of the rule sources, so an edit
@@ -15,12 +17,14 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import noFixedSleep from './no-fixed-sleep.mjs'
 import noFlakeMasking from './no-flake-masking.mjs'
+import noWaitForTimeout from './no-wait-for-timeout.mjs'
 import { ALLOWLIST_PATH, REPO_ROOT } from './ratchet.mjs'
 
-const RULES = ['no-fixed-sleep', 'no-flake-masking']
+const RULES = ['no-fixed-sleep', 'no-flake-masking', 'no-wait-for-timeout']
 
 /** The files the rules run on, repo-relative: a list key must be one. */
-const LINTED = /^(frontend|packages\/velo-ui)\/(src\/.+\.test\.ts|vitest\.config\.ts)$/
+const LINTED =
+  /^((frontend|packages\/velo-ui)\/(src\/.+\.test\.ts|vitest\.config\.ts)|frontend\/e2e\/.+\.ts)$/
 
 /** A hash of the rule sources (the *.mjs here, tests excluded). */
 function sourceHash() {
@@ -35,7 +39,11 @@ function sourceHash() {
 
 export const plugin = {
   meta: { name: 'velo-tests', version: sourceHash() },
-  rules: { 'no-fixed-sleep': noFixedSleep, 'no-flake-masking': noFlakeMasking },
+  rules: {
+    'no-fixed-sleep': noFixedSleep,
+    'no-flake-masking': noFlakeMasking,
+    'no-wait-for-timeout': noWaitForTimeout,
+  },
 }
 
 /**
@@ -54,7 +62,8 @@ export function loadAllowlist(listPath = ALLOWLIST_PATH) {
     if (!LINTED.test(file)) {
       throw new Error(
         `${listPath}: ${file} is not a file the test rules lint ` +
-          '(frontend/ or packages/velo-ui/: src/**/*.test.ts, vitest.config.ts) -- fix the key.',
+          '(frontend/ or packages/velo-ui/: src/**/*.test.ts, vitest.config.ts; ' +
+          'frontend/e2e/**/*.ts) -- fix the key.',
       )
     }
     if (!existsSync(path.join(REPO_ROOT, file))) {
@@ -100,4 +109,40 @@ export function testRulesConfig(testFiles, configFiles = []) {
     })
   }
   return entries
+}
+
+/**
+ * The flat-config entries for the Playwright suite (FE-211).
+ *
+ * @remarks
+ * no-wait-for-timeout runs on every e2e file: Playwright's sleep has no
+ * harness use. no-fixed-sleep runs on the test files only, as in the unit
+ * suite: the harness keeps two runner-side timers in a Promise on purpose --
+ * the 50 ms poll of settle() (a condition poll with a deadline) and the
+ * `delayMs` of the API mock (a slow server, not a test waiting).
+ * no-flake-masking is not applied: its limits are vitest's, and the
+ * Playwright config bans retries on its own (retries: 0, forbidOnly on CI).
+ *
+ * @param allFiles - Globs of every e2e file, relative to the config.
+ * @param testFiles - Globs of the e2e test files (specs, setup projects).
+ * @returns Flat-config objects to spread into an eslint.config.js.
+ */
+export function e2eRulesConfig(allFiles, testFiles) {
+  const allow = loadAllowlist()
+  return [
+    {
+      files: allFiles,
+      plugins: { 'velo-tests': plugin },
+      rules: {
+        'velo-tests/no-wait-for-timeout': ['error', { allow: allow['no-wait-for-timeout'] }],
+      },
+    },
+    {
+      files: testFiles,
+      plugins: { 'velo-tests': plugin },
+      rules: {
+        'velo-tests/no-fixed-sleep': ['error', { allow: allow['no-fixed-sleep'] }],
+      },
+    },
+  ]
 }

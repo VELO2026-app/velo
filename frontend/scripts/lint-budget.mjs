@@ -19,13 +19,17 @@ const budget = JSON.parse(readFileSync(new URL('../lint-budget.json', import.met
 // FE-203: no inline directive may switch the test rules off (see
 // eslint-rules/directives.mjs for why ESLint cannot check this itself).
 // Scans the files the rules lint: the tests and vitest configs of both
-// packages.
+// packages, and the app's Playwright suite (FE-211).
 const testRoots = ['.', '../packages/velo-ui']
+/** The files under `dir` whose name ends with `suffix`, as paths. */
+const filesIn = (dir, suffix) =>
+  readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith(suffix))
+    .map((f) => path.join(dir, f))
 const disables = []
 for (const root of testRoots) {
-  const files = readdirSync(path.join(root, 'src'), { recursive: true, encoding: 'utf8' })
-    .filter((f) => f.endsWith('.test.ts'))
-    .map((f) => path.join(root, 'src', f))
+  const files = filesIn(path.join(root, 'src'), '.test.ts')
+  if (root === '.') files.push(...filesIn('e2e', '.ts'))
   for (const file of [...files, path.join(root, 'vitest.config.ts')]) {
     for (const hit of findRuleDisables(readFileSync(file, 'utf8'))) {
       disables.push(`${file}:${hit.line}  ${hit.text}`)
