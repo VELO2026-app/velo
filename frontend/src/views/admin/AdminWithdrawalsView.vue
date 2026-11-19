@@ -93,13 +93,13 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
-import { ref, computed, type Component } from 'vue'
+import { computed, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@pinia/colada'
 import { VBackButton, VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
 import { IconPending, IconCheck, IconClose } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
-import { adminWithdrawalsQuery, onFailedRequest } from '@/composables/queries/admin'
+import { adminWithdrawalsQuery, usePagedListFailures } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import type { AdminWithdrawalResponse, WithdrawalStatus, PayoutDetails } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
@@ -116,7 +116,6 @@ const items = computed<AdminWithdrawalResponse[]>(
 )
 const total = computed(() => withdrawalsQuery.data.value?.pages.at(-1)?.total ?? 0)
 const { loading, failed: error } = screenQueryState(withdrawalsQuery)
-const loadingMore = ref(false)
 const hasMore = withdrawalsQuery.hasNextPage
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -177,28 +176,19 @@ function openDetail(w: AdminWithdrawalResponse): void {
   })
 }
 
-// -- Fetch. --
-// A failed first page is the error state and its toast; a failed next page
-// keeps the list and toasts on its own (loadMore).
-onFailedRequest(withdrawalsQuery, (e) => {
-  if (withdrawalsQuery.data.value === undefined)
-    toast.error(extractApiError(e, t('adminScreens.adminWithdrawals.withdrawalsLoadError')))
-})
+// Every failed request is told: a next page with its own fallback, the
+// list itself (its first load, a refetch) with the list's.
+const { loadingMore, loadMore } = usePagedListFailures(withdrawalsQuery, (e, nextPage) =>
+  toast.error(
+    extractApiError(
+      e,
+      nextPage ? t('common.loadError') : t('adminScreens.adminWithdrawals.withdrawalsLoadError'),
+    ),
+  ),
+)
 
 function retry(): void {
   void withdrawalsQuery.refetch()
-}
-
-async function loadMore(): Promise<void> {
-  loadingMore.value = true
-  try {
-    // cancelRefetch false: a tap during a reload joins it.
-    await withdrawalsQuery.loadNextPage({ throwOnError: true, cancelRefetch: false })
-  } catch (e) {
-    toast.error(extractApiError(e, t('common.loadError')))
-  } finally {
-    loadingMore.value = false
-  }
 }
 </script>
 

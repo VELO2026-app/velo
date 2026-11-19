@@ -135,7 +135,7 @@ import { toHistoryState } from '@/utils/historySnapshot'
 import { useToast } from '@/composables/useToast'
 import type { ReportResponse, ReportStatusFilter } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
-import { adminReportsQuery, onFailedRequest } from '@/composables/queries/admin'
+import { adminReportsQuery, usePagedListFailures } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { formatRelative } from '@/utils/adminHelpers'
 
@@ -210,31 +210,21 @@ const items = computed<ReportResponse[]>(
   () => reportsQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
 )
 const { loading, failed: error } = screenQueryState(reportsQuery)
-const loadingMore = ref(false)
 const hasMore = reportsQuery.hasNextPage
 
-// A failed first page is the error state and its toast; a failed next page
-// keeps the list and toasts on its own (loadMore).
-onFailedRequest(reportsQuery, (e) => {
-  if (reportsQuery.data.value === undefined)
-    toast.error(extractApiError(e, t('adminScreens.adminReports.ticketsLoadError')))
-})
+// Every failed request is told: a next page with its own fallback, the
+// list itself (its first load, a refetch) with the list's.
+const { loadingMore, loadMore } = usePagedListFailures(reportsQuery, (e, nextPage) =>
+  toast.error(
+    extractApiError(
+      e,
+      nextPage ? t('common.loadError') : t('adminScreens.adminReports.ticketsLoadError'),
+    ),
+  ),
+)
 
 function retry(): void {
   void reportsQuery.refetch()
-}
-
-async function loadMore(): Promise<void> {
-  loadingMore.value = true
-  try {
-    // cancelRefetch false: a tap during a reload joins it instead of gluing
-    // a stale page to a fresh one.
-    await reportsQuery.loadNextPage({ throwOnError: true, cancelRefetch: false })
-  } catch (e) {
-    toast.error(extractApiError(e, t('common.loadError')))
-  } finally {
-    loadingMore.value = false
-  }
 }
 
 function onApply(next: ModerationFilter): void {
