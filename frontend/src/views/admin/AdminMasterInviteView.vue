@@ -59,18 +59,21 @@ import { inviteMaster } from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { useAdminMutation } from '@/composables/queries/admin'
 
 const router = useRouter()
 const toast = useToast()
 
 const creating = ref(false)
 const inviteLink = ref('')
+// No list shows invites: the row invalidates nothing (ADMIN_INVALIDATES).
+const invite = useAdminMutation('inviteMaster', () => inviteMaster())
 
 async function onCreate(): Promise<void> {
   if (creating.value) return
   creating.value = true
   try {
-    const res = await inviteMaster()
+    const res = await invite.mutateAsync()
     inviteLink.value = res.invite_link
   } catch (e) {
     if (e instanceof ApiResponseError && e.code === 'bot_url_not_configured') {

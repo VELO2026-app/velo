@@ -46,7 +46,7 @@
       :title="t('common.loadError')"
       :description="error"
     >
-      <VButton size="sm" variant="outline" @click="loadMaster">{{ t('common.retry') }}</VButton>
+      <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
     </VEmptyState>
 
     <template v-else-if="master">
@@ -477,8 +477,9 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { host } from '@/platform/host'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useQuery, useQueryCache } from '@pinia/colada'
 import {
   VBackButton,
   VCard,
@@ -496,12 +497,10 @@ import {
 import { IconIdCard, IconView, IconClock } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import {
-  getMasterById,
   verifyMaster,
   rejectMaster,
   editMasterMethods,
   editMasterProfile,
-  getRevokePreview,
   revokeMaster,
   setMasterSchoolRight,
 } from '@/api/admin'
@@ -512,21 +511,60 @@ import type {
   RevokeMasterAdvisory,
 } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
+import {
+  adminMasterQuery,
+  adminRevokePreviewQuery,
+  onFailedRequest,
+  patchAdminMaster,
+  useAdminMutation,
+} from '@/composables/queries/admin'
 import { masterDisplayName, masterStatusLabel } from '@/utils/adminHelpers'
 import { LANGUAGES } from '@/utils/languages'
 import EditableFieldRow from '@/components/admin/EditableFieldRow.vue'
 import MethodTaxonomyPicker from '@/components/shared/MethodTaxonomyPicker.vue'
-import { parseMethods, flattenMethods, primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
+import { parseMethods, flattenMethods } from '@/utils/methodTaxonomy'
 
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
 const masterId = route.params.id as string
+const queryCache = useQueryCache()
 
-const master = ref<AdminMasterDetail | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
+// -- The master (Pinia Colada, composables/queries/admin.ts) --
+//
+// The list hands a subset (AdminMasterListItem) via router state for an
+// instant paint (our `history` ref shadows the global History, so reach it
+// through window.history.state). The detail is always fetched to fill the
+// real methods / experience / bio (T3); the taxonomy catalog loads with it
+// (Bug 2, PROMPT №405). The handed subset can still render one frame of
+// stale (pre-catalog) chips -- a property of the instant-paint design.
+const handedState = (host.history.state as { master?: AdminMasterListItem } | null)?.master
+const handed = handedState && handedState.id === masterId ? handedState : null
+const masterQuery = useQuery(() => adminMasterQuery(masterId))
+const master = computed<AdminMasterDetail | null>(() => masterQuery.data.value ?? handed)
+const masterFailed = computed(
+  () => masterQuery.error.value != null && masterQuery.asyncStatus.value === 'idle',
+)
+// SW7: a cold deep-link (no handed router-state, nothing on screen yet) gets
+// its own error rung with a retry, distinct from "not found" -- a refresh
+// failing on top of a page already shown stays toast-only (AdminPracticeDetailView's
+// T21-1 "don't blank a working page over a secondary failure" convention).
+const loading = computed(() => master.value === null && !masterFailed.value)
+const error = computed<string | null>(() =>
+  master.value === null && masterFailed.value
+    ? extractApiError(masterQuery.error.value, t('adminScreens.adminMasterReview.dataLoadError'))
+    : null,
+)
+onFailedRequest(masterQuery, (e) => {
+  if (master.value !== null)
+    toast.error(extractApiError(e, t('adminScreens.adminMasterReview.dataLoadError')))
+})
+
+function retry(): void {
+  void masterQuery.refetch()
+}
+
 const verifying = ref(false)
 const rejecting = ref(false)
 
@@ -592,7 +630,17 @@ const anyLoading = computed<boolean>(() => verifying.value || rejecting.value ||
 // -- Revoke master (A1): confirm dialog surfaces the advisory (WARN-not-block) --
 const showRevoke = ref(false)
 const revoking = ref(false)
-const revokeAdvisory = ref<RevokeMasterAdvisory | null>(null)
+// Best-effort: asked each time the dialog opens; until it answers (or when
+// it fails) the dialog keeps the base message -- the revoke itself does not
+// depend on the preview.
+const revokePreview = useQuery(() =>
+  adminRevokePreviewQuery({ userId: masterId, enabled: showRevoke.value }),
+)
+const revokeAdvisory = computed<RevokeMasterAdvisory | null>(() =>
+  revokePreview.asyncStatus.value === 'loading' || revokePreview.error.value
+    ? null
+    : (revokePreview.data.value ?? null),
+)
 
 const revokeMessage = computed<string>(() => {
   const base = t('adminScreens.adminMasterReview.revokeMessage', { name: displayName.value })
@@ -612,63 +660,74 @@ const revokeMessage = computed<string>(() => {
   return t('adminScreens.adminMasterReview.revokeWarning', { base, warns: warns.join(', ') })
 })
 
-async function openRevoke(): Promise<void> {
-  revokeAdvisory.value = null
+function openRevoke(): void {
   showRevoke.value = true
-  // Best-effort: fill the advisory numbers into the dialog (WARN-not-block).
-  try {
-    revokeAdvisory.value = await getRevokePreview(masterId)
-  } catch {
-    // Leave the base message; the revoke itself does not depend on the preview.
-  }
+  // A second opening asks again: the numbers move (a booking, a payout).
+  void revokePreview.refetch()
 }
+
+// -- The writes (ADMIN_INVALIDATES): the page is patched at once from what
+// was sent or answered, then the lists, the detail and the badges refetch. --
+const revoke = useAdminMutation('revokeMaster', () => revokeMaster(masterId), {
+  write: () => patchAdminMaster(queryCache, masterId, { master_status: 'suspended' }, master.value),
+  waitForRefetch: false,
+})
+const saveMethodsMutation = useAdminMutation(
+  'editMaster',
+  (methods: string[]) => editMasterMethods(masterId, methods),
+  {
+    write: (_res, methods) =>
+      patchAdminMaster(queryCache, masterId, { methods: [...methods] }, master.value),
+    waitForRefetch: false,
+  },
+)
+const saveProfileMutation = useAdminMutation(
+  'editMaster',
+  (patch: AdminMasterProfileUpdate) => editMasterProfile(masterId, patch),
+  {
+    write: (_res, patch) => patchAdminMaster(queryCache, masterId, patch, master.value),
+    waitForRefetch: false,
+  },
+)
+const schoolRight = useAdminMutation(
+  'editMaster',
+  (grant: boolean) => setMasterSchoolRight(masterId, grant),
+  {
+    write: (res) =>
+      patchAdminMaster(
+        queryCache,
+        masterId,
+        { can_create_schools: res.can_create_schools },
+        master.value,
+      ),
+    waitForRefetch: false,
+  },
+)
+const verify = useAdminMutation(
+  'verifyMaster',
+  (vars: { promote?: string[]; masterOnly?: string[]; grantSchools: boolean }) =>
+    verifyMaster(masterId, vars.promote, vars.masterOnly, vars.grantSchools),
+  { waitForRefetch: false },
+)
+const reject = useAdminMutation(
+  'rejectMaster',
+  (reason: string) => rejectMaster(masterId, reason),
+  {
+    waitForRefetch: false,
+  },
+)
 
 async function onRevoke(): Promise<void> {
   if (anyLoading.value) return
   revoking.value = true
   try {
-    await revokeMaster(masterId)
-    if (master.value) master.value.master_status = 'suspended'
+    await revoke.mutateAsync()
     showRevoke.value = false
     toast.success(t('adminScreens.adminMasterReview.revokedToUser'))
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminMasterReview.toast.revokeFailed')))
   } finally {
     revoking.value = false
-  }
-}
-
-async function loadMaster(): Promise<void> {
-  // The list hands a subset (AdminMasterListItem) via router state for an
-  // instant paint (our `history` ref shadows the global History, so reach it
-  // through window.history.state). Always fetch the detail afterwards to fill
-  // the real methods / experience / bio (T3).
-  const handed = (host.history.state as { master?: AdminMasterListItem }).master
-  if (handed && handed.id === masterId) master.value = handed
-  if (!master.value) loading.value = true
-  error.value = null
-  try {
-    // Bug 2 fix (PROMPT №405): prime the taxonomy catalog cache alongside the
-    // detail fetch so a promoted custom method already resolves to a plain
-    // chip. Note: the `handed` instant-paint above can still render one frame
-    // of stale (pre-catalog) chips before this resolves -- that flash predates
-    // this fix and is a property of the instant-paint design, not this bug.
-    const [detail] = await Promise.all([getMasterById(masterId), primeMethodTaxonomyCatalog()])
-    master.value = detail
-  } catch (e) {
-    const msg = extractApiError(e, t('adminScreens.adminMasterReview.dataLoadError'))
-    // SW7: a cold deep-link (no handed router-state, nothing on screen yet)
-    // gets its own error rung with a retry, distinct from "not found" -- a
-    // refresh failing on top of already-handed data stays toast-only
-    // (matches AdminPracticeDetailView's T21-1 "don't blank a working page
-    // over a secondary failure" convention).
-    if (!master.value) {
-      error.value = msg
-    } else {
-      toast.error(msg)
-    }
-  } finally {
-    loading.value = false
   }
 }
 
@@ -694,8 +753,7 @@ async function saveMethods(): Promise<void> {
   }
   savingMethods.value = true
   try {
-    await editMasterMethods(masterId, methodsDraft.value)
-    if (master.value) master.value.methods = [...methodsDraft.value]
+    await saveMethodsMutation.mutateAsync(methodsDraft.value)
     editingMethods.value = false
     toast.success(t('adminScreens.adminMasterReview.toast.directionsUpdated'))
   } catch (e) {
@@ -791,8 +849,7 @@ async function saveProfile(patch: AdminMasterProfileUpdate): Promise<void> {
   savingField.value = true
   fieldError.value = ''
   try {
-    await editMasterProfile(masterId, patch)
-    if (master.value) Object.assign(master.value, patch)
+    await saveProfileMutation.mutateAsync(patch)
     editing.value = null
     toast.success(t('ui.saved'))
   } catch (e) {
@@ -908,8 +965,7 @@ async function onToggleRight(): Promise<void> {
   if (!master.value || togglingRight.value) return
   togglingRight.value = true
   try {
-    const res = await setMasterSchoolRight(masterId, !master.value.can_create_schools)
-    master.value = { ...master.value, can_create_schools: res.can_create_schools }
+    const res = await schoolRight.mutateAsync(!master.value.can_create_schools)
     toast.success(
       res.can_create_schools
         ? t('adminScreens.adminMasterReview.toast.schoolRightGranted')
@@ -938,7 +994,7 @@ function onVerify(): void {
 async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void> {
   verifying.value = true
   try {
-    await verifyMaster(masterId, promote, masterOnly, grantSchools.value)
+    await verify.mutateAsync({ promote, masterOnly, grantSchools: grantSchools.value })
     toast.success(t('adminScreens.adminMasterReview.toast.verified'))
     // S-1/S-2: push to the list (fresh mount) instead of back().
     void router.push({ name: 'admin-masters' })
@@ -973,7 +1029,7 @@ async function onReject(): Promise<void> {
   }
   rejecting.value = true
   try {
-    await rejectMaster(masterId, rejectReason.value.trim())
+    await reject.mutateAsync(rejectReason.value.trim())
     toast.success(t('adminScreens.adminMasterReview.toast.requestRejected'))
     showReject.value = false
     // S-1/S-2: push to the list (fresh mount) instead of back().
@@ -984,8 +1040,6 @@ async function onReject(): Promise<void> {
     rejecting.value = false
   }
 }
-
-onMounted(loadMaster)
 </script>
 
 <style scoped>

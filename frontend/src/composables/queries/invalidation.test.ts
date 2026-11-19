@@ -41,6 +41,11 @@ const SAMPLE = {
   adminStats: adminKeys.stats() as EntryKey,
   adminTaxonomy: adminKeys.taxonomy() as EntryKey,
   adminPromos: adminKeys.promos('master') as EntryKey,
+  adminSchools: adminKeys.schools() as EntryKey,
+  adminUsers: adminKeys.users() as EntryKey,
+  adminMasters: adminKeys.masters() as EntryKey,
+  adminMaster: adminKeys.master('m1') as EntryKey,
+  adminMethodRequests: adminKeys.methodRequests() as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -104,11 +109,25 @@ describe('INVALIDATES', () => {
 const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
   changeTaxonomy: ['adminTaxonomy'],
   deactivatePromo: ['adminPromos'],
+  inviteMaster: [],
+  makeMaster: ['adminUsers', 'adminMasters', 'adminMaster'],
+  verifyMaster: ['adminMasters', 'adminMaster', 'adminUsers', 'adminStats', 'adminTaxonomy'],
+  rejectMaster: ['adminMasters', 'adminMaster', 'adminStats'],
+  revokeMaster: ['adminMasters', 'adminMaster', 'adminUsers', 'adminSchools'],
+  editMaster: ['adminMasters', 'adminMaster', 'adminUsers'],
+  approveMethodChange: [
+    'adminMethodRequests',
+    'adminStats',
+    'adminMasters',
+    'adminMaster',
+    'adminTaxonomy',
+  ],
+  rejectMethodChange: ['adminMethodRequests', 'adminStats'],
 }
 
 describe('ADMIN_INVALIDATES', () => {
   for (const mutation of Object.keys(ADMIN_EXPECTED) as AdminMutationName[]) {
-    it(`${mutation}: makes ${ADMIN_EXPECTED[mutation].join(', ')} stale, nothing else`, async () => {
+    it(`${mutation}: makes ${ADMIN_EXPECTED[mutation].join(', ') || 'nothing'} stale, nothing else`, async () => {
       await invalidateKeys(queryCache, ADMIN_INVALIDATES[mutation])
 
       for (const domain of Object.keys(SAMPLE) as Domain[]) {

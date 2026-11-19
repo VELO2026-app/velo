@@ -51,4 +51,16 @@ export const adminKeys = {
   promosAll: () => ['admin', 'promos'] as const,
   /** `GET /admin/promos?type=&is_active=` -- one tab of the promo oversight list, every page loaded so far. */
   promos: (filter: string) => ['admin', 'promos', { filter }] as const,
+  /** `GET /admin/users` -- every user of the platform (any role), every page loaded so far. */
+  users: () => ['admin', 'users'] as const,
+  /** `GET /admin/masters/list` -- every master with its status, counts and methods. */
+  masters: () => ['admin', 'masters'] as const,
+  /** Prefix of every master's detail (and what hangs under it). */
+  masterAll: () => ['admin', 'master'] as const,
+  /** `GET /admin/masters/{id}` -- one master's full application / profile. */
+  master: (userId: string) => ['admin', 'master', userId] as const,
+  /** `GET /admin/masters/{id}/revoke-preview` -- what revoking would leave behind. Under the master's prefix. */
+  revokePreview: (userId: string) => ['admin', 'master', userId, 'revokePreview'] as const,
+  /** `GET /admin/masters/method-change-requests` -- pending method-change requests, every page loaded so far. */
+  methodRequests: () => ['admin', 'methodRequests'] as const,
 }

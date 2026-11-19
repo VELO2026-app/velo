@@ -14,6 +14,8 @@
 //   - the platform's practices and participants lists;
 //   - the catalogs: the method catalog editor, the schools, the promo
 //     oversight list, one practice's oversight detail.
+//   - users and masters: the users and masters lists, one master's review
+//     page, the method-change queue.
 //
 // ONE module on purpose, not one per area: Rollup puts every module into a
 // chunk by the set of routes that import it, and each extra shared chunk
@@ -54,9 +56,15 @@ import {
   getAdminZoomAttendance,
   getCheckinMetric,
   getFeedbackMetric,
+  getMasterById,
+  getMastersList,
+  getMethodChangeRequests,
   getParticipants,
   getReports,
   getReturnMetric,
+  getRevokePreview,
+  getUsersList,
+  type AdminMasterDetail,
   type AdminPaginatedPromosResponse,
   type AdminPracticeScope,
   type AdminPromoTypeFilter,
@@ -70,13 +78,16 @@ import type {
   CheckinMetricResponse,
   FeedbackMetricResponse,
   PaginatedAdminSchoolsResponse,
+  PaginatedMethodChangeRequestsResponse,
   PaginatedParticipantsResponse,
+  PaginatedUsersResponse,
   ReturnMetricResponse,
 } from '@/api/types'
 import { adminKeys } from '@/composables/queries/adminKeys'
 import { invalidateKeys } from '@/composables/queries/invalidation'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useQueryScopeStore } from '@/composables/queries/setup'
+import { primeMethodTaxonomyCatalog } from '@/utils/methodTaxonomy'
 
 // =============================================================================
 // Shared: telling a failed request
@@ -184,6 +195,63 @@ export const ADMIN_INVALIDATES = {
   changeTaxonomy: [adminKeys.taxonomy()],
   /** `PATCH /admin/promos/{id}/deactivate`: the promo turns inactive -- every tab of the promo list. */
   deactivatePromo: [adminKeys.promosAll()],
+  /**
+   * `POST /admin/masters/invite`: a one-time invite link, answered to the
+   * caller only -- no list shows invites, nothing goes stale.
+   */
+  inviteMaster: [],
+  /**
+   * `POST /admin/users/{id}/make-master`: the user turns master -- their
+   * role in the users list, a new row in the masters list (and their
+   * detail, if one is held).
+   */
+  makeMaster: [adminKeys.users(), adminKeys.masters(), adminKeys.masterAll()],
+  /**
+   * `POST /admin/masters/{id}/verify`: the application turns verified -- the
+   * masters list and the detail, the role in the users list, the
+   * pending-verification badge; a method promoted on the way is a new
+   * catalog row.
+   */
+  verifyMaster: [
+    adminKeys.masters(),
+    adminKeys.masterAll(),
+    adminKeys.users(),
+    adminKeys.stats(),
+    adminKeys.taxonomy(),
+  ],
+  /** `POST /admin/masters/{id}/reject`: the application turns rejected -- the list, the detail, the badge. */
+  rejectMaster: [adminKeys.masters(), adminKeys.masterAll(), adminKeys.stats()],
+  /**
+   * `POST /admin/masters/{id}/revoke`: the master is suspended and back to
+   * user -- the lists, the detail, and the schools they own freeze.
+   */
+  revokeMaster: [
+    adminKeys.masters(),
+    adminKeys.masterAll(),
+    adminKeys.users(),
+    adminKeys.schools(),
+  ],
+  /**
+   * `PATCH /admin/masters/{id}/methods`, `PATCH /admin/masters/{id}/profile`,
+   * `PATCH /admin/masters/{id}/can-create-schools`: a master-authored field
+   * or the school right -- the detail, the masters list (its chips, names
+   * and flag) and the users list (names).
+   */
+  editMaster: [adminKeys.masters(), adminKeys.masterAll(), adminKeys.users()],
+  /**
+   * `POST /admin/masters/{id}/method-change-request/approve`: the methods go
+   * live -- the request leaves the queue (and its badge), the master's
+   * detail and list chips change; a promoted method is a new catalog row.
+   */
+  approveMethodChange: [
+    adminKeys.methodRequests(),
+    adminKeys.stats(),
+    adminKeys.masters(),
+    adminKeys.masterAll(),
+    adminKeys.taxonomy(),
+  ],
+  /** `POST /admin/masters/{id}/method-change-request/reject`: the request leaves the queue and its badge. */
+  rejectMethodChange: [adminKeys.methodRequests(), adminKeys.stats()],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of an admin mutation that has a row in `ADMIN_INVALIDATES`. */
@@ -509,4 +577,142 @@ export function markPromoInactive(queryCache: QueryCache, promoId: string): void
       })),
     }))
   }
+}
+
+// =============================================================================
+// Users and masters
+// =============================================================================
+//
+// The users list, the masters list, one master's review page (with the
+// revoke advisory) and the method-change queue. A verdict on a master
+// refreshes the lists, the detail and the shell's badges at once.
+//
+// The masters list, the review page and the method queue render method
+// chips from the taxonomy catalog (utils/methodTaxonomy), so each loads it
+// alongside its own answer -- a promoted custom method must already resolve
+// to a plain chip on first render (Bug 2, PROMPT №405).
+
+/** Users per page of `GET /admin/users` (the backend's cap). */
+export const ADMIN_USERS_PAGE_SIZE = 100
+
+/** Next offset of an offset-paged list, or null once every row is loaded. */
+function nextOffset(last: { total: number }, pages: { items: unknown[] }[]): number | null {
+  const loaded = pages.reduce((n, page) => n + page.items.length, 0)
+  return loaded < last.total ? loaded : null
+}
+
+/** Infinite query options for every user of the platform (`GET /admin/users`, any role). */
+export const adminUsersQuery = defineInfiniteQueryOptions(() => ({
+  key: adminKeys.users(),
+  query: ({ pageParam }: { pageParam: number }) =>
+    getUsersList(undefined, ADMIN_USERS_PAGE_SIZE, pageParam),
+  initialPageParam: 0,
+  getNextPageParam: (last: PaginatedUsersResponse, pages: PaginatedUsersResponse[]) =>
+    nextOffset(last, pages),
+  staleTime: 0,
+}))
+
+/**
+ * Masters the list asks for: the backend's page cap (le=100; 200 was
+ * 422-rejected). The screen filters and counts client-side; pagination
+ * comes when the master count approaches it (operator ruling, PROMPT №289).
+ */
+export const ADMIN_MASTERS_LIMIT = 100
+
+/** Query options for every master with its status (`GET /admin/masters/list`). */
+export const adminMastersQuery = defineQueryOptions(() => ({
+  key: adminKeys.masters(),
+  query: async () => {
+    const [res] = await Promise.all([
+      getMastersList(undefined, ADMIN_MASTERS_LIMIT, 0),
+      primeMethodTaxonomyCatalog(),
+    ])
+    return res
+  },
+  staleTime: 0,
+}))
+
+/** Query options for one master's full review page (`GET /admin/masters/{id}`). */
+export const adminMasterQuery = defineQueryOptions((userId: string) => ({
+  key: adminKeys.master(userId),
+  query: async () => {
+    const [detail] = await Promise.all([getMasterById(userId), primeMethodTaxonomyCatalog()])
+    return detail
+  },
+  staleTime: 0,
+}))
+
+/**
+ * Patch the review page of a master with what a mutation answered or sent
+ * (a status, edited fields, the school right) -- at once, before the
+ * invalidation's refetch.
+ *
+ * @param shown - What the screen shows when no page is held yet (the
+ *   list's handed subset while the detail has not answered): patched
+ *   instead, so the screen still reflects the write. No-op when neither.
+ */
+export function patchAdminMaster(
+  queryCache: QueryCache,
+  userId: string,
+  patch: Partial<AdminMasterDetail>,
+  shown: AdminMasterDetail | null = null,
+): void {
+  const base = queryCache.getQueryData<AdminMasterDetail>(adminKeys.master(userId)) ?? shown
+  if (base) queryCache.setQueryData(adminKeys.master(userId), { ...base, ...patch })
+}
+
+/**
+ * Query options for the revoke advisory of one master
+ * (`GET /admin/masters/{id}/revoke-preview`): the numbers the confirm
+ * dialog warns with. Best-effort, read when the dialog opens.
+ */
+export const adminRevokePreviewQuery = defineQueryOptions(
+  ({ userId, enabled }: { userId: string; enabled: boolean }) => ({
+    key: adminKeys.revokePreview(userId),
+    query: () => getRevokePreview(userId),
+    staleTime: 0,
+    enabled,
+  }),
+)
+
+/** Requests per page of `GET /admin/masters/method-change-requests`. */
+export const ADMIN_METHOD_REQUESTS_PAGE_SIZE = 20
+
+/** Infinite query options for the pending method-change requests, newest first. */
+export const adminMethodRequestsQuery = defineInfiniteQueryOptions(() => ({
+  key: adminKeys.methodRequests(),
+  query: async ({ pageParam }: { pageParam: number }) => {
+    const [res] = await Promise.all([
+      getMethodChangeRequests(ADMIN_METHOD_REQUESTS_PAGE_SIZE, pageParam),
+      // The first page only: later pages render from the catalog it loaded.
+      pageParam === 0 ? primeMethodTaxonomyCatalog() : undefined,
+    ])
+    return res
+  },
+  initialPageParam: 0,
+  getNextPageParam: (
+    last: PaginatedMethodChangeRequestsResponse,
+    pages: PaginatedMethodChangeRequestsResponse[],
+  ) => nextOffset(last, pages),
+  staleTime: 0,
+}))
+
+/**
+ * Drop a decided request from the queue held, at once -- the list loses the
+ * row and the header its count before the invalidation's refetch answers.
+ */
+export function dropMethodRequest(queryCache: QueryCache, userId: string): void {
+  if (queryCache.getQueryData(adminKeys.methodRequests()) === undefined) return
+  setInfiniteQueryData<PaginatedMethodChangeRequestsResponse, number>(
+    queryCache,
+    adminKeys.methodRequests(),
+    (data) => ({
+      pageParams: data?.pageParams ?? [],
+      pages: (data?.pages ?? []).map((page) => {
+        const items = page.items.filter((i) => i.user_id !== userId)
+        const dropped = page.items.length - items.length
+        return { ...page, items, total: Math.max(0, page.total - dropped) }
+      }),
+    }),
+  )
 }

@@ -18,6 +18,10 @@
   /admin/users/{id}/make-master (creates a verified MasterProfile + role flip).
   The button is gated to role='user' so an admin can't be demoted to master by
   accident.
+
+  The list is a Pinia Colada infinite query and make-master runs through
+  useAdminMutation (composables/queries/admin.ts, FE-181): the list
+  refetches in place after a promotion.
 -->
 
 <template>
@@ -41,7 +45,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="load(true)">{{ t('common.retry') }}</VButton></template
+        ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -89,8 +93,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { useInfiniteQuery } from '@pinia/colada'
 import {
   VBackButton,
   VInput,
@@ -102,23 +107,28 @@ import {
   VButton,
   VConfirmDialog,
 } from '@/components/ui'
-import { getUsersList, makeMaster } from '@/api/admin'
+import { makeMaster } from '@/api/admin'
 import type { UserResponse } from '@/api/admin'
+import { adminUsersQuery, onFailedRequest, useAdminMutation } from '@/composables/queries/admin'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const toast = useToast()
 
-const PAGE = 100
-
-const users = ref<UserResponse[]>([])
-const total = ref(0)
-const loading = ref(false)
+// Every user, page by page (Pinia Colada, composables/queries/admin.ts).
+const usersQuery = useInfiniteQuery(adminUsersQuery)
+const users = computed<UserResponse[]>(
+  () => usersQuery.data.value?.pages.flatMap((page) => page.items) ?? [],
+)
+const total = computed(() => usersQuery.data.value?.pages.at(-1)?.total ?? 0)
+// A failed first page is the error state; a failed next page keeps the
+// pages shown (the toast tells it).
+const { loading, failed: error } = screenQueryState(usersQuery)
 const loadingMore = ref(false)
-const error = ref(false)
 const search = ref('')
-const hasMore = computed<boolean>(() => users.value.length < total.value)
+const hasMore = usersQuery.hasNextPage
 
 function nameOf(u: UserResponse): string {
   const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim()
@@ -155,30 +165,24 @@ function roleVariant(role: string): 'success' | 'warning' | 'info' {
   return 'info'
 }
 
-async function load(reset: boolean): Promise<void> {
-  if (reset) {
-    loading.value = true
-  } else {
-    if (loadingMore.value) return
-    loadingMore.value = true
-  }
-  error.value = false
-  try {
-    const offset = reset ? 0 : users.value.length
-    const res = await getUsersList(undefined, PAGE, offset)
-    users.value = reset ? res.items : [...users.value, ...res.items]
-    total.value = res.total
-  } catch (e) {
-    error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminUsers.usersLoadError')))
-  } finally {
-    loading.value = false
-    loadingMore.value = false
-  }
+onFailedRequest(usersQuery, (e) =>
+  toast.error(extractApiError(e, t('adminScreens.adminUsers.usersLoadError'))),
+)
+
+function retry(): void {
+  void usersQuery.refetch()
 }
 
-function loadMore(): void {
-  void load(false)
+async function loadMore(): Promise<void> {
+  if (loadingMore.value) return
+  loadingMore.value = true
+  try {
+    // cancelRefetch false: a tap during a reload joins it. A failure is
+    // already told above.
+    await usersQuery.loadNextPage({ cancelRefetch: false })
+  } finally {
+    loadingMore.value = false
+  }
 }
 
 // -- Make-master confirm flow --
@@ -206,23 +210,26 @@ function closeConfirm(): void {
   confirm.target = null
 }
 
+// The users list (the new role), the masters list and the detail go stale
+// (ADMIN_INVALIDATES.makeMaster); the list on screen refetches in place.
+const promote = useAdminMutation('makeMaster', (userId: string) => makeMaster(userId), {
+  waitForRefetch: false,
+})
+
 async function doMakeMaster(): Promise<void> {
   if (!confirm.target || confirm.loading) return
   confirm.loading = true
   try {
-    await makeMaster(confirm.target.id)
+    await promote.mutateAsync(confirm.target.id)
     toast.success(t('adminScreens.adminUsers.toast.promotedToMaster'))
     confirm.open = false
     confirm.target = null
-    await load(true)
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminUsers.toast.promoteFailed')))
   } finally {
     confirm.loading = false
   }
 }
-
-onMounted(() => load(true))
 </script>
 
 <style scoped>

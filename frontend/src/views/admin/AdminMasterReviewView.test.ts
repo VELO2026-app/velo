@@ -116,6 +116,9 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
+import { coladaOptions } from '@/composables/queries/setup'
 import AdminMasterReviewView from '@/views/admin/AdminMasterReviewView.vue'
 import * as adminApi from '@/api/admin'
 import * as taxonomyApi from '@/api/taxonomy'
@@ -235,13 +238,21 @@ function mount(id: string, stateMaster: AdminMasterListItem | null = null): HTML
   window.history.replaceState(stateMaster ? { master: stateMaster } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(AdminMasterReviewView).use(createTestI18n())
+  // A fresh Pinia + Colada per mount, as in production.
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  app = createApp(AdminMasterReviewView)
+    .use(createTestI18n())
+    .use(pinia)
+    .use(PiniaColada, coladaOptions)
   app.mount(host)
   return host
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 8; i++) await nextTick()
+  for (let n = 0; n < 8; n++) await nextTick()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 }
 
 function text(): string {
@@ -585,6 +596,11 @@ describe('AdminMasterReviewView', () => {
       })
       mount('m_verified')
       await flush()
+      // The invalidation's refetch never answers here: what the screen shows
+      // is the in-place write, not the server's next answer.
+      vi.mocked(adminApi.getMasterById)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
 
       footBtn('Выдать право')?.click()
       await flush()
@@ -593,6 +609,7 @@ describe('AdminMasterReviewView', () => {
       expect(toastSuccess).toHaveBeenCalledWith('Право создавать школы выдано')
       expect(text()).toContain('Выдано')
       expect(footBtn('Отозвать право')).toBeDefined()
+      expect(adminApi.getMasterById).toHaveBeenCalledTimes(1) // the detail is asked again
     })
 
     it('revoke direction: a master WITH the right offers «Отозвать право» and PATCHes false', async () => {
@@ -605,6 +622,11 @@ describe('AdminMasterReviewView', () => {
       })
       mount('m_verified')
       await flush()
+      // The invalidation's refetch never answers here: what the screen shows
+      // is the in-place write, not the server's next answer.
+      vi.mocked(adminApi.getMasterById)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
 
       expect(text()).toContain('Выдано')
       footBtn('Отозвать право')?.click()
@@ -1013,6 +1035,11 @@ describe('AdminMasterReviewView', () => {
       vi.mocked(adminApi.getMasterById).mockResolvedValue(MASTER_VERIFIED())
       mount('m_verified')
       await flush()
+      // The invalidation's refetch never answers here: what the screen shows
+      // is the in-place write, not the server's next answer.
+      vi.mocked(adminApi.getMasterById)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
 
       footBtn('Отозвать мастера')?.click()
       await flush()
@@ -1022,10 +1049,11 @@ describe('AdminMasterReviewView', () => {
       expect(adminApi.revokeMaster).toHaveBeenCalledWith('m_verified')
       expect(toastSuccess).toHaveBeenCalledWith('Мастер отозван — аккаунт стал пользователем')
       expect(modalIsOpen()).toBe(false)
-      // Local status flip (.vue:543) -- the revoke-master button itself
-      // disappears (i18n:adminScreens.adminMasterReview.revokeMaster;
-      // no longer verified), NOT re-fetched from the server.
+      // Local status flip -- the revoke-master button itself disappears
+      // (i18n:adminScreens.adminMasterReview.revokeMaster; no longer
+      // verified) before the detail's refetch answers.
       expect(footBtn('Отозвать мастера')).toBeUndefined()
+      expect(adminApi.getMasterById).toHaveBeenCalledTimes(1) // the detail is asked again
     })
 
     it('cancelling calls NOTHING -- revokeMaster is never reached', async () => {
@@ -1280,13 +1308,18 @@ describe('AdminMasterReviewView', () => {
       expect(adminApi.editMasterProfile).not.toHaveBeenCalled()
     })
 
-    it('success: editMasterProfile called with the exact patch, LOCAL update via Object.assign, toast, editor closes', async () => {
+    it('success: editMasterProfile called with the exact patch, LOCAL update before the refetch, toast, editor closes', async () => {
       vi.mocked(adminApi.editMasterProfile).mockResolvedValue({
         user_id: 'm_pending',
         status: 'ok',
       })
       mount('m_pending')
       await flush()
+      // The invalidation's refetch never answers here: what the screen shows
+      // is the in-place write, not the server's next answer.
+      vi.mocked(adminApi.getMasterById)
+        .mockClear()
+        .mockReturnValue(new Promise(() => {}))
 
       pencilBtn('Имя-визитка').click()
       await flush()
@@ -1300,6 +1333,7 @@ describe('AdminMasterReviewView', () => {
       })
       expect(toastSuccess).toHaveBeenCalledWith('Сохранено')
       expect(fieldValue('Имя-визитка')).toBe('Мастер Обновлённая') // local patch reflected
+      expect(adminApi.getMasterById).toHaveBeenCalledTimes(1) // the detail is asked again
     })
 
     it('failure: NO toast fires (this path only sets fieldError, unlike verify/reject/revoke) -- editor STAYS open', async () => {

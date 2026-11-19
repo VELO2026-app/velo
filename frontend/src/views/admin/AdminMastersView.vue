@@ -23,6 +23,9 @@
   Experience / application date (applied-at) were dropped from
   the list card in R8 — they never carried real data (always «—»); the detail
   screen (AdminMasterReviewView) already shows experience for real.
+
+  The list is a Pinia Colada query (composables/queries/admin.ts,
+  FE-181); a verdict on a master elsewhere invalidates it.
 -->
 
 <template>
@@ -62,7 +65,7 @@
       :description="t('common.checkConnection')"
     >
       <template #action
-        ><VButton variant="primary" @click="load">{{ t('common.retry') }}</VButton></template
+        ><VButton variant="primary" @click="retry">{{ t('common.retry') }}</VButton></template
       >
     </VEmptyState>
 
@@ -137,8 +140,9 @@
 <script setup lang="ts">
 import { t, getLocale } from '@/locales'
 import { toHistoryState } from '@/utils/historySnapshot'
-import { ref, computed, onMounted, type Component } from 'vue'
+import { ref, computed, type Component } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuery } from '@pinia/colada'
 import {
   VBackButton,
   VSegment,
@@ -152,15 +156,11 @@ import {
 } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import { IconCheck, IconPending, IconClose } from '@/components/icons'
-import { getMastersList } from '@/api/admin'
 import type { AdminMasterListItem } from '@/api/admin'
+import { adminMastersQuery, onFailedRequest } from '@/composables/queries/admin'
+import { screenQueryState } from '@/composables/queries/screenState'
 import { masterDisplayName, masterStatusVariant } from '@/utils/adminHelpers'
-import {
-  parseMethods,
-  directionLabel,
-  resolveStyleLabel,
-  primeMethodTaxonomyCatalog,
-} from '@/utils/methodTaxonomy'
+import { parseMethods, directionLabel, resolveStyleLabel } from '@/utils/methodTaxonomy'
 import { formatMoney } from '@/utils/format'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -205,10 +205,20 @@ const schoolsEnabled = isOptionEnabled('schools')
 const toast = useToast()
 
 const filter = ref('all')
-const masters = ref<AdminMasterListItem[]>([])
-const total = ref(0)
-const loading = ref(false)
-const error = ref(false)
+// Every master once (the list is small, see ADMIN_MASTERS_LIMIT); filtered
+// and counted client-side. The taxonomy catalog loads with it (Bug 2,
+// PROMPT №405), so a promoted custom method renders as a plain chip.
+const mastersQuery = useQuery(adminMastersQuery)
+const masters = computed<AdminMasterListItem[]>(() => mastersQuery.data.value?.items ?? [])
+const total = computed(() => mastersQuery.data.value?.total ?? 0)
+const { loading, failed: error } = screenQueryState(mastersQuery)
+onFailedRequest(mastersQuery, (e) =>
+  toast.error(extractApiError(e, t('adminScreens.adminMasters.loadFailedToast'))),
+)
+
+function retry(): void {
+  void mastersQuery.refetch()
+}
 
 function nameOf(m: AdminMasterListItem): string {
   return masterDisplayName(m)
@@ -291,31 +301,6 @@ function badgeIcon(status: string): Component {
   return IconClose
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = false
-  try {
-    // Fetch all masters once; filter + count client-side (the list is small).
-    // Limit is clamped to the backend page cap (le=100 on /admin/masters/list);
-    // 200 was 422-rejected. Alpha: 100 is enough — add pagination when the
-    // master count approaches 100 (operator ruling, PROMPT №289).
-    // Bug 2 fix (PROMPT №405): prime the taxonomy catalog cache alongside the
-    // masters fetch so a promoted custom method already resolves to a plain
-    // chip on first render instead of flashing "custom".
-    const [res] = await Promise.all([
-      getMastersList(undefined, 100, 0),
-      primeMethodTaxonomyCatalog(),
-    ])
-    masters.value = res.items
-    total.value = res.total
-  } catch (e) {
-    error.value = true
-    toast.error(extractApiError(e, t('adminScreens.adminMasters.loadFailedToast')))
-  } finally {
-    loading.value = false
-  }
-}
-
 function openReview(m: AdminMasterListItem): void {
   void router.push({
     name: 'admin-master-review',
@@ -323,8 +308,6 @@ function openReview(m: AdminMasterListItem): void {
     state: { master: toHistoryState(m) },
   })
 }
-
-onMounted(load)
 </script>
 
 <style scoped>
