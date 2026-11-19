@@ -33,7 +33,7 @@
 // never for an old error an entry still holds.
 // =============================================================================
 
-import { computed, watch, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import {
   defineInfiniteQueryOptions,
   defineQueryOptions,
@@ -115,6 +115,51 @@ export function onFailedRequest(query: RequestState, tell: (error: unknown) => v
   })
 }
 
+/** A paged list's next-page loader, with the toast rule of the admin lists. */
+export interface PagedListMore {
+  /** A next page the admin asked for is in flight (the button's spinner). */
+  loadingMore: Ref<boolean>
+  /** Ask for the next page; a failure is told through `tell`, never thrown. */
+  loadMore: () => Promise<void>
+}
+
+/**
+ * Tell every failed request of a paged list once (onFailedRequest), saying
+ * which one failed: a next page the admin asked for (`nextPage` true), or
+ * the list itself -- its first load, a retry, a refetch while the list is
+ * shown (a stale list must not pass for a fresh one in silence).
+ */
+export function usePagedListFailures(
+  query: RequestState & {
+    loadNextPage: (options?: { cancelRefetch?: boolean }) => Promise<unknown>
+  },
+  tell: (error: unknown, nextPage: boolean) => void,
+): PagedListMore {
+  const loadingMore = ref(false)
+  // Read by the failure watcher, which runs before loadMore's own
+  // continuation: the failed request was the next page this flag names.
+  let askingMore = false
+  onFailedRequest(query, (error) => tell(error, askingMore))
+  return {
+    loadingMore,
+    async loadMore() {
+      if (loadingMore.value) return
+      loadingMore.value = true
+      askingMore = true
+      try {
+        // cancelRefetch false: a tap during a reload joins it instead of
+        // gluing a stale page to a fresh one.
+        await query.loadNextPage({ cancelRefetch: false })
+      } catch {
+        // Told by the failure watcher above.
+      } finally {
+        askingMore = false
+        loadingMore.value = false
+      }
+    },
+  }
+}
+
 // =============================================================================
 // Shared: the admin mutation map
 // =============================================================================
@@ -128,19 +173,6 @@ export function onFailedRequest(query: RequestState, tell: (error: unknown) => v
 // useAdminMutation is the one way an admin screen runs a mutation: the
 // request, then -- for the session it was started in only -- the row's
 // invalidation.
-
-//
-// The admin half of ./invalidation.ts: what each admin mutation makes stale,
-// written down once per mutation, with a test per row
-// (./invalidation.test.ts). Kept apart for the same reason as ./adminKeys.ts
-// -- the admin zone loads lazily, ./invalidation.ts is in the startup chunk.
-// A row may name user-zone prefixes too (./keys.ts) when an admin action
-// changes what the admin's own user zone shows.
-//
-// useAdminMutation is the one way an admin screen runs a mutation: the
-// request, then -- for the session it was started in only -- the row's
-// invalidation.
-// =============================================================================
 
 /** Each admin mutation and the query-key prefixes it makes stale. */
 export const ADMIN_INVALIDATES = {
@@ -352,11 +384,6 @@ export const adminParticipantsQuery = defineInfiniteQueryOptions(
 //
 // The method catalog editor, the platform's schools, the promo oversight
 // list and one practice's oversight detail.
-
-//
-// Each screen used to fetch on mount into its own refs; the reads now live
-// here, the writes go through useAdminMutation.
-// =============================================================================
 
 /** Query options for the full method catalog, inactive items included (`GET /admin/taxonomy`). */
 export const adminTaxonomyQuery = defineQueryOptions(() => ({

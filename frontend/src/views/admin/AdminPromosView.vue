@@ -145,7 +145,7 @@ import {
   type AdminPromoFilter,
   adminPromosQuery,
   markPromoInactive,
-  onFailedRequest,
+  usePagedListFailures,
   useAdminMutation,
 } from '@/composables/queries/admin'
 import type { AdminPromoResponse } from '@/api/admin'
@@ -173,7 +173,6 @@ const items = computed<AdminPromoResponse[]>(
 )
 const total = computed(() => promosQuery.data.value?.pages.at(-1)?.total ?? 0)
 const { loading, failed: error } = screenQueryState(promosQuery)
-const loadingMore = ref(false)
 const hasMore = promosQuery.hasNextPage
 
 const headerCount = computed<string>(() => (total.value ? String(total.value) : '—'))
@@ -200,28 +199,19 @@ function untilLabel(p: AdminPromoResponse): string {
   return p.valid_until ? formatShortDate(p.valid_until) : t('adminScreens.adminPromos.noExpiry')
 }
 
-// -- Fetch. A failed first page is the error state and its toast; a failed
-//    next page keeps the list and toasts on its own (loadMore). --
-onFailedRequest(promosQuery, (e) => {
-  if (promosQuery.data.value === undefined)
-    toast.error(extractApiError(e, t('adminScreens.adminPromos.promocodesLoadError')))
-})
+// -- Fetch. Every failed request is told: a next page with its own fallback,
+//    the list itself (its first load, a refetch) with the list's. --
+const { loadingMore, loadMore } = usePagedListFailures(promosQuery, (e, nextPage) =>
+  toast.error(
+    extractApiError(
+      e,
+      nextPage ? t('common.loadError') : t('adminScreens.adminPromos.promocodesLoadError'),
+    ),
+  ),
+)
 
 function retry(): void {
   void promosQuery.refetch()
-}
-
-async function loadMore(): Promise<void> {
-  loadingMore.value = true
-  try {
-    // cancelRefetch false: a tap during a reload joins it instead of gluing
-    // a stale page to a fresh one.
-    await promosQuery.loadNextPage({ throwOnError: true, cancelRefetch: false })
-  } catch (e) {
-    toast.error(extractApiError(e, t('common.loadError')))
-  } finally {
-    loadingMore.value = false
-  }
 }
 
 // -- Deactivate + confirm --

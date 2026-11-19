@@ -29,7 +29,7 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminPromosView from '@/views/admin/AdminPromosView.vue'
 import * as adminApi from '@/api/admin'
@@ -517,6 +517,23 @@ describe('AdminPromosView', () => {
       expect(cards()).toHaveLength(1)
       expect(text()).not.toContain('Не удалось загрузить промокоды')
       expect(toastError).toHaveBeenCalledWith('Ошибка загрузки')
+    })
+
+    it('a failed refetch of the shown list keeps the rows and says the list failed', async () => {
+      vi.mocked(adminApi.getAdminPromos).mockResolvedValue(page([promo('p1')], 1))
+      mount()
+      await flush()
+
+      vi.mocked(adminApi.getAdminPromos).mockRejectedValue(new TypeError('boom'))
+      // A return to the app, a revisit: the list is asked again.
+      useQueryCache()
+        .invalidateQueries({ key: ['admin', 'promos'] })
+        .catch(() => {})
+      await flush()
+
+      expect(cards()).toHaveLength(1)
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки промокодов')
     })
   })
 

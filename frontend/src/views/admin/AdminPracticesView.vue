@@ -74,13 +74,15 @@ import { VBackButton, VSegment, VCard, VLoader, VEmptyState, VButton } from '@/c
 import type { SegmentOption } from '@/components/ui'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import { IconGroup } from '@/components/icons'
-import { adminPracticesQuery, useAdminStats } from '@/composables/queries/admin'
+import { adminPracticesQuery, onFailedRequest, useAdminStats } from '@/composables/queries/admin'
+import { useToast } from '@/composables/useToast'
 import type { AdminPracticeScope } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort, formatTime } from '@/utils/format'
 import type { AdminPracticeListItem, PaginatedAdminPracticesResponse } from '@/api/types'
 
 const router = useRouter()
+const toast = useToast()
 const { stats } = useAdminStats()
 
 const filter = ref('all')
@@ -148,6 +150,13 @@ function isFull(p: AdminPracticeListItem): boolean {
 function retry(): void {
   void practicesQuery.refetch()
 }
+
+// A failed refetch over a list shown (a revisit, a return to the app) is
+// told; a failed load with nothing to show is the error rung.
+onFailedRequest(practicesQuery, (e) => {
+  if (answer.value !== undefined)
+    toast.error(extractApiError(e, t('adminScreens.adminPractices.loadFailed')))
+})
 
 // Tap a card -> admin practice detail; it re-fetches by id (GET /admin/practices/:id).
 function openDetail(p: AdminPracticeListItem): void {

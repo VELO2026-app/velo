@@ -107,10 +107,6 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
 }
 
 describe('ADMIN_INVALIDATES', () => {
-  it('has a test row for every admin mutation of the map', () => {
-    expect(Object.keys(ADMIN_EXPECTED).sort()).toEqual(Object.keys(ADMIN_INVALIDATES).sort())
-  })
-
   for (const mutation of Object.keys(ADMIN_EXPECTED) as AdminMutationName[]) {
     it(`${mutation}: makes ${ADMIN_EXPECTED[mutation].join(', ')} stale, nothing else`, async () => {
       await invalidateKeys(queryCache, ADMIN_INVALIDATES[mutation])

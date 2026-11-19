@@ -192,7 +192,12 @@ import {
 import PracticeHeroCard from '@/components/shared/PracticeHeroCard.vue'
 import { IconCalendar, IconProfile, IconCheck, IconClose } from '@/components/icons'
 import type { AdminZoomAttendanceResponse } from '@/api/admin'
-import { adminPracticeAttendanceQuery, adminPracticeQuery } from '@/composables/queries/admin'
+import {
+  adminPracticeAttendanceQuery,
+  adminPracticeQuery,
+  onFailedRequest,
+} from '@/composables/queries/admin'
+import { useToast } from '@/composables/useToast'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort } from '@/utils/format'
@@ -200,6 +205,7 @@ import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToast()
 const practiceId = route.params.id as string
 
 // Pinia Colada queries (composables/queries/admin.ts, FE-181).
@@ -292,6 +298,13 @@ const absent = computed<AdminRosterEntry[]>(() =>
 function retry(): void {
   void practiceQuery.refetch()
 }
+
+// A failed refetch over a practice shown (a return to the app) is told:
+// the roster may be out of date.
+onFailedRequest(practiceQuery, (e) => {
+  if (practiceQuery.data.value !== undefined)
+    toast.error(extractApiError(e, t('practice.loadFailed')))
+})
 </script>
 
 <style scoped>

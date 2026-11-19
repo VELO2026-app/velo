@@ -186,7 +186,7 @@ import {
 import { IconPen, IconClose, IconCheck } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
-import { adminTaxonomyQuery, useAdminMutation } from '@/composables/queries/admin'
+import { adminTaxonomyQuery, onFailedRequest, useAdminMutation } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import {
   createTaxonomyDirection,
@@ -206,6 +206,14 @@ const toast = useToast()
 const catalog = useQuery(adminTaxonomyQuery)
 const directions = computed<TaxonomyDirectionItem[]>(() => catalog.data.value ?? [])
 const { loading, failed: error } = screenQueryState(catalog)
+
+// A failed load with no tree is the error rung; a failed refetch over a
+// tree shown (after a write, a return to the app) is told -- the tree may
+// lack what was just written.
+onFailedRequest(catalog, () => {
+  if (catalog.data.value !== undefined)
+    toast.error(t('adminScreens.adminCatalog.catalogLoadFailed'))
+})
 
 function retry(): void {
   void catalog.refetch()
