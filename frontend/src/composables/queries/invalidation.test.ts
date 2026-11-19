@@ -187,8 +187,9 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
     'adminRevokePreview',
     'adminRevenue',
   ],
-  changeTicket: ['adminSupportTickets', 'adminSupportStats'],
-  replySupport: ['adminSupportTickets'],
+  changeTicketStatus: ['adminSupportTickets', 'adminSupportStats'],
+  changeTicketTaker: ['adminSupportTickets'],
+  replySupport: [],
   retryTranslation: [],
 }
 

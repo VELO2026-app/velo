@@ -23,7 +23,7 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import SupportTicketsPanel from '@/components/admin/SupportTicketsPanel.vue'
 import * as supportApi from '@/api/support'
@@ -570,6 +570,35 @@ describe('SupportTicketsPanel', () => {
       expect(supportApi.listAdminTickets).toHaveBeenCalledTimes(2)
       resolvePage(page([ticket({ id: 't_2' })], null))
       await flush()
+    })
+
+    it('a failed «Показать ещё» keeps the loaded rows and toasts -- no error state', async () => {
+      vi.mocked(supportApi.listAdminTickets).mockResolvedValueOnce(page([ticket()], 'cursor-2'))
+      mount()
+      await flush()
+
+      vi.mocked(supportApi.listAdminTickets).mockRejectedValueOnce(new Error('down'))
+      btnByText('Показать ещё')?.click()
+      await flush()
+
+      expect(cards()).toHaveLength(1)
+      expect(btnByText('Повторить')).toBeUndefined()
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки')
+    })
+
+    it('a failed refetch over the shown list keeps the rows and says the list failed', async () => {
+      mount()
+      await flush()
+      vi.mocked(supportApi.listAdminTickets).mockRejectedValue(new Error('down'))
+
+      // A return to the app: the list is asked again.
+      useQueryCache()
+        .invalidateQueries({ key: ['admin', 'support', 'tickets'] })
+        .catch(() => {})
+      await flush()
+
+      expect(cards()).toHaveLength(1)
+      expect(toastError).toHaveBeenCalledWith('Ошибка загрузки обращений')
     })
 
     it('a late answer of an older filter is dropped -- the newest wins', async () => {

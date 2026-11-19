@@ -96,8 +96,6 @@ export const adminKeys = {
   supportTickets: (query: object) => ['admin', 'support', 'tickets', query] as const,
   /** `GET /admin/support/tickets/{id}` -- one ticket. */
   supportTicket: (ticketId: string) => ['admin', 'support', 'ticket', ticketId] as const,
-  /** Prefix of every support thread feed. */
-  supportMessagesAll: () => ['admin', 'support', 'messages'] as const,
   /** `GET /support/threads/{id}/messages` -- one thread's feed (a ticket, or a person's history). */
   supportMessages: (threadId: string) => ['admin', 'support', 'messages', threadId] as const,
   /** Prefix of every support stats window. */

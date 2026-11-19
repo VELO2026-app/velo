@@ -336,18 +336,25 @@ export const ADMIN_INVALIDATES = {
     adminKeys.revenueAll(),
   ],
   /**
-   * A support ticket taken, handed over, released, reopened or closed with a
-   * status: every ticket list (its status, its taker) and the support stats.
-   * Not the ticket itself: the screen writes the answer into it (or reads
-   * it again where the answer carries none, the take).
+   * A support ticket closed with a status or reopened: every ticket list
+   * (its status) and the support stats (they count statuses, spam and who
+   * resolved). Not the ticket itself: the screen writes the answer into it.
    */
-  changeTicket: [adminKeys.supportTicketsAll(), adminKeys.supportStatsAll()],
+  changeTicketStatus: [adminKeys.supportTicketsAll(), adminKeys.supportStatsAll()],
   /**
-   * `POST /support/threads/{id}/messages`: a reply -- the ticket lists (their
-   * last activity). The thread's feed is read again by the screen, which
-   * polls it while translations are on their way.
+   * A support ticket taken, handed over or released: every ticket list (its
+   * taker). Not the stats (a taker is not counted) nor the ticket itself
+   * (the screen writes the answer into it, or reads it again after the
+   * take, whose answer carries no ticket).
    */
-  replySupport: [adminKeys.supportTicketsAll()],
+  changeTicketTaker: [adminKeys.supportTicketsAll()],
+  /**
+   * `POST /support/threads/{id}/messages`: a reply -- nothing a held list
+   * shows (a list row carries no last message, and a reply moves neither the
+   * status nor the taker). The thread's feed is read again by the screen,
+   * which polls it while translations are on their way.
+   */
+  replySupport: [],
   /**
    * `POST /support/threads/{id}/messages/{id}/translation/retry`: queued
    * again -- nothing to read now; the screen marks the message as being
@@ -970,7 +977,7 @@ export function setWithdrawal(queryCache: QueryCache, decided: AdminWithdrawalRe
 // =============================================================================
 
 /** Tickets per page of the support tab. */
-export const ADMIN_SUPPORT_TICKETS_PAGE_SIZE = 20
+const ADMIN_SUPPORT_TICKETS_PAGE_SIZE = 20
 
 /**
  * Infinite query options for the support tickets of one tab and filter
@@ -1052,4 +1059,9 @@ export const adminSupportStatsQuery = defineQueryOptions(
  */
 export function setSupportTicket(queryCache: QueryCache, ticket: AdminSupportTicket): void {
   queryCache.setQueryData(adminKeys.supportTicket(ticket.id), ticket)
+}
+
+/** Whether a ticket's entry holds an answer. */
+export function hasSupportTicket(queryCache: QueryCache, ticketId: string): boolean {
+  return queryCache.getQueryData(adminKeys.supportTicket(ticketId)) !== undefined
 }

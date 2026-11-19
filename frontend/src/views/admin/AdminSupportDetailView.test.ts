@@ -23,8 +23,8 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminSupportDetailView from '@/views/admin/AdminSupportDetailView.vue'
 import * as supportApi from '@/api/support'
@@ -149,13 +149,17 @@ function conflict(): ApiResponseError {
 let app: App | null = null
 let host: HTMLElement | null = null
 
-function mount(id: string, stateTicket: AdminSupportTicket | null = null): HTMLElement {
+/** Mount the card; pass a Pinia whose Colada cache is already written to revisit it. */
+function mount(
+  id: string,
+  stateTicket: AdminSupportTicket | null = null,
+  pinia: Pinia = createPinia(),
+): HTMLElement {
   routeParams.id = id
   window.history.replaceState(stateTicket ? { ticket: stateTicket } : {}, '')
   host = document.createElement('div')
   document.body.appendChild(host)
-  // A fresh Pinia + Colada per mount, as in production.
-  const pinia = createPinia()
+  // A fresh Pinia + Colada per mount unless revisiting, as in production.
   setActivePinia(pinia)
   app = createApp(AdminSupportDetailView)
     .use(createTestI18n())
@@ -336,6 +340,45 @@ describe('AdminSupportDetailView', () => {
       await flush()
 
       expect(text()).toContain('Обращение не найдено')
+    })
+
+    it('a held ticket is not overwritten by an older list row handed on the way in', async () => {
+      // Decided here a moment ago (the entry holds it); the list behind still
+      // showed it open while its refetch ran.
+      vi.mocked(supportApi.getAdminTicket).mockReturnValue(new Promise(() => {}))
+      const pinia = createPinia()
+      setActivePinia(pinia)
+      const seed = createApp({ render: () => null })
+        .use(pinia)
+        .use(PiniaColada, coladaOptions)
+      seed.runWithContext(() =>
+        useQueryCache().setQueryData(
+          ['admin', 'support', 'ticket', 't_1'],
+          ticket({ status: 'resolved' }),
+        ),
+      )
+      mount('t_1', ticket({ status: 'open' }), pinia)
+      await flush()
+
+      expect(badge()).toBe('Решена')
+    })
+
+    it('a 404 is for good: a later read of the missing ticket keeps the not-found screen', async () => {
+      vi.mocked(supportApi.getAdminTicket).mockRejectedValue(
+        new ApiResponseError(404, 'Ticket not found'),
+      )
+      mount('t_missing', null)
+      await flush()
+      vi.mocked(supportApi.getAdminTicket).mockReturnValue(new Promise(() => {}))
+
+      // Colada asks an entry in error again on a return to the app.
+      useQueryCache()
+        .invalidateQueries({ key: ['admin', 'support', 'ticket'] })
+        .catch(() => {})
+      await flush()
+
+      expect(text()).toContain('Обращение не найдено')
+      expect(host?.querySelector('.support-detail__loader')).toBeNull()
     })
 
     it('the not-found screen and the header both lead back', async () => {
@@ -731,6 +774,22 @@ describe('AdminSupportDetailView', () => {
       expect(assignSheetOpen()).toBe(true)
     })
 
+    it('a 422 whose roster re-read fails keeps the roster and says so', async () => {
+      getUsersList.mockResolvedValueOnce(roster(OLGA_USER)).mockRejectedValue(new Error('down'))
+      vi.mocked(supportApi.assignTicket).mockRejectedValue(
+        new ApiResponseError(422, 'The assignee must be an admin'),
+      )
+      mount('t_1', ticket())
+      await flush()
+
+      await pickStatus('Назначить')
+      assignRows()[0]?.click()
+      await flush()
+
+      expect(assignRows()).toHaveLength(1)
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить администраторов')
+    })
+
     it('a 409 (handed over meanwhile) toasts, closes the sheet and reads the ticket again', async () => {
       getUsersList.mockResolvedValue(roster(OLGA_USER))
       vi.mocked(supportApi.assignTicket).mockRejectedValue(conflict())
@@ -796,17 +855,6 @@ describe('AdminSupportDetailView', () => {
       expect(btnByText('Взять в работу')).toBeDefined()
     })
 
-    it('any other failure toasts the generic fallback; the ticket stays held', async () => {
-      vi.mocked(supportApi.releaseTicket).mockRejectedValue(new ApiResponseError(502, 'down'))
-      mount('t_1', ticket({ claimed_by: ME }))
-      await flush()
-
-      await pickStatus('Освободить')
-
-      expect(toastError).toHaveBeenCalledWith('Не удалось освободить обращение')
-      expect(composer()).not.toBeNull()
-    })
-
     it('a 409 (handed over meanwhile) toasts and reads the ticket again', async () => {
       vi.mocked(supportApi.releaseTicket).mockRejectedValue(conflict())
       vi.mocked(supportApi.getAdminTicket).mockResolvedValue(ticket({ claimed_by: OTHER }))
@@ -827,7 +875,7 @@ describe('AdminSupportDetailView', () => {
 
       await pickStatus('Освободить')
 
-      expect(toastError).toHaveBeenCalled()
+      expect(toastError).toHaveBeenCalledWith('Не удалось освободить обращение')
       expect(supportApi.getAdminTicket).not.toHaveBeenCalled()
       expect(composer()).not.toBeNull()
     })
@@ -1126,7 +1174,7 @@ describe('AdminSupportDetailView', () => {
       expect(draftField().value).toBe('')
     })
 
-    it('a 403 from comms (unclaimed mid-flight) toasts rather than crashing', async () => {
+    it('a 403 from comms (unclaimed mid-flight) toasts rather than crashing; the draft stays', async () => {
       vi.mocked(supportApi.sendAdminSupportReply).mockRejectedValue(new Error('403'))
       mount('t_1', ticket({ claimed_by: ME }))
       await flush()
@@ -1137,6 +1185,62 @@ describe('AdminSupportDetailView', () => {
       await flush()
 
       expect(toastError).toHaveBeenCalled()
+      expect(draftField().value).toBe('Здравствуйте')
+    })
+
+    it('a double tap on «Отправить» sends the reply once', async () => {
+      vi.mocked(supportApi.sendAdminSupportReply).mockReturnValue(new Promise(() => {}))
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+      setValue(draftField(), 'Здравствуйте')
+      await flush()
+
+      btnByText('Отправить')?.click()
+      btnByText('Отправить')?.click()
+      await flush()
+
+      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledTimes(1)
+    })
+
+    it('a return to the app reads the feed again behind the composer: the draft stays, no loader', async () => {
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+      setValue(draftField(), 'Черновик ответа')
+      await flush()
+      vi.mocked(supportApi.getAdminSupportMessages).mockReturnValue(new Promise(() => {}))
+
+      // Colada asks the stale feed again on focus / visibilitychange.
+      useQueryCache()
+        .invalidateQueries({ key: ['admin', 'support', 'messages'] })
+        .catch(() => {})
+      await flush()
+
+      expect(host?.querySelector('.support-detail__loader')).toBeNull()
+      expect(composer()).not.toBeNull()
+      expect(draftField().value).toBe('Черновик ответа')
+      expect(bubbles()).toHaveLength(1)
+    })
+
+    it('a failed read on a return keeps the feed and the composer, told once', async () => {
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+      vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(() =>
+        Promise.reject(new Error('down')),
+      )
+      const again = async () => {
+        useQueryCache()
+          .invalidateQueries({ key: ['admin', 'support', 'messages'] })
+          .catch(() => {})
+        await flush()
+      }
+
+      await again()
+      await again()
+
+      expect(composer()).not.toBeNull()
+      expect(bubbles()).toHaveLength(1)
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить сообщения')
     })
 
     it('an empty draft cannot be sent', async () => {

@@ -329,7 +329,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery, useQueryCache } from '@pinia/colada'
 import { VHeader } from '@/components/layout'
@@ -370,6 +370,8 @@ import {
   adminAdminsQuery,
   adminSupportMessagesQuery,
   adminSupportTicketQuery,
+  hasSupportTicket,
+  onFailedRequest,
   setSupportTicket,
   updateSupportFeed,
   useAdminMutation,
@@ -393,7 +395,10 @@ const queryCache = useQueryCache()
 // ticket. A 404 -- that read, a later one, a reopen -- is the not-found
 // screen; any other failure with nothing shown is the error rung.
 const handedTicket = (history.state as { ticket?: AdminSupportTicket } | null)?.ticket
-if (handedTicket && handedTicket.id === ticketId) setSupportTicket(queryCache, handedTicket)
+// Only into an empty entry: a held one may be newer than the list's row (a
+// decision made here a moment ago, the list's refetch still on its way).
+if (handedTicket && handedTicket.id === ticketId && !hasSupportTicket(queryCache, ticketId))
+  setSupportTicket(queryCache, handedTicket)
 const ticketQuery = useQuery(() => adminSupportTicketQuery(ticketId))
 /** A reopen answered 404: the spam bin emptied the ticket. */
 const gone = ref(false)
@@ -423,27 +428,75 @@ const ticketError = computed<string | null>(() =>
 )
 
 // -- The feeds: the ticket's thread and, on demand, the person's history --
-// A read the screen makes itself (the first load, the refresh button, a
-// retry) is "loud": the loader while it runs, the error rung when it fails.
-// The polling's reads are silent: a failed one keeps what is shown.
+// With nothing shown yet, a read shows the loader and, failed, the error
+// rung. Over a shown feed only a read the screen asks for itself (the
+// refresh button, a retry) is "loud" and takes the feed's place; every other
+// read keeps the feed and the composer (and its draft) on screen. The
+// translation polling's reads are quiet: a failed one waits for the next
+// poll. Colada's own (a return to the app) are told once when they fail
+// (onFailedRequest).
+interface FeedQuery {
+  data: Readonly<Ref<SupportMessage[] | undefined>>
+  error: Readonly<Ref<unknown>>
+  asyncStatus: Readonly<Ref<'idle' | 'loading'>>
+}
+
+function feedState(query: FeedQuery, shown: () => boolean) {
+  const loud = ref(false)
+  const loudFailed = ref(false)
+  let quiet = false
+  onFailedRequest(query, (e) => {
+    // Runs before the reads' own continuations: a loud read is its rung's,
+    // a quiet one the next poll's.
+    if (!loud.value && !quiet && query.data.value !== undefined)
+      toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.messagesLoadFailed')))
+  })
+  return {
+    loading: computed(
+      () =>
+        shown() &&
+        query.asyncStatus.value === 'loading' &&
+        (query.data.value === undefined || loud.value),
+    ),
+    error: computed<string | null>(() => {
+      const e = query.error.value
+      return shown() &&
+        e != null &&
+        query.asyncStatus.value === 'idle' &&
+        (query.data.value === undefined || loudFailed.value)
+        ? extractApiError(e, t('adminScreens.adminSupportDetail.tryAgain'))
+        : null
+    }),
+    /** Run a read of the polling, quietly. */
+    async readQuietly(read: () => Promise<unknown>): Promise<void> {
+      quiet = true
+      try {
+        await read()
+      } finally {
+        quiet = false
+      }
+    },
+    /** Run a read the screen asks for itself, loudly. */
+    async readLoudly(read: () => Promise<{ status: string }>): Promise<boolean> {
+      loud.value = true
+      try {
+        const state = await read()
+        loudFailed.value = state.status === 'error'
+        return state.status === 'success'
+      } finally {
+        loud.value = false
+      }
+    },
+  }
+}
+
 const messagesQuery = useQuery(() =>
   adminSupportMessagesQuery({ threadId: ticketId, enabled: true }),
 )
-const messagesLoud = ref(true)
 const messages = computed<SupportMessage[]>(() => messagesQuery.data.value ?? [])
-const loadingMessages = computed(
-  () =>
-    messagesQuery.asyncStatus.value === 'loading' &&
-    (messagesQuery.data.value === undefined || messagesLoud.value),
-)
-const messagesError = computed<string | null>(() => {
-  const e = messagesQuery.error.value
-  return e != null &&
-    messagesQuery.asyncStatus.value === 'idle' &&
-    (messagesQuery.data.value === undefined || messagesLoud.value)
-    ? extractApiError(e, t('adminScreens.adminSupportDetail.tryAgain'))
-    : null
-})
+const messagesFeed = feedState(messagesQuery, () => true)
+const loadingMessages = messagesFeed.loading
+const messagesError = messagesFeed.error
 
 const draft = ref('')
 const sending = ref(false)
@@ -457,7 +510,6 @@ const originalShown = ref<ReadonlySet<string>>(new Set())
 const retrying = ref<ReadonlySet<string>>(new Set())
 
 const historyShown = ref(false)
-const historyLoud = ref(true)
 const historyQuery = useQuery(() =>
   adminSupportMessagesQuery({
     threadId: ticket.value?.history_thread_id ?? '',
@@ -467,21 +519,9 @@ const historyQuery = useQuery(() =>
 const historyMessages = computed<SupportMessage[]>(() =>
   historyShown.value ? (historyQuery.data.value ?? []) : [],
 )
-const loadingHistory = computed(
-  () =>
-    historyShown.value &&
-    historyQuery.asyncStatus.value === 'loading' &&
-    (historyQuery.data.value === undefined || historyLoud.value),
-)
-const historyError = computed<string | null>(() => {
-  const e = historyQuery.error.value
-  return historyShown.value &&
-    e != null &&
-    historyQuery.asyncStatus.value === 'idle' &&
-    (historyQuery.data.value === undefined || historyLoud.value)
-    ? extractApiError(e, t('adminScreens.adminSupportDetail.tryAgain'))
-    : null
-})
+const historyFeed = feedState(historyQuery, () => historyShown.value)
+const loadingHistory = historyFeed.loading
+const historyError = historyFeed.error
 
 const headerTitle = computed(
   () => ticket.value?.opener?.name ?? t('adminScreens.adminSupportDetail.threadFallback'),
@@ -632,6 +672,13 @@ const adminsError = computed<string | null>(() =>
     : null,
 )
 
+// A failed read over a roster already shown (a return, a 422 re-read) is
+// told; the roster stays for a pick.
+onFailedRequest(adminsQuery, (e) => {
+  if (adminsQuery.data.value !== undefined)
+    toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.menu.assignLoadFailed')))
+})
+
 /** The roster source is the admin users list (the same one AdminUsersView
  *  reads). The caller themselves is not offered: handing a ticket to
  *  yourself is the take button (i18n:adminScreens.adminSupportDetail.take),
@@ -661,14 +708,14 @@ const writeTicket = {
   waitForRefetch: false,
 }
 const assign = useAdminMutation(
-  'changeTicket',
+  'changeTicketTaker',
   (to: string) => assignTicket(ticketId, to),
   writeTicket,
 )
-const release = useAdminMutation('changeTicket', () => releaseTicket(ticketId), writeTicket)
-const reopen = useAdminMutation('changeTicket', () => reopenTicket(ticketId), writeTicket)
+const release = useAdminMutation('changeTicketTaker', () => releaseTicket(ticketId), writeTicket)
+const reopen = useAdminMutation('changeTicketStatus', () => reopenTicket(ticketId), writeTicket)
 const changeStatus = useAdminMutation(
-  'changeTicket',
+  'changeTicketStatus',
   (status: SupportClosingStatus) => setTicketStatus(ticketId, status),
   {
     write: (changed) => {
@@ -678,7 +725,7 @@ const changeStatus = useAdminMutation(
   },
 )
 // The take answers no ticket: the screen reads it again (refreshTicket).
-const claim = useAdminMutation('changeTicket', () => claimSupportThread(ticketId), {
+const claim = useAdminMutation('changeTicketTaker', () => claimSupportThread(ticketId), {
   waitForRefetch: false,
 })
 const reply = useAdminMutation(
@@ -811,11 +858,11 @@ function restartPolling(): void {
  *  shown -- the next poll or the refresh button
  *  (i18n:adminScreens.adminSupportDetail.refresh) tries again. */
 async function rereadFeeds(): Promise<void> {
-  messagesLoud.value = false
-  historyLoud.value = false
   await Promise.all([
-    messagesQuery.refetch(),
-    historyShown.value && historyThreadId.value ? historyQuery.refetch() : undefined,
+    messagesFeed.readQuietly(() => messagesQuery.refetch()),
+    historyShown.value && historyThreadId.value
+      ? historyFeed.readQuietly(() => historyQuery.refetch())
+      : undefined,
   ])
 }
 
@@ -881,21 +928,17 @@ async function refreshTicket(): Promise<void> {
 
 /** The feed again, loudly (the refresh button, the error rung's retry). */
 async function loadMessages(): Promise<void> {
-  messagesLoud.value = true
-  const state = await messagesQuery.refetch()
-  if (state.status === 'success') restartPolling()
+  if (await messagesFeed.readLoudly(() => messagesQuery.refetch())) restartPolling()
 }
 
 /** Show the person's history (the button), or read it again (its retry). */
 async function loadHistory(): Promise<void> {
   if (!historyThreadId.value || loadingHistory.value) return
   historyShown.value = true
-  historyLoud.value = true
   // The query turns on with historyShown; refresh joins the read it starts,
   // and reads again after a failure.
   await nextTick()
-  const state = await historyQuery.refresh()
-  if (state.status === 'success') restartPolling()
+  if (await historyFeed.readLoudly(() => historyQuery.refresh())) restartPolling()
 }
 
 async function onSetStatus(status: SupportClosingStatus): Promise<void> {
@@ -974,6 +1017,12 @@ onMounted(async () => {
 
 watch(ticketMissing, (missing) => {
   if (missing) stopPolling()
+})
+
+// A 404 is for good: Colada asks an entry in error again (a return to the
+// app), and the not-found screen must not flicker back to a loader.
+watch(ticketSettledError, (e) => {
+  if (isStatus(e, 404)) gone.value = true
 })
 </script>
 
