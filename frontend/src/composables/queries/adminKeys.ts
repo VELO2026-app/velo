@@ -74,4 +74,14 @@ export const adminKeys = {
   revokePreview: (userId: string) => ['admin', 'revokePreview', userId] as const,
   /** `GET /admin/masters/method-change-requests` -- pending method-change requests, every page loaded so far. */
   methodRequests: () => ['admin', 'methodRequests'] as const,
+  /** Prefix of every moderation-report list. */
+  reportsAll: () => ['admin', 'reports'] as const,
+  /** `GET /admin/reports?status=` -- one status filter of the complaints tab, every page loaded so far. */
+  reports: (status: string) => ['admin', 'reports', { status }] as const,
+  /** Prefix of every report's detail. */
+  reportAll: () => ['admin', 'report'] as const,
+  /** `GET /admin/reports/{id}` -- one report (a deep link; the list hands its row otherwise). */
+  report: (reportId: string) => ['admin', 'report', reportId] as const,
+  /** `GET /admin/withdrawals` -- every payout request, every page loaded so far. */
+  withdrawals: () => ['admin', 'withdrawals'] as const,
 }

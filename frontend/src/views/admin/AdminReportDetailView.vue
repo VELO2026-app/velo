@@ -5,7 +5,7 @@
 
   S-1/S-2: after resolve/dismiss use router.push({ name: 'admin-reports' })
   instead of router.back(). Guarantees a fresh mount of AdminReportsView
-  and a fresh loadInitial() -- no stale reports shown.
+  and, the complaints being invalidated, a fresh read -- no stale reports shown.
 -->
 
 <template>
@@ -29,7 +29,7 @@
         :title="t('common.loadError')"
         :description="error"
       >
-        <VButton size="sm" variant="outline" @click="loadReport">{{ t('common.retry') }}</VButton>
+        <VButton size="sm" variant="outline" @click="retry">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <template v-else-if="report">
@@ -181,13 +181,15 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { decodeReportReason } from '@/utils/reportReasons'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useQuery } from '@pinia/colada'
 import type { RouteLocationRaw } from 'vue-router'
 import { VHeader } from '@/components/layout'
 import { VBadge, VButton, VTextarea, VEmptyState, VLoader, VCard } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
-import { getReportById, resolveReport, dismissReport } from '@/api/admin'
+import { resolveReport, dismissReport } from '@/api/admin'
+import { adminReportQuery, useAdminMutation } from '@/composables/queries/admin'
 import type { ReportResponse } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
 import {
@@ -203,10 +205,38 @@ const toast = useToast()
 
 const reportId = route.params.id as string
 
-const report = ref<ReportResponse | null>(null)
-const loading = ref(false)
-const error = ref<string | null>(null)
-const currentStatus = ref<string>('pending')
+// The list hands its row via router state: rendered as is, no request. A
+// deep link (nothing handed) asks for the report (Pinia Colada,
+// composables/queries/admin.ts).
+const handedState = (history.state as { report?: ReportResponse } | null)?.report
+const handed = handedState && handedState.id === reportId ? handedState : null
+const reportQuery = useQuery(() => adminReportQuery({ reportId, enabled: handed === null }))
+const report = computed<ReportResponse | null>(() => handed ?? reportQuery.data.value ?? null)
+const failed = computed(
+  () => reportQuery.error.value != null && reportQuery.asyncStatus.value === 'idle',
+)
+const loading = computed(() => report.value === null && !failed.value)
+const error = computed<string | null>(() =>
+  report.value === null && failed.value
+    ? extractApiError(reportQuery.error.value, t('adminScreens.adminReportDetail.loadFailedToast'))
+    : null,
+)
+const currentStatus = computed<string>(() => report.value?.status ?? 'pending')
+
+function retry(): void {
+  void reportQuery.refetch()
+}
+
+// The verdicts: every complaints list, the detail and the moderation badge
+// go stale (ADMIN_INVALIDATES.decideReport); the screen leaves for the list.
+const resolve = useAdminMutation('decideReport', (note: string) => resolveReport(reportId, note), {
+  waitForRefetch: false,
+})
+const dismiss = useAdminMutation(
+  'decideReport',
+  (note: string | undefined) => dismissReport(reportId, note),
+  { waitForRefetch: false },
+)
 
 const resolveNote = ref('')
 const resolveError = ref('')
@@ -230,27 +260,6 @@ const targetRoute = computed<RouteLocationRaw | null>(() => {
   return null
 })
 
-async function loadReport(): Promise<void> {
-  const stateData = (history.state as { report?: ReportResponse }).report
-  if (stateData && stateData.id === reportId) {
-    report.value = stateData
-    currentStatus.value = stateData.status
-    return
-  }
-  loading.value = true
-  error.value = null
-  try {
-    const fetched = await getReportById(reportId)
-    report.value = fetched
-    currentStatus.value = fetched.status
-  } catch (e) {
-    // SW8: own error rung + retry, distinct from "not found".
-    error.value = extractApiError(e, t('adminScreens.adminReportDetail.loadFailedToast'))
-  } finally {
-    loading.value = false
-  }
-}
-
 async function onResolve(): Promise<void> {
   resolveError.value = ''
   if (!resolveNote.value.trim()) {
@@ -260,9 +269,9 @@ async function onResolve(): Promise<void> {
   if (anyLoading.value) return
   resolving.value = true
   try {
-    await resolveReport(reportId, resolveNote.value.trim())
+    await resolve.mutateAsync(resolveNote.value.trim())
     toast.success(t('adminScreens.adminReportDetail.resolvedToast'))
-    // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
+    // S-1/S-2: push to the list instead of back() -- a fresh mount over invalidated complaints.
     // FE-100: Moderation (i18n:adminScreens.adminReports.moderationTab) opens on
     // tickets (i18n:adminScreens.adminReports.tabTickets); a report returns to
     // complaints (i18n:adminScreens.adminReports.tabComplaints).
@@ -278,9 +287,9 @@ async function onDismiss(): Promise<void> {
   if (anyLoading.value) return
   dismissing.value = true
   try {
-    await dismissReport(reportId, dismissNote.value.trim() || undefined)
+    await dismiss.mutateAsync(dismissNote.value.trim() || undefined)
     toast.success(t('adminScreens.adminReportDetail.rejectedToast'))
-    // S-1/S-2: push to list instead of back() -- guarantees fresh loadInitial().
+    // S-1/S-2: push to the list instead of back() -- a fresh mount over invalidated complaints.
     // FE-100: Moderation (i18n:adminScreens.adminReports.moderationTab) opens on
     // tickets (i18n:adminScreens.adminReports.tabTickets); a report returns to
     // complaints (i18n:adminScreens.adminReports.tabComplaints).
@@ -291,8 +300,6 @@ async function onDismiss(): Promise<void> {
     dismissing.value = false
   }
 }
-
-onMounted(loadReport)
 
 // tz-i18n: known reason codes decode to localized labels; legacy free text
 // renders verbatim.

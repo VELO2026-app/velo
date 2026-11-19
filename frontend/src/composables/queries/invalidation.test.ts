@@ -55,6 +55,9 @@ const SAMPLE = {
   // The admin's own master profile: no admin edit of another master reaches it.
   masterProfile: keys.masters.profile() as EntryKey,
   adminParticipants: adminKeys.participants('all') as EntryKey,
+  adminReports: adminKeys.reports('pending') as EntryKey,
+  adminReport: adminKeys.report('r1') as EntryKey,
+  adminWithdrawals: adminKeys.withdrawals() as EntryKey,
 }
 type Domain = keyof typeof SAMPLE
 
@@ -170,6 +173,8 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
     'masterPublic',
   ],
   rejectMethodChange: ['adminMethodRequests', 'adminStats'],
+  decideReport: ['adminReports', 'adminReport', 'adminStats'],
+  decideWithdrawal: ['adminWithdrawals', 'adminMasters'],
 }
 
 describe('ADMIN_INVALIDATES', () => {

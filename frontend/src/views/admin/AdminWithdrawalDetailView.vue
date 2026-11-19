@@ -112,6 +112,7 @@ import { useToast } from '@/composables/useToast'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
 import type { AdminWithdrawalResponse } from '@/api/admin'
 import { extractApiError } from '@/composables/useApiError'
+import { useAdminMutation } from '@/composables/queries/admin'
 import { formatMoney } from '@/utils/format'
 
 const router = useRouter()
@@ -138,6 +139,17 @@ const rejectError = ref('')
 const showConfirm = ref(false)
 const approving = ref(false)
 const rejecting = ref(false)
+
+// The verdicts: the payouts list and the masters' balances go stale
+// (ADMIN_INVALIDATES.decideWithdrawal); the screen goes back to the list.
+const approve = useAdminMutation('decideWithdrawal', (id: string) => approveWithdrawal(id), {
+  waitForRefetch: false,
+})
+const reject = useAdminMutation(
+  'decideWithdrawal',
+  ({ id, reason }: { id: string; reason: string }) => rejectWithdrawal(id, reason),
+  { waitForRefetch: false },
+)
 
 const anyLoading = computed<boolean>(() => approving.value || rejecting.value)
 const isPending = computed<boolean>(() => w.value?.status === 'pending')
@@ -192,7 +204,7 @@ async function onApprove(): Promise<void> {
   if (!w.value || approving.value) return
   approving.value = true
   try {
-    await approveWithdrawal(w.value.id)
+    await approve.mutateAsync(w.value.id)
     toast.success(t('adminScreens.adminWithdrawalDetail.toast.approved'))
     showConfirm.value = false
     router.back()
@@ -212,7 +224,7 @@ async function onReject(): Promise<void> {
   }
   rejecting.value = true
   try {
-    await rejectWithdrawal(w.value.id, rejectReason.value.trim())
+    await reject.mutateAsync({ id: w.value.id, reason: rejectReason.value.trim() })
     toast.success(t('adminScreens.adminWithdrawalDetail.toast.rejected'))
     showReject.value = false
     router.back()
