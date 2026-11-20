@@ -16,8 +16,9 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, h, nextTick, ref, type App } from 'vue'
 import DiarySearchBar from '@/components/shared/DiarySearchBar.vue'
+import { VModal } from '@/components/ui'
 
 const DEBOUNCE_MS = 300
 
@@ -134,6 +135,31 @@ describe('DiarySearchBar', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flush()
     expect(events.close).toHaveLength(1)
+  })
+
+  it('Esc with a modal open over the bar closes the modal first, the bar on the next press (FE-215)', async () => {
+    mount()
+    const modalOpen = ref(false)
+    const modalHost = document.createElement('div')
+    document.body.appendChild(modalHost)
+    const modalApp = createApp({
+      render: () => h(VModal, { open: modalOpen.value, onClose: () => (modalOpen.value = false) }),
+    }).use(createTestI18n())
+    modalApp.mount(modalHost)
+    modalOpen.value = true
+    await flush()
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flush()
+    expect(modalOpen.value).toBe(false)
+    expect(events.close).toHaveLength(0)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flush()
+    expect(events.close).toHaveLength(1)
+
+    modalApp.unmount()
+    modalHost.remove()
   })
 
   it('a pending debounce is cleared on unmount (no emit after the bar is gone)', async () => {

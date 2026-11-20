@@ -125,8 +125,8 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useEscapeLayer } from '@/components/ui'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 
 const props = defineProps<{
   /** The ACTIVE search, to prefill/sync the field ('' = none). */
@@ -198,17 +198,18 @@ watch(
   { immediate: true },
 )
 
-// Esc closes the search mode. Listeners live only while mounted (the view
-// v-ifs the whole bar, so unmount is the teardown).
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') {
+// Esc closes the search mode. The bar is a layer of the kit's Escape stack
+// (FE-215) for as long as it is mounted (the view v-ifs the whole bar): an
+// overlay opened over the feed takes Escape first, and only the next press
+// closes the search.
+useEscapeLayer(
+  () => true,
+  () => {
     inputEl.value?.blur()
     emit('close')
-  }
-}
-onMounted(() => onDocumentEvent('keydown', onKeydown))
+  },
+)
 onBeforeUnmount(() => {
-  offDocumentEvent('keydown', onKeydown)
   if (liveTimer) {
     clearTimeout(liveTimer)
     liveTimer = null

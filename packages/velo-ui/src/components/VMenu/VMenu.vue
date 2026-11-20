@@ -202,8 +202,9 @@ function onDocPointerDown(event: PointerEvent): void {
 }
 
 // An open menu owns Escape (FE-213): VModal and VBottomSheet close on a
-// document keydown too, and they attach it on mount -- before this menu
-// opens -- so a bubble-phase stopPropagation here would run too late. The
+// document keydown too (the Escape stack, src/escapeStack.ts), bound when
+// the overlay opens -- before this menu opens -- so a bubble-phase
+// stopPropagation here would run too late. The
 // listener sits in the CAPTURE phase, which reaches the document before the
 // key goes down to its target and back up, and stops the event there: one
 // press closes the menu and leaves the overlay under it open.
