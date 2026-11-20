@@ -1328,7 +1328,7 @@ describe('MasterPracticesView', () => {
   //   by any honest mount of this SFC alone. It belongs to a MobileLayout test.
   // - practiceIconFor's direction -> glyph table (.vue:84,132): displayHelpers'
   //   own ground, and already unit-tested territory. The fixtures carry no
-  //   `direction`, so every card renders the IconDots fallback -- which is why
+  //   `direction`, so every card renders DIRECTION_ICON_FALLBACK -- which is why
   //   no assertion here reads the icon.
   // - the insights reader's skip-if-held guard: the query's behaviour, covered
   //   in composables/queries/diary.test.ts.

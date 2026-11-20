@@ -9,7 +9,7 @@
 //   "Meditation — Meditation of silence" -> [meditation icon] "of silence"
 //   "Yoga — Kundalini yoga"              -> [yoga icon]       "Kundalini"
 //   "Breathwork practices"               -> [breathwork icon] "Breathwork practices"
-//   "My unique method"                   -> [dots fallback]   "My unique method"
+//   "My unique method"                   -> [default icon]    "My unique method"
 //
 // The style labels embed the direction word by design ("Meditation of
 // silence", "Kundalini yoga"), so the old raw-string pill read the word
@@ -21,10 +21,10 @@
 // glyphs -- the same DIRECTION_ICON mapping the practice cards use. A string
 // the taxonomy does not know (a custom own-variant entry
 // (i18n:methodPicker.custom), legacy free text, a catalog-only entry while
-// the catalog cache is cold) keeps its verbatim text under the neutral
-// IconDots fallback: an invented icon would claim a skill the set cannot
-// name. Priming the taxonomy catalog (admin screens already do) extends
-// recognition to catalog rows with no change here.
+// the catalog cache is cold) keeps its verbatim text under the default
+// direction artwork (DIRECTION_ICON_FALLBACK, FE-216). Priming the taxonomy
+// catalog (admin screens already do) extends recognition to catalog rows
+// with no change here.
 // =============================================================================
 
 import type { Component } from 'vue'

@@ -10,7 +10,13 @@
 
 import { describe, it, expect } from 'vitest'
 import { methodChipFor, shortStyleLabel } from '@/utils/methodChips'
-import { IconBreathwork, IconCircles, IconDots, IconMeditation, IconYoga } from '@/components/icons'
+import {
+  IconBreathwork,
+  IconCircles,
+  IconDirectionDefault,
+  IconMeditation,
+  IconYoga,
+} from '@/components/icons'
 
 describe('methodChipFor -- stored string -> icon + short label', () => {
   it('«Медитация — Медитация молчания»: direction word stripped from the style', () => {
@@ -37,7 +43,7 @@ describe('methodChipFor -- stored string -> icon + short label', () => {
     expect(chip.label).toBe('Дыхательные практики')
   })
 
-  it('«Медитация — Медитация» is not a producible pair: the parser surfaces it verbatim under the fallback glyph', () => {
+  it('«Медитация — Медитация» is not a producible pair: the parser surfaces it verbatim under the default direction icon', () => {
     // parseMethods maps a "Direction — Style" string only when BOTH halves
     // resolve — the direction label "Meditation" is not a known style under
     // meditation, so the whole string is custom text. The wizard cannot emit
@@ -45,7 +51,7 @@ describe('methodChipFor -- stored string -> icon + short label', () => {
     // (tested above) for catalog-provided styles whose label repeats the
     // direction.
     const chip = methodChipFor('Медитация — Медитация')
-    expect(chip.icon).toBe(IconDots)
+    expect(chip.icon).toBe(IconDirectionDefault)
     expect(chip.label).toBe('Медитация — Медитация')
   })
 
@@ -55,15 +61,15 @@ describe('methodChipFor -- stored string -> icon + short label', () => {
     expect(chip.label).toBe('Женский круг')
   })
 
-  it('custom / unknown string: neutral fallback icon, verbatim label', () => {
+  it('custom / unknown string: default direction icon (FE-216), verbatim label', () => {
     const chip = methodChipFor('Мой уникальный метод')
-    expect(chip.icon).toBe(IconDots)
+    expect(chip.icon).toBe(IconDirectionDefault)
     expect(chip.label).toBe('Мой уникальный метод')
   })
 
   it('legacy bare style string: unknown to the direction parser, verbatim', () => {
     const chip = methodChipFor('Йога-нидра')
-    expect(chip.icon).toBe(IconDots)
+    expect(chip.icon).toBe(IconDirectionDefault)
     expect(chip.label).toBe('Йога-нидра')
   })
 })

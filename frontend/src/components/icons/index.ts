@@ -40,6 +40,8 @@ export { default as IconSoundHealing } from './IconSoundHealing.vue'
 export { default as IconArt } from './IconArt.vue'
 export { default as IconNarrative } from './IconNarrative.vue'
 export { default as IconMovement } from './IconMovement.vue'
+// FE-216: the artwork for a direction without its own icon (custom / catalog-only).
+export { default as IconDirectionDefault } from './IconDirectionDefault.vue'
 export { default as IconRatingConfused } from './IconRatingConfused.vue'
 export { default as IconRatingGood } from './IconRatingGood.vue'
 export { default as IconRatingFire } from './IconRatingFire.vue'

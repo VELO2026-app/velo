@@ -1,5 +1,22 @@
 import { describe, it, expect } from 'vitest'
-import { recurrenceDaysLabel } from './displayHelpers'
+import { practiceIconFor, recurrenceDaysLabel } from './displayHelpers'
+import { IconDirectionDefault, IconYoga } from '@/components/icons'
+
+// FE-216: a direction without its own artwork (a master's own direction
+// approved into the taxonomy, an unmapped backend value, or none at all)
+// renders the default direction icon; a mapped direction keeps its own.
+describe('practiceIconFor', () => {
+  it('keeps a mapped direction on its own icon', () => {
+    expect(practiceIconFor({ direction: 'yoga' })).toBe(IconYoga)
+  })
+
+  it.each([['custom_direction'], [null], [undefined]])(
+    'falls back to the default direction icon for %s',
+    (direction) => {
+      expect(practiceIconFor({ direction })).toBe(IconDirectionDefault)
+    },
+  )
+})
 
 describe('recurrenceDaysLabel', () => {
   it('returns null for empty / missing day lists', () => {

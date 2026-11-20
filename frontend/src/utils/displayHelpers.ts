@@ -29,7 +29,7 @@ import {
   IconArt,
   IconNarrative,
   IconMovement,
-  IconDots,
+  IconDirectionDefault,
   IconCalendarStar,
 } from '@/components/icons'
 
@@ -121,7 +121,7 @@ export const DIRECTION_LABEL: Record<PracticeDirection, string> = {
 // lands (handoff §9), some directions still can't be created by masters.
 // A new direction added here without its own icon would fall through to
 // DIRECTION_ICON_FALLBACK instead of failing vue-tsc.
-/** Icon component per practice direction, with a neutral fallback for unknown directions. */
+/** Icon component per practice direction; unmapped directions use DIRECTION_ICON_FALLBACK. */
 export const DIRECTION_ICON: Partial<Record<PracticeDirection, Component>> = {
   meditation: IconMeditation,
   yoga: IconYoga,
@@ -135,16 +135,22 @@ export const DIRECTION_ICON: Partial<Record<PracticeDirection, Component>> = {
   movement: IconMovement,
 }
 
-/** Neutral fallback glyph. After F-1 closed (2026-05-28) all 10 directions
- * in DIRECTION_ICON have real artwork, so this is only hit when:
- *   - the backend returns an unknown direction string (e.g. transient state
- *     during the B-2 migration when old kundalini/womens_circle/mens_circle
- *     records have not been remapped yet);
- *   - the caller passes direction=null/undefined and the title-heuristic in
- *     practiceIconFor() also fails to match.
- * Deliberately NOT IconMeditation — a neutral "..." reads as "icon pending"
- * instead of misleading the user about the direction. */
-export const DIRECTION_ICON_FALLBACK: Component = IconDots
+/**
+ * Default direction artwork for a direction without its own icon.
+ *
+ * @remarks
+ * The ten directions in DIRECTION_ICON carry their own artwork; this one is
+ * hit when:
+ *   - a master's own direction (approved by an admin into the shared
+ *     taxonomy, or still pending) has no icon of its own;
+ *   - the backend returns a direction string the frontend does not map yet;
+ *   - the caller passes direction=null/undefined.
+ * It replaced the neutral IconDots glyph (FE-216): the designer's default
+ * artwork (ring + lotus) reads as "a practice direction" without naming a
+ * specific one. A per-direction custom icon, once the taxonomy carries one,
+ * takes precedence over this default.
+ */
+export const DIRECTION_ICON_FALLBACK: Component = IconDirectionDefault
 
 /**
  * Pick the icon component for a practice card by direction.
@@ -152,7 +158,7 @@ export const DIRECTION_ICON_FALLBACK: Component = IconDots
  * Works for both PracticeResponse and PracticeSummary — backend B-1 added
  * `direction` to PracticeSummary on 2026-05-28, so the title-heuristic
  * fallback that used to live here is no longer needed (removed 2026-05-29).
- * `Unknown direction -> neutral IconDots fallback`.
+ * `Unknown direction -> IconDirectionDefault (DIRECTION_ICON_FALLBACK)`.
  *
  * `title` prop kept in the signature for call-site compatibility (some
  * legacy callers pass it); ignored internally.
