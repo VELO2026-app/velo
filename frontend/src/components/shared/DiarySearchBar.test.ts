@@ -24,6 +24,8 @@ const DEBOUNCE_MS = 300
 
 let app: App | null = null
 let host: HTMLElement | null = null
+let modalApp: App | null = null
+let modalHost: HTMLElement | null = null
 const events: { live: string[]; close: number[]; cancel: number[] } = {
   live: [],
   close: [],
@@ -76,6 +78,10 @@ afterEach(() => {
   host?.remove()
   app = null
   host = null
+  modalApp?.unmount()
+  modalHost?.remove()
+  modalApp = null
+  modalHost = null
   vi.useRealTimers()
 })
 
@@ -129,20 +135,25 @@ describe('DiarySearchBar', () => {
     expect(recents[0]).toBe('море')
   })
 
-  it('Esc emits close', async () => {
-    mount()
+  // The bar stays mounted while the search mode is down (the diary view only
+  // crossfades it), so Escape must close it only while `active` (FE-215).
+  it.each([
+    [true, 1],
+    [false, 0],
+  ])('Esc with active=%s emits close %i time(s)', async (active, closes) => {
+    mount({ active })
     await flush()
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flush()
-    expect(events.close).toHaveLength(1)
+    expect(events.close).toHaveLength(closes)
   })
 
   it('Esc with a modal open over the bar closes the modal first, the bar on the next press (FE-215)', async () => {
-    mount()
+    mount({ active: true })
     const modalOpen = ref(false)
-    const modalHost = document.createElement('div')
+    modalHost = document.createElement('div')
     document.body.appendChild(modalHost)
-    const modalApp = createApp({
+    modalApp = createApp({
       render: () => h(VModal, { open: modalOpen.value, onClose: () => (modalOpen.value = false) }),
     }).use(createTestI18n())
     modalApp.mount(modalHost)
@@ -157,9 +168,6 @@ describe('DiarySearchBar', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flush()
     expect(events.close).toHaveLength(1)
-
-    modalApp.unmount()
-    modalHost.remove()
   })
 
   it('a pending debounce is cleared on unmount (no emit after the bar is gone)', async () => {

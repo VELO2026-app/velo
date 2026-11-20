@@ -35,6 +35,9 @@ const stack: EscapeLayer[] = []
 
 function onDocumentKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape') return
+  // Someone below already handled this Escape, or it only ends an IME
+  // composition: neither is a request to close a layer.
+  if (event.defaultPrevented || event.isComposing) return
   stack[stack.length - 1]?.onEscape()
 }
 

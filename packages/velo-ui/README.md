@@ -271,8 +271,9 @@ src/icons/
 - **dom mini-seam — `src/platform/dom.ts`**: единственная дверь пакета к
   `document`, зеркало закона фронтенда (`no-restricted-globals`, включён в
   eslint пакета тем же FE-143). Мини-набор ровно под резидентов: пара
-  `onDocumentEvent`/`offDocumentEvent` (Escape-keydown оверлеев — с FE-145
-  его слушают сами китовые VModal/VBottomSheet) и пара
+  `onDocumentEvent`/`offDocumentEvent` (Escape-keydown оверлеев — с FE-215
+  его слушает общий стек `src/escapeStack.ts`: VModal/VBottomSheet встают в
+  него через `useEscapeLayer`, Escape закрывает только верхнее окно) и пара
   `setBodyOverflow`/`toggleRootClass` (записи скролл-лока). Пакет-внутренний:
   из баррела не экспортируется, приложение продолжает ходить через свой
   `@/platform/dom`.

@@ -12,7 +12,8 @@
   remembers the query and drops the keyboard (flushing any pending live
   pass); a recent tap applies its query immediately. The small inner x
   behaves like backspacing to empty; the OUTER x emits `cancel` -- the parent
-  resets everything and returns the header row. Esc emits `close`.
+  resets everything and returns the header row. Esc emits `close` while the
+  search mode is up (`active`).
 
   Recent queries persist in localStorage, capped at MAX_RECENTS,
   most-recent-first, de-duplicated case-insensitively (carried over from the
@@ -20,6 +21,7 @@
 
   Usage:
     <DiarySearchBar
+      :active="searchMode"
       :initial="feedFilters.search ?? ''"
       @live="onLiveSearch"
       @cancel="onSearchCancel"
@@ -131,6 +133,9 @@ import { ref, computed, watch, onBeforeUnmount } from 'vue'
 const props = defineProps<{
   /** The ACTIVE search, to prefill/sync the field ('' = none). */
   initial?: string
+  /** The search mode is up. The bar stays mounted while it is down (the
+   *  parent only crossfades it), so Escape listens only while this is true. */
+  active?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -199,11 +204,11 @@ watch(
 )
 
 // Esc closes the search mode. The bar is a layer of the kit's Escape stack
-// (FE-215) for as long as it is mounted (the view v-ifs the whole bar): an
-// overlay opened over the feed takes Escape first, and only the next press
-// closes the search.
+// (FE-215) while the search mode is up -- the parent keeps the bar mounted
+// and only crossfades it, so mounting says nothing. An overlay opened over
+// the feed takes Escape first, and only the next press closes the search.
 useEscapeLayer(
-  () => true,
+  () => props.active,
   () => {
     inputEl.value?.blur()
     emit('close')

@@ -51,8 +51,10 @@ async function flush(): Promise<void> {
 }
 
 /** A keydown bubbling from body to the document, like a real key press. */
-async function pressEscape(): Promise<void> {
-  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+async function pressEscape(init: KeyboardEventInit = {}): Promise<void> {
+  document.body.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true, ...init }),
+  )
   await flush()
 }
 
@@ -115,5 +117,34 @@ describe('stacked overlays close one per Escape, top first (FE-215)', () => {
 
     await pressEscape()
     expect(closed).toEqual(['mounted-first', 'opened-first'])
+  })
+
+  it('an overlay unmounted while open leaves the stack: Escape reaches the one under it', async () => {
+    const sheetOpen = ref(true)
+    const modalOpen = ref(true)
+    const modalMounted = ref(true)
+    mount(() =>
+      overlay('sheet', 'sheet', sheetOpen, () =>
+        modalMounted.value ? overlay('modal', 'modal', modalOpen) : h('p', 'no modal'),
+      ),
+    )
+    await flush()
+    modalMounted.value = false
+    await flush()
+
+    await pressEscape()
+    expect(closed).toEqual(['sheet'])
+  })
+
+  it('an Escape that only ends an IME composition closes nothing; a plain one closes', async () => {
+    const modalOpen = ref(true)
+    mount(() => overlay('modal', 'modal', modalOpen))
+    await flush()
+
+    await pressEscape({ isComposing: true })
+    expect(closed).toEqual([])
+
+    await pressEscape()
+    expect(closed).toEqual(['modal'])
   })
 })
