@@ -145,10 +145,11 @@ export const DIRECTION_ICON: Partial<Record<PracticeDirection, Component>> = {
  *     taxonomy, or still pending) has no icon of its own;
  *   - the backend returns a direction string the frontend does not map yet;
  *   - the caller passes direction=null/undefined.
- * It replaced the neutral IconDots glyph (FE-216): the designer's default
- * artwork (ring + lotus) reads as "a practice direction" without naming a
- * specific one. A per-direction custom icon, once the taxonomy carries one,
- * takes precedence over this default.
+ * The designer's default artwork (ring + lotus) reads as "a practice
+ * direction" without naming a specific one. Per-direction custom icons are
+ * not supported yet.
+ *
+ * @see FE-216
  */
 export const DIRECTION_ICON_FALLBACK: Component = IconDirectionDefault
 
