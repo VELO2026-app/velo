@@ -22,6 +22,7 @@
 ## Конвенции фронта
 - `frontend-comments.md` — стандарт комментариев фронта (TSDoc, `i18n:<key>`), проверяется гейтами `pnpm lint`.
 - `testing.md` — правила тестирования фронта: что тестировать, как писать, как запускать (FE-204).
+- `ci/deploy-machine-ruleset.md` — защита ветки `deploy-machine`: обязательные проверки, ruleset (`ci/deploy-machine-ruleset.json`) и команда для админа (FE-222).
 - `frontend/docs/en-glossary.md` — единственный источник терминологии для `src/locales/en/**`.
 - `packages/velo-ui/README.md` — контракт кита: токены, граница, i18n-шов, Storybook.
 - `oauth-consent/` — эталонная вёрстка страницы согласия OAuth «Подключение к VELO» (FE-99; сниппет для бэка, BE-181).

@@ -9,8 +9,13 @@ import { PARAM_KEYS, SWEEP } from '../../e2e/sweep/routes'
 // The sweep (frontend/e2e/sweep/) opens every named route of the router under
 // the roles its table lists. This test is what keeps the table whole: a new
 // screen without a row fails here, in the fast gate, long before anyone runs
-// the sweep. A row either visits the route or skips it WITH a reason.
+// the sweep. A row either visits the route or skips it WITH a task: a skip
+// is the quarantine of a screen (FE-222, docs/testing.md), and its reason
+// starts with the key of the task that brings the screen back.
 // =============================================================================
+
+/** The task key a skip starts with: a key of one of our teams. */
+const SKIP_TASK = /^(?:FE|BE|PM|DSGN|DM|MEET)-\d+ \S/
 
 const named = router
   .getRoutes()
@@ -33,9 +38,10 @@ describe('e2e sweep table (e2e/sweep/routes.ts)', () => {
   })
 
   it.each(Object.entries(SWEEP))(
-    '%s: a skip has a reason, a visit has roles and every parameter',
+    '%s: a skip has a task and a reason, a visit has roles and every parameter',
     (name, row) => {
       if ('skip' in row) {
+        expect(row.skip, `${name}: a skip starts with its task, "FE-123 <why>"`).toMatch(SKIP_TASK)
         expect(row.skip.trim().length, `${name}: skip without a reason`).toBeGreaterThan(10)
         return
       }

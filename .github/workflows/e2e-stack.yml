@@ -6,9 +6,11 @@
 # backend seeded with the `e2e` profile, under the crash detector
 # (frontend/e2e/, docs/agents/e2e.md). Two entry points:
 #
-#   workflow_call  -- from ci.yml on every PR / push to test (Chromium only).
-#                     `advisory: true` keeps a red sweep from failing the job
-#                     for the burn-in period (see ci.yml).
+#   workflow_call  -- from ci.yml on every PR and push (Chromium only).
+#                     Blocking (FE-222): a red sweep fails this job and the
+#                     gate of ci.yml. There is no advisory switch; a screen
+#                     that fails for a known reason is quarantined in
+#                     frontend/e2e/sweep/routes.ts (docs/testing.md).
 #   schedule       -- nightly on the default branch (deploy-machine):
 #                     Chromium (Telegram on Android) and WebKit (Telegram on
 #                     iOS).
@@ -31,9 +33,6 @@ on:
       projects:
         type: string
         default: sweep
-      advisory:
-        type: boolean
-        default: false
   schedule:
     # 02:30 UTC, after the day's merges.
     - cron: '30 2 * * *'
@@ -160,15 +159,11 @@ jobs:
         run: pnpm -C frontend exec vite build
 
       - name: Sweep
-        id: sweep
-        # Burn-in (ci.yml passes advisory: true): a red sweep is reported in
-        # the step summary and the artifact, but does not fail the job.
-        continue-on-error: ${{ inputs.advisory == true }}
         working-directory: frontend
         run: pnpm e2e:sweep:ci $(printf -- '--project=%s ' $PROJECTS)
 
       - uses: actions/upload-artifact@v7
-        if: always() && (failure() || steps.sweep.outcome == 'failure')
+        if: failure()
         with:
           name: e2e-sweep-${{ github.run_attempt }}
           path: |
