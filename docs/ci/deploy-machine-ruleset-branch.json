@@ -1,0 +1,16 @@
+{
+  "name": "deploy-machine: no deletion, no force-push (FE-222)",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/deploy-machine"],
+      "exclude": []
+    }
+  },
+  "bypass_actors": [],
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" }
+  ]
+}

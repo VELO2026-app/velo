@@ -1,5 +1,5 @@
 {
-  "name": "deploy-machine: required checks, no force-push (FE-222)",
+  "name": "deploy-machine: PR only, required checks, merge commit (FE-222)",
   "target": "branch",
   "enforcement": "active",
   "conditions": {
@@ -14,8 +14,6 @@
     { "actor_id": null, "actor_type": "DeployKey", "bypass_mode": "always" }
   ],
   "rules": [
-    { "type": "deletion" },
-    { "type": "non_fast_forward" },
     {
       "type": "pull_request",
       "parameters": {

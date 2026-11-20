@@ -11,7 +11,7 @@
 // Run by the scope job of ci.yml next to the classifier's test.
 // Locally: node --test .github/scripts/ci-gate.test.mjs
 // Node stdlib only: ci.yml is read line by line (two-space job keys under
-// `jobs:`), not parsed as YAML.
+// `jobs:`, bare or quoted, a trailing comment allowed), not parsed as YAML.
 // =============================================================================
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -28,8 +28,9 @@ function jobs() {
   assert.ok(start >= 0, 'ci.yml has no `jobs:` block')
   const found = []
   for (const line of lines.slice(start + 1)) {
-    const key = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line)
-    if (key) found.push({ key: key[1], body: [] })
+    // A job key: bare or quoted, with or without a trailing comment.
+    const key = /^ {2}(["']?)([A-Za-z0-9_-]+)\1:\s*(#.*)?$/.exec(line)
+    if (key) found.push({ key: key[2], body: [] })
     else if (found.length) found.at(-1).body.push(line)
   }
   return found

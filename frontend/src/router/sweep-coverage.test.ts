@@ -14,8 +14,14 @@ import { PARAM_KEYS, SWEEP } from '../../e2e/sweep/routes'
 // starts with the key of the task that brings the screen back.
 // =============================================================================
 
-/** The task key a skip starts with: a key of one of our teams. */
-const SKIP_TASK = /^(?:FE|BE|PM|DSGN|DM|MEET)-\d+ \S/
+/**
+ * A skip reason that names its task: the key of one of our teams, a space,
+ * then the why. The table has no skip row today, so the predicate is pinned
+ * on examples below as well.
+ */
+function startsWithTask(reason: string): boolean {
+  return /^(?:FE|BE|PM|DSGN|DM|MEET)-\d+ \S/.test(reason)
+}
 
 const named = router
   .getRoutes()
@@ -23,6 +29,16 @@ const named = router
   .map((r) => ({ name: r.name as string, path: r.path }))
 
 describe('e2e sweep table (e2e/sweep/routes.ts)', () => {
+  it.each([
+    ['FE-123 why it fails', true],
+    ['BE-7 the backend answers 500', true],
+    ['why it fails', false],
+    ['FE-123', false],
+    ['fe-123 why', false],
+  ])('a skip reason %j names its task: %s', (reason, ok) => {
+    expect(startsWithTask(reason)).toBe(ok)
+  })
+
   it('has a row for every named route', () => {
     const missing = named.filter((r) => !(r.name in SWEEP)).map((r) => `${r.name} ${r.path}`)
     expect(missing, 'add these routes to e2e/sweep/routes.ts (visit or skip)').toEqual([])
@@ -41,7 +57,10 @@ describe('e2e sweep table (e2e/sweep/routes.ts)', () => {
     '%s: a skip has a task and a reason, a visit has roles and every parameter',
     (name, row) => {
       if ('skip' in row) {
-        expect(row.skip, `${name}: a skip starts with its task, "FE-123 <why>"`).toMatch(SKIP_TASK)
+        expect(
+          startsWithTask(row.skip),
+          `${name}: a skip starts with its task, "FE-123 <why>"`,
+        ).toBe(true)
         expect(row.skip.trim().length, `${name}: skip without a reason`).toBeGreaterThan(10)
         return
       }
