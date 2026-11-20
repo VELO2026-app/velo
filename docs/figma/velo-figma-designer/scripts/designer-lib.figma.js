@@ -1,6 +1,6 @@
 /**
  * DESIGNER: the ONLY write helpers of the designer's agent (docs/figma-protocol.md §2, §9).
- * Writes only to `Эксперименты · …`, `К разработке` and `Архив`; refuses any other page.
+ * Writes only to `Эксперименты · …`, `К разработке`, `Архив` and `Дизайн · Исходники`; refuses any other page.
  * figma-console `figma_execute`: <this file> + one call, e.g.
  *   return await DESIGNER.startExperiment('Сонник', '<frame id or empty>');
  *   return await DESIGNER.fix([{ id: '<node>', rename: 'Header' }, { id: '<text>', textStyle: 'velo/fs-14' },
@@ -20,7 +20,7 @@
  * First run: in a copy of the file.
  */
 const DESIGNER = (() => {
-  const OWN = /^(Эксперименты · .+|К разработке|Архив)$/;
+  const OWN = /^(Эксперименты · .+|К разработке|Архив|Дизайн · Исходники)$/;
   const STATUSES = ['эксперимент', 'на согласовании', 'к разработке', 'в работе', 'в коде', 'отменено'];
   const WHO = 'designer-agent';
   const options = { allowNoVersion: false }; // set true ONLY after the designer said «да, без версии»
