@@ -21,7 +21,7 @@ name: Bundle budget
 
 on:
   pull_request:
-    branches: [test, deploy-machine]
+    branches: [test, deploy-machine, bb/fe-222-verify-base]
     types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:

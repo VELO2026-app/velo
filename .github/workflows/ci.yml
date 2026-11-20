@@ -106,7 +106,7 @@ on:
   push:
     branches: [test, deploy-machine]
   pull_request:
-    branches: [test, deploy-machine]
+    branches: [test, deploy-machine, bb/fe-222-verify-base]
     # No labeled/unlabeled (FE-206): labels belong to bundle-budget.yml and
     # visual.yml.
     types: [opened, synchronize, reopened]
