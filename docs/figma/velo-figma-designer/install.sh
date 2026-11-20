@@ -13,7 +13,11 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CLIENT="codex"
-[ "${1:-}" = "--claude" ] && CLIENT="claude"
+case "${1:-}" in
+  "") ;;
+  --claude) CLIENT="claude" ;;
+  *) echo "Неизвестный ключ: $1. Запуск: bash install.sh (Codex) или bash install.sh --claude (Claude Code)"; exit 2 ;;
+esac
 # The figma-console-mcp version the VELO agents run and tested (bump together with the guide).
 FIGMA_CONSOLE_VERSION="1.46.0"
 LINEAR_URL="https://mcp.linear.app/mcp"
@@ -54,29 +58,44 @@ if [ "$CLIENT" = codex ]; then
   CONFIG="$HOME/.codex/config.toml"
   mkdir -p "$HOME/.codex"
   touch "$CONFIG"
+  BACKUP="$CONFIG.bak.$(date +%Y%m%d-%H%M%S)"
+  cp "$CONFIG" "$BACKUP"
+  # a server table may be written as [mcp_servers.name] or [mcp_servers."name"]
+  has_server() { grep -Eq "^[[:space:]]*\[mcp_servers\.\"?$1\"?\][[:space:]]*$" "$CONFIG"; }
+  CHANGED=0
   echo "3. Сервер Figma (figma-console $FIGMA_CONSOLE_VERSION) в $CONFIG"
-  if grep -q '^\[mcp_servers\.figma-console\]' "$CONFIG"; then
-    ok "уже подключён"
+  if has_server figma-console; then
+    if grep -q "figma-console-mcp@$FIGMA_CONSOLE_VERSION" "$CONFIG"; then
+      ok "уже подключён"
+    else
+      ok "уже подключён, но не версии $FIGMA_CONSOLE_VERSION — проверьте args в $CONFIG (агенты VELO проверены на $FIGMA_CONSOLE_VERSION)"
+    fi
   else
     # startup_timeout_sec: the first start downloads the package with npx (default 10 s is too short)
     printf '\n[mcp_servers.figma-console]\ncommand = "npx"\nargs = ["-y", "figma-console-mcp@%s"]\nstartup_timeout_sec = 90\ntool_timeout_sec = 120\n' "$FIGMA_CONSOLE_VERSION" >> "$CONFIG"
+    CHANGED=1
     ok "добавлен"
   fi
   echo "4. Linear"
-  if grep -q '^\[mcp_servers\.linear\]' "$CONFIG"; then
+  if has_server linear; then
     ok "уже подключён"
   else
     printf '\n[mcp_servers.linear]\nurl = "%s"\n' "$LINEAR_URL" >> "$CONFIG"
+    CHANGED=1
     ok "добавлен (вход: инструкция, шаг 5 — codex mcp login linear)"
   fi
-  if codex mcp list >/dev/null 2>&1; then
-    if codex mcp list 2>/dev/null | grep -E 'figma-console|linear' >/dev/null; then
-      ok "codex видит оба сервера"
-    else
-      bad "codex mcp list не показывает серверы — напишите Владимиру"
-    fi
+  if LIST="$(codex mcp list 2>&1)"; then
+    for srv in figma-console linear; do
+      if printf '%s\n' "$LIST" | grep -Eq "^${srv}[[:space:]]"; then ok "codex видит $srv"; else bad "codex mcp list не показывает $srv — напишите Владимиру"; fi
+    done
+    [ "$CHANGED" -eq 0 ] && rm -f "$BACKUP"
   else
-    bad "codex не читает $CONFIG (codex mcp list с ошибкой) — напишите Владимиру"
+    if [ "$CHANGED" -eq 1 ]; then
+      cp "$BACKUP" "$CONFIG"
+      bad "codex не читает изменённый $CONFIG — вернул прежний (копия: $BACKUP). Напишите Владимиру: $LIST"
+    else
+      bad "codex mcp list с ошибкой (конфиг не менялся): $LIST — напишите Владимиру"
+    fi
   fi
 else
   echo "3. Сервер Figma (figma-console $FIGMA_CONSOLE_VERSION)"

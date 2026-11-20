@@ -7,7 +7,7 @@
  *   return await DESIGNER.fix([{ id: '<node>', rename: 'Header' }, { id: '<text>', textStyle: 'velo/fs-14' },
  *                              { id: '<node>', bindColor: { field: 'fills', variable: 'color/primary' } },
  *                              { id: '<frame>', bindNumber: { field: 'itemSpacing', variable: 'space/2' } }]);
- *   return await DESIGNER.toHandoff(['<frame id>', …], { issue: 'FE-231', dsgn: 'DSGN-30', title: 'Юрдоки',
+ *   return await DESIGNER.toHandoff(['<frame id in an experiment>', …], { issue: 'FE-231', dsgn: 'DSGN-30', title: 'Юрдоки',
  *                                     approved: 'Alexandra 2026-11-21', base: '<front sheet id>' });
  *   return await DESIGNER.setStatus('<handoff section id>', 'в работе');
  *   return await DESIGNER.archive('<handoff section id>', 'в коде', '<link to the «Фронт» sheet>');
@@ -177,6 +177,9 @@ const DESIGNER = (() => {
       for (const id of frameIds) {                              // validate all before moving any
         const n = await node(id); const from = own(n);
         if (from.name === 'К разработке') fail('"' + n.name + '" is already on «К разработке»');
+        // only from an experiment: undoHandoff returns the section there, and the designer's own
+        // pages (Icons, User App, …) never lose their original frames
+        if (!/^Эксперименты · /.test(from.name)) fail('"' + n.name + '" is on «' + from.name + '»: hand off only from an experiment. First DESIGNER.startExperiment(\'<тема>\', \'' + n.id + '\') and hand off the copy');
         frames.push({ n, from: from.name });
       }
       const p = await page('К разработке');
