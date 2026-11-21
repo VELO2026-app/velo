@@ -16,8 +16,9 @@
  *
  * Every builder that changes the file throws outside FRONT.write and refuses a target OR a source
  * node (adopt, masterNode, body, masters) outside the locked pages. setMeta refuses the keys only
- * FRONT.stamp writes (commit, captured, committed, evidence, seal). Only sheet() and componentSheet()
- * mark a sheet rebuilt (FRONT.stamp then needs no evidence). FRONT.write refuses to run when this
+ * FRONT.stamp writes (commit, captured, committed, evidence, seal). Only a COMPLETED sheet() or
+ * componentSheet() marks a sheet rebuilt (FRONT.stamp then needs no evidence); sheet({ replace })
+ * checks the template, the variables and the text styles before it clears the old content. FRONT.write refuses to run when this
  * file is missing its version or is older than FSS_LIB_MIN in front-lib.figma.js.
  *
  * What it guarantees: idempotent (find-or-create by pluginData c2f:key), every builder
@@ -189,25 +190,26 @@ function makeFSS() {
     c2fNeedGuard(figma.currentPage);
     const { key, route, title, source, status = 'draft', date = '', commit = '', states = [{ state: 'Default' }], position, spec } = o;
     const ex = findByKey(key);
-    let sec = null;
     if (o.replace) {
       if (!ex || ex.id !== o.replace) throw new Error('FSS: replace ' + o.replace + ' is not the sheet with key ' + key + ' on this page');
       c2fNeedGuard(ex);
       if (ex.findOne((n) => n.type === 'COMPONENT' || n.type === 'COMPONENT_SET')) throw new Error('FSS: ' + ex.name + ' holds masters: not a screen sheet, not replaced');
-      for (const c of [...ex.children]) c.remove();
-      sec = ex;
-      c2fMarkRebuilt(sec); // a failed rebuild fails the write, so a half-built sheet is never stamped
     } else if (ex) return { id: ex.id, existed: true };
+    // everything the build needs, checked BEFORE the first change: a cleared sheet comes back only
+    // with a rollback of the whole file
     const tpl = findByKey('template:sheet-header'); if (!tpl) throw new Error('FSS: run ensureTemplates() first');
     const pad = await num('doc/sheet-pad'), gapS = await num('doc/state-gap'), gapSpec = await num('doc/spec-gap');
     const headerH = await num('doc/header-h'), specW = await num('doc/spec-w');
-    if (!sec) {
+    for (const [n, c] of [['doc/sheet-bg', 'doc'], ['space/5', 'legacy'], ['space/2', 'legacy']]) await V(n, c);
+    for (const st of ['doc/section', 'doc/body']) await S(st);
+    let sec;
+    if (o.replace) { for (const c of [...ex.children]) c.remove(); sec = ex; }
+    else {
       let pos = position;
       if (!pos) { let y = 0; for (const n of figma.currentPage.children) y = Math.max(y, n.y + n.height); pos = { x: 0, y: y + 400 }; }
       sec = figma.createSection(); sec.x = pos.x; sec.y = pos.y;
     }
     sec.name = `Screen / ${route} / ${title}`;
-    c2fMarkRebuilt(sec);  // a new sheet (the replaced one is marked above)
     await fillVar(sec, 'doc/sheet-bg'); sec.strokes = []; setMeta(sec, { key, route, source, status });
 
     const head = tpl.createInstance(); sec.appendChild(head); head.x = pad; head.y = pad;
@@ -229,6 +231,7 @@ function makeFSS() {
     }
     sp.x = pad + row.width + gapSpec; sp.y = row.y;
     sec.resizeWithoutConstraints(sp.x + specW + pad, Math.max(row.y + row.height, sp.y + sp.height) + pad);
+    c2fMarkRebuilt(sec); // only after a complete build: a failed one leaves the sheet unstampable without evidence
     return { id: sec.id, header: head.id, states: row.id, frames, spec: sp.id, bounds: { w: sec.width, h: sec.height } };
   }
 
@@ -257,13 +260,14 @@ function makeFSS() {
     const tpl = findByKey('template:sheet-header'); if (!tpl) throw new Error('FSS: run ensureTemplates() first');
     const pad = await num('doc/sheet-pad'), headerH = await num('doc/header-h'), gap = await num('doc/state-gap');
     let pos = position; if (!pos) { let y = 0; for (const n of figma.currentPage.children) y = Math.max(y, n.y + n.height); pos = { x: 0, y: y + 400 }; }
-    const sec = figma.createSection(); sec.name = 'Component / ' + family; sec.x = pos.x; sec.y = pos.y; c2fMarkRebuilt(sec); await fillVar(sec, 'doc/sheet-bg'); sec.strokes = [];
+    const sec = figma.createSection(); sec.name = 'Component / ' + family; sec.x = pos.x; sec.y = pos.y; await fillVar(sec, 'doc/sheet-bg'); sec.strokes = [];
     const head = tpl.createInstance(); sec.appendChild(head); head.x = pad; head.y = pad;
     head.setProperties({ [propKey(head, 'Title')]: family, [propKey(head, 'Route')]: source, [propKey(head, 'Date')]: '' });
     head.findOne((n) => n.type === 'INSTANCE').setProperties({ [propKey(head.findOne((n) => n.type === 'INSTANCE'), 'Status')]: status });
     b.name = 'Body'; sec.appendChild(b); b.x = pad; b.y = pad + headerH + gap;
     sec.resizeWithoutConstraints(b.width + 2 * pad, b.y + b.height + pad);
     setMeta(sec, { key, source, status });
+    c2fMarkRebuilt(sec); // only after a complete build
     return { id: sec.id, bounds: { w: sec.width, h: sec.height } };
   }
 

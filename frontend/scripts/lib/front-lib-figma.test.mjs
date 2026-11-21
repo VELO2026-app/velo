@@ -61,6 +61,26 @@ class Node {
   loadAsync() {
     return Promise.resolve()
   }
+  // what the FSS builders call on a node; layout fields are plain assignments
+  resize(w, h) {
+    Object.assign(this, { width: w, height: h })
+  }
+  resizeWithoutConstraints(w, h) {
+    this.resize(w, h)
+  }
+  setBoundVariable() {}
+  setProperties() {}
+  setTextStyleIdAsync() {
+    return Promise.resolve()
+  }
+  createInstance() {
+    const props = (names) => Object.fromEntries(names.map((n, i) => [`${n}#${i}`, {}]))
+    const head = new Node('INSTANCE', this.name, {
+      componentProperties: props(['Title', 'Route', 'Date']),
+    })
+    head.appendChild(new Node('INSTANCE', 'badge', { componentProperties: props(['Status']) }))
+    return head
+  }
   remove() {
     const parent = /** @type {Node} */ (this.parent)
     parent.children.splice(parent.children.indexOf(this), 1)
@@ -89,6 +109,8 @@ function setup() {
     }),
   )
   const handoff = pages[2].appendChild(new Node('SECTION', 'Handoff / FE-1 / X'))
+  const template = pages[0].appendChild(new Node('COMPONENT', 'Template / Sheet Header'))
+  template.setPluginData('c2f:key', 'template:sheet-header')
   const byId = (id) => doc.findAll((n) => n.id === id)[0] || null
   figma = {
     mixed: Symbol('mixed'),
@@ -100,11 +122,45 @@ function setup() {
     setCurrentPageAsync: (p) => Promise.resolve((figma.currentPage = p)),
     saveVersionHistoryAsync: (label) => Promise.resolve(figma.versions.push(label)),
     getNodeByIdAsync: (id) => Promise.resolve(byId(id)),
+    // what a full FSS.sheet() build needs: doc/* and legacy variables, doc/* text styles
+    variables: {
+      getLocalVariablesAsync: () =>
+        Promise.resolve(
+          VARS.map(([c, n]) => ({ name: n, variableCollectionId: c, valuesByMode: { m: 16 } })),
+        ),
+      getVariableCollectionByIdAsync: (c) => Promise.resolve({ name: c }),
+      setBoundVariableForPaint: (paint) => paint,
+    },
+    getLocalTextStylesAsync: () =>
+      Promise.resolve(['doc/section', 'doc/body'].map((n) => ({ name: n, id: n, fontName: {} }))),
+    loadFontAsync: () => Promise.resolve(),
+    createSection: () => figma.currentPage.appendChild(new Node('SECTION', '')),
+    createFrame: () => figma.currentPage.appendChild(new Node('FRAME', '')),
+    createRectangle: () => figma.currentPage.appendChild(new Node('RECTANGLE', '')),
+    createText: () =>
+      figma.currentPage.appendChild(
+        new Node('TEXT', '', {
+          characters: '',
+          fontName: { family: 'Inter', style: 'Regular' },
+          fontSize: 12,
+        }),
+      ),
   }
   // the file is a plugin script without exports: run it in a context with the fake API
   F = load(LIB + '\n' + FSS_LIB)
-  return { pages, sheet, frame, handoff }
+  return { pages, sheet, frame, handoff, template }
 }
+const DOC = [
+  'sheet-pad',
+  'state-gap',
+  'spec-gap',
+  'header-h',
+  'spec-w',
+  'sheet-bg',
+  'chrome-text',
+  'chrome-muted',
+]
+let VARS = []
 /** Run the plugin scripts (no exports) in a context with the fake API. */
 const load = (src) =>
   runInNewContext(
@@ -119,6 +175,7 @@ const designerLock = (until = Date.now() + 5 * 60e3) =>
 const COMMIT = { commit: 'f0db5d67', committedAt: '2026-11-21T08:00:00+08:00' }
 let t
 beforeEach(() => {
+  VARS = [...DOC.map((n) => ['doc', 'doc/' + n]), ['legacy', 'space/5'], ['legacy', 'space/2']]
   t = setup()
 })
 
@@ -288,8 +345,16 @@ test('FSS builders: a source or target on an unlocked page and the stamp-only ke
   assert.equal(t.handoff.parent, t.pages[2])
 })
 
-test('stamp: FRONT.touch guards only; FSS.sheet({ replace }) marks the sheet rebuilt', async () => {
-  const front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
+test('stamp: FRONT.touch guards only; only a completed FSS.sheet({ replace }) marks the sheet rebuilt', async () => {
+  let front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
+  const resnap = () =>
+    F.makeFSS().sheet({
+      key: 'screen:user.home',
+      route: 'user.home',
+      title: 'Home',
+      replace: t.sheet.id,
+    })
+  t.sheet.setPluginData('c2f:key', 'screen:user.home')
   await assert.rejects(
     front.write(['Фронт · Экраны'], 'x', () => {
       front.touch(t.frame)
@@ -297,22 +362,35 @@ test('stamp: FRONT.touch guards only; FSS.sheet({ replace }) marks the sheet reb
     }),
     /was not rebuilt/,
   )
+  // a build that cannot finish (no template, no variable) changes nothing and earns no stamp
+  for (const breakIt of [() => t.template.remove(), () => VARS.pop()]) {
+    t = setup() // a fresh file and library for each case
+    front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
+    t.sheet.setPluginData('c2f:key', 'screen:user.home')
+    breakIt()
+    const before = t.sheet.children.length
+    await assert.rejects(
+      front.write(['Фронт · Экраны'], 'failed resnap', async () => {
+        await resnap().catch(() => {}) // the agent swallows the error and stamps anyway
+        return front.stamp(t.sheet.id, COMMIT)
+      }),
+      /was not rebuilt/,
+    )
+    assert.equal(t.sheet.children.length, before)
+  }
+  VARS.push(['legacy', 'space/2'])
+  t = setup()
+  front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
   t.sheet.setPluginData('c2f:key', 'screen:user.home')
   const r = await front.write(['Фронт · Экраны'], 'resnap', async () => {
-    // the fake has no templates: the rebuild stops after clearing and marking the sheet
-    await assert.rejects(
-      F.makeFSS().sheet({
-        key: 'screen:user.home',
-        route: 'user.home',
-        title: 'Home',
-        replace: t.sheet.id,
-      }),
-      /ensureTemplates/,
-    )
+    await resnap()
     return front.stamp(t.sheet.id, COMMIT)
   })
   assert.equal(r.rebuilt, true)
-  assert.equal(t.sheet.children.length, 0)
+  assert.deepEqual(
+    t.sheet.children.map((c) => c.name),
+    ['Template / Sheet Header', 'States', 'Spec'],
+  )
 })
 
 test('check: a seal of another version is not «edited» but needs a restamp', async () => {
@@ -332,11 +410,18 @@ test('c2fInventory: lists keyed sheets of the mirror pages; a seal of another ve
   let inv = await F.c2fInventory()
   assert.deepEqual(
     // the vm context has its own Array: compare plain JSON
-    JSON.parse(JSON.stringify(inv.sheets.map((x) => [x.key, x.sources, x.intact]))),
+    JSON.parse(
+      JSON.stringify(
+        inv.sheets
+          .filter((x) => x.key.startsWith('screen:'))
+          .map((x) => [x.key, x.sources, x.intact]),
+      ),
+    ),
     [['screen:user.home', ['frontend/src/views/user/HomeView.vue'], true]],
   )
   t.sheet.setPluginData('c2f:seal', 'v1:39:3092364d')
   inv = await F.c2fInventory()
-  assert.equal(inv.sheets[0].seal, null)
-  assert.match(inv.sheets[0].sealNote, /restamp/)
+  const home = inv.sheets.find((x) => x.key === 'screen:user.home')
+  assert.equal(home.seal, null)
+  assert.match(home.sealNote, /restamp/)
 })
