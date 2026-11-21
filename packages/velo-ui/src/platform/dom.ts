@@ -8,8 +8,9 @@
 // no-restricted-globals exactly like the frontend's seam.
 //
 // Mini on purpose (FE-143): only what the kit's own residents need. The
-// event pair onDocumentEvent/offDocumentEvent is what the P6 overlays
-// (VModal/VBottomSheet) bind for their document-level Escape keydown; the
+// event pair onDocumentEvent/offDocumentEvent is what the kit's Escape
+// stack (src/escapeStack.ts, used by VModal/VBottomSheet) and VMenu bind
+// for their document-level keydown; the
 // write pair setBodyOverflow/toggleRootClass is what the kit's ref-counted
 // body-scroll lock (src/useBodyScrollLock.ts, moved from the app in
 // FE-143) applies and releases. Anything a future resident needs grows

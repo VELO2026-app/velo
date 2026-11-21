@@ -388,6 +388,7 @@
     <div class="diary-feed__search" :class="{ 'diary-feed__search--up': searchMode }">
       <DiarySearchBar
         ref="searchBarEl"
+        :active="searchMode"
         :initial="feedFilters.search ?? ''"
         @live="onLiveSearch"
         @cancel="onSearchCancel"
