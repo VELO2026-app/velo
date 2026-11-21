@@ -1,9 +1,5 @@
-# FE-226: the commit subject gate at the source -- one regex, no node,
-# no install, safe to run on every commit. Allowed subjects:
-#   "FE-226: short English description" (BE-194 part 10: for backend
-#   slices, "FE-200, FE-201:" when one commit closes several tasks) or
-#   "short description (owner 2026-11-21)" for owner-requested work
-#   without a Linear task. Merge/revert subjects pass through.
-# The body stays free-form; the "Task: FE-NNN" trailer is the tooling's.
-# Bypass via --no-verify closes at CI (the commit-msg workflow).
+# FE-226: the commit subject gate at the source -- one regex, no node.
+# The allowed formats are described in scripts/check-commit-msg.sh and
+# only there; this hook just runs it on every commit. Bypass via
+# --no-verify closes at CI (the "Commit msg" workflow).
 scripts/check-commit-msg.sh "$1"
