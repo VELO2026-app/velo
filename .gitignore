@@ -25,8 +25,9 @@ node_modules/
 
 # Local scratch. Two producers, both write here by design, neither belongs in git:
 #   1. Standalone HTML previews — the operator confirms visual changes by opening
-#      a preview, not by reading a description. Serve them via the `tmp-static`
-#      entry in .claude/launch.json. A preview is spent once he has looked at it.
+#      a preview, not by reading a description. Serve the file over any local
+#      static server rooted at `.tmp/` and give him the URL. A preview is spent
+#      once he has looked at it.
 #   2. probekit report output — `.tmp/probekit-review` is the configured report_dir
 #      for nine audit skills (PROMPT №435), so every run writes here.
 # Untracked-but-not-ignored was the actual problem: every probekit run dirtied
