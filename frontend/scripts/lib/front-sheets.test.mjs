@@ -1,6 +1,6 @@
 // =============================================================================
-// FE-224 -- unit tests for the «Фронт» sheet mapping (Vitest, the `scripts`
-// project; part of `pnpm test`). One miniature repo drives every case.
+// FE-224 -- unit tests for the Figma mirror sheet mapping (Vitest, the
+// `scripts` project; part of `pnpm test`). One miniature repo drives every case.
 // =============================================================================
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
@@ -8,6 +8,7 @@ import {
   affectedSheets,
   createGraph,
   isVisualChange,
+  parseCatFileBatch,
   parseModule,
   staleSheets,
   toManifest,
@@ -33,8 +34,10 @@ const SRC = {
     "export { VButton } from '@velo/ui'",
     'export { VModal, VNote }',
   ].join('\n'),
+  'frontend/src/components/ui/VeloLogo.vue':
+    '<script setup>\nconst src = \'/icons/logo.svg\'\n</script>\n<template><img :src="src" /></template>',
   'frontend/src/components/shared/PracticeCard.vue':
-    "<script setup lang=\"ts\">\nimport { VButton } from '@/components/ui'\nimport { iconFor } from '@/utils/icons'\nimport type { Practice } from '@/api/types'\n</script>",
+    "<script setup lang=\"ts\">\nimport { VButton } from '@/components/ui'\nimport { iconFor } from '@/utils/icons'\nimport type { Practice } from '@/api/types'\n</script>\n<template><p>{{ t('card.title') }}</p></template>",
   'frontend/src/components/shared/NoteRow.vue':
     "<script setup>\nimport { VNote } from '@/components/ui'\n</script>\n<style>@import '../../styles/rows.css';</style>",
   'frontend/src/styles/rows.css': '.row {}',
@@ -45,9 +48,19 @@ const SRC = {
   'frontend/src/views/user/HomeView.vue':
     "<script setup>\nimport PracticeCard from '@/components/shared/PracticeCard.vue'\nimport { useStore } from '@/stores/main'\nconst Sheet = () => import('@/components/shared/NoteRow.vue')\n</script>",
   'frontend/src/views/user/OtherView.vue': '<template><div /></template>',
+  // the role shell is mounted by the router, not imported by the view
+  // a glob in an HTML comment must not hide the imports below it (FE-224 review)
+  'frontend/src/views/shells/UserShell.vue':
+    "<!-- Layout for all /user/* routes. -->\n<script setup>\nimport MobileLayout from '@/components/layout/MobileLayout.vue'\n/** The shell. */\nconst tabs = []\n</script>",
+  'frontend/src/views/shells/MasterShell.vue': '<template><main /></template>',
+  'frontend/src/components/layout/MobileLayout.vue':
+    "<script setup>\nimport VTabBar from './VTabBar.vue'\n</script>",
+  'frontend/src/components/layout/VTabBar.vue': '<template><nav /></template>',
+  'frontend/src/router/tabs.ts': "import i18n from '@/locales'\nexport const TABS = []",
   // behaviour, outside the graph: a store that imports every view must not leak into a screen
   'frontend/src/stores/main.ts':
     "import Other from '@/views/user/OtherView.vue'\nexport const useStore = () => Other",
+  'frontend/src/api/types.ts': 'export type Practice = { id: string }',
   'frontend/src/locales/index.ts': 'export const t = (k) => k',
   'frontend/src/styles/global.css': 'body {}',
   'frontend/tokens.json': '{}',
@@ -55,68 +68,43 @@ const SRC = {
 const FILES = [
   ...Object.keys(SRC),
   'frontend/public/bg/background.webp',
+  'frontend/public/icons/logo.svg',
   'frontend/src/views/user/HomeView.test.ts',
 ]
 const repo = { files: new Set(FILES), read: (p) => (p in SRC ? SRC[p] : null) }
 
+const sheet = (key, id, sources, page = 'Фронт · Kit и токены') => ({
+  key,
+  id,
+  page,
+  name: key,
+  sources,
+})
 const SHEETS = [
-  {
-    key: 'screen:user.home',
-    id: '1:1',
-    page: 'Фронт · Экраны',
-    name: 'Screen / user.home / Home',
-    sources: ['frontend/src/views/user/HomeView.vue'],
-  },
-  {
-    key: 'component:Actions',
-    id: '1:2',
-    page: 'Фронт · Kit и токены',
-    name: 'Component / Actions',
-    sources: ['packages/velo-ui/src/components/VButton'],
-  },
-  {
-    key: 'component:Overlays',
-    id: '1:3',
-    page: 'Фронт · Kit и токены',
-    name: 'Component / Overlays',
-    sources: ['name:VModal'],
-  },
+  sheet('screen:user.home', '1:1', ['frontend/src/views/user/HomeView.vue'], 'Фронт · Экраны'),
+  sheet('component:Actions', '1:2', ['packages/velo-ui/src/components/VButton']),
+  sheet('component:Overlays', '1:3', ['name:VModal']),
   // a source that moved into the kit keeps its file name
-  {
-    key: 'component:Legacy',
-    id: '1:4',
-    page: 'Фронт · Kit и токены',
-    name: 'Component / Legacy',
-    sources: ['frontend/src/components/ui/VButton.vue'],
-  },
-  {
-    key: 'component:Icons',
-    id: '1:5',
-    page: 'Фронт · Kit и токены',
-    name: 'Component / Icons',
-    sources: ['frontend/src/components/icons'],
-  },
-  {
-    key: 'registry:velo',
-    id: '1:6',
-    page: 'Фронт · Kit и токены',
-    name: 'Registry / velo',
-    sources: [],
-  },
-  {
-    key: 'asset:app-background',
-    id: '1:7',
-    page: 'Фронт · Скины',
-    name: 'Asset / App background',
-    sources: [],
-  },
-  { key: 'templates', id: '1:8', page: 'Фронт · Kit и токены', name: 'Templates', sources: [] },
+  sheet('component:Legacy', '1:4', ['frontend/src/components/ui/VButton.vue']),
+  sheet('component:Icons', '1:5', ['frontend/src/components/icons']),
+  sheet('registry:velo', '1:6', []),
+  sheet('asset:app-background', '1:7', [], 'Фронт · Скины'),
+  sheet('templates', '1:8', []),
+  sheet('component:Brand', '1:9', ['frontend/src/components/ui/VeloLogo.vue']),
 ]
 const manifest = { sheets: SHEETS }
 const keysFor = (files) => affectedSheets(files, manifest, repo).sheets.map((s) => s.key)
+const KIT_AND_SCREENS = [
+  'screen:user.home',
+  'component:Actions',
+  'component:Overlays',
+  'component:Legacy',
+  'component:Icons',
+  'component:Brand',
+]
 
 // --- parsing ---------------------------------------------------------------------
-test('parseModule: bindings, whole-module imports and re-exports; type-only imports are skipped', () => {
+test('parseModule: bindings, whole-module imports, public assets and re-exports; type-only imports are skipped', () => {
   const m = parseModule(
     [
       "import A, { b as c, type T } from './a'",
@@ -126,7 +114,7 @@ test('parseModule: bindings, whole-module imports and re-exports; type-only impo
       "const L = () => import('./lazy.vue')",
       "export { default as V, w } from './v'",
       "export * from './all'",
-      '<style>@import "./s.css";</style>',
+      '<style>@import "./s.css"; .x { background: url(/bg/b.webp) }</style>',
     ].join('\n'),
   )
   assert.deepEqual(m.imports, [
@@ -141,6 +129,7 @@ test('parseModule: bindings, whole-module imports and re-exports; type-only impo
     { spec: './side.css', bindings: null },
     { spec: './lazy.vue', bindings: null },
     { spec: './s.css', bindings: null },
+    { spec: '/bg/b.webp', bindings: null },
   ])
   assert.deepEqual(
     m.reexports.map((r) => [r.spec, r.map && [...r.map]]),
@@ -157,10 +146,22 @@ test('parseModule: bindings, whole-module imports and re-exports; type-only impo
   )
 })
 
+test('parseCatFileBatch: splits contents by the header sizes and skips missing objects', () => {
+  const buf = Buffer.from('aa blob 5\nhello\nbb missing\ncc blob 5\nпр\n\n', 'utf8')
+  const out = parseCatFileBatch(buf, ['x.vue', 'gone.ts', 'y.css'])
+  assert.deepEqual(
+    [...out],
+    [
+      ['x.vue', 'hello'],
+      ['y.css', 'пр\n'],
+    ],
+  )
+  assert.throws(() => parseCatFileBatch(Buffer.from('aa blob five\n'), ['x.vue']), /bad header/)
+})
+
 // --- the import graph ------------------------------------------------------------
 test('closure: a named barrel import depends on the defining file, not on the whole barrel', () => {
-  const g = createGraph(repo)
-  const c = g.closure('frontend/src/components/shared/PracticeCard.vue')
+  const c = createGraph(repo).closure('frontend/src/components/shared/PracticeCard.vue')
   assert.ok(c.has('packages/velo-ui/src/components/VButton/VButton.vue'))
   assert.ok(!c.has('packages/velo-ui/src/components/VModal/VModal.vue'))
 })
@@ -177,7 +178,10 @@ test('closure: a wrapper declared in a barrel follows only the imports it uses',
     'frontend/src/components/shared/NoteRow.vue':
       "<script setup>\nimport { VModal } from '@/components/ui'\n</script>",
   }
-  const g2 = createGraph({ files: repo.files, read: (p) => (p in withModal ? withModal[p] : null) })
+  const g2 = createGraph({
+    files: repo.files,
+    read: (p) => (p in withModal ? withModal[p] : null),
+  })
   assert.ok(
     g2
       .closure('frontend/src/components/shared/NoteRow.vue')
@@ -185,26 +189,36 @@ test('closure: a wrapper declared in a barrel follows only the imports it uses',
   )
 })
 
-test('closure: follows dynamic and CSS imports and utils, but not stores', () => {
-  const c = createGraph(repo).closure('frontend/src/views/user/HomeView.vue')
+test('closure: follows dynamic and CSS imports, utils and public assets, but not stores', () => {
+  const g = createGraph(repo)
+  const c = g.closure('frontend/src/views/user/HomeView.vue')
   assert.ok(c.has('frontend/src/components/shared/NoteRow.vue'))
   assert.ok(c.has('frontend/src/styles/rows.css'))
   assert.ok(c.has('frontend/src/components/icons/IconStar.vue'))
   assert.ok(!c.has('frontend/src/views/user/OtherView.vue'))
+  assert.ok(
+    g.closure('frontend/src/components/ui/VeloLogo.vue').has('frontend/public/icons/logo.svg'),
+  )
 })
 
 // --- which changes count -----------------------------------------------------------
-test('isVisualChange: markup, styles, tokens and skin assets count; logic, tests and docs do not', () => {
+test('isVisualChange: markup, styles, fonts, tokens, ru texts, the tab table and skin assets count; logic, other locales, tests and docs do not', () => {
   for (const f of [
     'frontend/src/a/B.vue',
     'frontend/src/styles/x.css',
+    'frontend/public/fonts/marmelad-subset.woff2',
     'frontend/tokens.json',
+    'frontend/src/locales/ru/user.json',
+    'packages/velo-ui/src/i18n.ts',
+    'frontend/src/router/tabs.ts',
     'frontend/public/bg/bg.webp',
   ]) {
     assert.equal(isVisualChange(f), true, f)
   }
   for (const f of [
-    'frontend/src/utils/icons.ts',
+    'frontend/src/stores/main.ts',
+    'frontend/src/router/guards.ts',
+    'frontend/src/locales/en/user.json',
     'frontend/src/views/user/HomeView.test.ts',
     'docs/figma-protocol.md',
   ]) {
@@ -221,26 +235,50 @@ test('affectedSheets: a kit component change reaches its kit sheet and the scree
   ])
 })
 
-test('affectedSheets: a `name:` source and a component folder map to their sheets', () => {
+test('affectedSheets: a `name:` source, a component folder and a public asset map to their sheets', () => {
   assert.deepEqual(keysFor(['packages/velo-ui/src/components/VModal/VModal.vue']), [
     'component:Overlays',
   ])
   assert.deepEqual(keysFor(['frontend/src/components/icons/IconMoon.vue']), ['component:Icons'])
+  assert.deepEqual(keysFor(['frontend/public/icons/logo.svg']), ['component:Brand'])
 })
 
-test('affectedSheets: tokens map to the registry and raise the variable-sync flag; assets to their sheet', () => {
-  const r = affectedSheets(['frontend/tokens.json'], manifest, repo)
+test('affectedSheets: the role shell, its layout and the tab table reach the screens of that role only', () => {
+  for (const f of [
+    'frontend/src/views/shells/UserShell.vue',
+    'frontend/src/components/layout/VTabBar.vue',
+    'frontend/src/router/tabs.ts',
+  ]) {
+    assert.deepEqual(keysFor([f]), ['screen:user.home'], f)
+  }
+  assert.deepEqual(keysFor(['frontend/src/views/shells/MasterShell.vue']), [])
+})
+
+test('affectedSheets: a ru text change reaches the sheets that translate and raises the texts flag', () => {
+  const r = affectedSheets(['frontend/src/locales/ru/user.json'], manifest, repo)
   assert.deepEqual(
     r.sheets.map((s) => s.key),
-    ['registry:velo'],
+    ['screen:user.home'],
   )
+  assert.equal(r.texts, true)
+})
+
+test('affectedSheets: tokens reach the registry and every screen and kit sheet; global styles the screens and the kit', () => {
+  const r = affectedSheets(['frontend/tokens.json'], manifest, repo)
+  assert.deepEqual(r.sheets.map((s) => s.key).sort(), [...KIT_AND_SCREENS, 'registry:velo'].sort())
   assert.equal(r.tokens, true)
+  assert.deepEqual(keysFor(['frontend/src/styles/global.css']).sort(), [...KIT_AND_SCREENS].sort())
   assert.deepEqual(keysFor(['frontend/public/bg/background.webp']), ['asset:app-background'])
 })
 
 test('affectedSheets: a change without UI gives nothing to do', () => {
   const r = affectedSheets(
-    ['frontend/src/utils/icons.ts', 'frontend/src/views/user/HomeView.test.ts', 'docs/x.md'],
+    [
+      'frontend/src/stores/main.ts',
+      'frontend/src/api/types.ts',
+      'frontend/src/views/user/HomeView.test.ts',
+      'docs/x.md',
+    ],
     manifest,
     repo,
   )
@@ -255,26 +293,30 @@ test('affectedSheets: a changed view without a sheet is listed, not resnapped', 
 })
 
 // --- weekly check -------------------------------------------------------------------
-test('staleSheets: sorts sheets by their commit and reports manifest drift', () => {
+test('staleSheets: sorts sheets by commit and seal and reports manifest drift', () => {
   const inventory = {
     sheets: [
-      { ...SHEETS[0], commit: 'aaa1111', intact: true },
-      { ...SHEETS[1], commit: 'bbb2222', intact: false },
+      { ...SHEETS[0], commit: 'aaa1111', seal: 'v2:1:0', intact: true },
+      { ...SHEETS[1], commit: 'bbb2222', seal: 'v2:1:1', intact: false },
+      { ...SHEETS[2], commit: 'bbb2222' },
       { ...SHEETS[4] },
-      { ...SHEETS[5], commit: 'ccc3333' },
+      { ...SHEETS[5], commit: 'ccc3333', seal: 'v2:1:2' },
       { ...SHEETS[7] },
+      sheet('component:Ghost', '1:10', ['frontend/src/components/shared/Gone.vue']),
       {
-        key: 'screen:user.new',
-        id: '9:9',
-        page: 'Фронт · Экраны',
-        name: 'Screen / user.new / New',
-        sources: ['frontend/src/views/user/OtherView.vue'],
+        ...sheet(
+          'screen:user.new',
+          '9:9',
+          ['frontend/src/views/user/OtherView.vue'],
+          'Фронт · Экраны',
+        ),
         commit: 'aaa1111',
+        seal: 'v2:1:3',
       },
     ],
   }
   const changes = {
-    aaa1111: ['frontend/src/components/icons/IconStar.vue', 'frontend/src/utils/icons.ts'],
+    aaa1111: ['frontend/src/components/icons/IconStar.vue', 'frontend/src/stores/main.ts'],
     bbb2222: ['docs/x.md'],
   }
   const r = staleSheets(inventory, manifest, repo, (c) => changes[c] ?? null)
@@ -287,10 +329,15 @@ test('staleSheets: sorts sheets by their commit and reports manifest drift', () 
     ['component:Actions', 'screen:user.new'],
   )
   assert.deepEqual(
+    r.unsealed.map((s) => s.key),
+    ['component:Overlays'],
+  )
+  assert.deepEqual(
     r.unknown.map((s) => [s.key, s.why]),
     [
       ['component:Icons', 'no c2f:commit'],
       ['registry:velo', 'commit ccc3333 not in the repo'],
+      ['component:Ghost', 'no source resolves in the repo'],
     ],
   )
   assert.deepEqual(
@@ -307,7 +354,7 @@ test('staleSheets: sorts sheets by their commit and reports manifest drift', () 
 
 test('toManifest: keeps the sheet identity and sources, drops the per-capture fields', () => {
   const m = toManifest(
-    { file: 'F', sheets: [{ ...SHEETS[0], commit: 'aaa1111', seal: 'v1:1:0', intact: true }] },
+    { file: 'F', sheets: [{ ...SHEETS[0], commit: 'aaa1111', seal: 'v2:1:0', intact: true }] },
     '2026-11-21',
   )
   assert.deepEqual(m.sheets, [SHEETS[0]])

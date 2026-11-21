@@ -5,9 +5,12 @@
 //
 // A mirror sheet (one top-level section on a "Front" page) mirrors code:
 //   screen:<route>      the view in `sources` plus everything it renders
-//                       (the import closure, see below) and the global styles;
+//                       (the import closure, see below), the shell of its role
+//                       (SCREEN_SHELLS, mounted by the router, not imported by
+//                       the view) and the app-wide styles and fonts;
 //   component:<Family>  the kit masters' files in `sources` (paths, component
-//                       folders or `name:<Component>`) and their closure;
+//                       folders or `name:<Component>`), their closure and the
+//                       app-wide styles and fonts;
 //   registry:*          the token registry; skin:* the registry and the skin
 //                       assets; asset:app-background the background images;
 //   anything else       (templates: sheet chrome) mirrors no code.
@@ -18,21 +21,45 @@
 // behaviour, and following them would make every screen depend on every
 // other one. A named import from a barrel (`import { VButton } from
 // '@velo/ui'`) depends on the file that defines that name, not on the whole
-// barrel.
+// barrel. Quoted public paths (`'/icons/logo.svg'`, `url(/bg/x.webp)`) are
+// dependencies on frontend/public.
 //
-// Only VISUAL changes count: .vue, styles, images, the token files and the
-// skin asset folders. A .ts change (logic) never asks for a resnap, even
-// when it sits in a closure; tests and docs never do.
+// VISUAL changes count: .vue, styles, images, fonts, the token files, the
+// skin asset folders, the visible router table (router/tabs.ts) and the
+// texts (TEXT_FILES). A text change reaches only sheets whose closure
+// translates (`t(`, `$t(`, `useI18n`); a token change reaches every screen
+// and kit sheet, because their layers are bound to the variables. Any other
+// .ts change (logic) never asks for a resnap, even inside a closure; tests
+// and docs never do.
 // =============================================================================
 
 export const TOKEN_FILES = ['frontend/tokens.json', 'frontend/src/styles/variables.css']
 export const SKIN_ASSET_DIRS = ['frontend/public/bg/', 'frontend/public/icons/']
-/** Files every screen depends on without importing them. */
-export const SCREEN_GLOBALS = [
-  'frontend/src/styles/global.css',
-  'frontend/src/App.vue',
-  'frontend/src/components/layout/AppFrame.vue',
+/** The Russian catalog (the sheets show ru) and the kit's own catalog seam. */
+export const TEXT_FILES = [
+  /^frontend\/src\/locales\/ru\/.+\.json$/,
+  /^packages\/velo-ui\/src\/i18n\.ts$/,
 ]
+/** App-wide files every screen and kit sheet depends on (imported by app.ts / index.html). */
+export const APP_GLOBALS = [
+  'frontend/src/styles/global.css',
+  'frontend/src/styles/motion.css',
+  'frontend/src/styles/diary-entry-scale.css',
+  'frontend/public/fonts/',
+]
+/** Screens are mounted inside these: the app frame and the shell of each role (router/routes/*). */
+export const SCREEN_SHELLS = {
+  '*': [
+    'frontend/src/App.vue',
+    'frontend/src/components/layout/AppFrame.vue',
+    'frontend/src/router/tabs.ts',
+  ],
+  user: ['frontend/src/views/shells/UserShell.vue'],
+  master: ['frontend/src/views/shells/MasterShell.vue'],
+  admin: ['frontend/src/views/shells/AdminShell.vue'],
+}
+/** .ts files that are visible: the tab table renders the tab bar. */
+const VISUAL_TS = ['frontend/src/router/tabs.ts']
 export const GRAPH_ROOTS = [
   'frontend/src/components/',
   'frontend/src/views/',
@@ -46,13 +73,16 @@ const ALIASES = [
   { re: /^@\//, to: 'frontend/src/' },
 ]
 const EXTENSIONS = ['', '.ts', '.vue', '.js', '.mjs', '.css', '/index.ts', '/index.js']
-const VISUAL_RE = /\.(vue|css|scss|svg|png|webp|jpe?g|gif)$/
+const VISUAL_RE = /\.(vue|css|scss|svg|png|webp|jpe?g|gif|woff2?|ttf|otf)$/
 const TEST_RE = /(\.(test|spec)\.[cm]?[jt]s$)|(\/__tests__\/)|(\/e2e\/)/
+const TRANSLATES_RE = /(?:^|[^\w$.])\$?t\(|\buseI18n\b/
+
+export const isTextFile = (path) => TEXT_FILES.some((re) => re.test(path))
 
 /** True when a changed file can change what a mirror sheet shows. */
 export function isVisualChange(path) {
   if (TEST_RE.test(path)) return false
-  if (TOKEN_FILES.includes(path)) return true
+  if (TOKEN_FILES.includes(path) || VISUAL_TS.includes(path) || isTextFile(path)) return true
   if (SKIN_ASSET_DIRS.some((d) => path.startsWith(d))) return true
   return VISUAL_RE.test(path)
 }
@@ -60,7 +90,12 @@ export function isVisualChange(path) {
 const inGraph = (path) => GRAPH_ROOTS.some((r) => path.startsWith(r))
 
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  // HTML comments first: a path like `/user/*` inside one must not open a block comment;
+  // a block comment starts a line or follows whitespace (not `'/user/*'` in a string)
+  return src
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/(^|\s)\/\*[\s\S]*?\*\//g, '$1')
+    .replace(/^\s*\/\/.*$/gm, '')
 }
 
 function parseBindings(clause) {
@@ -105,6 +140,11 @@ export function parseModule(source) {
   for (const m of src.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g))
     imports.push({ spec: m[1], bindings: null })
   for (const m of src.matchAll(/@import\s+(?:url\()?\s*['"]([^'"]+)['"]/g))
+    imports.push({ spec: m[1], bindings: null })
+  // public assets referenced by an absolute path: '/icons/logo.svg', url(/bg/background.webp)
+  for (const m of src.matchAll(
+    /(?:['"`]|url\(\s*)(\/(?:icons|bg|fonts|onboarding)\/[^'"`)\s?#]+)/g,
+  ))
     imports.push({ spec: m[1], bindings: null })
   for (const m of src.matchAll(/\bexport\s+(type\s+)?\{([^}]*)\}\s*from\s+['"]([^'"]+)['"]/g)) {
     if (m[1]) continue
@@ -260,7 +300,7 @@ export function createGraph(repo) {
     const queue = [start]
     while (queue.length) {
       const n = queue.shift()
-      if (!inGraph(n)) continue
+      if (n !== start && !inGraph(n)) continue // a root outside the graph (router/tabs.ts) is expanded once
       for (const d of deps(n)) {
         if (seen.has(d)) continue
         seen.add(d)
@@ -318,18 +358,29 @@ export function resolveSources(sources, repo) {
   return { files: [...new Set(files)], moved, missing }
 }
 
-/** What one sheet depends on: exact files plus folder prefixes. */
+/** What one sheet depends on: exact files, folder prefixes, and whether it shows texts. */
 export function sheetDeps(sheet, repo, graph) {
   const key = sheet.key || ''
   const files = new Set()
   const prefixes = []
   const notes = []
+  let texts = false
+  let unmapped = false
+  const addGlobal = (f) => (f.endsWith('/') ? prefixes.push(f) : files.add(f))
   if (key.startsWith('screen:') || key.startsWith('component:')) {
     const r = resolveSources(sheet.sources || [], repo)
-    for (const f of r.files) for (const d of graph.closure(f)) files.add(d)
-    if (key.startsWith('screen:')) for (const f of SCREEN_GLOBALS) files.add(f)
+    const roots = [...r.files]
+    if (key.startsWith('screen:')) {
+      const role = key.slice('screen:'.length).split('.')[0]
+      roots.push(...SCREEN_SHELLS['*'], ...(SCREEN_SHELLS[role] || []))
+    }
+    for (const f of roots) for (const d of graph.closure(f)) files.add(d)
+    for (const f of [...APP_GLOBALS, ...TOKEN_FILES]) addGlobal(f)
+    texts = [...files].some((f) => TRANSLATES_RE.test(stripComments(repo.read(f) || '')))
+    unmapped = !r.files.length
     for (const m of r.moved) notes.push(`source moved: ${m.from} -> ${m.to.join(', ')}`)
     for (const m of r.missing) notes.push(`source not found: ${m}`)
+    if (unmapped) notes.push('no source resolves: the sheet maps to the shared files only')
   } else if (key.startsWith('registry:')) {
     for (const f of TOKEN_FILES) files.add(f)
   } else if (key.startsWith('skin:')) {
@@ -338,14 +389,15 @@ export function sheetDeps(sheet, repo, graph) {
   } else if (key === 'asset:app-background') {
     prefixes.push('frontend/public/bg/')
   }
-  return { files, prefixes, notes }
+  return { files, prefixes, texts, unmapped, notes }
 }
 
-const depends = (d, path) => d.files.has(path) || d.prefixes.some((p) => path.startsWith(p))
+const depends = (d, path) =>
+  d.files.has(path) || d.prefixes.some((p) => path.startsWith(p)) || (d.texts && isTextFile(path))
 
 /**
  * Sheets to resnap for a list of changed files.
- * @returns {{ sheets: {key,id,page,name,reasons: string[]}[], tokens: boolean,
+ * @returns {{ sheets: {key,id,page,name,reasons: string[]}[], tokens: boolean, texts: boolean,
  *             screensWithoutSheet: string[], notes: string[] }}
  */
 export function affectedSheets(changedFiles, manifest, repo, graph = createGraph(repo)) {
@@ -367,26 +419,48 @@ export function affectedSheets(changedFiles, manifest, repo, graph = createGraph
   const screensWithoutSheet = visual.filter(
     (f) => /^frontend\/src\/views\/.+\.vue$/.test(f) && !covered.has(f),
   )
-  return { sheets, tokens: visual.some((f) => TOKEN_FILES.includes(f)), screensWithoutSheet, notes }
+  return {
+    sheets,
+    tokens: visual.some((f) => TOKEN_FILES.includes(f)),
+    texts: visual.some(isTextFile),
+    screensWithoutSheet,
+    notes,
+  }
 }
 
 /**
  * Weekly check: each sheet of a Figma inventory against the code it mirrors.
  * `changedSince(commit)` returns the files changed from that commit to the checked ref,
  * or null when the commit is unknown to the repo.
- * @returns {{ stale, fresh, unknown, edited, notMirroring, drift }}
+ * `unsealed` = a commit without a seal: the sheet may have been edited since, so it is never
+ * reported fresh. `edited` = the seal does not match: changed after the capture, by hand or
+ * by a kit / variable update.
+ * @returns {{ stale, fresh, unsealed, unknown, edited, notMirroring, drift }}
  */
 export function staleSheets(inventory, manifest, repo, changedSince, graph = createGraph(repo)) {
   /** @typedef {{ key: string, id: string, page: string, name: string }} SheetRef */
   /** @type {{ stale: (SheetRef & { commit: string, reasons: string[] })[], fresh: (SheetRef & { commit: string })[],
-   *           unknown: (SheetRef & { why: string })[], edited: SheetRef[], notMirroring: SheetRef[], drift: string[] }} */
-  const out = { stale: [], fresh: [], unknown: [], edited: [], notMirroring: [], drift: [] }
+   *           unsealed: (SheetRef & { commit: string })[], unknown: (SheetRef & { why: string })[],
+   *           edited: SheetRef[], notMirroring: SheetRef[], drift: string[] }} */
+  const out = {
+    stale: [],
+    fresh: [],
+    unsealed: [],
+    unknown: [],
+    edited: [],
+    notMirroring: [],
+    drift: [],
+  }
   for (const sheet of inventory.sheets || []) {
     const ref = { key: sheet.key, id: sheet.id, page: sheet.page, name: sheet.name }
     if (sheet.intact === false) out.edited.push(ref)
     const d = sheetDeps(sheet, repo, graph)
     if (!d.files.size && !d.prefixes.length) {
       out.notMirroring.push(ref)
+      continue
+    }
+    if (d.unmapped) {
+      out.unknown.push({ ...ref, why: 'no source resolves in the repo' })
       continue
     }
     if (!sheet.commit) {
@@ -403,6 +477,7 @@ export function staleSheets(inventory, manifest, repo, changedSince, graph = cre
       .filter((f) => depends(d, f))
       .sort()
     if (reasons.length) out.stale.push({ ...ref, commit: sheet.commit, reasons })
+    else if (!sheet.seal) out.unsealed.push({ ...ref, commit: sheet.commit })
     else out.fresh.push({ ...ref, commit: sheet.commit })
   }
   if (manifest) {
@@ -435,4 +510,27 @@ export function toManifest(inventory, date) {
       sources: sources || [],
     })),
   }
+}
+
+/**
+ * Splits the output of `git cat-file --batch` for `paths` (asked in that order).
+ * @param {Buffer} buf
+ * @param {string[]} paths
+ * @returns {Map<string, string>} path -> content; missing objects are left out
+ */
+export function parseCatFileBatch(buf, paths) {
+  const contents = new Map()
+  let pos = 0
+  for (const f of paths) {
+    const nl = buf.indexOf(10, pos)
+    if (nl < 0) throw new Error(`cat-file output ends before ${f}`)
+    const header = buf.subarray(pos, nl).toString()
+    pos = nl + 1
+    if (header.endsWith(' missing')) continue
+    const size = Number(header.split(' ')[2])
+    if (!Number.isInteger(size)) throw new Error(`cat-file: bad header "${header}" for ${f}`)
+    contents.set(f, buf.subarray(pos, pos + size).toString('utf8'))
+    pos += size + 1
+  }
+  return contents
 }

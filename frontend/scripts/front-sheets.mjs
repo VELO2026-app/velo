@@ -36,6 +36,7 @@ import { join } from 'node:path'
 import {
   affectedSheets,
   createGraph,
+  parseCatFileBatch,
   staleSheets,
   toManifest,
   GRAPH_ROOTS,
@@ -86,18 +87,8 @@ function gitRepo(repo, ref) {
     input: wanted.map((f) => `${ref}:${f}`).join('\n') + '\n',
     maxBuffer: 256 << 20,
   })
-  const contents = new Map()
-  let pos = 0
-  for (const f of wanted) {
-    const nl = buf.indexOf(10, pos)
-    const header = buf.subarray(pos, nl).toString()
-    pos = nl + 1
-    if (header.endsWith(' missing')) continue
-    const size = Number(header.split(' ')[2])
-    contents.set(f, buf.subarray(pos, pos + size).toString('utf8'))
-    pos += size + 1
-  }
-  return { files, read: (p) => (contents.has(p) ? contents.get(p) : null) }
+  const contents = parseCatFileBatch(buf, wanted)
+  return { files, read: (/** @type {string} */ p) => contents.get(p) ?? null }
 }
 
 function loadManifest(repo, a) {
@@ -108,21 +99,27 @@ function loadManifest(repo, a) {
   return JSON.parse(raw)
 }
 
+/**
+ * Files of a PR. Merged: `git diff <merge>^1 <merge>` (complete; the merge commit must be
+ * fetched). Open: `gh pr diff --name-only` (not capped like `gh pr view --json files`).
+ */
 function prInfo(repo, n) {
-  const out = execFileSync(
-    'gh',
-    ['pr', 'view', String(n), '--json', 'number,title,state,files,mergeCommit'],
-    {
-      cwd: repo,
-      encoding: 'utf8',
-    },
-  )
-  const pr = JSON.parse(out)
-  return {
-    files: pr.files.map((f) => f.path),
-    ref: pr.state === 'MERGED' && pr.mergeCommit ? pr.mergeCommit.oid : null,
-    label: `PR #${pr.number} (${pr.state.toLowerCase()}): ${pr.title}`,
+  const gh = (args) => execFileSync('gh', args, { cwd: repo, encoding: 'utf8' })
+  const pr = JSON.parse(gh(['pr', 'view', String(n), '--json', 'number,title,state,mergeCommit']))
+  const label = `PR #${pr.number} (${pr.state.toLowerCase()}): ${pr.title}`
+  if (pr.state === 'MERGED' && pr.mergeCommit) {
+    const merge = pr.mergeCommit.oid
+    if (tryGit(repo, ['cat-file', '-e', `${merge}^{commit}`]) === null)
+      throw new Error(`merge commit ${merge} is not in the local repo: run git fetch origin`)
+    const files = git(repo, ['diff', '--name-only', `${merge}^1`, merge])
+      .split('\n')
+      .filter(Boolean)
+    return { files, ref: merge, label }
   }
+  const files = gh(['pr', 'diff', String(n), '--name-only'])
+    .split('\n')
+    .filter(Boolean)
+  return { files, ref: null, label }
 }
 
 function printAffected(r, label, ref, verbose) {
@@ -138,6 +135,8 @@ function printAffected(r, label, ref, verbose) {
       'Tokens changed: bring the Figma variables to tokens.json first (drift: scripts/sync-figma-variables.mjs --snapshot), then the sheets above.',
     )
   }
+  if (r.texts)
+    lines.push('Texts changed: the sheets above that translate show the new copy after the resnap.')
   if (r.screensWithoutSheet.length)
     lines.push(`Screens changed without a sheet (no action): ${r.screensWithoutSheet.join(', ')}`)
   lines.push(...noteLines(r.notes, verbose))
@@ -167,12 +166,17 @@ function printStale(r, ref) {
       `${s.page} / ${s.name} [${s.key}] node ${s.id} since ${s.commit}: ${s.reasons.join(', ')}`,
   )
   list(
+    'unsealed (commit without a seal: cannot prove it is unedited)',
+    r.unsealed,
+    (s) => `${s.page} / ${s.name} [${s.key}] node ${s.id} at ${s.commit}`,
+  )
+  list(
     'unknown (cannot tell)',
     r.unknown,
     (s) => `${s.page} / ${s.name} [${s.key}] node ${s.id}: ${s.why}`,
   )
   list(
-    'edited by hand (seal broken)',
+    'edited after the capture (seal broken: by hand, or by a kit / variable update)',
     r.edited,
     (s) => `${s.page} / ${s.name} [${s.key}] node ${s.id}`,
   )
