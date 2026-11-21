@@ -1,0 +1,303 @@
+{
+  "about": "Mirror sheets of the Figma \"Front\" pages (docs/figma-protocol.md §8). Generated from c2fInventory() in Figma; commits and seals stay in Figma. Read by frontend/scripts/front-sheets.mjs.",
+  "file": "IV92js0q2cBHmHmDxB0zxM",
+  "generated": "2026-11-21",
+  "sheets": [
+    {
+      "key": "screen:user.dashboard",
+      "id": "3997:19031",
+      "page": "Фронт · Экраны",
+      "name": "Legacy screen / user.dashboard / Dashboard",
+      "sources": ["frontend/src/views/user/UserDashboardView.vue"]
+    },
+    {
+      "key": "screen:user.calendar",
+      "id": "3997:19056",
+      "page": "Фронт · Экраны",
+      "name": "Legacy screen / user.calendar / Practices",
+      "sources": ["frontend/src/views/user/CalendarView.vue"]
+    },
+    {
+      "key": "screen:user.diary",
+      "id": "3997:19081",
+      "page": "Фронт · Экраны",
+      "name": "Legacy screen / user.diary / Diary",
+      "sources": ["frontend/src/views/user/DiaryFeedView.vue"]
+    },
+    {
+      "key": "screen:master.practice-reviews",
+      "id": "3997:19106",
+      "page": "Фронт · Экраны",
+      "name": "Legacy screen / master.practice-reviews / Practice Analytics",
+      "sources": ["frontend/src/views/master/PracticeReviewsView.vue"]
+    },
+    {
+      "key": "registry:legacy",
+      "id": "3997:17943",
+      "page": "Фронт · Kit и токены",
+      "name": "Registry / legacy",
+      "sources": []
+    },
+    {
+      "key": "registry:velo",
+      "id": "3997:18039",
+      "page": "Фронт · Kit и токены",
+      "name": "Registry / velo",
+      "sources": []
+    },
+    {
+      "key": "component:Actions",
+      "id": "3997:19145",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Actions",
+      "sources": [
+        "packages/velo-ui/src/components/VButton/VButton.vue",
+        "packages/velo-ui/src/components/VChip"
+      ]
+    },
+    {
+      "key": "component:Badges & tags",
+      "id": "3997:19152",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Badges & tags",
+      "sources": ["packages/velo-ui/src/components/VBadge", "packages/velo-ui/src/components/VTag"]
+    },
+    {
+      "key": "component:Form controls",
+      "id": "3997:19159",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Form controls",
+      "sources": [
+        "packages/velo-ui/src/components/VDayPicker",
+        "packages/velo-ui/src/components/VSegment",
+        "packages/velo-ui/src/components/VSegmentTrack",
+        "packages/velo-ui/src/components/VSwitch",
+        "packages/velo-ui/src/components/VWheel"
+      ]
+    },
+    {
+      "key": "component:Data display & identity",
+      "id": "3997:19166",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Data display & identity",
+      "sources": [
+        "packages/velo-ui/src/components/VAvatar",
+        "packages/velo-ui/src/components/VListRow",
+        "packages/velo-ui/src/components/VLoader",
+        "packages/velo-ui/src/components/VMetricHero",
+        "packages/velo-ui/src/components/VPaginationDots",
+        "packages/velo-ui/src/components/VRatingBar",
+        "packages/velo-ui/src/components/VStatCard"
+      ]
+    },
+    {
+      "key": "component:Forms",
+      "id": "3997:19173",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Forms",
+      "sources": [
+        "frontend/src/components/ui/VCheckbox.vue",
+        "frontend/src/components/ui/VFieldError.vue",
+        "frontend/src/components/ui/VRadioGroup.vue",
+        "frontend/src/components/ui/VSelect.vue"
+      ]
+    },
+    {
+      "key": "component:Overlays",
+      "id": "3997:19180",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Overlays",
+      "sources": [
+        "frontend/src/components/ui/VBottomSheet.vue",
+        "frontend/src/components/ui/VMenuRow.vue",
+        "frontend/src/components/ui/VToast.vue"
+      ]
+    },
+    {
+      "key": "component:States & skeletons",
+      "id": "3997:19187",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / States & skeletons",
+      "sources": [
+        "frontend/src/components/ui/VEmptyState.vue",
+        "frontend/src/components/ui/VSkeleton.vue",
+        "frontend/src/components/ui/VSkeletonBubbles.vue",
+        "frontend/src/components/ui/VSkeletonPracticeCard.vue",
+        "frontend/src/components/ui/VSkeletonRow.vue"
+      ]
+    },
+    {
+      "key": "component:Navigation & brand",
+      "id": "3997:19194",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Navigation & brand",
+      "sources": [
+        "frontend/src/components/ui/VBackButton.vue",
+        "frontend/src/components/ui/VMoreLink.vue",
+        "frontend/src/components/ui/VeloLogo.vue",
+        "packages/velo-ui/src/components/VAccordion"
+      ]
+    },
+    {
+      "key": "component:Admin & analytics",
+      "id": "3997:19201",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Admin & analytics",
+      "sources": [
+        "frontend/src/components/layout/VAdminTabBar.vue",
+        "frontend/src/components/shared/DistributionCard.vue",
+        "frontend/src/components/shared/VRatingDistribution.vue",
+        "frontend/src/components/ui/VBarChart.vue",
+        "frontend/src/components/ui/VProgressRow.vue",
+        "frontend/src/components/ui/VRatingBadges.vue"
+      ]
+    },
+    {
+      "key": "component:Screen building blocks",
+      "id": "3997:19208",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Screen building blocks",
+      "sources": [
+        "frontend/src/components/layout/VHeader.vue",
+        "frontend/src/components/layout/VTabBar.vue",
+        "name:QuickCommand"
+      ]
+    },
+    {
+      "key": "component:Form fields — states",
+      "id": "3997:19215",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Form fields — states",
+      "sources": [
+        "packages/velo-ui/src/components/VInput/VInput.vue",
+        "packages/velo-ui/src/components/VTextarea/VTextarea.vue"
+      ]
+    },
+    {
+      "key": "component:Cards & rows",
+      "id": "3997:19222",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Cards & rows",
+      "sources": ["packages/velo-ui/src/components/VCard/VCard.vue"]
+    },
+    {
+      "key": "component:Overlays — kit additions",
+      "id": "3997:19229",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Overlays — kit additions",
+      "sources": [
+        "packages/velo-ui/src/components/VConfirmDialog/VConfirmDialog.vue",
+        "packages/velo-ui/src/components/VMenu/VMenu.vue",
+        "packages/velo-ui/src/components/VMenu/VMenuItem.vue",
+        "packages/velo-ui/src/components/VModal/VModal.vue"
+      ]
+    },
+    {
+      "key": "component:Diary, sheets & modals",
+      "id": "3997:19236",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Diary, sheets & modals",
+      "sources": [
+        "frontend/src/components/admin/SupportMessageBubble.vue",
+        "frontend/src/components/admin/SupportTicketsFilterModal.vue",
+        "frontend/src/components/onboarding/OnboardingDateStep.vue",
+        "frontend/src/components/onboarding/OnboardingGoalStep.vue",
+        "frontend/src/components/shared/BookingPopup.vue",
+        "frontend/src/components/shared/CalendarFilterModal.vue",
+        "frontend/src/components/shared/CancelBookingPopup.vue",
+        "frontend/src/components/shared/CancelPracticeDialog.vue",
+        "frontend/src/components/shared/ConfirmPaymentModal.vue",
+        "frontend/src/components/shared/DiaryBubbleShape.vue",
+        "frontend/src/components/shared/DiaryComposer.vue",
+        "frontend/src/components/shared/DiaryFeedCard.vue",
+        "frontend/src/components/shared/DiaryFilterModal.vue",
+        "frontend/src/components/shared/DiarySearchBar.vue",
+        "frontend/src/components/shared/DiarySearchResultRow.vue",
+        "frontend/src/components/shared/DiaryThreadCard.vue",
+        "frontend/src/components/shared/DiaryTimeline.vue",
+        "frontend/src/components/shared/ModerationFilterModal.vue",
+        "frontend/src/components/shared/PracticeAudiencePicker.vue",
+        "frontend/src/components/shared/SendMessageModal.vue",
+        "frontend/src/components/shared/TimezoneCityPicker.vue",
+        "frontend/src/components/shared/VoiceMicButton.vue",
+        "frontend/src/components/shared/VoiceRecordingPanel.vue",
+        "frontend/src/components/ui/VBottomSheet.vue",
+        "name:ChatBubble"
+      ]
+    },
+    {
+      "key": "component:Practices, bookings & chats",
+      "id": "3997:19244",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Practices, bookings & chats",
+      "sources": [
+        "frontend/src/components/shared/Banner.vue",
+        "frontend/src/components/shared/BookingCard.vue",
+        "frontend/src/components/shared/CalendarPracticeCard.vue",
+        "frontend/src/components/shared/ChatListRow.vue",
+        "frontend/src/components/shared/FormShell.vue",
+        "frontend/src/components/shared/MasterCard.vue",
+        "frontend/src/components/shared/MoodAvatar.vue",
+        "frontend/src/components/shared/MoodSlider.vue",
+        "frontend/src/components/shared/NotificationRow.vue",
+        "frontend/src/components/shared/PracticeHeroCard.vue",
+        "frontend/src/components/shared/PracticeListCard.vue",
+        "frontend/src/components/shared/PracticePlaceholder.vue",
+        "frontend/src/components/shared/PracticeSoldOut.vue",
+        "frontend/src/components/shared/ResultScreen.vue",
+        "frontend/src/components/shared/RoleSwitchSection.vue",
+        "frontend/src/components/shared/TargetUserCard.vue",
+        "frontend/src/components/shared/UseTemplateBlock.vue",
+        "frontend/src/components/shared/VShowMore.vue",
+        "frontend/src/components/shared/WeekStrip.vue",
+        "name:Badge",
+        "name:BookingBadge",
+        "name:WeekStripDay"
+      ]
+    },
+    {
+      "key": "component:School",
+      "id": "3997:19252",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / School",
+      "sources": [
+        "frontend/src/components/shared/SchoolAvatarPicker.vue",
+        "frontend/src/components/shared/SchoolBannerPicker.vue",
+        "frontend/src/components/shared/SchoolBrandBanner.vue",
+        "frontend/src/components/shared/SchoolHeroCard.vue",
+        "frontend/src/components/shared/SchoolInviteCard.vue",
+        "frontend/src/components/shared/SchoolInviteField.vue",
+        "frontend/src/components/shared/SchoolMandalaBadge.vue",
+        "frontend/src/components/shared/SchoolMemberRow.vue"
+      ]
+    },
+    {
+      "key": "component:Icons",
+      "id": "3997:19260",
+      "page": "Фронт · Kit и токены",
+      "name": "Component / Icons",
+      "sources": ["frontend/src/components/icons", "packages/velo-ui/src/icons"]
+    },
+    {
+      "key": "templates",
+      "id": "3999:19392",
+      "page": "Фронт · Kit и токены",
+      "name": "Templates",
+      "sources": []
+    },
+    {
+      "key": "asset:app-background",
+      "id": "4004:20936",
+      "page": "Фронт · Скины",
+      "name": "Asset / App background",
+      "sources": []
+    },
+    {
+      "key": "skin:gold",
+      "id": "4179:1985",
+      "page": "Фронт · Скины",
+      "name": "Skin / gold",
+      "sources": []
+    }
+  ]
+}
