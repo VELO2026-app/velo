@@ -1,0 +1,42 @@
+# =============================================================================
+# commit-msg -- the CI backstop for the FE-226 subject gate. The local
+# frontend/.husky/commit-msg hook is bypassable with --no-verify; this is
+# where that closes (the same house pattern as pre-commit -> the CI
+# frontend job). One job, no toolchain install, seconds per run:
+#   every non-merge commit the PR contributes must have the subject
+#   "FE-NNN: short English description" (BE-NNN for backend tasks,
+#   "FE-200, FE-201:" for several, or "description (owner YYYY-MM-DD)"
+#   for owner-requested work without a task).
+# Merge and revert commits pass; bot PRs (dependabot and friends) are
+# out of scope -- their commits are machinery, not agent work.
+# No branch filter: PRs ride to whatever trunk is current.
+# =============================================================================
+name: commit-msg
+
+on:
+  pull_request:
+
+concurrency:
+  group: commit-msg-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  subjects:
+    name: commit subjects
+    if: ${{ !endsWith(github.event.pull_request.user.login, '[bot]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # merge-base needs the history on both sides of the range.
+          fetch-depth: 0
+
+      - name: Check every commit the PR contributes
+        run: |
+          git fetch origin "$GITHUB_BASE_REF"
+          base=$(git merge-base FETCH_HEAD HEAD)
+          status=0
+          for sha in $(git rev-list --no-merges "$base..HEAD"); do
+            git show -s --format=%B "$sha" | scripts/check-commit-msg.sh - || status=1
+          done
+          exit $status
