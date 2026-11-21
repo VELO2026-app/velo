@@ -28,6 +28,10 @@
 //   --snapshot <file>  a JSON dump of the Figma variables (the shape the
 //                      Desktop Bridge / figma_get_variables returns: at
 //                      least {variables:[{id,name,resolvedType,valuesByMode}]})
+//   --skin <dir> --mode <id> --dry-run   (FE-219) the values a skin package
+//                      gives mode <id>: token -> gold -> skin, plus what Figma
+//                      cannot hold. Without --dry-run it refuses (item 3, the
+//                      Figma write, is not built).
 //   --rest             the published-variables REST API
 //                      (GET /v1/files/{fileKey}/variables; env FIGMA_TOKEN,
 //                      --file-key, default IV92js0q2cBHmHmDxB0zxM). The
@@ -54,6 +58,8 @@ import {
   reconstructCss,
 } from './lib/figma-token-sync.mjs'
 import { generateVariables } from './generate-variables.mjs'
+import { loadSkinPackage } from './lib/skin-package.mjs'
+import { skinModeReport, formatSkinModeReport } from './lib/skin-mode.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const tokensPath = join(here, '..', 'tokens.json')
@@ -71,6 +77,9 @@ const useRest = args.includes('--rest')
 const apply = args.includes('--apply')
 const reportPath = argValue('--report')
 const fileKey = argValue('--file-key') ?? DEFAULT_FILE_KEY
+const skinDir = argValue('--skin')
+const modeId = argValue('--mode')
+const dryRun = args.includes('--dry-run')
 
 // --- input -------------------------------------------------------------------
 async function loadFigmaVariables() {
@@ -121,6 +130,47 @@ async function loadFigmaVariables() {
     return json.variables
   }
   throw new Error('pass --snapshot <file> or --rest')
+}
+
+// --- skin mode (FE-219) --------------------------------------------------------
+// --skin <package dir> --mode <id>: the values a skin package gives the
+// `velo` collection's mode <id> (gold + the package's overrides). Only the
+// dry-run report exists; writing the mode into Figma is FE-219 item 3.
+if (skinDir !== undefined) {
+  if (!modeId) {
+    console.error('error: --skin needs --mode <id> (the Figma mode name, e.g. goodo)')
+    process.exit(1)
+  }
+  if (!dryRun) {
+    console.error(
+      'error: writing a skin mode is not implemented yet (FE-219 item 3); use --dry-run',
+    )
+    process.exit(1)
+  }
+  const goldDoc = JSON.parse(readFileSync(tokensPath, 'utf8'))
+  const goldLeaves = collectLeaves(goldDoc)
+  const pkg = loadSkinPackage(skinDir, goldDoc)
+  if (pkg.problems.length > 0) {
+    console.error(
+      `error: skin package is not valid:\n${pkg.problems.map((p) => `  - ${p}`).join('\n')}`,
+    )
+    process.exit(1)
+  }
+  // Names are paired by the FE-124 rule only when a Figma snapshot is given.
+  const figmaNames = snapshotPath
+    ? buildNameMap(goldLeaves, await loadFigmaVariables()).map
+    : undefined
+  const skinReport = formatSkinModeReport(skinModeReport(goldLeaves, pkg.decls, figmaNames), {
+    skinPath: skinDir,
+    modeId,
+  })
+  if (reportPath) {
+    writeFileSync(reportPath, `${skinReport}\n`)
+    console.log(`report: ${reportPath}`)
+  } else {
+    console.log(skinReport)
+  }
+  process.exit(0)
 }
 
 // --- main --------------------------------------------------------------------
