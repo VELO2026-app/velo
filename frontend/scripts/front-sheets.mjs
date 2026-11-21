@@ -9,13 +9,16 @@
 // scripts/lib/front-sheets.mjs.
 //
 // MODES
-//   --pr <n>                 files of a GitHub PR (gh). Code ref: the merge
+//   --pr <n>                 files of a GitHub PR. Merged with a merge commit
+//                            (two parents): `git diff <merge>^1 <merge>`; squash,
+//                            rebase or open: `gh pr diff --name-only` (the whole
+//                            PR, not only its last commit). Code ref: the merge
 //                            commit of a merged PR, else origin/deploy-machine.
 //   --files <a,b,...>        an explicit list of changed files
 //   --base <ref> [--head <ref>]  files of `git diff base...head` (head: --ref)
 //   --stale <inventory.json> weekly check: every sheet's c2f:commit vs --ref.
-//                            The inventory is what `c2fInventory()` (skill
-//                            code-to-figma-pixel-perfect, figma-lib.js) returns.
+//                            The inventory is what `c2fInventory()` of the repo's
+//                            docs/figma/front/front-lib.figma.js returns in Figma.
 //   --write-manifest <inventory.json>  regenerate the manifest from Figma.
 //
 // OPTIONS
@@ -81,7 +84,9 @@ function gitRepo(repo, ref) {
   ])
   const files = new Set(list.split('\n').filter(Boolean))
   const wanted = [...files].filter(
-    (f) => GRAPH_ROOTS.some((r) => f.startsWith(r)) && /\.(vue|[cm]?[jt]s|css|scss)$/.test(f),
+    (f) =>
+      (GRAPH_ROOTS.some((r) => f.startsWith(r)) && /\.(vue|[cm]?[jt]s|css|scss)$/.test(f)) ||
+      /^frontend\/src\/locales\/ru\/.+\.json$/.test(f), // key namespaces of the texts
   )
   const buf = execFileSync('git', ['-C', repo, 'cat-file', '--batch'], {
     input: wanted.map((f) => `${ref}:${f}`).join('\n') + '\n',
@@ -111,10 +116,14 @@ function prInfo(repo, n) {
     const merge = pr.mergeCommit.oid
     if (tryGit(repo, ['cat-file', '-e', `${merge}^{commit}`]) === null)
       throw new Error(`merge commit ${merge} is not in the local repo: run git fetch origin`)
-    const files = git(repo, ['diff', '--name-only', `${merge}^1`, merge])
-      .split('\n')
-      .filter(Boolean)
-    return { files, ref: merge, label }
+    const parents =
+      git(repo, ['rev-list', '--parents', '-n', '1', merge]).trim().split(' ').length - 1
+    // a squash or rebase merge has one parent: its ^1 diff would hold only the last commit
+    const out =
+      parents === 2
+        ? git(repo, ['diff', '--name-only', `${merge}^1`, merge])
+        : gh(['pr', 'diff', String(n), '--name-only'])
+    return { files: out.split('\n').filter(Boolean), ref: merge, label }
   }
   const files = gh(['pr', 'diff', String(n), '--name-only'])
     .split('\n')

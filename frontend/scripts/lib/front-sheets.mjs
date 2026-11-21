@@ -76,6 +76,24 @@ const EXTENSIONS = ['', '.ts', '.vue', '.js', '.mjs', '.css', '/index.ts', '/ind
 const VISUAL_RE = /\.(vue|css|scss|svg|png|webp|jpe?g|gif|woff2?|ttf|otf)$/
 const TEST_RE = /(\.(test|spec)\.[cm]?[jt]s$)|(\/__tests__\/)|(\/e2e\/)/
 const TRANSLATES_RE = /(?:^|[^\w$.])\$?t\(|\buseI18n\b/
+// the namespace of a key the code renders: t('ns.…'), $t(`ns.…`), te(…), or a key constant (labelKey: 'ns.…')
+const KEY_NS_RES = [
+  /(?:^|[^\w$])\$?t[ce]?\(\s*['"`]([A-Za-z_]\w*)\./g,
+  /\b\w*[kK]ey\s*:\s*['"`]([A-Za-z_]\w*)\./g,
+]
+
+/**
+ * Key namespaces a text file holds: the top-level keys of ru/<file>.json, `ui` for the kit's
+ * catalog seam; null when the file cannot be read (then every translating sheet counts).
+ */
+export function textNamespaces(path, repo) {
+  if (path === 'packages/velo-ui/src/i18n.ts') return ['ui']
+  try {
+    return Object.keys(JSON.parse(repo.read(path) || ''))
+  } catch {
+    return null
+  }
+}
 
 export const isTextFile = (path) => TEXT_FILES.some((re) => re.test(path))
 
@@ -365,6 +383,7 @@ export function sheetDeps(sheet, repo, graph) {
   const prefixes = []
   const notes = []
   let texts = false
+  const textNs = new Set()
   let unmapped = false
   const addGlobal = (f) => (f.endsWith('/') ? prefixes.push(f) : files.add(f))
   if (key.startsWith('screen:') || key.startsWith('component:')) {
@@ -376,7 +395,11 @@ export function sheetDeps(sheet, repo, graph) {
     }
     for (const f of roots) for (const d of graph.closure(f)) files.add(d)
     for (const f of [...APP_GLOBALS, ...TOKEN_FILES]) addGlobal(f)
-    texts = [...files].some((f) => TRANSLATES_RE.test(stripComments(repo.read(f) || '')))
+    for (const f of files) {
+      const src = stripComments(repo.read(f) || '')
+      if (TRANSLATES_RE.test(src)) texts = true
+      for (const re of KEY_NS_RES) for (const m of src.matchAll(re)) textNs.add(m[1])
+    }
     unmapped = !r.files.length
     for (const m of r.moved) notes.push(`source moved: ${m.from} -> ${m.to.join(', ')}`)
     for (const m of r.missing) notes.push(`source not found: ${m}`)
@@ -389,11 +412,20 @@ export function sheetDeps(sheet, repo, graph) {
   } else if (key === 'asset:app-background') {
     prefixes.push('frontend/public/bg/')
   }
-  return { files, prefixes, texts, unmapped, notes }
+  return { files, prefixes, texts, textNs, unmapped, notes }
 }
 
-const depends = (d, path) =>
-  d.files.has(path) || d.prefixes.some((p) => path.startsWith(p)) || (d.texts && isTextFile(path))
+/** A text file reaches a sheet that renders a key of one of its namespaces (any translating sheet when unknown). */
+function dependsOnText(d, path, repo) {
+  if (!d.texts) return false
+  const ns = textNamespaces(path, repo)
+  return ns === null || ns.some((n) => d.textNs.has(n))
+}
+
+const depends = (d, path, repo) =>
+  d.files.has(path) ||
+  d.prefixes.some((p) => path.startsWith(p)) ||
+  (isTextFile(path) && dependsOnText(d, path, repo))
 
 /**
  * Sheets to resnap for a list of changed files.
@@ -407,7 +439,7 @@ export function affectedSheets(changedFiles, manifest, repo, graph = createGraph
   for (const sheet of manifest.sheets || []) {
     const d = sheetDeps(sheet, repo, graph)
     notes.push(...d.notes.map((n) => `${sheet.key}: ${n}`))
-    const reasons = visual.filter((f) => depends(d, f))
+    const reasons = visual.filter((f) => depends(d, f, repo))
     if (reasons.length)
       sheets.push({ key: sheet.key, id: sheet.id, page: sheet.page, name: sheet.name, reasons })
   }
@@ -474,7 +506,7 @@ export function staleSheets(inventory, manifest, repo, changedSince, graph = cre
     }
     const reasons = changed
       .filter(isVisualChange)
-      .filter((f) => depends(d, f))
+      .filter((f) => depends(d, f, repo))
       .sort()
     if (reasons.length) out.stale.push({ ...ref, commit: sheet.commit, reasons })
     else if (!sheet.seal) out.unsealed.push({ ...ref, commit: sheet.commit })

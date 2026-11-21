@@ -51,17 +51,23 @@ const SRC = {
   // the role shell is mounted by the router, not imported by the view
   // a glob in an HTML comment must not hide the imports below it (FE-224 review)
   'frontend/src/views/shells/UserShell.vue':
-    "<!-- Layout for all /user/* routes. -->\n<script setup>\nimport MobileLayout from '@/components/layout/MobileLayout.vue'\n/** The shell. */\nconst tabs = []\n</script>",
+    "<!-- Layout for all /user/* routes; see the legacy /* note -->\n<script setup>\nimport MobileLayout from '@/components/layout/MobileLayout.vue'\n/** The shell. */\nconst tabs = []\n</script>",
   'frontend/src/views/shells/MasterShell.vue': '<template><main /></template>',
   'frontend/src/components/layout/MobileLayout.vue':
     "<script setup>\nimport VTabBar from './VTabBar.vue'\n</script>",
   'frontend/src/components/layout/VTabBar.vue': '<template><nav /></template>',
-  'frontend/src/router/tabs.ts': "import i18n from '@/locales'\nexport const TABS = []",
+  // the tab table is a root outside the graph: its own imports must be followed
+  'frontend/src/router/tabs.ts':
+    "import i18n from '@/locales'\nimport IconTab from '@/components/icons/IconTab.vue'\nexport const TABS = [IconTab]",
+  'frontend/src/components/icons/IconTab.vue': '<template><svg /></template>',
   // behaviour, outside the graph: a store that imports every view must not leak into a screen
   'frontend/src/stores/main.ts':
     "import Other from '@/views/user/OtherView.vue'\nexport const useStore = () => Other",
   'frontend/src/api/types.ts': 'export type Practice = { id: string }',
   'frontend/src/locales/index.ts': 'export const t = (k) => k',
+  // texts: PracticeCard renders t('card.title'); nothing renders the `other` namespace
+  'frontend/src/locales/ru/user.json': '{ "card": { "title": "Практика" } }',
+  'frontend/src/locales/ru/other.json': '{ "other": { "x": "y" } }',
   'frontend/src/styles/global.css': 'body {}',
   'frontend/tokens.json': '{}',
 }
@@ -251,16 +257,18 @@ test('affectedSheets: the role shell, its layout and the tab table reach the scr
   ]) {
     assert.deepEqual(keysFor([f]), ['screen:user.home'], f)
   }
+  assert.ok(keysFor(['frontend/src/components/icons/IconTab.vue']).includes('screen:user.home'))
   assert.deepEqual(keysFor(['frontend/src/views/shells/MasterShell.vue']), [])
 })
 
-test('affectedSheets: a ru text change reaches the sheets that translate and raises the texts flag', () => {
+test('affectedSheets: a ru text file reaches only the sheets that render a key of its namespaces', () => {
   const r = affectedSheets(['frontend/src/locales/ru/user.json'], manifest, repo)
   assert.deepEqual(
     r.sheets.map((s) => s.key),
     ['screen:user.home'],
   )
   assert.equal(r.texts, true)
+  assert.deepEqual(keysFor(['frontend/src/locales/ru/other.json']), [])
 })
 
 test('affectedSheets: tokens reach the registry and every screen and kit sheet; global styles the screens and the kit', () => {
