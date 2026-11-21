@@ -24,8 +24,8 @@
 #                  Every test runs under the crash detector (FE-161).
 #   e2e-stack    — FE-161: the sweep -- every route x role on a REAL backend
 #                  seeded with the `e2e` profile (.github/workflows/e2e-stack.yml,
-#                  which also runs nightly on test with WebKit). Advisory
-#                  during burn-in, see the job.
+#                  which also runs nightly on deploy-machine with WebKit).
+#                  Blocking since FE-222: a red sweep is a red gate.
 #   matrix-plan, matrix, matrix-gate
 #                — the whitelabel build matrix (FE-114, FE-152) fanned out one
 #                  runner per cell (`build-matrix.mjs --cell`); matrix-gate
@@ -42,6 +42,10 @@
 #                  OpenAPI schema and fail on any diff. Read-only w.r.t. the
 #                  backend. The generator is deterministic by contract
 #                  (backend/scripts/generate_ts_types.py).
+#   gate         — FE-222: the fan-in of every job above and THE status the
+#                  deploy-machine ruleset requires (docs/ci/deploy-machine-
+#                  ruleset.md). It always runs, so it answers on any PR,
+#                  backend-only and docs-only included.
 #
 # Label-driven checks live in workflows of their own (FE-206), and ci.yml
 # does not listen to labels at all: a label event here used to produce a run
@@ -73,6 +77,12 @@
 #   + image only when the PR touches what the image build reads
 #     (Dockerfile, frontend/nginx*, editions.json, lockfile, workspace
 #     manifests, .dockerignore) or the gate itself
+# Required checks (FE-222): the ruleset names `CI — gate`, never the jobs
+# above. A skipped job reports under a name of its own: a matrix job as
+# `matrix — ${{ matrix.cell }}`, a reusable workflow under the caller's
+# name (`e2e-stack`) instead of `e2e-stack / e2e-stack — sweep on a real
+# backend`. A check required by its "ran" name would wait in Expected on
+# every PR that skips it. The gate has one name and always runs.
 # A push is sized like a PR (FE-187). It gets the full gate only when its
 # range cannot be trusted: a new branch (before all zeros), a before outside
 # the history, a forced push (before not an ancestor of sha). So the trunk is
@@ -132,8 +142,9 @@ jobs:
           fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
 
       # The classifier is the gate's size: its own test runs where it runs.
-      - name: Test the classifier
-        run: node --test .github/scripts/ci-scope.test.mjs
+      # FE-222: so does the check that the gate waits for every job.
+      - name: Test the classifier and the gate's needs
+        run: node --test .github/scripts/ci-scope.test.mjs .github/scripts/ci-gate.test.mjs
 
       - name: Classify the PR diff or the push range
         id: scope
@@ -571,10 +582,10 @@ jobs:
 
   # FE-161: the sweep on a real backend. Runs for frontend changes AND for
   # backend ones (scope `drift`): a renamed response field breaks a screen
-  # without touching frontend/. BURN-IN: advisory (a red sweep does not fail
-  # the check) until 10 green runs in a row on test / two weeks; then the
-  # owner drops `advisory` and makes `e2e-stack — sweep on a real backend`
-  # a required check.
+  # without touching frontend/. Blocking since FE-222 (burn-in: 60 PR runs,
+  # no false red, ~2.5 min); a red sweep fails the gate below. A screen that
+  # fails for a known reason is quarantined in e2e/sweep/routes.ts with its
+  # task key, never by making this job advisory (docs/testing.md).
   e2e-stack:
     name: e2e-stack
     needs: scope
@@ -582,7 +593,6 @@ jobs:
     uses: ./.github/workflows/e2e-stack.yml
     with:
       projects: sweep
-      advisory: true
 
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
   # gate -- golden x every edition of editions.json through PRIMER_EDITION
@@ -787,3 +797,50 @@ jobs:
 
       - name: Fail on drift
         run: git diff --exit-code -- frontend/src/api/generated.ts
+
+  # FE-222: the one required status of this workflow (the deploy-machine
+  # ruleset, docs/ci/deploy-machine-ruleset.md). `always()`: it runs whatever
+  # the other jobs did -- after a failure, a skip or a cancel -- so the check
+  # exists on every PR under this one name and never waits in Expected.
+  # Verdict: scope must succeed (a failed scope skips everything after it,
+  # and a skip passes); every other job must succeed or be skipped. A skip is
+  # sizing only -- scope's outputs and the `if:`s above -- because a failure
+  # upstream always surfaces as a failure too: test -> test-report,
+  # matrix-plan / matrix -> matrix-gate, and each of them is a need here.
+  # Add every new job of this workflow to `needs`.
+  gate:
+    name: CI — gate
+    needs:
+      - scope
+      - lint
+      - format
+      - typecheck
+      - test
+      - test-report
+      - test-other
+      - build
+      - e2e
+      - e2e-stack
+      - matrix-plan
+      - matrix
+      - matrix-gate
+      - image
+      - drift-check
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every job passed or was sized out
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"' | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$(echo "$NEEDS" | jq -r '.scope.result')" != success ]; then
+            echo "scope did not succeed: nothing after it ran" >&2
+            exit 1
+          fi
+          bad=$(echo "$NEEDS" | jq -r 'to_entries[] | select(.value.result != "success" and .value.result != "skipped") | "\(.key) (\(.value.result))"')
+          if [ -n "$bad" ]; then
+            echo "not green: $bad" | tr '\n' ' ' >&2
+            exit 1
+          fi
