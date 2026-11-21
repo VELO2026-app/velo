@@ -213,7 +213,8 @@ export function resolveColor(comparable, byCssName, seen = new Set()) {
   if (comparable.kind === 'mix') {
     const base = resolveColor(comparable.base, byCssName, new Set(seen))
     if (!base) return null
-    return { rgb: base.rgb, a: comparable.percent / 100 }
+    // a mix over a translucent base multiplies the alphas (color-mix with transparent)
+    return { rgb: base.rgb, a: (base.a * comparable.percent) / 100 }
   }
   return null
 }

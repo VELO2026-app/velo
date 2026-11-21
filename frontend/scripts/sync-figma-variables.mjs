@@ -59,7 +59,7 @@ import {
 } from './lib/figma-token-sync.mjs'
 import { generateVariables } from './generate-variables.mjs'
 import { loadSkinPackage } from './lib/skin-package.mjs'
-import { skinModeReport, formatSkinModeReport } from './lib/skin-mode.mjs'
+import { skinModeReport, formatSkinModeReport, parseSkinArgs } from './lib/skin-mode.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const tokensPath = join(here, '..', 'tokens.json')
@@ -77,8 +77,11 @@ const useRest = args.includes('--rest')
 const apply = args.includes('--apply')
 const reportPath = argValue('--report')
 const fileKey = argValue('--file-key') ?? DEFAULT_FILE_KEY
-const skinDir = argValue('--skin')
-const modeId = argValue('--mode')
+const skinArgs = parseSkinArgs(args)
+if (skinArgs && 'error' in skinArgs) {
+  console.error(`error: ${skinArgs.error}`)
+  process.exit(1)
+}
 const dryRun = args.includes('--dry-run')
 
 // --- input -------------------------------------------------------------------
@@ -136,11 +139,8 @@ async function loadFigmaVariables() {
 // --skin <package dir> --mode <id>: the values a skin package gives the
 // `velo` collection's mode <id> (gold + the package's overrides). Only the
 // dry-run report exists; writing the mode into Figma is FE-219 item 3.
-if (skinDir !== undefined) {
-  if (!modeId) {
-    console.error('error: --skin needs --mode <id> (the Figma mode name, e.g. goodo)')
-    process.exit(1)
-  }
+if (skinArgs) {
+  const { skinDir, modeId } = skinArgs
   if (!dryRun) {
     console.error(
       'error: writing a skin mode is not implemented yet (FE-219 item 3); use --dry-run',

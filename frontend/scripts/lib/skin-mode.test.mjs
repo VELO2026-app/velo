@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { collectLeaves, buildNameMap } from './figma-token-sync.mjs'
 import { loadSkinPackage, readGoldenTokens } from './skin-package.mjs'
-import { resolveForFigma, skinModeReport } from './skin-mode.mjs'
+import { parseSkinArgs, resolveForFigma, skinModeReport } from './skin-mode.mjs'
 
 const leaf = (cssName, value) => ({ cssName, value })
 const gold = [
@@ -105,5 +105,35 @@ describe('package parsing through the build engine', () => {
     expect(bad.problems.join('\n')).toContain('velo.nonsense is not a token of the product')
     expect(bad.decls).toEqual([])
     expect(collectLeaves(goldenDoc).length).toBeGreaterThan(0)
+  })
+})
+
+describe('skin mode details', () => {
+  it('color-mix over a translucent base multiplies the alphas', () => {
+    const byName = new Map([['--velo-glass', { value: 'rgba(0, 0, 255, 0.5)' }]])
+    expect(
+      resolveForFigma('color-mix(in srgb, var(--velo-glass) 15%, transparent)', byName),
+    ).toMatchObject({ text: '#0000FF @ 0.075' })
+  })
+
+  it('a literal size and a reference to the same size print the same text', () => {
+    const byName = new Map([['--velo-space', { value: '16px' }]])
+    const lit = resolveForFigma('16px', byName)
+    expect(resolveForFigma('var(--velo-space)', byName)).toEqual(lit)
+    expect(lit).toMatchObject({ text: '16px' })
+  })
+
+  it('refuses a --skin or --mode without a value, and --mode gold; accepts a full pair', () => {
+    expect(parseSkinArgs(['--skin'])).toHaveProperty('error')
+    expect(parseSkinArgs(['--skin', '--apply', '--mode', 'goodo'])).toHaveProperty('error')
+    expect(parseSkinArgs(['--skin', '/p', '--mode'])).toHaveProperty('error')
+    expect(parseSkinArgs(['--mode', 'goodo'])).toHaveProperty('error')
+    expect(parseSkinArgs(['--skin', '/p'])).toHaveProperty('error')
+    expect(parseSkinArgs(['--skin', '/p', '--mode', 'Gold'])).toHaveProperty('error')
+    expect(parseSkinArgs(['--skin', '/p', '--mode', 'goodo'])).toEqual({
+      skinDir: '/p',
+      modeId: 'goodo',
+    })
+    expect(parseSkinArgs(['--snapshot', 'x.json'])).toBeNull()
   })
 })

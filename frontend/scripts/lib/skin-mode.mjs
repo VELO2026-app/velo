@@ -11,12 +11,50 @@
 //
 // PURE (no fs, no network). The dry-run CLI is sync-figma-variables.mjs.
 // =============================================================================
-import { parseCssValue, resolveColor, resolveMagnitude } from './figma-token-sync.mjs'
+import { parseCssValue, resolveColor } from './figma-token-sync.mjs'
 
 /** @param {{rgb: number[], a: number}} c */
 function colorText(c) {
   const hex = `#${c.rgb.map((v) => v.toString(16).padStart(2, '0')).join('')}`.toUpperCase()
   return c.a === 1 ? hex : `${hex} @ ${Number(c.a.toFixed(3))}`
+}
+
+/** Follow a reference chain to its dimension leaf, keeping the unit. */
+function resolveDim(parsed, byCssName, seen = new Set()) {
+  if (parsed.kind === 'dim') return parsed
+  if (parsed.kind !== 'ref' || seen.has(parsed.cssName)) return null
+  seen.add(parsed.cssName)
+  const target = byCssName.get(parsed.cssName)
+  return target ? resolveDim(parseCssValue(target.value), byCssName, seen) : null
+}
+
+/**
+ * Check the --skin / --mode arguments. A flag without a value must stop the
+ * run: silently falling through would take the gold path (and --apply
+ * rewrites tokens.json). The gold mode is refused as a target: the gold
+ * sync owns the first mode of the collection.
+ *
+ * @param {string[]} args process arguments
+ * @returns {{error: string} | {skinDir: string, modeId: string} | null} null = not a skin run
+ */
+export function parseSkinArgs(args) {
+  const valueOf = (flag) => {
+    const i = args.indexOf(flag)
+    if (i < 0) return undefined
+    const v = args[i + 1]
+    return v === undefined || v.startsWith('--') ? null : v
+  }
+  const skinDir = valueOf('--skin')
+  const modeId = valueOf('--mode')
+  if (skinDir === undefined && modeId === undefined) return null
+  if (skinDir === null) return { error: '--skin needs a package directory' }
+  if (modeId === null) return { error: '--mode needs a mode id (e.g. goodo)' }
+  if (skinDir === undefined) return { error: '--mode needs --skin <package directory>' }
+  if (modeId === undefined) return { error: '--skin needs --mode <id> (e.g. goodo)' }
+  if (modeId.toLowerCase() === 'gold') {
+    return { error: '--mode gold is refused: gold is the first mode, owned by the gold sync' }
+  }
+  return { skinDir, modeId }
 }
 
 /**
@@ -32,11 +70,11 @@ export function resolveForFigma(css, byCssName) {
   if (parsed.kind === 'raw') {
     return { ok: false, reason: `a verbatim CSS string, not a color or a number: ${parsed.text}` }
   }
-  if (parsed.kind === 'dim') return { ok: true, kind: 'dim', text: `${parsed.value}${parsed.unit}` }
   const color = resolveColor(parsed, byCssName)
   if (color) return { ok: true, kind: 'color', text: colorText(color) }
-  const magnitude = resolveMagnitude(parsed, byCssName)
-  if (magnitude !== null) return { ok: true, kind: 'dim', text: String(magnitude) }
+  // A literal and a reference to the same size must print the same text.
+  const dim = resolveDim(parsed, byCssName)
+  if (dim) return { ok: true, kind: 'dim', text: `${dim.value}${dim.unit}` }
   return { ok: false, reason: 'a reference that does not resolve to a color or a number' }
 }
 
