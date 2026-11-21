@@ -13,6 +13,7 @@ import { runInNewContext } from 'node:vm'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const LIB = readFileSync(join(root, 'docs/figma/front/front-lib.figma.js'), 'utf8')
+const FSS_LIB = readFileSync(join(root, 'docs/figma/front/fss-lib.figma.js'), 'utf8')
 const COMPARE = readFileSync(
   join(root, 'docs/figma/velo-figma-designer/scripts/compare.figma.js'),
   'utf8',
@@ -57,6 +58,14 @@ class Node {
     walk(this)
     return out
   }
+  loadAsync() {
+    return Promise.resolve()
+  }
+  remove() {
+    const parent = /** @type {Node} */ (this.parent)
+    parent.children.splice(parent.children.indexOf(this), 1)
+    this.parent = null
+  }
   findOne(fn) {
     return this.findAll(fn)[0] || null
   }
@@ -93,9 +102,18 @@ function setup() {
     getNodeByIdAsync: (id) => Promise.resolve(byId(id)),
   }
   // the file is a plugin script without exports: run it in a context with the fake API
-  F = runInNewContext(LIB + '\n;({ makeFront, c2fSeal, c2fNeedGuard })', { figma, setTimeout })
+  F = load(LIB + '\n' + FSS_LIB)
   return { pages, sheet, frame, handoff }
 }
+/** Run the plugin scripts (no exports) in a context with the fake API. */
+const load = (src) =>
+  runInNewContext(
+    src + '\n;({ makeFront, makeFSS, c2fSeal, c2fNeedGuard, c2fMarkRebuilt, c2fInventory })',
+    {
+      figma,
+      setTimeout,
+    },
+  )
 const designerLock = (until = Date.now() + 5 * 60e3) =>
   JSON.stringify({ who: 'designer-agent', task: 'DSGN-1', until: new Date(until).toISOString() })
 const COMMIT = { commit: 'f0db5d67', committedAt: '2026-11-21T08:00:00+08:00' }
@@ -169,10 +187,12 @@ test('acquire: the lock outlives a write and blocks another front thread until r
   await a.acquire(['Фронт · Экраны'])
   await a.write(['Фронт · Экраны'], 'step 1', () => {})
   assert.equal(JSON.parse(t.pages[0].getPluginData('f2c:lock')).who, 'front-agent thr_a')
+  const saved = figma.versions.length
   await assert.rejects(
     b.write(['Фронт · Экраны'], 'x', () => {}),
     /СТРАНИЦА ЗАНЯТА/,
   )
+  assert.equal(figma.versions.length, saved) // refused before the version
   await a.release(['Фронт · Экраны'])
   await b.write(['Фронт · Экраны'], 'ok', () => {})
 })
@@ -201,7 +221,7 @@ test('stamp: a sheet not rebuilt in the write needs evidence; a rebuilt one does
   assert.equal(t.frame.getPluginData('c2f:commit'), 'f0db5d67')
   assert.equal(t.sheet.getPluginData('c2f:seal'), F.c2fSeal(t.sheet))
   await front.write(['Фронт · Экраны'], 'resnap', () => {
-    front.touch(t.frame) // a raw change of a layer inside the sheet
+    F.c2fMarkRebuilt(t.sheet) // what FSS.sheet / componentSheet do
     return front.stamp(t.sheet.id, { ...COMMIT, committedAt: '2026-11-22T08:00:00+08:00' })
   })
   assert.equal(t.sheet.getPluginData('c2f:evidence'), 'rebuilt from code in this write')
@@ -216,4 +236,107 @@ test('stamp: older code than the sheet already shows is refused', async () => {
     ),
     /newer code/,
   )
+})
+
+test('write: our own expired task lock is extended and kept, not released', async () => {
+  const a = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
+  t.pages[0].setPluginData(
+    'f2c:lock',
+    JSON.stringify({
+      who: 'front-agent thr_a',
+      task: 'FE-1',
+      until: new Date(Date.now() - 1000).toISOString(),
+    }),
+  )
+  await a.write(['Фронт · Экраны'], 'ok', () => {})
+  const l = JSON.parse(t.pages[0].getPluginData('f2c:lock'))
+  assert.equal(l.who, 'front-agent thr_a')
+  assert.ok(Date.parse(l.until) > Date.now())
+})
+
+test('write: refuses an FSS copy without the repo version before any change', async () => {
+  F = load(LIB + '\nfunction makeFSS() {}') // an old skill copy of the builders
+  const front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
+  await assert.rejects(
+    front.write(['Фронт · Экраны'], 'x', () => {}),
+    /fss-lib\.figma\.js/,
+  )
+  assert.deepEqual(figma.versions, [])
+})
+
+// --- the FSS builders from the repo --------------------------------------------------------
+test('FSS builders: a source or target on an unlocked page and the stamp-only keys are refused', async () => {
+  const front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
+  const FSS = F.makeFSS()
+  assert.throws(() => FSS.setMeta(t.sheet, { status: 'draft' }), /outside FRONT\.write/)
+  await front.write(['Фронт · Экраны'], 'x', async () => {
+    assert.throws(() => FSS.setMeta(t.sheet, { commit: 'abc1234' }), /only by FRONT\.stamp/)
+    FSS.setMeta(t.sheet, { status: 'draft' })
+    const outside = /outside FRONT\.write/
+    await assert.rejects(FSS.tile(t.frame, { key: 'k', name: 'n', masterNode: t.handoff }), outside)
+    await assert.rejects(
+      FSS.stateFrame(t.frame, { key: 'k', title: 'T', adopt: t.handoff.id }),
+      outside,
+    )
+    await assert.rejects(FSS.row(t.frame, 'T', 's', [t.handoff]), outside)
+    await assert.rejects(
+      FSS.componentSheet({ key: 'component:X', family: 'X', body: t.handoff.id }),
+      outside,
+    )
+  })
+  assert.equal(t.sheet.getPluginData('c2f:status'), 'draft')
+  assert.equal(t.handoff.parent, t.pages[2])
+})
+
+test('stamp: FRONT.touch guards only; FSS.sheet({ replace }) marks the sheet rebuilt', async () => {
+  const front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
+  await assert.rejects(
+    front.write(['Фронт · Экраны'], 'x', () => {
+      front.touch(t.frame)
+      return front.stamp(t.sheet.id, COMMIT)
+    }),
+    /was not rebuilt/,
+  )
+  t.sheet.setPluginData('c2f:key', 'screen:user.home')
+  const r = await front.write(['Фронт · Экраны'], 'resnap', async () => {
+    // the fake has no templates: the rebuild stops after clearing and marking the sheet
+    await assert.rejects(
+      F.makeFSS().sheet({
+        key: 'screen:user.home',
+        route: 'user.home',
+        title: 'Home',
+        replace: t.sheet.id,
+      }),
+      /ensureTemplates/,
+    )
+    return front.stamp(t.sheet.id, COMMIT)
+  })
+  assert.equal(r.rebuilt, true)
+  assert.equal(t.sheet.children.length, 0)
+})
+
+test('check: a seal of another version is not «edited» but needs a restamp', async () => {
+  const front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
+  t.sheet.setPluginData('c2f:seal', 'v1:39:3092364d')
+  const c = await front.check(t.sheet.id)
+  assert.equal(c.intact, null)
+  assert.match(c.note, /restamp/)
+})
+
+test('c2fInventory: lists keyed sheets of the mirror pages; a seal of another version reads as no seal', async () => {
+  t.sheet.setPluginData('c2f:key', 'screen:user.home')
+  t.sheet.setPluginData('c2f:source', 'frontend/src/views/user/HomeView.vue')
+  t.sheet.setPluginData('c2f:commit', 'f0db5d67')
+  t.sheet.setPluginData('c2f:seal', F.c2fSeal(t.sheet))
+  t.handoff.setPluginData('c2f:key', 'screen:not-a-mirror')
+  let inv = await F.c2fInventory()
+  assert.deepEqual(
+    // the vm context has its own Array: compare plain JSON
+    JSON.parse(JSON.stringify(inv.sheets.map((x) => [x.key, x.sources, x.intact]))),
+    [['screen:user.home', ['frontend/src/views/user/HomeView.vue'], true]],
+  )
+  t.sheet.setPluginData('c2f:seal', 'v1:39:3092364d')
+  inv = await F.c2fInventory()
+  assert.equal(inv.sheets[0].seal, null)
+  assert.match(inv.sheets[0].sealNote, /restamp/)
 })

@@ -2,8 +2,8 @@
  * FRONT: the front-end agent's writes to the Figma mirror pages (docs/figma-protocol.md §8, §9; FE-224).
  * The source of truth is this file in the repo. Read it from the branch you work against
  * (`git show origin/deploy-machine:docs/figma/front/front-lib.figma.js`) and paste it into
- * `figma_execute` BEFORE the skill's `figma-lib.js` (makeFSS calls c2fNeedGuard and checks
- * FRONT_LIB_VERSION). Read-only callers (the weekly check) need only c2fSeal and c2fInventory.
+ * `figma_execute` BEFORE docs/figma/front/fss-lib.figma.js (the FSS builders; makeFSS calls
+ * c2fNeedGuard). A read-only caller (the weekly check) pastes it too and calls only c2fInventory().
  *
  *   const FRONT = makeFront({ thread: '<bb thread id>', task: 'FE-NNN' });
  *   await FRONT.acquire(['Фронт · Экраны']);          // once per task: the lock outlives one call
@@ -20,19 +20,27 @@
  *     `acquire` holds the lock across calls (TTL 60 min, every write extends it), a write without
  *     `acquire` locks and releases in `finally`;
  *   - a named version is saved first; no version -> stop (unless allowNoVersion, owner's yes);
- *   - the FSS builders refuse a target or a source node outside the locked pages;
+ *   - the FSS builders refuse a target or a source node outside the locked pages; a write refuses
+ *     to start when fss-lib.figma.js is pasted without its version or older than FSS_LIB_MIN;
  *   - new nodes are created on the first locked page (it is made current), never on a designer page;
- *   - `stamp` writes a commit only on a sheet rebuilt in this write (a builder or FRONT.touch reached
- *     it) or with `evidence` of a comparison (a baseline).
+ *   - `stamp` writes a commit without `evidence` only on a sheet that FSS.sheet / FSS.componentSheet
+ *     rebuilt in this write; anything else (a baseline, a raw resnap) needs `evidence`: a diff result
+ *     or another comparison with that commit.
  * NOT guarded: a raw `figma.*` change. Figma does not report a plugin's own changes to the plugin
  * (`documentchange` stays silent, checked live 21.11), so nothing can watch them. The rule: before a
  * raw change, pass the node to FRONT.touch(node) — it refuses a node outside the locked pages.
+ * Restoring a saved version rolls back the WHOLE file, the designer's pages included.
  */
-const FRONT_LIB_VERSION = '2026-11-21.2';
+/** Numeric versions (yyyymmddnn): compared as numbers, never as strings. */
+const FRONT_LIB_VERSION = 2026112103;
+/** The oldest fss-lib.figma.js (FSS_LIB_VERSION) a write accepts. */
+const FSS_LIB_MIN = 2026112101;
+/** Prefix of the current c2fSeal; a stored seal with another prefix cannot be compared. */
+const C2F_SEAL_V = 'v2:';
 const C2F_FILE = 'IV92js0q2cBHmHmDxB0zxM';
 /** pluginData keys only FRONT.stamp may write (FSS.setMeta refuses them). */
 const C2F_RESERVED = ['commit', 'captured', 'committed', 'evidence', 'seal'];
-// Set only while FRONT.write runs: { pages: Set<pageId>, touched: Set<sheetId> }.
+// Set only while FRONT.write runs: { pages: Set<pageId>, rebuilt: Set<sheetId> }.
 let C2F_GUARD = null;
 
 function c2fPageOf(n) { let p = n; while (p && p.type !== 'PAGE') p = p.parent; return p; }
@@ -42,7 +50,7 @@ function c2fSheetOf(n) {
   while (x && x.parent && x.parent.type !== 'PAGE') x = x.parent;
   return x && x.parent && x.parent.type === 'PAGE' ? x : null;
 }
-/** Throws unless every node is on a page the running FRONT.write locked; marks their sheets touched. */
+/** Throws unless every node is on a page the running FRONT.write locked. Marks nothing. */
 function c2fNeedGuard(...nodes) {
   for (const node of nodes) {
     if (!node) continue;
@@ -50,9 +58,19 @@ function c2fNeedGuard(...nodes) {
     if (!C2F_GUARD || !p || !C2F_GUARD.pages.has(p.id)) {
       throw new Error('FRONT: node "' + node.name + '" on page "' + (p && p.name) + '" is outside FRONT.write: wrap the call in FRONT.write([<page>], …) and lock every page it touches (protocol §9)');
     }
-    const s = c2fSheetOf(node);
-    if (s) C2F_GUARD.touched.add(s.id);
   }
+}
+/** Called by FSS.sheet / FSS.componentSheet only: this sheet was rebuilt from code in this write. */
+function c2fMarkRebuilt(sheet) {
+  c2fNeedGuard(sheet);
+  C2F_GUARD.rebuilt.add((c2fSheetOf(sheet) || sheet).id);
+}
+/** Stored seal vs the current algorithm: { intact, note }. */
+function c2fSealState(node) {
+  const stored = node.getPluginData('c2f:seal') || null;
+  if (!stored) return { seal: null, intact: null, note: 'no seal' };
+  if (!stored.startsWith(C2F_SEAL_V)) return { seal: stored, intact: null, note: 'seal ' + stored.split(':')[0] + ' is not ' + C2F_SEAL_V + ' restamp needed' };
+  return { seal: stored, intact: stored === c2fSeal(node), note: null };
 }
 
 /**
@@ -155,6 +173,9 @@ function makeFront(o) {
     },
     async write(list, label, fn) {
       if (C2F_GUARD) fail('FRONT.write is already running (no nesting)');
+      if (typeof makeFSS === 'function' && (typeof FSS_LIB_VERSION !== 'number' || FSS_LIB_VERSION < FSS_LIB_MIN)) {
+        fail('FRONT: the pasted FSS builders are not docs/figma/front/fss-lib.figma.js ≥ ' + FSS_LIB_MIN + ' (an old skill copy has no guards): paste the repo file');
+      }
       checkFile();
       if (!label) fail('FRONT.write: label is required (goes into the version name)');
       const pages = await resolvePages(list);
@@ -163,18 +184,18 @@ function makeFront(o) {
       const lockedHere = [];
       const back = figma.currentPage;
       const pageIds = new Set(pages.map((p) => p.id));
-      const guard = { pages: pageIds, touched: new Set() };
+      const guard = { pages: pageIds, rebuilt: new Set() };
       try {
         for (const p of pages) {
           const l = lockOf(p);
           if (alive(l) && l.who !== WHO) fail(busyError(p, l)); // taken between the check and now
-          if (!(alive(l) && l.who === WHO)) lockedHere.push(p); // held by acquire: extended, kept after the write
+          if (!(l && l.who === WHO)) lockedHere.push(p); // our own lock (acquire; even expired) is extended and kept
           setLock(p, label);
         }
         C2F_GUARD = guard;
         if (figma.currentPage !== pages[0]) await figma.setCurrentPageAsync(pages[0]); // new nodes land on a locked page
         const r = await fn(pages);
-        return Object.assign({ version: v, pages: [...pageIds], touched: [...guard.touched] }, r || {});
+        return Object.assign({ version: v, pages: [...pageIds], rebuilt: [...guard.rebuilt] }, r || {});
       } finally {
         C2F_GUARD = null;
         for (const p of lockedHere) { const l = lockOf(p); if (l && l.who === WHO) p.setPluginData('f2c:lock', ''); }
@@ -193,9 +214,9 @@ function makeFront(o) {
       const sheet = await figma.getNodeByIdAsync(sheetId);
       if (!sheet) fail('FRONT.stamp: node not found ' + sheetId);
       if (!C2F_GUARD) fail('FRONT.stamp: only inside FRONT.write');
-      const rebuilt = C2F_GUARD.touched.has(sheet.id);
+      const rebuilt = C2F_GUARD.rebuilt.has(sheet.id);
       c2fNeedGuard(sheet);
-      if (!rebuilt && !m.evidence) fail('FRONT.stamp: "' + sheet.name + '" was not rebuilt in this write: pass evidence (how it was compared with ' + m.commit + ', protocol §8.3) or rebuild it');
+      if (!rebuilt && !m.evidence) fail('FRONT.stamp: "' + sheet.name + '" was not rebuilt by FSS.sheet / FSS.componentSheet in this write: pass evidence (a diff result or how it was compared with ' + m.commit + ', protocol §8.3)');
       const prev = sheet.getPluginData('c2f:committed');
       if (prev && Date.parse(prev) > Date.parse(m.committedAt)) fail('FRONT.stamp: the sheet shows newer code (' + sheet.getPluginData('c2f:commit') + ', ' + prev + '): resnap from the current origin/deploy-machine');
       const captured = m.captured || new Date().toISOString();
@@ -209,16 +230,15 @@ function makeFront(o) {
     /** Inside write: declare a raw `figma.*` change of these nodes (refused outside the locked pages). */
     touch(...nodes) {
       if (!C2F_GUARD) fail('FRONT.touch: only inside FRONT.write');
-      c2fNeedGuard(...nodes);
+      c2fNeedGuard(...nodes); // guards only: a touched sheet is not «rebuilt»
       return nodes.length;
     },
     /** Read-only: was the sheet changed after the last stamp? */
     async check(sheetId) {
       const s = await figma.getNodeByIdAsync(sheetId);
       if (!s) return { error: 'not found ' + sheetId };
-      const stored = s.getPluginData('c2f:seal') || null;
-      const now = c2fSeal(s);
-      return { sheet: s.id, name: s.name, commit: s.getPluginData('c2f:commit') || null, captured: s.getPluginData('c2f:captured') || null, seal: stored, current: now, intact: stored ? stored === now : null };
+      const st = c2fSealState(s);
+      return { sheet: s.id, name: s.name, commit: s.getPluginData('c2f:commit') || null, captured: s.getPluginData('c2f:captured') || null, seal: st.seal, current: c2fSeal(s), intact: st.intact, note: st.note };
     },
   };
 }
@@ -257,8 +277,8 @@ async function c2fInventory() {
       let captured = s.getPluginData('c2f:captured') || null;
       const skin = s.getPluginData('c2f:skin');
       if (!commit && skin) { try { const j = JSON.parse(skin); commit = j.commit || null; captured = captured || j.date || null; } catch (e) { /* not JSON */ } }
-      const seal = s.getPluginData('c2f:seal') || null;
-      sheets.push({ key, id: s.id, page: p.name, name: s.name, status: s.getPluginData('c2f:status') || null, sources, commit, captured, seal, intact: seal ? seal === c2fSeal(s) : null });
+      const st = c2fSealState(s); // a seal of another version counts as no seal (unsealed), with a note
+      sheets.push({ key, id: s.id, page: p.name, name: s.name, status: s.getPluginData('c2f:status') || null, sources, commit, captured, seal: st.intact === null ? null : st.seal, intact: st.intact, sealNote: st.note });
     }
   }
   return { file: figma.fileKey, at: new Date().toISOString(), lib: FRONT_LIB_VERSION, sheets };

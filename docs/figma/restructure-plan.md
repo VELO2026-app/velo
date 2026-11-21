@@ -159,7 +159,7 @@ Icons, User App, Master App, Admin Panel   страницы Тани, как б�
 **Этап 5. Ссылки в коде и скиллах** (docs-PR, без Figma).
 - `code-to-figma-pixel-perfect/references/velo.md`: страница `front` → новые страницы, список секций.
 - `figma-standard.md` §1 и §9.1: ссылка на протокол (уже добавлена).
-- `figma-lib.js`: проверка страницы, версия и замок перед записью (протокол §9) — сделано в FE-224.
+- `figma-lib.js`: проверка страницы, версия и замок перед записью (протокол §9) — сделано в FE-224 (теперь `docs/figma/front/`).
 - `frontend/design/component-map.md`: ссылки по node id не меняются; проверить выборочно.
 - `handoff-check.figma.js`: `kitPages` уже понимает `Фронт…` и `front`.
 

@@ -82,7 +82,9 @@ const COMPARE_FRAMES = async (aId, bId, opts) => {
     while (s && s.type !== 'PAGE' && !s.getPluginData('c2f:seal')) s = s.parent;
     if (!s || s.type === 'PAGE') return { seal: null, intact: null, commit: null, captured: null };
     const seal = s.getPluginData('c2f:seal');
-    return { id: s.id, name: s.name, seal, intact: seal === c2fSeal(s), commit: s.getPluginData('c2f:commit') || null, captured: s.getPluginData('c2f:captured') || null };
+    // a seal of another algorithm version cannot be compared: say so instead of «edited»
+    const sameVersion = seal.split(':')[0] === c2fSeal(s).split(':')[0];
+    return { id: s.id, name: s.name, seal, intact: sameVersion ? seal === c2fSeal(s) : null, note: sameVersion ? null : 'old seal version: the front agent must restamp the sheet', commit: s.getPluginData('c2f:commit') || null, captured: s.getPluginData('c2f:captured') || null };
   }
   const A = await summary(aId), B = await summary(bId);
   if (A.error || B.error) return { error: A.error || B.error };
