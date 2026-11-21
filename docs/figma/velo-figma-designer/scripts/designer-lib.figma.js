@@ -169,7 +169,7 @@ const DESIGNER = (() => {
     /** Move approved frames into `Handoff / <issue> / <title>` on «К разработке» and write the metadata. */
     async toHandoff(frameIds, meta) {
       meta = meta || {};
-      if (!/^FE-\d+$/.test(meta.issue || '')) fail('meta.issue = FE-NNN is required (create the Linear issue first)');
+      if (!/^FE-\d+$/.test(meta.issue || '')) fail('meta.issue = FE-NNN is required (find the existing Linear issue or create one first)');
       if (!meta.title || !String(meta.title).trim()) fail('meta.title is required');
       if (!meta.approved) fail('meta.approved is required: who approved and when (protocol §4)');
       if (!Array.isArray(frameIds) || !frameIds.length) fail('no frames to hand off');
