@@ -1,0 +1,5 @@
+# FE-226: the commit subject gate at the source -- one regex, no node.
+# The allowed formats are described in scripts/check-commit-msg.sh and
+# only there; this hook just runs it on every commit. Bypass via
+# --no-verify closes at CI (the "Commit msg" workflow).
+scripts/check-commit-msg.sh "$1"
