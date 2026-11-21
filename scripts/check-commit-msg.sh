@@ -1,25 +1,34 @@
 #!/bin/sh
-# FE-226: the commit subject gate -- the format the practice actually
-# converged on (38 of the last 100 deploy-machine commits; the old
-# type(scope)/trailing-(FE-N) rule matched 3 and is retired, the history
-# keeps its old subjects as they are).
+# FE-226: the commit subject gate. The ONE place the format is described.
 #
-# Allowed subjects -- the Linear ID leads, because it is the one thing
-# every reader scans for and GitHub/Linear autolink it anywhere:
-#   FE-226: align the commit header rule with the practice
-#   BE-194 part 10: velo's tests run under the deploy machine
-#   FE-200, FE-201: restore the import the rebase dropped
-#   Fix the stand token leak (owner 2026-11-21)   <- owner work, no task
-# Merge and revert subjects pass through untouched.
+# Allowed subjects:
+#   FE-226: short English description
+#     Any Linear team key works (BE, PM, DSGN, ...): "KEY-N: description".
+#     Several tasks at once: "FE-200, FE-201: ...".
+#     A numbered part of a long task: "FE-181 part 6: ...".
+#   Fix the stand token leak (owner 2026-11-21)
+#     Owner-requested work with no Linear task; the date is validated.
+# Merge/revert subjects are git's own and pass through: "Merge branch ...",
+# "Merge pull request ...", "Merge remote-tracking branch ...", 'Revert "..."'.
+# fixup!/squash!/amend! pass in the default (local hook) mode so the
+# fixup + autosquash flow stays usable; --ci rejects them -- a PR must
+# carry real subjects.
 #
 # Usage:
 #   check-commit-msg.sh <message-file>   git commit-msg hook style ($1)
 #   check-commit-msg.sh -               read the message from stdin
-# Only the subject (first line) is checked; the body stays free-form
-# (the "Task: FE-NNN" trailer is the tooling's, not this gate's concern).
+#   check-commit-msg.sh --ci <file|->   CI mode: also reject fixup!/squash!/amend!
+#
+# Only the subject (first line) is checked; the body is free-form.
+
+ci=0
+if [ "$#" -gt 0 ] && [ "$1" = "--ci" ]; then
+    ci=1
+    shift
+fi
 
 if [ "$#" -ne 1 ]; then
-    echo "usage: $0 <message-file> | -" >&2
+    printf 'usage: %s [--ci] <message-file> | -\n' "$0" >&2
     exit 2
 fi
 
@@ -29,26 +38,37 @@ else
     subject=$(head -n 1 "$1")
 fi
 
-# Merge and revert commits carry the machinery's own subject.
+# git's own subjects for merges and reverts.
 case $subject in
-    "Merge "*|"Revert "*)
+    "Merge branch "*|"Merge pull request "*|"Merge remote-tracking branch "*|'Revert "'*)
         exit 0
         ;;
 esac
 
-# A Linear task first: FE-226: / BE-194 part 10: / FE-200, FE-201:
-if echo "$subject" | grep -Eq '^(FE|BE)-[0-9]+(, (FE|BE)-[0-9]+)*( part [0-9]+)?: .+'; then
+# Rebase plumbing: fine while the branch is local, never in a PR.
+if [ "$ci" -eq 0 ]; then
+    case $subject in
+        "fixup! "*|"squash! "*|"amend! "*)
+            exit 0
+            ;;
+    esac
+fi
+
+# A Linear task first: "FE-226: ...", "BE-194 part 10: ...",
+# "FE-200, FE-201: ..." -- the description must not be blank.
+if printf '%s\n' "$subject" | grep -Eq '^[A-Z]+-[0-9]+(, [A-Z]+-[0-9]+)*( part [0-9]+)?: [^[:space:]].*'; then
     exit 0
 fi
 
-# Owner-requested work without a Linear task: the date in trailing parens.
-if echo "$subject" | grep -Eq '.+ \(owner [0-9]{4}-[0-9]{2}-[0-9]{2}\)$'; then
+# Owner-requested work without a Linear task: a real date in the parens.
+if printf '%s\n' "$subject" | grep -Eq '^[^[:space:]].* \(owner [0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\)$'; then
     exit 0
 fi
 
-echo "commit subject: $subject" >&2
-echo "Subject must be 'FE-NNN: short English description' (BE-NNN for a" >&2
-echo "backend task, 'FE-200, FE-201:' when one commit closes several)," >&2
-echo "or 'short description (owner YYYY-MM-DD)' for owner-requested work" >&2
-echo "with no Linear task. Merge/revert subjects pass." >&2
+printf 'commit subject: %s\n' "$subject" >&2
+printf 'Subject must be "KEY-N: short English description" (any Linear team\n' >&2
+printf 'key: FE, BE, PM, DSGN; "FE-200, FE-201:" closes several tasks,\n' >&2
+printf '"FE-181 part 6:" is a numbered part) or "short description\n' >&2
+printf '(owner YYYY-MM-DD)" for owner-requested work without a task.\n' >&2
+printf 'Merge/revert subjects pass; fixup!/squash!/amend! pass only outside CI.\n' >&2
 exit 1
