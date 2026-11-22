@@ -6,9 +6,10 @@
 // endpoints, mirroring masters.ts. HAND-WRITTEN, not generated: the backend
 // (P1, PROMPT №590) shipped these endpoints without a local server to
 // regenerate generated.ts against, so the types below are a temporary
-// stand-in for the real OpenAPI-derived ones. They reconcile automatically
-// at the next `velo update` regen -- do NOT add these to api/types.ts by
-// hand (that file's own header forbids it).
+// stand-in for the real OpenAPI-derived ones. They reconcile at the next
+// regeneration of generated.ts (scripts/generate_ts_types.py; CI's
+// drift-check) -- do NOT add these to api/types.ts by hand (that file's own
+// header forbids it).
 //
 // Backend endpoints (masters/groups_router.py + students_router.py's tag/
 // block/P3-addenda additions):

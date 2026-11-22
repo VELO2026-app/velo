@@ -293,11 +293,10 @@ def _keep_only_user_form_threads(payload: dict[str, Any]) -> None:
     admin branch. The admin branch BUILDS its list from the projection;
     this branch receives the list from comms, where the projection is a
     lookup table, not the source. The projection can legitimately lack a
-    row for a live DM -- _create_or_get_thread re-points on an id change,
-    and `velo resync-comms` truncates it outright -- and in that window a
-    projection filter would delete a master's OWN conversations from the
-    screen. That trades a leak for data loss. Thread FORM does not depend
-    on projection state.
+    row for a live DM -- _create_or_get_thread re-points on an id change
+    -- and in that window a projection filter would delete a master's OWN
+    conversations from the screen. That trades a leak for data loss.
+    Thread FORM does not depend on projection state.
 
     ORDER MATTERS: this runs BEFORE _attach_peers_from_comms. Names and
     avatars we are about to discard must not be resolved at all -- the
@@ -1550,11 +1549,10 @@ async def unread_count(
     #      reaching comms, and dropping a verb narrows what that matrix
     #      proves while the surface itself stays exposed; and (b) the
     #      ONLY sanctioned end-to-end probe the owner has: comms has no
-    #      public port and no nginx route, and the server permits only
-    #      install_velo.sh and velo commands, so `curl` into comms is not
-    #      available. Verifying "the list shows the same numbers as the
-    #      per-thread count" is possible through this proxy and nowhere
-    #      else.
+    #      public port and no nginx route, and the box is touched only
+    #      through pridem, so `curl` into comms is not available.
+    #      Verifying "the list shows the same numbers as the per-thread
+    #      count" is possible through this proxy and nowhere else.
     """
     _reject_actor_override(request)
     conversation = await _require_participant(session, thread_id, user)

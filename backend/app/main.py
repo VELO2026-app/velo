@@ -300,8 +300,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # a flag forgotten on one box, would leave that box open. The schema itself
 # still exists: app.openapi() builds it in-process whether or not it is
 # served, and that is what type generation reads (backend/scripts/
-# dump_openapi.py, run inside the app container by `velo update`, `velo
-# gen-types` and the installer) and what CI reads.
+# dump_openapi.py, run in the app's image by the deploy machine as the
+# `openapi` command of primer.yaml, stacks.velo.types) and what CI reads.
 app = FastAPI(
     title="VELO API",
     description="Platform for wellness practice facilitators",

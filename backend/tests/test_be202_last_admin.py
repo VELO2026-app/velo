@@ -350,7 +350,7 @@ async def test_revoke_of_a_user_mode_holder_keeps_the_marker_unrefused() -> None
 async def test_setrole_on_the_last_admin_exits_1_and_commits_nothing(
     monkeypatch: pytest.MonkeyPatch, letter: str
 ) -> None:
-    """`velo setrole <id> M|U --yes` on the only admin: exit 1, nothing
+    """`set_role.py <id> M|U --yes` on the only admin: exit 1, nothing
     committed (to_master and to_user each carry the refusal)."""
     tid = BAND_MIN + 4
     uid = await _make_user(tid, role=UserRole.ADMIN.value)

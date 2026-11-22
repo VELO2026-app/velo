@@ -4,40 +4,26 @@ Platform for wellness practice facilitators — meditation, yoga, breathwork.
 
 **Stack:** Python 3.12 · FastAPI · SQLAlchemy 2.0 (async) · PostgreSQL 16 · Redis 7
 
-## Deployment (VPS only)
+## Deployment
 
-There is no local development. Code is written in Claude, pushed to GitHub,
-and built on the VPS.
-
-### Commands
+The deploy machine pridem installs velo and rolls it out on every box, by
+`primer.yaml` at the repository root (stacks, seeds, verbs) and the box's
+passport. There is nothing to run by hand on a box but `pridem`:
 
 ```
-velo update              — Pull, build, migrate, test, restart
-velo test                — Run all tests
-velo lint                — Run linters (ruff)
-velo status              — Health check + Docker status
-velo logs [app|db|redis] — View logs
-velo restart [app]       — Restart services
-velo db connect          — Open psql session
-velo db migrate          — Run Alembic migrations
-velo backup              — Backup DB + .env
+pridem update                            -- Roll the box out to its source
+pridem status                            -- The box's composition, under its lock
+pridem logs velo [app|postgres|redis]    -- View logs
+pridem restart velo [app]                -- Restart the stack or one service
+pridem db connect velo                   -- psql, every transaction read-only
+pridem db migrate velo                   -- Run the stack's migrate
+pridem backup                            -- Dump every database of the box
+pridem verb <name> [<arg>=<value> ...]   -- A verb of primer.yaml `verbs`
 ```
 
-### Manual Docker commands
-
-```bash
-# Build and start
-docker compose up -d --build
-
-# Run migrations
-docker compose exec app python -m alembic upgrade head
-
-# Run tests
-docker compose exec app python -m pytest tests/ -v --tb=short
-
-# Run linter
-docker compose exec app python -m ruff check app/ tests/
-```
+Tests run in CI on every push (`.github/workflows/backend-tests.yml`) and,
+on a box of the role test, before the migrations of every rollout
+(`primer.yaml` `test.run`).
 
 ## Architecture
 

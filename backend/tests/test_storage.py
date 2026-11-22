@@ -1,7 +1,8 @@
 """BE-133: the storage module against the LIVE velo-storage, in test buckets.
 
-These tests talk to the real storage at velo-storage:9000 -- on the stand the
-app container reaches it over aivis-shared. They work ONLY in the test twins
+These tests talk to the real storage at settings.storage_endpoint -- in CI
+velo-storage:9000 on the job's network (backend-tests.yml). They work ONLY in
+the test twins
 of the registry types (`<type>-test`), which the storage init creates and the
 service key may use; the live buckets are never touched. Without a reachable
 storage they FAIL, by design: a skipped storage test would turn the colour of
@@ -10,7 +11,8 @@ the suite into a fact about the environment.
 The registry is read through the Python loader, independently of the init's
 own reading of it: a type that is in the YAML but that the init did not create
 fails here (test_every_registry_type_round_trips), and nowhere else -- the
-`velo doctor` check is the init's own code and shares its blind spots.
+init's check mode (`pridem verb storage-check`) is the init's own code and
+shares its blind spots.
 
 Reading by signed link is done the way comms does it: a plain GET of the URL,
 redirects not followed, from inside the docker network.

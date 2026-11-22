@@ -8,13 +8,12 @@
 # that side's table; only comparing the two tables catches it. This job
 # compares them.
 #
-# The logic is the one of run_codec_vector_diff in scripts/velo-manage.sh
-# (the stand runs that on `test`), with ONE deliberate difference: a vector
-# with no cases is red here. Two empty tables agree and check nothing.
+# This job is the only place the two copies are compared. A vector with no
+# cases is red: two empty tables agree and check nothing.
 #
 # The runner's own python3: the comparison is plain JSON, and the pinned
-# backend base image already lives in three places (backend/Dockerfile says
-# which) -- this job does not add a fourth.
+# backend base image already lives in two places (backend/Dockerfile says
+# which) -- this job does not add a third.
 #
 # Its own file, not a job in ci.yml: a `paths` filter applies to a whole
 # workflow, and ci.yml is shared with open frontend pull requests.

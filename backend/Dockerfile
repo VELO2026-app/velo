@@ -39,8 +39,8 @@
 # list -- the pull picks the platform (servers are amd64). The tag only names
 # what is inside (Python 3.12.15 on Debian 13 trixie); the digest decides.
 # The same string is in BOTH FROM lines that name it below (builder, runtime;
-# builder-test and test derive from those) and in scripts/velo-manage.sh
-# (run_codec_vector_diff): moving the base means changing all three at once.
+# builder-test and test derive from those): moving the base means changing
+# both at once.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------

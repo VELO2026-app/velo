@@ -9,7 +9,8 @@
 // param fails here instead of as a silent no-op deep link.
 //
 // The T-44 codec vector for decodePracticeCode lives in
-// composables/useAuth.test.ts -- `velo test` reads it from that path.
+// composables/useAuth.test.ts -- the CI job codec vector
+// (.github/workflows/codec-vector.yml) reads it from that path.
 // =============================================================================
 
 import { describe, it, expect } from 'vitest'

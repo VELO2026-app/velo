@@ -20,7 +20,6 @@ backend
 storage
 loadtest
 comms-profile
-scripts
 docs
 diagrams
 Design_prototype

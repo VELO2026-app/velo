@@ -63,9 +63,8 @@
 # owned outside this contour — first CI run measured 383 ruff errors at the
 # lockfile-range ruff, and wiring that gate (pinning ruff, fixing or scoping
 # findings) belongs to the backend owner. Add the job when they green-light it.
-# The backend pytest suite is not here either: on branch deploy-machine it
-# runs in its own workflow, backend-tests.yml (BE-197); on test the stand
-# runs it on every rollout.
+# The backend pytest suite is not here either: it runs in its own workflow,
+# backend-tests.yml (BE-197).
 #
 # Scope (per PR type): a `scope` job classifies the PR's diff -- or, on a
 # push, everything the push brought, before..sha (FE-187) -- with
