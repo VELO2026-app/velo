@@ -511,24 +511,23 @@ jobs:
       # FE-230: the core is neutral and production always ships a skin
       # package, so the size that matters is the skinned one (the `skinned`
       # line of bundle-budget.json: the package's photo and font join the
-      # precache). The golden package lives in the private velo-brand
-      # repository: the step runs only when the VELO_BRAND_DEPLOY_KEY secret
-      # (a read-only deploy key of velo-brand) is set, and says so when not.
-      # VELO_BRAND_REF follows the package named in bundle-budget.json.
+      # precache). The golden package comes from the public velo-brand
+      # repository at the tag the `skinned` line was measured with
+      # (bundle-budget.json skinned.repo / skinned.tag). A tag that does not
+      # exist yet is a notice (it is set before the merge); a tag that exists
+      # but does not download fails the step.
       - name: Bundle size budget (with the velo-brand package)
-        env:
-          VELO_BRAND_KEY: ${{ secrets.VELO_BRAND_DEPLOY_KEY }}
-          VELO_BRAND_REF: feat/skin-0.1.1-fe-230
         run: |
-          if [ -z "$VELO_BRAND_KEY" ]; then
-            echo "::notice::VELO_BRAND_DEPLOY_KEY is not set: the skinned bundle budget is not checked in CI"
+          repo=$(node -p "require('./frontend/bundle-budget.json').skinned.repo")
+          tag=$(node -p "require('./frontend/bundle-budget.json').skinned.tag")
+          rc=0
+          git ls-remote --exit-code --tags "$repo" "refs/tags/$tag" > /dev/null || rc=$?
+          if [ "$rc" = 2 ]; then
+            echo "::notice::$repo has no tag $tag yet: the skinned bundle budget is not checked"
             exit 0
           fi
-          mkdir -p ~/.ssh && ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          eval "$(ssh-agent -s)" > /dev/null
-          printf '%s\n' "$VELO_BRAND_KEY" | ssh-add - 2>/dev/null
-          git clone --quiet --depth 1 --branch "$VELO_BRAND_REF" \
-            git@github.com:VELO2026-app/velo-brand.git "$RUNNER_TEMP/velo-brand"
+          [ "$rc" = 0 ] || { echo "::error::cannot list the tags of $repo (exit $rc)"; exit 1; }
+          git clone --quiet --depth 1 --branch "$tag" "$repo" "$RUNNER_TEMP/velo-brand"
           cp -r "$RUNNER_TEMP/velo-brand/skin" frontend/public/skin
           pnpm -C frontend exec vite build
           node frontend/scripts/bundle-report.mjs --budget
@@ -628,10 +627,11 @@ jobs:
   # FE-230) x every edition of editions.json through PRIMER_EDITION
   # (the machine's channel): a module outside the edition must leave NO
   # chunks in dist (core: no ai; payments is an instance option since
-  # FE-151, always built) -- plus ONE skin x full cell
-  # on a synthetic package written to the runner's temp dir (velo carries
-  # no skins since FE-131; scripts/make-test-skin.mjs: the core's assets, a
-  # contrasting palette, a font) -- the build's skin path (asset spill,
+  # FE-151, always built) -- plus TWO skin x full cells on synthetic
+  # packages written to the runner's temp dir (velo carries no skins since
+  # FE-131; scripts/make-test-skin.mjs: the core's assets, a contrasting
+  # palette, a font): ci-skin without a logo set (the brand-icon fallback),
+  # ci-skin-logo with one (FE-230) -- the build's skin path (asset spill,
   # dist/skin prune, @font-face, brand grep) runs on every PR. One vite
   # build per cell, one runner per cell; the cell list comes from the
   # script itself (--list), so a new edition joins the gate without
@@ -657,7 +657,8 @@ jobs:
         id: plan
         run: |
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin")" >> "$GITHUB_OUTPUT"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
+          echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo")" >> "$GITHUB_OUTPUT"
 
   matrix:
     name: matrix — ${{ matrix.cell }}
@@ -695,7 +696,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/facts"
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
+          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -739,7 +741,8 @@ jobs:
           i=0
           for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
+          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo"
 
   # FE-159: the image the machine runs. The stand fell three times (05-07.11)
   # on what no other job builds: the node digest, the Dockerfile's pnpm

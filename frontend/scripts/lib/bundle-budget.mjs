@@ -158,7 +158,7 @@ export function checkBudget(sizes, budget, base) {
     )
   }
   const md = [
-    `### Bundle budget${budget.line ? ` (${budget.line} build${budget.package ? `, ${budget.package}` : ''})` : ''}: ${failures.length ? 'FAIL' : 'ok'}`,
+    `### Bundle budget${budget.line ? ` (${budget.line} build${budget.package ? `, ${budget.package}${budget.tag ? ` ${budget.tag}` : ''}` : ''})` : ''}: ${failures.length ? 'FAIL' : 'ok'}`,
     '',
     '| metric | budget | actual | vs budget | vs base | gate | status |',
     '| --- | --- | --- | --- | --- | --- | --- |',
