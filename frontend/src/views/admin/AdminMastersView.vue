@@ -456,7 +456,7 @@ function openReview(m: AdminMasterListItem): void {
 
 .mcard__stat-key {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-secondary);
+  color: var(--velo-text-on-bg-secondary);
   letter-spacing: 0.02em;
 }
 
