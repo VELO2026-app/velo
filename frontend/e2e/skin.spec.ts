@@ -22,7 +22,10 @@ test('reduced motion outranks a skin that sets motion tokens', async ({ page }) 
       .evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name)
       .then(ms)
   // The skin's own value reaches the page (a token outside the reduced-motion set) ...
-  expect(await token('--velo-dur-pulse')).toBe(777)
+  expect(
+    await token('--velo-dur-pulse'),
+    'the smoke build needs the synthetic skin: node scripts/make-test-skin.mjs public/skin',
+  ).toBe(777)
   // ... and its --velo-dur-fast (999ms) loses to the reduced-motion value.
   expect(await token('--velo-dur-fast')).toBe(120)
 })

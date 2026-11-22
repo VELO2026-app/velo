@@ -624,12 +624,13 @@ jobs:
       projects: sweep
 
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
-  # gate -- golden x every edition of editions.json through PRIMER_EDITION
+  # gate -- the core without a skin (cells named golden/*; neutral since
+  # FE-230) x every edition of editions.json through PRIMER_EDITION
   # (the machine's channel): a module outside the edition must leave NO
   # chunks in dist (core: no ai; payments is an instance option since
   # FE-151, always built) -- plus ONE skin x full cell
   # on a synthetic package written to the runner's temp dir (velo carries
-  # no skins since FE-131; scripts/make-test-skin.mjs: golden assets, a
+  # no skins since FE-131; scripts/make-test-skin.mjs: the core's assets, a
   # contrasting palette, a font) -- the build's skin path (asset spill,
   # dist/skin prune, @font-face, brand grep) runs on every PR. One vite
   # build per cell, one runner per cell; the cell list comes from the

@@ -16,21 +16,26 @@
   <div class="v-select" :class="{ 'v-select--error': !!error }">
     <label v-if="label" class="v-select__label" :for="fieldId">{{ label }}</label>
     <div class="v-select__row">
-      <select
-        :id="fieldId"
-        class="v-select__field"
-        :value="modelValue"
-        :disabled="disabled"
-        :aria-label="label ? undefined : placeholder || undefined"
-        :aria-invalid="!!error || undefined"
-        :aria-describedby="error ? errorId : undefined"
-        @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
-      >
-        <option v-if="placeholder" value="" disabled>{{ placeholder }}</option>
-        <option v-for="opt in options" :key="opt.value" :value="opt.value">
-          {{ opt.label }}
-        </option>
-      </select>
+      <!-- The control wraps the native select so the chevron can be a layer
+           painted with a token (a data: URI in background-image cannot read
+           CSS variables -- FE-230). -->
+      <span class="v-select__control" :class="{ 'v-select__control--disabled': disabled }">
+        <select
+          :id="fieldId"
+          class="v-select__field"
+          :value="modelValue"
+          :disabled="disabled"
+          :aria-label="label ? undefined : placeholder || undefined"
+          :aria-invalid="!!error || undefined"
+          :aria-describedby="error ? errorId : undefined"
+          @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
+        >
+          <option v-if="placeholder" value="" disabled>{{ placeholder }}</option>
+          <option v-for="opt in options" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+      </span>
       <!-- Required marker (DS): the gutter is ALWAYS reserved while `required`, so
            the field width never jumps when a value is chosen. Red rosette «!» when
            empty → green rosette «✓» when selected (operator 2026-06-23). -->
@@ -126,10 +131,36 @@ defineEmits<{
   border-radius: var(--velo-radius-badge);
   transition: border-color var(--transition-base);
   appearance: none;
-  /* Primary-tinted chevron (operator SVG 2026-06-11). */
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23627a9c' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 16px center;
+}
+
+/* The field box plus its chevron layer. */
+.v-select__control {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Primary-tinted chevron (operator SVG 2026-06-11): the SVG is the mask, the
+   color is the token. Placed where the field's background-image sat: 16px
+   in from the padding box plus the 2px border, centered. */
+.v-select__control::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: calc(var(--space-4) + var(--velo-gap-2));
+  width: var(--velo-size-12);
+  height: var(--velo-size-12);
+  translate: 0 -50%;
+  background-color: var(--velo-primary);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E")
+    no-repeat center / contain;
+  pointer-events: none;
+}
+
+/* The chevron fades with the disabled field (opacity 0.5 below). */
+.v-select__control--disabled::after {
+  opacity: 0.5;
 }
 
 .v-select__field:focus {

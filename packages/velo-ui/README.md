@@ -187,6 +187,7 @@
 --velo-required-done       # VSelect required-done glyph color
 --velo-size-46             # VSkeletonRow/VSkeletonPracticeCard row height
 --velo-size-56             # VInput affix-icon size (P8 batch 2)
+--velo-size-12             # VSelect chevron (FE-230)
 --velo-shadow-toast         # VToast elevation (P8 batch 6)
 --velo-success              # VToast success fill (P8 batch 6)
 --velo-text-placeholder    # VInput placeholder tint (P8 batch 2)

@@ -13,7 +13,7 @@
 // while .ea (the one screen) re-points it at --velo-text-placeholder-faint,
 // a lighter value at the same contrast level.
 //
-// FE-230: the core's colours are neutral greys; the golden VELO values (and
+// FE-230: the core's colors are neutral grays; the golden VELO values (and
 // their saturation gap, HSL S 29% vs 17%) live in the velo-brand skin
 // package. This suite pins the rules on the core's own values and the
 // screen's CSS wiring, token-law.test.ts's raw-source discipline:

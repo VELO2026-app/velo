@@ -72,6 +72,8 @@ export const SKIN_CONTRACT = '2.1'
 const CONTRAST_EXCEPTIONS_MINOR = 1
 /** A contrast exception's reason: plain text, one or two sentences. */
 const REASON_MAX = 300
+/** A token path of a contrast exception: dot-separated token names. */
+const TOKEN_PATH = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/
 export const MANIFEST = 'primer-package.yaml'
 /** The $extensions key of the brand record. */
 export const BRAND_EXTENSION = 'velo-skin'
@@ -483,22 +485,32 @@ function checkContrastExceptions(list, where, problems) {
     return []
   }
   const out = []
+  const pairs = new Set()
   list.forEach((entry, i) => {
     const here = `${at}[${i}]`
     if (!isObject(entry)) return problems.push(`${here}: must be an object`)
+    // Package data: a key is quoted, never echoed raw into a build log.
     for (const key of Object.keys(entry))
       if (!['text', 'surface', 'reason'].includes(key))
-        problems.push(`${here}.${key}: unknown field`)
+        problems.push(`${here}: unknown field ${JSON.stringify(key)}`)
+    let valid = true
     for (const key of ['text', 'surface'])
-      if (typeof entry[key] !== 'string' || !/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/.test(entry[key]))
+      if (typeof entry[key] !== 'string' || !TOKEN_PATH.test(entry[key])) {
         problems.push(`${here}.${key}: a token path, e.g. velo.text.secondary`)
+        valid = false
+      }
     const reason = typeof entry.reason === 'string' ? entry.reason.trim() : ''
     if (reason === '') problems.push(`${here}.reason: why the pair stays under the floor`)
     else if (reason.length > REASON_MAX)
       problems.push(`${here}.reason: longer than ${REASON_MAX} characters`)
     else if (UNSAFE_TEXT.test(reason))
       problems.push(`${here}.reason: no < > & " or control characters`)
-    out.push({ text: String(entry.text), surface: String(entry.surface), reason })
+    // Only well-formed paths travel on: later messages print them.
+    if (!valid) return
+    const pair = `${entry.text} on ${entry.surface}`
+    if (pairs.has(pair)) return problems.push(`${here}: ${pair} is declared twice`)
+    pairs.add(pair)
+    out.push({ text: entry.text, surface: entry.surface, reason })
   })
   return out
 }

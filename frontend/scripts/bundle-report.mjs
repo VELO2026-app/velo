@@ -29,7 +29,7 @@
 // bundle-budget-guard CI job checks the labels, no build needed.
 //
 // --modules runs its OWN production build into a temporary outDir (dist/ is
-// left untouched on the golden build; with a skin in public/skin/ the
+// left untouched on the core build; with a skin in public/skin/ the
 // config's skinAssetSpill still copies the skin assets into frontend/dist/,
 // its path is fixed there) with vite.config.ts unchanged: the config file is loaded as
 // is, and an inline config (Vite's JS API merges it over the file) adds one

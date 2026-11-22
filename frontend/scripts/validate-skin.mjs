@@ -29,7 +29,7 @@
 //
 // Usage: node scripts/validate-skin.mjs [skinDir] [--build]  (default: public/skin)
 // Exits 1 on any FAIL. --build is the `pnpm build` gate (FE-148): an absent
-// package passes (golden build), a present one must pass in full (the slot
+// package passes (the core build), a present one must pass in full (the slot
 // of an apply:build package has no `validate:` -- contract 3 rule 31 -- so
 // this gate inside the build IS the package check).
 // validateSkin() and skinBuildGate() are exported for the unit suite.
@@ -45,7 +45,7 @@ import {
   goldenTokenMap,
 } from './lib/skin-package.mjs'
 
-/** An assets/bg/background.png above this is warned about: the golden ships WebP. */
+/** An assets/bg/background.png above this is warned about: the golden VELO skin ships WebP. */
 const BG_PNG_WARN_KB = 300
 
 const PNG_SIZES = {
@@ -54,17 +54,25 @@ const PNG_SIZES = {
   'icon-maskable-512.png': [512, 512],
   'apple-touch-icon-180.png': [180, 180],
 }
-/** Text/background pairs checked when the skin overrides either side. */
-/** A declared contrast exception holds down to this ratio, not below: the
- *  WCAG floor for large text and UI parts. The golden secondary text on the
- *  white card measures 3.12:1 (FE-230). */
-const EXCEPTION_FLOOR = 3.0
+/** Text/background pairs checked when the skin overrides a token side. A
+ *  side is a token (`--velo-*`) or a fixed color (`#ffffff`). */
 /** @type {[string, string, number][]} */
 const CONTRAST_PAIRS = [
   ['--velo-text-primary', '--velo-bg-card-solid', 4.5],
   ['--velo-text-secondary', '--velo-bg-card-solid', 4.5],
   ['--velo-tg-header', '#ffffff', 3.0],
+  // The practice-card art is white on the card color (PracticePlaceholder,
+  // FE-230): a light primary would make the glyph disappear. 3:1 -- the
+  // WCAG floor for graphics.
+  ['#ffffff', '--velo-primary', 3.0],
 ]
+/** The only pair a package may declare in contrastExceptions (FE-230): the
+ *  golden secondary text on the white card (3.12:1). Body text and the rest
+ *  hold their floor. */
+const EXCEPTION_PAIRS = [['--velo-text-secondary', '--velo-bg-card-solid']]
+/** A declared contrast exception holds down to this ratio, not below: the
+ *  WCAG floor for large text and UI parts. */
+const EXCEPTION_FLOOR = 3.0
 
 // -- tiny helpers ------------------------------------------------------------
 
@@ -148,7 +156,7 @@ function deprecatedTokens(tokensDoc) {
 // -- the check ---------------------------------------------------------------
 
 /** Validates the skin package at `skinDir`. `frontendDir` anchors
- * tokens.json (the token names a skin may set, and the golden values the
+ * tokens.json (the token names a skin may set, and the core values the
  * contrast pairs resolve against). Returns the report; `fails.length === 0`
  * means the package may ship. */
 export function validateSkin(skinDir, frontendDir) {
@@ -198,7 +206,7 @@ export function validateSkin(skinDir, frontendDir) {
       )
     } else ok(out, '§1 single source: velo.tg.header == brand themeColor')
   } else {
-    // The core's header colour, read from tokens.json (not mirrored here).
+    // The core's header color, read from tokens.json (not mirrored here).
     const coreHeader = (goldenTokenMap(goldenDoc).get('velo.tg.header')?.value ?? '').toLowerCase()
     warn(
       out,
@@ -209,7 +217,7 @@ export function validateSkin(skinDir, frontendDir) {
       // so a mismatched native header is almost certainly unintended.
       fail(
         out,
-        `FAIL §1 single source: themeColor != ${coreHeader} but the package never overrides velo.tg.header -- the Telegram header would keep the core's colour`,
+        `FAIL §1 single source: themeColor != ${coreHeader} but the package never overrides velo.tg.header -- the Telegram header would keep the core's color`,
       )
     }
   }
@@ -236,27 +244,24 @@ export function validateSkin(skinDir, frontendDir) {
   }
   // contrastExceptions name token PATHS; the pairs above are CSS names.
   const cssNameOf = new Map([...goldenTokenMap(goldenDoc)].map(([path, t]) => [path, t.cssName]))
-  const exceptions = brand.contrastExceptions.map((e) => ({
-    ...e,
-    fgName: cssNameOf.get(e.text),
-    bgName: cssNameOf.get(e.surface),
-    used: false,
-  }))
+  const exceptions = brand.contrastExceptions.map((e) => {
+    const fgName = cssNameOf.get(e.text)
+    const bgName = cssNameOf.get(e.surface)
+    const allowed = EXCEPTION_PAIRS.some(([fg, bg]) => fg === fgName && bg === bgName)
+    return { ...e, fgName, bgName, allowed, used: false }
+  })
   for (const e of exceptions)
-    if (!CONTRAST_PAIRS.some(([fg, bg]) => fg === e.fgName && bg === e.bgName))
+    if (!e.allowed)
       fail(
         out,
-        `FAIL contrastExceptions: ${e.text} on ${e.surface} is not a pair the gate measures (${CONTRAST_PAIRS.filter(
-          ([, bg]) => bg.startsWith('--'),
-        )
-          .map(([fg, bg]) => `${fg} on ${bg}`)
-          .join(', ')})`,
+        `FAIL contrastExceptions: ${e.text} on ${e.surface} may not be declared -- only ${EXCEPTION_PAIRS.map(([fg, bg]) => `${fg} on ${bg}`).join(', ')} (FE-230)`,
       )
+  const side = (name) => (name.startsWith('--') ? resolveToken(name) : name)
   for (const [fgName, bgName, min] of CONTRAST_PAIRS) {
-    const fg = resolveToken(fgName)
-    const bg = bgName.startsWith('--') ? resolveToken(bgName) : bgName
+    const fg = side(fgName)
+    const bg = side(bgName)
     if (tokens[fgName] === undefined && tokens[bgName] === undefined && !bgName.startsWith('#'))
-      continue // nothing overridden -- the golden pair is already accepted
+      continue // nothing overridden -- the core pair is already accepted
     const ratio = fg === undefined || bg === undefined ? null : contrast(fg, bg)
     if (ratio === null) {
       // An overridden pair the gate cannot evaluate is refused, not waved
@@ -267,7 +272,7 @@ export function validateSkin(skinDir, frontendDir) {
       )
       continue
     }
-    const declared = exceptions.find((e) => e.fgName === fgName && e.bgName === bgName)
+    const declared = exceptions.find((e) => e.allowed && e.fgName === fgName && e.bgName === bgName)
     if (declared) declared.used = ratio < min
     if (ratio >= min) ok(out, `contrast: ${fgName} on ${bgName} ${ratio.toFixed(2)}:1 >= ${min}:1`)
     else if (declared && ratio >= EXCEPTION_FLOOR)
@@ -283,12 +288,7 @@ export function validateSkin(skinDir, frontendDir) {
     else fail(out, `FAIL contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 < ${min}:1`)
   }
   for (const e of exceptions)
-    if (
-      !e.used &&
-      e.fgName &&
-      e.bgName &&
-      CONTRAST_PAIRS.some(([fg, bg]) => fg === e.fgName && bg === e.bgName)
-    )
+    if (e.allowed && !e.used)
       warn(
         out,
         `contrastExceptions: ${e.text} on ${e.surface} clears the floor or is not overridden -- drop the declaration`,
@@ -375,7 +375,7 @@ export function validateSkin(skinDir, frontendDir) {
 // -- build gate -----------------------------------------------------------------
 
 /** The build-time gate (FE-148): an invalid skin package fails the build.
- * No `skinDir` at all = the golden build, nothing to check (returns null).
+ * No `skinDir` at all = the core build, nothing to check (returns null).
  * A PRESENT directory is validated in full -- including one without
  * primer-package.yaml, which the build itself would silently treat as "no
  * skin" (`readSkin` keys on the manifest), so a half-delivered package can

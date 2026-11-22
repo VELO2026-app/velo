@@ -41,17 +41,18 @@
 // apiBaseUrl default -- is a hit. No file is exempt.
 //
 // GATE 4 -- the golden look (FE-230, tz-whitelabel §3.4). The core is neutral: the golden VELO
-// colours, the golden font and the golden asset files live in the velo-brand
+// colors, the golden font and the golden asset files live in the velo-brand
 // skin package only. A hit is one of
-//   - a golden brand colour (hex, or its rgb() triple) in code: src/
-//     (.ts/.vue/.css/.svg, tests skipped), index.html, the kit sources, and
-//     the SVG files of public/ -- comments stripped (history may cite them);
+//   - a golden brand color in code -- #rrggbb (with or without alpha),
+//     %23rrggbb, or its rgb()/rgba() triple: src/ (.ts/.vue/.css/.svg, tests
+//     skipped), index.html, tokens.json, the kit sources, and the SVG files
+//     of public/ -- comments stripped (history may cite them);
 //   - the golden font family name in code (same files, same stripping);
 //   - a file under public/ or src/assets/ byte-identical to a golden asset
 //     (sha256 of velo-brand v0.1.0 skin/assets and the pre-FE-230 practice
 //     cards).
-// Semantic colours (warning, error, the mood and analytics scales) and white
-// or black are product colours, not the brand: they are not listed.
+// Semantic colors (warning, error, the mood and analytics scales) and white
+// or black are product colors, not the brand: they are not listed.
 //
 // Exit 1 on any hit. Wired into `pnpm lint`. brandGrepReport() is exported
 // for the unit suite (src/platform/brand-grep.test.ts).
@@ -255,12 +256,11 @@ const GOLDEN_HEX = [
   '#e2f0fd',
   '#62748a',
 ]
-/** The same hues as rgb() triples (the text tokens are rgba() of them). */
-const GOLDEN_RGB = ['76,101,137', '98,122,156', '51,77,110']
+/** The golden font family names. */
 const GOLDEN_FONTS = ['marmelad']
 /** sha256 of the golden asset files (velo-brand v0.1.0 skin/assets, and the
- *  practice cards before their colour moved into a token). */
-export const GOLDEN_ASSET_SHA256 = new Set([
+ *  practice cards before their color moved into a token). */
+const GOLDEN_ASSET_SHA256 = new Set([
   '448f866fc7ae0814bff7e54154bdfe47159d634cb95c2a6c683203364de4bca8', // apple-touch-icon-180.png
   '1dde39b76fb1537d8c5d42906fe9f525ade329d67139d18b698c1a071b7f8dda', // bg/background.webp
   '2fd312a1724f49efee3d71e05ec18bf02d1b33feae09884a915ba07d8b6a629c', // favicon.svg
@@ -308,20 +308,60 @@ function lookText(path, raw) {
         )
         .replace(/(<style[^>]*>)([\s\S]*?)(<\/style>)/g, (_, a, b, c) => a + css(b) + c),
     )
-  return stripHtmlComments(raw) // .svg, .html
+  if (path.endsWith('.json')) return raw
+  // .svg, .html -- an HTML page may carry an inline <style> with CSS comments
+  return css(stripHtmlComments(raw))
 }
+
+/** A number written in CSS, rounded either way: 38.4 matches 38, 38.4, 39. */
+const near = (v) => `(?:${Math.floor(v)}|${Math.ceil(v)})(?:\\.\\d+)?`
+
+/** HSL of an sRGB triple (0-255): hue in degrees, saturation and lightness in %.
+ *  @param {number[]} rgb */
+function hsl(rgb) {
+  const [r, g, b] = rgb
+  const [rr, gg, bb] = [r, g, b].map((c) => c / 255)
+  const max = Math.max(rr, gg, bb)
+  const min = Math.min(rr, gg, bb)
+  const l = (max + min) / 2
+  const d = max - min
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+  let h = 0
+  if (d !== 0)
+    h = max === rr ? ((gg - bb) / d + 6) % 6 : max === gg ? (bb - rr) / d + 2 : (rr - gg) / d + 4
+  return [h * 60, s * 100, l * 100]
+}
+
+/** A golden hue in any spelling: #rrggbb with or without alpha, its
+ *  URL-encoded form (%23rrggbb in a data: URI), rgb()/rgba() with commas or
+ *  spaces, in numbers or percents, and hsl()/hsla(). */
+const GOLDEN_COLOR = GOLDEN_HEX.map((hex) => {
+  const h = hex.slice(1)
+  const rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
+  const sep = '[\\s,]+'
+  const triple = (parts) => parts.join(sep)
+  const [hue, sat, light] = hsl(rgb)
+  return {
+    hex,
+    re: new RegExp(
+      [
+        `(?:#|%23)${h}(?:[0-9a-f]{2})?(?![0-9a-f])`,
+        `rgba?\\(\\s*${triple(rgb.map(String))}(?![0-9.%])`,
+        `rgba?\\(\\s*${triple(rgb.map((c) => `${near((c / 255) * 100)}%`))}`,
+        `hsla?\\(\\s*${near(hue)}(?:deg)?${sep}${near(sat)}%${sep}${near(light)}%`,
+      ].join('|'),
+    ),
+  }
+})
 
 function lookHits(files) {
   const hits = []
   for (const { path, raw } of files) {
     const text = lookText(path, raw).toLowerCase()
-    for (const hex of GOLDEN_HEX)
-      if (new RegExp(`${hex}(?![0-9a-f])`).test(text))
-        hits.push(`${path}:~${lineOf(raw.toLowerCase(), hex)} golden colour ${hex}`)
-    const flat = text.replace(/\s+/g, '')
-    for (const rgb of GOLDEN_RGB)
-      if (flat.includes(`rgb(${rgb}`) || flat.includes(`rgba(${rgb}`))
-        hits.push(`${path} golden colour rgb(${rgb})`)
+    for (const { hex, re } of GOLDEN_COLOR) {
+      const m = re.exec(text)
+      if (m) hits.push(`${path}:~${lineOf(text, m[0])} golden color ${hex} (${m[0]})`)
+    }
     for (const font of GOLDEN_FONTS)
       if (text.includes(font)) hits.push(`${path} golden font ${font}`)
   }
@@ -388,10 +428,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const lookFiles = [
     ...listAll(SRC_ROOT),
     ...listAll('../packages/velo-ui/src'),
+    ...listAll('../packages/velo-ui/.storybook'),
     ...listAll('public'),
   ]
-    .filter((p) => /\.(ts|vue|css|svg)$/.test(p) && !p.includes('.test.'))
-    .concat('index.html')
+    .filter((p) => /\.(ts|vue|css|svg|html)$/.test(p) && !p.includes('.test.'))
+    .concat('index.html', 'tokens.json', '../docs/oauth-consent/index.html')
     .map((p) => ({ path: p, content: readFileSync(p, 'utf8') }))
   const binaries = [...listAll('public'), ...listAll('src/assets')].map((p) => ({
     path: p,
@@ -420,7 +461,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   }
   if (look.length > 0) {
     console.error(
-      `brand-grep: ${look.length} golden-look hit(s) in the core -- the golden VELO colours, font and assets live in the velo-brand skin package (FE-230):\n`,
+      `brand-grep: ${look.length} golden-look hit(s) in the core -- the golden VELO colors, font and assets live in the velo-brand skin package (FE-230):\n`,
     )
     for (const h of look) console.error('  ' + h)
   }

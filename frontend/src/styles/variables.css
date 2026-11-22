@@ -42,7 +42,7 @@
   /* --velo-bg-end removed PROMPT №437 (operator ruling): it was #ffffff with ZERO
      consumers -- a «white to white» gradient that never existed. --velo-bg-start
      stays: it is body's base colour (global.css:54) under the photo backdrop. */
-  /* The core has no photo (FE-230): a light grey ground, so the white cards
+  /* The core has no photo (FE-230): a light gray ground, so the white cards
      (--velo-bg-card-solid) read as cards. A skin sets its own. */
   --velo-bg-start: #f2f2f2;
   --velo-bg-subtle: color-mix(in srgb, var(--velo-blue-500) 6%, transparent);
@@ -53,7 +53,7 @@
 
   /* === Colors: Text === */
   --velo-text-primary: #646464;
-  --velo-text-secondary: rgba(100, 100, 100, 0.9);
+  --velo-text-secondary: rgba(100, 100, 100, 0.95);
   --velo-text-muted: rgba(100, 100, 100, 0.5);
   /* Placeholder-only (owner-ruled option B, PROMPT №679): --velo-text-muted composited on
      --velo-bg-card-solid is under both WCAG bars, and 72 usages of --velo-text-muted exist,
@@ -301,7 +301,7 @@
    * screen was outside the design system and invisible to any re-theme.
    *
    * Values started as the EXACT literals telegram.ts used. The core header is a
-   * neutral grey (FE-230); a skin sets its own (validate-skin: velo.tg.header must
+   * neutral gray (FE-230); a skin sets its own (validate-skin: velo.tg.header must
    * equal the brand themeColor). Read by NAME via getComputedStyle (same idiom as the fog
    * tokens in MobileLayout), because the SDK takes a string, not a CSS var.
    *
@@ -575,6 +575,7 @@
   /* Component-size ramp (value-named; extends --velo-size-40/44/46/50 above).
      Admin count-badges, avatars, id circles, week-nav button, review photo. */
   --velo-size-10: 10px; /* bell presence-dot diameter (user dashboard header bell) */
+  --velo-size-12: 12px; /* select chevron (VSelect) */
   --velo-size-16: 16px; /* practice-detail id circle */
   --velo-size-35: 35px; /* dashboard week-nav button height */
   --velo-size-36: 36px; /* list count-badge height */

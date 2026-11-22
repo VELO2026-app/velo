@@ -160,7 +160,7 @@ describe('brand-grep: the switched-off literal (FE-151, protocol 5.2.3)', () => 
 })
 
 describe('brand-grep: the golden look (FE-230)', () => {
-  it('a golden colour or font in code is a hit; in a comment, or a product colour, it is not', () => {
+  it('a golden color or font in code is a hit; in a comment, or a product color, it is not', () => {
     const report = scan([
       ['src/styles/a.css', '.a { color: #627A9C; }\n/* was #627a9c */'],
       ['src/components/B.vue', "<style>\n.b { font-family: 'Marmelad'; }\n</style>"],
@@ -168,10 +168,24 @@ describe('brand-grep: the golden look (FE-230)', () => {
       ['public/onboarding/d.svg', '<svg><!-- #4c6589 --><rect fill="#fe9093"/></svg>'],
     ])
     expect(report.look).toEqual([
-      'src/styles/a.css:~1 golden colour #627a9c',
+      'src/styles/a.css:~1 golden color #627a9c (#627a9c)',
       'src/components/B.vue golden font marmelad',
-      'src/utils/c.ts golden colour rgb(76,101,137)',
+      'src/utils/c.ts:~1 golden color #4c6589 (rgba(76, 101, 137)',
     ])
+  })
+
+  it.each([
+    ['a hex with alpha', '.a { color: #4c6589cc; }'],
+    ['the space syntax of rgb()', '.a { color: rgb(76 101 137 / 0.7); }'],
+    [
+      'a URL-encoded hex in a data: URI',
+      '.a { background: url("data:image/svg+xml,%3Cpath fill=\'%23627a9c\'/%3E"); }',
+    ],
+    ['rgb() in percents', '.a { color: rgb(38.4% 47.8% 61.2%); }'],
+    ['hsl()', '.a { color: hsl(215deg 23% 50%); }'],
+    ['hsla() with commas and decimals', '.a { color: hsla(215, 22.8%, 49.8%, 1); }'],
+  ])('%s is a hit', (_, css) => {
+    expect(scan([['src/styles/a.css', css]]).look).toHaveLength(1)
   })
 
   it('a golden asset is a hit by its bytes, whatever its name', () => {

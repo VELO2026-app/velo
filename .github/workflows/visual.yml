@@ -153,13 +153,20 @@ jobs:
           v=$(pnpm exec playwright --version | awk '{print $2}')
           [ "$v" = "1.64.1" ] || { echo "playwright $v does not match the image tag v1.64.1 -- update container: above"; exit 1; }
 
-      # FE-204: vite only (types are the typecheck job's).
+      # FE-204: vite only (types are the typecheck job's). FE-230: both builds
+      # carry the synthetic skin package, each from its own make-test-skin.mjs
+      # -- the core is neutral, and a change that only shows under a skin
+      # (a logo layer, a token the skin sets) must still show up here.
       - name: Build head
-        run: pnpm -C frontend exec vite build
+        run: |
+          node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          pnpm -C frontend exec vite build
 
       - name: Build base
         working-directory: ${{ runner.temp }}/base
-        run: pnpm -C frontend exec vite build
+        run: |
+          node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          pnpm -C frontend exec vite build
 
       - name: Shoot both builds and compare
         working-directory: frontend

@@ -11,8 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Plain ESM module (types loosely declared in env.d.ts).
-// @ts-expect-error -- *.mjs modules carry no type information
+// Plain ESM module, typed by scripts/validate-skin.d.mts.
 import { skinBuildGate, validateSkin } from '../../scripts/validate-skin.mjs'
 import {
   FIXTURE_BRAND,
@@ -275,6 +274,20 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     expect(failsOf(dir)).toMatch(/contrast: --velo-text-primary on --velo-bg-card-solid/)
   })
 
+  it('a light primary fails: the white practice-card art would vanish (FE-230)', () => {
+    const withPrimary = (primary: string): string =>
+      writeSkinPackage({
+        tokens: {
+          ...FIXTURE_TOKENS,
+          velo: { ...FIXTURE_TOKENS.velo, primary: { $value: primary } },
+        },
+      })
+    expect(failsOf(withPrimary('#dddddd'))).toMatch(
+      /FAIL contrast: #ffffff on --velo-primary is 1\.36:1 < 3:1/,
+    )
+    expect(failsOf(withPrimary('#2c4a6e'))).not.toContain('--velo-primary')
+  })
+
   it('an apple-touch icon with alpha fails (iOS paints it black)', () => {
     const dir = writeSkinPackage()
     writeFileSync(join(dir, 'assets', 'apple-touch-icon-180.png'), png(180, 180, 6))
@@ -328,19 +341,66 @@ describe('declared contrast exceptions (contract 2.1, FE-230)', () => {
     expect(passing.warns.join('\n')).toContain('clears the floor or is not overridden')
   })
 
-  it('a pair the gate does not measure, a missing reason, a 2.0 manifest fail', () => {
-    expect(failsOf(pkg('#333333', [{ ...EXCEPTION, surface: 'velo.primary' }]))).toContain(
-      'is not a pair the gate measures',
-    )
-    expect(failsOf(pkg('#333333', [{ ...EXCEPTION, reason: ' ' }]))).toContain(
-      'reason: why the pair stays under the floor',
-    )
-    expect(failsOf(pkg('#333333', [EXCEPTION], 'schema: 1\ncontract: "2.0"\n'))).toContain(
+  it.each([
+    ['not a list', 'x', 'must be a non-empty list'],
+    ['an empty list', [], 'must be a non-empty list'],
+    ['an entry that is not an object', ['x'], '[0]: must be an object'],
+    [
+      'an unknown key, quoted',
+      [{ ...EXCEPTION, 'x\n::error::y': 1 }],
+      'unknown field "x\\n::error::y"',
+    ],
+    [
+      'a text that is not a token path',
+      [{ ...EXCEPTION, text: 'x\n::error::y' }],
+      '[0].text: a token path',
+    ],
+    [
+      'a reason over 300 characters',
+      [{ ...EXCEPTION, reason: 'a'.repeat(301) }],
+      'longer than 300',
+    ],
+    ['markup in the reason', [{ ...EXCEPTION, reason: '<b>x</b>' }], 'no < > & "'],
+    [
+      'the same pair twice',
+      [EXCEPTION, EXCEPTION],
+      'velo.text.secondary on velo.bg.card.solid is declared twice',
+    ],
+  ])('a malformed declaration fails: %s', (_, exceptions, message) => {
+    const fails = failsOf(pkg('rgba(76, 101, 137, 0.7)', exceptions as object[]))
+    expect(fails).toContain(message)
+    // A refused path never reaches a later message raw.
+    expect(fails).not.toMatch(/^::error::/m)
+  })
+
+  it.each([
+    [
+      'body text on the card (only secondary text may be declared)',
+      [{ ...EXCEPTION, text: 'velo.text.primary' }],
+      undefined,
+      'velo.text.primary on velo.bg.card.solid may not be declared',
+    ],
+    [
+      'a pair the gate does not measure',
+      [{ ...EXCEPTION, surface: 'velo.primary' }],
+      undefined,
+      'velo.text.secondary on velo.primary may not be declared',
+    ],
+    ['a blank reason', [{ ...EXCEPTION, reason: ' ' }], undefined, 'reason: why the pair stays'],
+    [
+      'a 2.0 manifest',
+      [EXCEPTION],
+      'schema: 1\ncontract: "2.0"\n',
       'contrastExceptions need contract "2.1" or later, got "2.0"',
-    )
-    expect(failsOf(pkg('#333333', [{ ...EXCEPTION, text: 'velo.text.nope' }]))).toContain(
+    ],
+    [
+      'a path that is no product token',
+      [{ ...EXCEPTION, text: 'velo.text.nope' }],
+      undefined,
       'contrastExceptions: velo.text.nope is not a token of the product',
-    )
+    ],
+  ])('a declaration fails: %s', (_, exceptions, manifest, message) => {
+    expect(failsOf(pkg('#333333', exceptions, manifest))).toContain(message)
   })
 })
 

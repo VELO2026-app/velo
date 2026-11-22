@@ -8,7 +8,7 @@
   practice's top-level `direction` tag.
 
   The 10 SVGs in @/assets/practice-cards keep the designer's geometry; the half-
-  tone motif is baked into the artwork. The card colour is NOT in the files
+  tone motif is baked into the artwork. The card color is NOT in the files
   (FE-230): they are transparent, and the card paints --velo-primary under
   them, so the skin sets the tone. Unknown / missing direction falls back to
   the meditation card.
@@ -66,7 +66,7 @@ const art = computed(() => ART[props.direction ?? ''] ?? ART.meditation)
 
 <style scoped>
 /* The SVG art is the 336x199 card (centred ring + direction glyph + faint
-   half-tone motif) on a transparent ground; the card colour is the token
+   half-tone motif) on a transparent ground; the card color is the token
    below, under the same rounded corners the art clips to. The white glow is NO LONGER baked into the SVG — it comes
    from the --velo-shadow-glow DS token here, so the glow is controlled centrally
    (one token -> all cards). Rounded to --radius-md so the glow hugs the corners. */

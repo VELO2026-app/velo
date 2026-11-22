@@ -23,8 +23,9 @@
 // (any FAIL = exit 1), all of it read from dist/:
 //
 //   a. identity: title + theme-color equal the cell's source of record --
-//      the skin's brand record, or the golden defaults (VITE_BRAND ?? 'VELO',
-//      #4c4c4c) for golden cells;
+//      the skin's brand record, or the core defaults (VITE_BRAND ?? 'VELO',
+//      #4c4c4c) for golden cells. "golden" names the cells WITHOUT a skin
+//      package; since FE-230 that build is the neutral core, not VELO;
 //   b. brand grep: a skin cell's bundle carries the skin's displayName and
 //      every one of its token declarations; a golden cell carries NO
 //      matrix skin's displayName and none of its distinctive declarations

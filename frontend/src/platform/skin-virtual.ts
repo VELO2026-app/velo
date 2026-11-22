@@ -21,9 +21,9 @@ export const SKIN_BRAND_ID = 'virtual:skin-brand'
 const RESOLVED_PREFIX = '\0'
 
 /**
- * Source of the brand module: the skin's display name, or null (golden).
+ * Source of the brand module: the skin's display name, or null (no package).
  *
- * @param skin - The skin package, or null for the golden build.
+ * @param skin - The skin package, or null for the core build.
  */
 export function skinBrandSource(skin: SkinPackage | null): string {
   return `export const SKIN_BRAND = ${JSON.stringify(skin?.displayName ?? null)}\n`
@@ -34,7 +34,7 @@ export function skinBrandSource(skin: SkinPackage | null): string {
  * skin. The `.css` suffix of the tokens id keeps Vite's CSS pipeline on it.
  *
  * @param publicDir - The frontend/public directory (holds `skin/tokens.css`).
- * @param skin - The skin package, or null for the golden build.
+ * @param skin - The skin package, or null for the core build.
  */
 export function skinVirtualModules(publicDir: string, skin: SkinPackage | null): Plugin {
   const sources: Record<string, () => string> = {

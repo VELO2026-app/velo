@@ -9,7 +9,7 @@
 //           layer (e2e/support/api.ts). No backend. CI builds it with the
 //           synthetic skin package; e2e/skin.spec.ts needs one (FE-230):
 //             node scripts/make-test-skin.mjs public/skin && pnpm build
-//             pnpm e2e:smoke
+//             pnpm e2e:smoke    (then: node scripts/apply-skin.mjs --remove)
 //
 //   sweep   e2e/sweep/ -- every route of the router under every role that may
 //           open it, against a REAL backend with the `e2e` seed profile. The
