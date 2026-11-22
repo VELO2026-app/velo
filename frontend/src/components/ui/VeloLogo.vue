@@ -36,7 +36,7 @@
       <div class="velo-logo__steady">
         <img
           class="velo-logo__layer velo-logo__mandala"
-          src="/icons/mandala-white.png"
+          :src="SKIN_IMAGE.mandalaWhite"
           alt=""
           aria-hidden="true"
         />
@@ -44,7 +44,7 @@
     </div>
     <img
       class="velo-logo__layer velo-logo__word"
-      src="/icons/velo-word-filled.svg"
+      :src="SKIN_IMAGE.wordFilled"
       :alt="t('common.brandName')"
     />
   </div>
@@ -58,20 +58,20 @@
   >
     <img
       class="velo-logo__layer velo-logo__mandala"
-      src="/icons/mandala-blue.png"
+      :src="SKIN_IMAGE.mandalaBlue"
       alt=""
       aria-hidden="true"
     />
     <img
       class="velo-logo__layer velo-logo__word velo-logo__word--blue"
-      src="/icons/velo-word-blue.svg"
+      :src="SKIN_IMAGE.wordBlue"
       :alt="t('common.brandName')"
     />
   </div>
   <!-- White static logo. -->
   <img
     v-else
-    src="/icons/logo-white.svg"
+    :src="SKIN_IMAGE.logoWhite"
     :width="size"
     :height="size"
     :alt="t('common.brandName')"
@@ -81,6 +81,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { SKIN_IMAGE } from '@/utils/skinAssets'
 
 withDefaults(
   defineProps<{

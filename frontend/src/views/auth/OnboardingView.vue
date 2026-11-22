@@ -42,7 +42,8 @@
   Single outward event: `done`. App.vue switches to the dashboard on it.
   Persistence happens here so App.vue stays a simple state machine.
 
-  Illustrations live in public/onboarding/ (provided separately):
+  Illustrations come from the skin package on /onboarding/ (the core ships
+  neutral ones on the same paths; utils/skinAssets.ts):
     /onboarding/onboarding-practice.svg
     /onboarding/onboarding-diary.svg
     /onboarding/onboarding-masters.svg
@@ -114,6 +115,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { GOAL_CUSTOM } from '@/utils/userGoals'
+import { SKIN_IMAGE } from '@/utils/skinAssets'
 import type { UserUpdate } from '@/api/types'
 
 const emit = defineEmits<{
@@ -152,10 +154,10 @@ const finishArmed = ref(false)
 
 const isFinalStep = computed(() => step.value === FINAL_STEP_INDEX)
 
-// -- Intro slides (0-2). Illustrations served from public/onboarding/. --
+// -- Intro slides (0-2). Illustrations: /onboarding/ (the skin's, or the core's neutral ones). --
 const SLIDES = [
   {
-    image: '/onboarding/onboarding-practice.svg',
+    image: SKIN_IMAGE.onboardingPractice,
     get title(): string {
       return t('auth.onboarding.find.title')
     },
@@ -164,7 +166,7 @@ const SLIDES = [
     },
   },
   {
-    image: '/onboarding/onboarding-diary.svg',
+    image: SKIN_IMAGE.onboardingDiary,
     get title(): string {
       return t('auth.onboarding.diary.title')
     },
@@ -173,7 +175,7 @@ const SLIDES = [
     },
   },
   {
-    image: '/onboarding/onboarding-masters.svg',
+    image: SKIN_IMAGE.onboardingMasters,
     get title(): string {
       return t('auth.onboarding.map.title')
     },
