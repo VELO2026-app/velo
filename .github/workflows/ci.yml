@@ -19,8 +19,8 @@
 #   test-other   — @velo/ui (its own package and vitest config).
 #   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
 #                  vue-tsc + vite build with the FE-153 build-log gate.
-#   e2e          — Playwright smoke scenarios on the golden build served by
-#                  `vite preview`, API mocked (frontend/e2e/); Chromium cached.
+#   e2e          — Playwright smoke scenarios on the build with the synthetic
+#                  skin package, served by `vite preview`, API mocked (frontend/e2e/); Chromium cached.
 #                  Every test runs under the crash detector (FE-161).
 #   e2e-stack    — FE-161: the sweep -- every route x role on a REAL backend
 #                  seeded with the `e2e` profile (.github/workflows/e2e-stack.yml,
@@ -515,8 +515,9 @@ jobs:
           path: .bundle-head/sizes.json
           key: bundle-sizes-${{ github.ref_name }}-${{ github.sha }}
 
-  # FE-157 5A.2: smoke e2e on Playwright -- the golden production build under
-  # `vite preview`, the API mocked at the network layer (frontend/e2e/), so
+  # FE-157 5A.2: smoke e2e on Playwright -- the production build under
+  # `vite preview`, with the synthetic skin package of make-test-skin.mjs
+  # (FE-230: the core has no look of its own to test against), the API mocked at the network layer (frontend/e2e/), so
   # no backend is needed. Its own job: a browser binary and a build of its
   # own, kept off the fast gate. The Chromium binary is cached by the
   # Playwright version (a new version = a new revision = a fresh download);
@@ -565,9 +566,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       # FE-204: vite only -- this job needs the dist. vue-tsc runs in the
-      # typecheck job and the skin validation in the build job.
-      - name: Build the app (golden)
-        run: pnpm -C frontend exec vite build
+      # typecheck job and the skin validation in the build job. FE-230: the
+      # synthetic skin goes where the machine puts a package (public/skin);
+      # make-test-skin refuses a package the engine would not load.
+      - name: Build the app (synthetic skin)
+        run: |
+          node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          pnpm -C frontend exec vite build
 
       - name: Smoke scenarios (+ crash-detector self-checks)
         run: pnpm -C frontend e2e:smoke

@@ -780,9 +780,13 @@
 
 /* Reduced motion (WCAG 2.3.3): travel goes to zero and durations collapse to
  * a short crossfade, so state changes stay readable without movement. The
- * View Transition and skeleton rules read the same tokens (global.css). */
+ * View Transition and skeleton rules read the same tokens (global.css).
+ * :root:root, not :root: a skin package sets its tokens in a later :root
+ * rule (virtual:skin-tokens.css), and at equal specificity a skin that sets
+ * --velo-dur-* would switch reduced motion off (FE-230). The doubled
+ * pseudo-class outranks it whatever the order. */
 @media (prefers-reduced-motion: reduce) {
-  :root {
+  :root:root {
     --velo-dur-press: 0ms;
     --velo-dur-fast: 120ms;
     --velo-dur-base: 120ms;

@@ -5,9 +5,11 @@
 // Two contours, one config (docs/agents/e2e.md):
 //
 //   smoke   e2e/*.spec.ts -- scenarios and the crash-detector self-checks on
-//           the golden build under `vite preview`, the API mocked at the
-//           network layer (e2e/support/api.ts). No backend.
-//             pnpm e2e:smoke        (on a built dist: pnpm build first)
+//           the build under `vite preview`, the API mocked at the network
+//           layer (e2e/support/api.ts). No backend. CI builds it with the
+//           synthetic skin package; e2e/skin.spec.ts needs one (FE-230):
+//             node scripts/make-test-skin.mjs public/skin && pnpm build
+//             pnpm e2e:smoke
 //
 //   sweep   e2e/sweep/ -- every route of the router under every role that may
 //           open it, against a REAL backend with the `e2e` seed profile. The
@@ -96,7 +98,7 @@ export default defineConfig({
       use: { ...devices['iPhone 15'] },
     },
   ],
-  // The golden build for smoke, and for the sweep unless E2E_BASE_URL points
+  // The built dist for smoke, and for the sweep unless E2E_BASE_URL points
   // elsewhere (a dev server already running).
   webServer: {
     command: `pnpm exec vite preview --outDir ${DIST} --host 127.0.0.1 --port ${PORT} --strictPort`,

@@ -91,6 +91,11 @@ writeFileSync(
         text: { primary: { $value: '#000000' }, secondary: { $value: 'rgba(0, 0, 0, 0.7)' } },
         border: { $value: '#14213d' },
         nav: { active: { bg: { $value: 'rgba(252, 163, 17, 0.25)' } } },
+        // Motion: dur.fast is one of the tokens the core re-sets under
+        // prefers-reduced-motion, dur.pulse is not. e2e/skin.spec.ts reads
+        // both: the skin reaches the page, and reduced motion still wins
+        // (FE-230).
+        dur: { fast: { $value: '999ms' }, pulse: { $value: '777ms' } },
       },
       bare: { 'font-body': { $value: ['CI Sans', 'Noto Sans', 'sans-serif'] } },
     },
