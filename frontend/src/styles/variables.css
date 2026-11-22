@@ -35,14 +35,16 @@
 
 :root {
   /* === Colors: Primary === */
-  --velo-primary: #627a9c;
-  --velo-primary-dark: #4c6589;
+  --velo-primary: #787878;
+  --velo-primary-dark: #646464;
 
   /* === Colors: Background === */
   /* --velo-bg-end removed PROMPT №437 (operator ruling): it was #ffffff with ZERO
      consumers -- a «white to white» gradient that never existed. --velo-bg-start
      stays: it is body's base colour (global.css:54) under the photo backdrop. */
-  --velo-bg-start: var(--velo-white);
+  /* The core has no photo (FE-230): a light grey ground, so the white cards
+     (--velo-bg-card-solid) read as cards. A skin sets its own. */
+  --velo-bg-start: #f2f2f2;
   --velo-bg-subtle: color-mix(in srgb, var(--velo-blue-500) 6%, transparent);
   /* --velo-bg-card (glass blue) removed 2026-06-03 — legacy, 0 uses; white cards
      use --velo-bg-card-solid; glass surfaces use --velo-glass-*. */
@@ -50,31 +52,25 @@
   --velo-scrim: rgba(0, 0, 0, 0.5); /* dark backdrop behind modals/sheets (VModal) */
 
   /* === Colors: Text === */
-  --velo-text-primary: #4c6589;
-  --velo-text-secondary: rgba(76, 101, 137, 0.7);
-  --velo-text-muted: rgba(76, 101, 137, 0.5);
+  --velo-text-primary: #646464;
+  --velo-text-secondary: rgba(100, 100, 100, 0.9);
+  --velo-text-muted: rgba(100, 100, 100, 0.5);
   /* Placeholder-only (owner-ruled option B, PROMPT №679): --velo-text-muted composited on
-     --velo-bg-card-solid is 2.15:1, below both WCAG bars. 72 usages of --velo-text-muted exist,
-     only 4 are placeholders (VInput/VTextarea) -- darkening the shared token would move 68
-     unreviewed places to fix four. This token is 90% opacity of the same base hue, the minimum
-     clean value that clears 4.5:1 (measured 4.75:1; 85% measures 4.26:1 and still fails).
-     [FE-79] This GLOBAL value stays №679's: a fainter placeholder ride is scoped to the
-     new-event screen (i18n:user.screens.externalActivityCreate.title) via the faint
-     sibling just below, pending the owner's global-vs-
-     screen ruling -- re-theming the other placeholder consumers (~10 places) is the owner's
-     call, not this ticket's. Pinned byte-exact by placeholder-contrast.test.ts. */
-  --velo-text-placeholder: rgba(76, 101, 137, 0.9);
-  /* [FE-79] The screen-scoped paler placeholder -- the audit's "paler, yet
-     contrasting" third way, WITHOUT its predicted 4.5:1 violation: a desaturated, lighter blue-grey
-     measuring 4.79:1 on --velo-bg-card-solid (№679's own level), paler than the typed
-     text (#4c6589: 5.95:1) on the axis same-hue alpha could not move -- saturation
-     (HSL S 29%→17%; the text keeps its blue cast, the hint reads grey). Consumed ONLY
-     by ExternalActivityCreateView's scoped --velo-text-placeholder override; every hint
-     on that screen -- the thoughts field, the custom-variant input, the
-     date/time pickers -- rides
-     it. Invariants (≥4.5:1; saturation ≥8pp under the text's) live in
-     placeholder-contrast.test.ts, calibrated so №679's 0.9-alpha FAILS them. */
-  --velo-text-placeholder-faint: #62748a;
+     --velo-bg-card-solid is under both WCAG bars, and 72 usages of --velo-text-muted exist,
+     only 4 of them placeholders (VInput/VTextarea) -- darkening the shared token would move
+     68 unreviewed places to fix four. This token is 90% opacity of the text hue, the minimum
+     clean value that clears 4.5:1 (the core: 4.71:1; the golden VELO skin carries its own).
+     [FE-79] A fainter placeholder ride is scoped to the new-event screen
+     (i18n:user.screens.externalActivityCreate.title) via the faint sibling just below.
+     Invariants: placeholder-contrast.test.ts. */
+  --velo-text-placeholder: rgba(100, 100, 100, 0.9);
+  /* [FE-79] The screen-scoped paler placeholder: clears 4.5:1 on --velo-bg-card-solid,
+     yet sits under the typed text in contrast and lightness. Consumed ONLY by
+     ExternalActivityCreateView's scoped --velo-text-placeholder override; every hint on
+     that screen -- the thoughts field, the custom-variant input, the date/time pickers --
+     rides it. A hued skin earns the paleness on saturation too (the golden VELO skin:
+     HSL S 29% text vs 17% hint). Invariants: placeholder-contrast.test.ts. */
+  --velo-text-placeholder-faint: #767676;
 
   /* === Colors: Borders === */
   --velo-border: var(--velo-blue-200);
@@ -161,7 +157,7 @@
   --velo-analytics-fire: #5abafd;
 
   /* === Typography === */
-  --font-body: 'Marmelad', 'Noto Sans', sans-serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
   --font-heading: var(--font-body);
   --font-mono: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
 
@@ -292,10 +288,10 @@
     var(--velo-pink-300) 40%,
     transparent
   ); /* pink-300 @ 0.4 — undo bar fill */
-  --velo-blue-100: #e2f0fd;
-  --velo-blue-200: #abbfda;
-  --velo-blue-300: #91a2ba; /* mid blue-grey — admin check-in bar chart (light bars) + list avatars; operator SVG 2026-06-14 */
-  --velo-blue-400: #619cd2; /* analytics rating-bar "have questions" option; operator SVG 2026-06-11 (no prior token) */
+  --velo-blue-100: #eeeeee;
+  --velo-blue-200: #bdbdbd;
+  --velo-blue-300: #a1a1a1; /* mid blue-grey — admin check-in bar chart (light bars) + list avatars; operator SVG 2026-06-14 */
+  --velo-blue-400: #979797; /* analytics rating-bar "have questions" option; operator SVG 2026-06-11 (no prior token) */
   --velo-sand-100: #fdf3e2;
 
   /* === VELΘ: Telegram app chrome (PROMPT №437) ===
@@ -304,8 +300,9 @@
    * file and existed in NO token -- so the chrome the user sees around every
    * screen was outside the design system and invisible to any re-theme.
    *
-   * Values are the EXACT literals telegram.ts already used: nothing renders
-   * differently. Read by NAME via getComputedStyle (same idiom as the fog
+   * Values started as the EXACT literals telegram.ts used. The core header is a
+   * neutral grey (FE-230); a skin sets its own (validate-skin: velo.tg.header must
+   * equal the brand themeColor). Read by NAME via getComputedStyle (same idiom as the fog
    * tokens in MobileLayout), because the SDK takes a string, not a CSS var.
    *
    * --velo-tg-bg WAS #f8fafc -- a faintly cooler white than --velo-bg-start
@@ -315,8 +312,8 @@
    * the Telegram webview shows through, i.e. overscroll.
    * Keep this in step with --velo-bg-start: they are the same surface to a user.
    */
-  --velo-tg-header: #334d6e;
-  --velo-tg-bg: #ffffff;
+  --velo-tg-header: #4c4c4c;
+  --velo-tg-bg: #f2f2f2;
   /* [TG-SURFACE 2026-09-07] The KEYBOARD variant of the native backdrop:
    * with the dark search scrim up, the keyboard's rounded top corners expose
    * Telegram's native surface (outside the WebView) -- the seam must
@@ -489,8 +486,8 @@
 
   /* Primitive ramp steps (extend-not-duplicate; values mirror existing roles) */
   --velo-white: #ffffff; /* = bg/card-solid; explicit neutral primitive */
-  --velo-blue-500: #627a9c; /* = --velo-primary */
-  --velo-blue-700: #4c6589; /* = --velo-primary-dark / text-primary */
+  --velo-blue-500: #787878; /* = --velo-primary */
+  --velo-blue-700: #646464; /* = --velo-primary-dark / text-primary */
   --velo-peach-800: #b45309; /* NO SOURCE name (= warning-text-light) */
   --velo-pink-500: #d66674; /* NO SOURCE name (= rating-good) */
 
@@ -530,7 +527,7 @@
   ); /* dashed section divider; = former glass-blue-30 (grab-handle) reused as a divider */
   --velo-divider-width: 3px; /* dashed divider stroke width */
   /* Typography */
-  --velo-text-stroke-strong: 0.3px; /* Marmelad faux-bold stroke width (single-weight workaround) */
+  --velo-text-stroke-strong: 0.3px; /* faux-bold stroke width (single-weight display fonts) */
   /* Component-size ramp — values reused across >=2 distinct components (avatars,
      icon circles, round + field controls). Value-named because each is cross-ROLE
      (e.g. 46 = avatar AND icon AND control), so a semantic name would mislead. */
@@ -638,11 +635,11 @@
     0 8px 24px rgba(0, 0, 0, 0.08); /* glass pill/field, ×3 carriers */
   --velo-write-shadow-active:
     inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 -1px 0 rgba(255, 255, 255, 0.2),
-    0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 18px rgba(150, 190, 255, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 18px rgba(160, 160, 160, 0.2),
     0 8px 30px rgba(0, 0, 0, 0.08); /* Composer active */
   --velo-write-shadow-focus:
     inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 -1px 0 rgba(255, 255, 255, 0.25),
-    0 0 0 2px rgba(255, 255, 255, 0.35), 0 0 26px rgba(150, 190, 255, 0.32),
+    0 0 0 2px rgba(255, 255, 255, 0.35), 0 0 26px rgba(160, 160, 160, 0.32),
     0 8px 30px rgba(0, 0, 0, 0.08); /* Composer focus */
   --velo-shadow-toast: 0 4px 12px rgba(0, 0, 0, 0.3); /* VToast, floats over everything */
   --velo-shadow-switch: 0 1px 2px rgba(0, 0, 0, 0.2); /* VSwitch thumb */

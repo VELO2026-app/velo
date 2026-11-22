@@ -58,8 +58,8 @@ export function expectedFromSources() {
     brand: brand.value,
     brandSource: brand.source,
     shortBrand: (skin ? pick(skin.shortName) : pick(undefined, 'VITE_BRAND', 'VELO')).value,
-    themeColor: pick(skin?.themeColor, undefined, '#334D6E').value,
-    themeSource: pick(skin?.themeColor, undefined, '#334D6E').source,
+    themeColor: pick(skin?.themeColor, undefined, '#4c4c4c').value,
+    themeSource: pick(skin?.themeColor, undefined, '#4c4c4c').source,
     defaultLocale: pick(undefined, 'VITE_DEFAULT_LOCALE', 'ru').value,
     locales: (env.VITE_LOCALES ?? 'ru')
       .split(',')

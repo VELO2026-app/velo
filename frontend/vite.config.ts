@@ -30,10 +30,10 @@ import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest
 // vitest, so the test cannot import this config file).
 import { passportHtmlDefaults } from './src/platform/passport-html'
 // tz-whitelabel F2 (§3): the skin package (public/skin/, deploy-supplied).
-// No package = the golden build; the derivatives (the skin-tokens cascade,
+// No package = the neutral core build (FE-230); the derivatives (the skin-tokens cascade,
 // index.html theme-color/font, manifest identity/colours) materialize HERE,
 // at config time.
-import { readSkin } from './src/platform/skin'
+import { readSkin, skinBackgroundFormat } from './src/platform/skin'
 import { skinVirtualModules } from './src/platform/skin-virtual'
 import { ASSET_DIRS, IGNORED_FILES, MANDATORY_ASSETS } from './scripts/lib/skin-package.mjs'
 import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
@@ -55,13 +55,13 @@ const LOCALE_CORE_CATALOG =
  * the package into public/skin/ (FE-131: the machine's format, assets under
  * assets/), and its files must WIN on the canonical public paths (VeloLogo
  * renders /icons/..., the mandala lives on /bg/...). Runs at closeBundle: the
- * golden files are already in dist/, this copies the skin's over them. The
+ * core's neutral files are already in dist/, this copies the skin's over them. The
  * publicDir copy also drops the whole package into dist/skin/; only its
- * assets/fonts/ is meant to be served (virtual:skin-tokens.css @font-face points
- * there), so everything else -- the manifest, the token sources, a checkout's
- * .git -- is removed from dist/skin/ here (FE-131). The PWA precache ignores
+ * assets/fonts/ (virtual:skin-tokens.css @font-face points there) and its
+ * LICENSE are meant to be served, so everything else -- the manifest, the
+ * token sources, a checkout's .git -- is removed from dist/skin/ here (FE-131). The PWA precache ignores
  * skin/** (workbox globIgnores below), so the removal cannot race it.
- * Dev servers see the golden assets (a dev stand with a skin is not a
+ * Dev servers see the core's assets (a dev stand with a skin is not a
  * supported flow; build with the skin instead). */
 /** OS litter of a local working copy never reaches dist. */
 function shippable(from: string): boolean {
@@ -95,6 +95,10 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
       if (existsSync(fonts)) {
         cpSync(fonts, join(shipped, 'assets', 'fonts'), { recursive: true, filter: shippable })
       }
+      // The package's license ships with the files it covers (the font's
+      // OFL asks for it; the core no longer carries a font of its own).
+      const license = join(skinDir, 'LICENSE')
+      if (existsSync(license)) cpSync(license, join(shipped, 'LICENSE'))
     },
   }
 }
@@ -254,7 +258,7 @@ export default defineConfig(({ mode }) => {
         // Include these file types in precache.
         workbox: {
           // FE-157 s2 (owner decision R1): the precache is the SHELL only --
-          // the entry, its CSS and static imports, the font, the PWA icons,
+          // the entry, its CSS and static imports, the PWA icons,
           // the background photo and the splash logo. The app has no offline
           // mode (every screen needs the API), so precaching all routes bought
           // nothing and cost every install the whole build, and every deploy a
@@ -278,10 +282,11 @@ export default defineConfig(({ mode }) => {
           // runtime rule below); there is no offline mode to lose.
           globPatterns: [
             'registerSW.js',
-            'fonts/*.woff2',
             // The background photo paints the first frame of every screen;
-            // already-released skins ship it as PNG (platform/skin.ts).
-            'bg/background.{webp,png}',
+            // already-released skins ship it as PNG (platform/skin.ts). The
+            // core has no photo (FE-230): the pattern joins only when the
+            // package brings one, so a core build has no empty glob.
+            ...(skinBackgroundFormat(publicDir) ? ['bg/background.{webp,png}'] : []),
             // PWA icons, favicon, and the splash logo (LoadingView: spinning
             // mandala ring under the filled wordmark).
             'icons/{icon-192,icon-512,icon-maskable-512,apple-touch-icon-180,favicon,mandala-white,velo-word-filled}.*',

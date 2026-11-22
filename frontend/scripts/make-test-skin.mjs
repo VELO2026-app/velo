@@ -5,14 +5,16 @@
 // the skin path of the BUILD -- assets/ spilled onto /icons, /bg and
 // /onboarding, the dist/skin/ prune, @font-face and the font preload, the
 // brand grep of a skin cell -- must be exercised on every PR. This writes a
-// throwaway package OUTSIDE the repository: golden VELO assets, a
-// deliberately contrasting palette (every value differs from golden, so the
-// matrix's "tokens reach dist / never leak into golden" checks bite), a
-// background and a self-hosted font file. Not a brand; nothing is committed.
+// throwaway package: the core's neutral assets made byte-distinct, a
+// deliberately contrasting palette (every value differs from the core, so the
+// matrix's "tokens reach dist / never leak into the core build" checks bite),
+// a background and a self-hosted font file. Not a brand; nothing is committed.
+// The e2e builds in CI carry it too (FE-230: the core has no look to test).
 //
 // Usage: node scripts/make-test-skin.mjs <out-dir>   (out-dir must not exist)
 // CI:    node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
 //        pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin"
+//        node frontend/scripts/make-test-skin.mjs frontend/public/skin   (e2e)
 // =============================================================================
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -41,9 +43,9 @@ const publicDir = join(frontendDir, 'public')
 mkdirSync(join(dir, 'tokens'), { recursive: true })
 mkdirSync(join(dir, 'assets', 'bg'), { recursive: true })
 mkdirSync(join(dir, 'assets', 'fonts'), { recursive: true })
-// Golden assets made byte-distinct from the golden files -- otherwise the
+// The core's assets made byte-distinct from the core's files -- otherwise the
 // matrix could not tell "the build spilled the skin's asset" from "the
-// golden one stayed": an SVG gets a comment, a PNG trailing bytes after IEND
+// core's one stayed": an SVG gets a comment, a PNG trailing bytes after IEND
 // (decoders ignore them; the validator reads IHDR only).
 const MARK = '\n<!-- ci-skin -->\n'
 const distinct = (from, to) => {
@@ -52,12 +54,17 @@ const distinct = (from, to) => {
 }
 for (const name of MANDATORY_ASSETS)
   distinct(join(publicDir, 'icons', name), join(dir, 'assets', name))
-// The golden photo is WebP since FE-157 (trailing bytes after the RIFF
-// chunk are ignored the same way); the build re-points --velo-app-bg-image
-// at it, so the skin cell exercises the WebP path.
-distinct(join(publicDir, 'bg', 'background.webp'), join(dir, 'assets', 'bg', 'background.webp'))
-// A WOFF2 signature is all the engine checks; the browser never sees CI dist.
+// The core ships no photo (FE-230): a 1x1 lossless WebP stands in. The build
+// re-points --velo-app-bg-image at it, so the skin cell exercises the WebP path.
+writeFileSync(
+  join(dir, 'assets', 'bg', 'background.webp'),
+  Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64'),
+)
+// A WOFF2 signature is all the engine checks; the e2e browser falls back to
+// the next family of --font-body when the face does not decode.
 writeFileSync(join(dir, 'assets', 'fonts', 'ci-sans-400.woff2'), 'wOF2')
+// A license file, so the skin cell checks that dist/skin/ carries it.
+writeFileSync(join(dir, 'LICENSE'), 'CI-only synthetic skin package. No rights granted.\n')
 
 writeFileSync(
   join(dir, 'primer-package.yaml'),

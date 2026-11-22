@@ -20,14 +20,14 @@
 //                      VITE_ env prefix, so the VELO_ spelling is ours alone.
 //   %VELO_THEME_COLOR%, the VELO:FONT block
 //                   -- the skin derivatives (tz-whitelabel §1/§3,
-//                      platform/skin.ts), golden defaults when no skin ships.
-//                      The defaults DUPLICATE the golden values on purpose
+//                      platform/skin.ts), the core defaults when no skin ships
+//                      (CORE_SKIN). The defaults DUPLICATE the core values on purpose
 //                      (mirror pattern, pinned by passport-html.test.ts).
 // =============================================================================
 
 import { loadEnv, type Plugin } from 'vite'
 
-import { GOLDEN_SKIN, type SkinPackage } from './skin'
+import { CORE_SKIN, type SkinPackage } from './skin'
 
 /** Placeholder (as written in index.html, between the %) mapped to the env var
  *  that values it. */
@@ -37,7 +37,7 @@ const PASSPORT_PLACEHOLDERS: Record<string, string> = {
 }
 
 const PASSPORT_HTML_DEFAULTS: Record<string, string> = {
-  VITE_BRAND: GOLDEN_SKIN.displayName,
+  VITE_BRAND: CORE_SKIN.displayName,
   VITE_DEFAULT_LOCALE: 'ru',
 }
 
@@ -68,7 +68,7 @@ function escapeHtml(text: string): string {
 
 /** The index.html post-transform.
  *
- * @param skin - The package read by platform/skin.ts (null = golden build). */
+ * @param skin - The package read by platform/skin.ts (null = the core build). */
 export function passportHtmlDefaults(skin: SkinPackage | null = null): Plugin {
   let files: Record<string, string> = {}
   return {
@@ -86,7 +86,7 @@ export function passportHtmlDefaults(skin: SkinPackage | null = null): Plugin {
           return value ?? placeholder
         })
         // Skin derivatives (§1: the brand record is the single header-color source).
-        out = out.replace(/%VELO_THEME_COLOR%/g, skin?.themeColor ?? GOLDEN_SKIN.themeColor)
+        out = out.replace(/%VELO_THEME_COLOR%/g, skin?.themeColor ?? CORE_SKIN.themeColor)
         if (skin) {
           if (skin.fonts.length > 0) out = out.replace(FONT_BLOCK, skinFontBlock(skin))
           // The tab title follows the skin's display name: a branded build

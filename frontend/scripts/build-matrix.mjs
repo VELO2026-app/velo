@@ -24,7 +24,7 @@
 //
 //   a. identity: title + theme-color equal the cell's source of record --
 //      the skin's brand record, or the golden defaults (VITE_BRAND ?? 'VELO',
-//      #334D6E) for golden cells;
+//      #4c4c4c) for golden cells;
 //   b. brand grep: a skin cell's bundle carries the skin's displayName and
 //      every one of its token declarations; a golden cell carries NO
 //      matrix skin's displayName and none of its distinctive declarations
@@ -85,10 +85,10 @@ export const MODULE_CHUNKS = {
   ai: [/AiSummary/, /AiConnections/],
 }
 
-/** GOLDEN_SKIN.themeColor (platform/skin.ts) -- the skinless build's header
+/** CORE_SKIN.themeColor (platform/skin.ts) -- the skinless build's header
  *  color, pinned here the same mirror-and-pin way passport-html.test.ts and
  *  the manifest comments pin it. No env seam exists for colors (§1). */
-const GOLDEN_THEME = '#334D6E'
+const CORE_THEME = '#4c4c4c'
 
 /** The edition every skin cell is built at: `full` while editions.json has
  *  it, and the one edition there is once the file holds a single one
@@ -398,8 +398,11 @@ function skinLayout(source, files, brand, distDir, html, css) {
     }
   }
   walk('')
-  const extra = shipped.filter((f) => !f.startsWith('assets/fonts/'))
-  if (extra.length > 0) problems.push(`dist/skin/ ships more than the fonts: ${extra.join(', ')}`)
+  const extra = shipped.filter((f) => !f.startsWith('assets/fonts/') && f !== 'LICENSE')
+  if (extra.length > 0)
+    problems.push(`dist/skin/ ships more than the fonts and the license: ${extra.join(', ')}`)
+  if (files.includes('LICENSE') && !same(join(source, 'LICENSE'), join(distDir, 'skin', 'LICENSE')))
+    problems.push("dist/skin/LICENSE is not the package's LICENSE")
   for (const font of brand.fonts) {
     if (!shipped.includes(font.file)) problems.push(`dist/skin/${font.file} missing`)
     if (!css.includes(`/skin/${font.file}`))
@@ -463,7 +466,7 @@ async function goldenBrand() {
 }
 
 async function expectationOf(cell) {
-  if (!cell.skin) return { title: await goldenBrand(), theme: GOLDEN_THEME }
+  if (!cell.skin) return { title: await goldenBrand(), theme: CORE_THEME }
   const { brand } = skinRecord(cell.skin)
   return { title: brand.displayName, theme: brand.themeColor }
 }

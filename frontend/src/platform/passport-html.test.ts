@@ -9,7 +9,7 @@
 // process.env -> wins, unknown placeholder -> untouched.
 // =============================================================================
 
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -75,7 +75,7 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
   const FONT_HTML =
     '<!--VELO:FONT--><link href="https://fonts.googleapis.com/css2?family=Marmelad&display=swap" rel="stylesheet" /><!--/VELO:FONT-->'
 
-  it('no skin: %VELO_THEME_COLOR% is the golden default, the font block is untouched', () => {
+  it('no skin: %VELO_THEME_COLOR% is the core default, the font block is untouched', () => {
     resolveWithRoot()
     const plugin = passportHtmlDefaults()
     ;(plugin as unknown as HtmlPlugin).configResolved({
@@ -88,7 +88,7 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
       return hook.handler(html)
     }
     expect(transformSkin('<meta name="theme-color" content="%VELO_THEME_COLOR%" />')).toBe(
-      '<meta name="theme-color" content="#334D6E" />',
+      '<meta name="theme-color" content="#4c4c4c" />',
     )
     expect(transformSkin(FONT_HTML)).toBe(FONT_HTML)
   })
@@ -146,7 +146,7 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
   })
 })
 
-describe('real index.html font block -- golden self-host vs skin webfont (FE-157 s2/font)', () => {
+describe('real index.html font block -- no webfont in the core, the skin brings its own (FE-230)', () => {
   const INDEX_HTML = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
   const run = (skin: Parameters<typeof passportHtmlDefaults>[0]): string => {
     const p = passportHtmlDefaults(skin) as unknown as HtmlPlugin
@@ -154,14 +154,8 @@ describe('real index.html font block -- golden self-host vs skin webfont (FE-157
     return p.transformIndexHtml.handler(INDEX_HTML)
   }
 
-  it('golden: Marmelad is preloaded from our own origin, no Google Fonts anywhere', () => {
-    const out = run(null)
-    expect(out).toMatch(
-      /<link rel="preload" href="\/fonts\/marmelad-subset\.woff2" as="font" type="font\/woff2" crossorigin \/>/,
-    )
-    expect(out).not.toContain('googleapis')
-    expect(out).not.toContain('gstatic')
-    expect(existsSync(resolve(process.cwd(), 'public/fonts/marmelad-subset.woff2'))).toBe(true)
+  it('the core build preloads no font and requests none from a third party', () => {
+    expect(run(null)).not.toContain('googleapis')
   })
 
   it('skin fonts still replace the block: their preloads in, ours out (FE-131)', () => {
@@ -177,6 +171,6 @@ describe('real index.html font block -- golden self-host vs skin webfont (FE-157
     expect(out).toContain(
       '<link rel="preload" href="/skin/assets/fonts/rubik-400.woff2" as="font" type="font/woff2" crossorigin />',
     )
-    expect(out).not.toContain('marmelad-subset')
+    expect(out.match(/rel="preload"/g)).toHaveLength(1)
   })
 })

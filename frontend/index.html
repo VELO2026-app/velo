@@ -11,23 +11,19 @@
      The theme-color placeholder and the VELO:FONT block are the SKIN derivatives
      (§1/§3): materialized at build time from the skin's brand record by
      platform/passport-html.ts -- the brand record is the SINGLE header-color source
-     (§1); without a skin both stay the golden defaults. -->
+     (§1); without a skin both stay the core defaults (platform/skin.ts
+     CORE_SKIN, FE-230). -->
 <html lang="%VELO_DEFAULT_LOCALE%">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes, interactive-widget=resizes-visual" />
     <meta name="theme-color" content="%VELO_THEME_COLOR%" />
 
-    <!-- VELO:FONT (tz-whitelabel §3): a skin's self-hosted fonts replace
-         everything between the markers at build time with preloads of the
-         package's assets/fonts/ (platform/passport-html.ts, FE-131); without
-         one this stays Marmelad. -->
+    <!-- VELO:FONT (tz-whitelabel §3): a skin's self-hosted fonts fill the
+         space between the markers at build time with preloads of the
+         package's assets/fonts/ (platform/passport-html.ts, FE-131). The
+         core has no webfont (FE-230): without a package it stays empty. -->
     <!--VELO:FONT-->
-    <!-- Marmelad is self-hosted (OFL 1.1, see public/fonts/OFL.txt): a
-         cyrillic+latin woff2 subset, declared by @font-face in
-         styles/global.css. The preload fetches it in parallel with the CSS;
-         crossorigin is required for font preloads even same-origin. -->
-    <link rel="preload" href="/fonts/marmelad-subset.woff2" as="font" type="font/woff2" crossorigin />
     <!--/VELO:FONT-->
 
     <!-- Telegram WebApp SDK: NOT here. src/platform/launch.ts loads it, and

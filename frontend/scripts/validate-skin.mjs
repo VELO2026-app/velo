@@ -198,16 +198,18 @@ export function validateSkin(skinDir, frontendDir) {
       )
     } else ok(out, '§1 single source: velo.tg.header == brand themeColor')
   } else {
+    // The core's header colour, read from tokens.json (not mirrored here).
+    const coreHeader = (goldenTokenMap(goldenDoc).get('velo.tg.header')?.value ?? '').toLowerCase()
     warn(
       out,
-      'the package does not override velo.tg.header: the Telegram header stays the golden #334d6e',
+      `the package does not override velo.tg.header: the Telegram header stays the core's ${coreHeader}`,
     )
-    if (brand.themeColor.toLowerCase() !== '#334d6e') {
+    if (brand.themeColor.toLowerCase() !== coreHeader) {
       // The HTML meta and the manifest WILL carry themeColor (materialized),
       // so a mismatched native header is almost certainly unintended.
       fail(
         out,
-        'FAIL §1 single source: themeColor != #334d6e but the package never overrides velo.tg.header -- the Telegram header would stay VELO-colored',
+        `FAIL §1 single source: themeColor != ${coreHeader} but the package never overrides velo.tg.header -- the Telegram header would keep the core's colour`,
       )
     }
   }
@@ -292,12 +294,13 @@ export function validateSkin(skinDir, frontendDir) {
         `contrastExceptions: ${e.text} on ${e.surface} clears the floor or is not overridden -- drop the declaration`,
       )
   // The background photo is the one optional asset that can quietly break a
-  // theme: it is the app's bottom layer, and the GOLDEN one is light. A skin
-  // that flips --velo-text-primary to a light color while shipping no
-  // assets/bg/background.* paints light text over the light photo -- unreadable
+  // theme: it is the app's bottom layer, and without it the core's light
+  // --velo-bg-start shows (FE-230: the core has no photo). A skin that flips
+  // --velo-text-primary to a light color while shipping no
+  // assets/bg/background.* paints light text over a light ground -- unreadable
   // (the velo_test_front_bot incident). Light-on-light skins may omit it.
   // Two formats are accepted, WebP preferred: released skins carry
-  // background.png, the golden ships background.webp (platform/skin.ts
+  // background.png, the golden VELO skin ships background.webp (platform/skin.ts
   // re-points --velo-app-bg-image at whichever one lies there; FE-157).
   const bgWebp = join(assets, 'bg', 'background.webp')
   const bgPng = join(assets, 'bg', 'background.png')
@@ -311,12 +314,12 @@ export function validateSkin(skinDir, frontendDir) {
     } else if (textPrimary && textPrimary.lum > 0.35) {
       fail(
         out,
-        'FAIL assets/bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including assets/bg/, or use dark text tokens.',
+        'FAIL assets/bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the light core background stays and the light text on it is unreadable. Ship the full package including assets/bg/, or use dark text tokens.',
       )
     } else {
       warn(
         out,
-        'assets/bg/background missing: the golden light photo stays (fine for a light-on-light skin)',
+        'assets/bg/background missing: the light core background stays (fine for a light-on-light skin)',
       )
     }
   } else if (existsSync(bgWebp)) {
@@ -394,7 +397,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     ? skinBuildGate(skinDir, frontendDir)
     : validateSkin(skinDir, frontendDir)
   if (report === null) {
-    console.log(`validate-skin: no skin package at ${skinDir} -- golden build`)
+    console.log(`validate-skin: no skin package at ${skinDir} -- the core build`)
     process.exit(0)
   }
   for (const line of [...report.fails, ...report.warns, ...report.manual, ...report.passed])

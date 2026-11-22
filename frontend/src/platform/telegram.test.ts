@@ -33,8 +33,8 @@ import { standalonePlatform } from '@/platform/standalone'
 // The fallback literals telegram.ts ships. They MUST mirror --velo-tg-header /
 // --velo-tg-bg / --velo-tg-bg-kbd in variables.css. See the honesty note in the
 // banner above: this set is held in sync by a comment, not by a machine.
-const FALLBACK_HEADER = '#334d6e'
-const FALLBACK_BG = '#ffffff'
+const FALLBACK_HEADER = '#4c4c4c'
+const FALLBACK_BG = '#f2f2f2'
 const FALLBACK_BG_KBD = '#727678'
 
 const setHeaderColor = vi.fn()

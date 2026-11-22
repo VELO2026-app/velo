@@ -64,8 +64,8 @@ export const telegramPlatform: Platform = {
     // Fallbacks mirror variables.css by hand: no test reads that file (see
     // telegram.test.ts). The token wins whenever the stylesheet is present, so
     // a drift only shows if variables.css failed to load.
-    webApp.setHeaderColor(tokenColor('--velo-tg-header', '#334d6e'))
-    webApp.setBackgroundColor(tokenColor('--velo-tg-bg', '#ffffff'))
+    webApp.setHeaderColor(tokenColor('--velo-tg-header', '#4c4c4c'))
+    webApp.setBackgroundColor(tokenColor('--velo-tg-bg', '#f2f2f2'))
     return Promise.resolve()
   },
 
@@ -99,7 +99,7 @@ export const telegramPlatform: Platform = {
   setKeyboardSurface(dark: boolean): void {
     try {
       const token = dark ? '--velo-tg-bg-kbd' : '--velo-tg-bg'
-      const fallback = dark ? '#727678' : '#ffffff'
+      const fallback = dark ? '#727678' : '#f2f2f2'
       getWebApp().setBackgroundColor(tokenColor(token, fallback))
     } catch {
       // Silently ignore -- older clients or missing SDK.

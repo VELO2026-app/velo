@@ -24,11 +24,11 @@
       rx="177.85"
       style="fill: var(--velo-mood-fill-rose, #f9cbd1)"
     />
-    <circle cx="73.8014" cy="190.783" r="17.7518" style="fill: var(--velo-primary-dark, #4c6589)" />
-    <circle cx="286.823" cy="190.783" r="17.7518" style="fill: var(--velo-primary-dark, #4c6589)" />
+    <circle cx="73.8014" cy="190.783" r="17.7518" style="fill: var(--velo-primary-dark)" />
+    <circle cx="286.823" cy="190.783" r="17.7518" style="fill: var(--velo-primary-dark)" />
     <path
       d="M128.914 241.013H229.803"
-      style="stroke: var(--velo-primary-dark, #4c6589)"
+      style="stroke: var(--velo-primary-dark)"
       stroke-width="11.2099"
       stroke-linecap="round"
     />

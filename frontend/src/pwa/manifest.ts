@@ -14,8 +14,9 @@
 // suite runs BEFORE the build in the Docker image, so the only manifest a test
 // can see is this object -- src/pwa/manifest.test.ts pins its fields.
 //
-// Identity (tz-whitelabel §2). The GOLDEN object below carries the
-// golden build's values. For a rebranded build vite.config.ts resolves the
+// Identity (tz-whitelabel §2). The object below carries the values of the
+// build without a skin package (the neutral core since FE-230; the name
+// moves out with FE-231). For a rebranded build vite.config.ts resolves the
 // instance env (loadEnv: .env files + process.env) and hands it to
 // pwaManifestWithPassport() -- two .env files produce two builds (§2.4)
 // without touching this file. This module is evaluated at CONFIG time in
@@ -37,7 +38,8 @@
 // "any maskable" entry makes the launcher crop the transparent-cornered circle
 // mark as if it were full-bleed (maskable) or show the full-bleed square where
 // a round mark is expected (any). The maskable file is the same mark on a
-// solid #334D6E square; the mark already sits inside the 80% safe zone.
+// solid square; the mark sits inside the 80% safe zone. The files on these
+// paths are the core's neutral ones, or the skin package's (FE-230).
 // The iOS home-screen icon is NOT read from here -- iOS takes
 // <link rel="apple-touch-icon"> from index.html.
 // =============================================================================
@@ -56,8 +58,8 @@ export const pwaManifest: Partial<ManifestOptions> = {
   scope: '/',
   display: 'standalone',
   orientation: 'portrait',
-  theme_color: '#334D6E',
-  background_color: '#ffffff',
+  theme_color: '#4c4c4c',
+  background_color: '#f2f2f2',
   icons: [
     { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
     { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
