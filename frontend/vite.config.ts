@@ -59,8 +59,8 @@ const LOCALE_CORE_CATALOG =
  * publicDir copy also drops the whole package into dist/skin/; only its
  * assets/fonts/ (virtual:skin-tokens.css @font-face points there) and its
  * LICENSE are meant to be served, so everything else -- the manifest, the
- * token sources, a checkout's .git -- is removed from dist/skin/ here (FE-131). The PWA precache ignores
- * skin/** (workbox globIgnores below), so the removal cannot race it.
+ * token sources, a checkout's .git -- is removed from dist/skin/ here (FE-131). The PWA precache
+ * names the fonts only (workbox globPatterns below), so the removal cannot race it.
  * Dev servers see the core's assets (a dev stand with a skin is not a
  * supported flow; build with the skin instead). */
 /** OS litter of a local working copy never reaches dist. */
@@ -287,16 +287,21 @@ export default defineConfig(({ mode }) => {
             // core has no photo (FE-230): the pattern joins only when the
             // package brings one, so a core build has no empty glob.
             ...(skinBackgroundFormat(publicDir) ? ['bg/background.{webp,png}'] : []),
+            // The skin's webfont paints the first text of every screen: an
+            // offline first start without it would draw the fallback face
+            // (FE-230). Only with a package that ships fonts -- the core has
+            // none, and an empty glob warns.
+            ...(skin && skin.fonts.length > 0 ? ['skin/assets/fonts/*.woff2'] : []),
             // PWA icons, favicon, and the splash logo (LoadingView: spinning
             // mandala ring under the filled wordmark).
             'icons/{icon-192,icon-512,icon-maskable-512,apple-touch-icon-180,favicon,mandala-white,velo-word-filled}.*',
             'assets/*.{js,css}',
           ],
           // Don't precache source maps -- nor the Zoom Meeting SDK chunk.
-          // skin/** (FE-131): the package copy in dist/skin/ is pruned to
-          // its fonts at closeBundle -- precaching it would race the prune;
-          // the fonts ride the runtime cache below.
-          globIgnores: ['**/*.map', '**/zoom-sdk-*.js', 'skin/**'],
+          // dist/skin/ (FE-131) is pruned to its fonts and license at
+          // closeBundle; the patterns above name the fonts only, so nothing
+          // else of the package copy can reach the precache.
+          globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
           manifestTransforms: [shellOnly],
           navigateFallback: null,
           // Runtime caching also gives the service worker a valid strategy

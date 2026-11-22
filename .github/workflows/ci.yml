@@ -508,6 +508,31 @@ jobs:
           node frontend/scripts/bundle-report.mjs --budget \
             --base .bundle-base/sizes.json --save-sizes .bundle-head/sizes.json
 
+      # FE-230: the core is neutral and production always ships a skin
+      # package, so the size that matters is the skinned one (the `skinned`
+      # line of bundle-budget.json: the package's photo and font join the
+      # precache). The golden package lives in the private velo-brand
+      # repository: the step runs only when the VELO_BRAND_DEPLOY_KEY secret
+      # (a read-only deploy key of velo-brand) is set, and says so when not.
+      # VELO_BRAND_REF follows the package named in bundle-budget.json.
+      - name: Bundle size budget (with the velo-brand package)
+        env:
+          VELO_BRAND_KEY: ${{ secrets.VELO_BRAND_DEPLOY_KEY }}
+          VELO_BRAND_REF: feat/skin-0.1.1-fe-230
+        run: |
+          if [ -z "$VELO_BRAND_KEY" ]; then
+            echo "::notice::VELO_BRAND_DEPLOY_KEY is not set: the skinned bundle budget is not checked in CI"
+            exit 0
+          fi
+          mkdir -p ~/.ssh && ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          eval "$(ssh-agent -s)" > /dev/null
+          printf '%s\n' "$VELO_BRAND_KEY" | ssh-add - 2>/dev/null
+          git clone --quiet --depth 1 --branch "$VELO_BRAND_REF" \
+            git@github.com:VELO2026-app/velo-brand.git "$RUNNER_TEMP/velo-brand"
+          cp -r "$RUNNER_TEMP/velo-brand/skin" frontend/public/skin
+          pnpm -C frontend exec vite build
+          node frontend/scripts/bundle-report.mjs --budget
+
       - name: Keep this build's sizes as the base for the next PRs
         if: github.event_name == 'push' && !cancelled() && hashFiles('.bundle-head/sizes.json') != ''
         uses: actions/cache/save@v6

@@ -16,6 +16,11 @@
 //               with the value to lower the budget to, so a saving is locked
 //               in the same PR instead of becoming headroom for the next
 //               growth. Raising it needs the `bundle-growth` label.
+//   skinned  -- the same two budgets for a build WITH a skin package (FE-230):
+//               the core is neutral and every instance ships a package, so
+//               the production size is the skinned one (the package's photo
+//               and font join the precache). Same window, same ceiling, same
+//               label rule. `package` names the package it was measured with.
 //
 // The label rule is checked by the guard job from the budget file of the base
 // branch and of the head, without a build (checkBudgetRaise).
@@ -74,7 +79,27 @@ export function assertBudgetShape(budget, where = 'bundle-budget.json') {
     if (!Number.isFinite(budget.ceiling?.[key]) || budget.ceiling[key] <= 0) {
       throw new Error(`${where}: no positive numeric ceiling.${key}`)
     }
+    if (
+      budget.skinned !== undefined &&
+      (!Number.isFinite(budget.skinned?.[key]) || budget.skinned[key] <= 0)
+    ) {
+      throw new Error(`${where}: no positive numeric skinned.${key}`)
+    }
   }
+}
+
+/**
+ * The budget a build is checked against: the core line, or the `skinned`
+ * line for a build with a skin package (FE-230). Both share the ceiling.
+ *
+ * @param budget - Parsed bundle-budget.json (must pass assertBudgetShape).
+ * @param skinned - Whether the build carried a skin package.
+ */
+export function budgetFor(budget, skinned) {
+  if (!skinned) return budget
+  if (budget.skinned === undefined)
+    throw new Error('a build with a skin package, but the budget file has no `skinned` line')
+  return { ...budget.skinned, ceiling: budget.ceiling, line: 'skinned' }
 }
 
 /**
@@ -124,7 +149,7 @@ export function checkBudget(sizes, budget, base) {
       )
     } else if (actual < lower) {
       problems.push(
-        `${name} ${kb(actual)} is below the budget ${kb(value)} by more than ${TOLERANCE_PCT}%: lower the budget to ${suggestBudget(actual)} (${key} in frontend/bundle-budget.json)`,
+        `${name} ${kb(actual)} is below the budget ${kb(value)} by more than ${TOLERANCE_PCT}%: lower the budget to ${suggestBudget(actual)} (${budget.line ? `${budget.line}.` : ''}${key} in frontend/bundle-budget.json)`,
       )
     }
     failures.push(...problems)
@@ -133,7 +158,7 @@ export function checkBudget(sizes, budget, base) {
     )
   }
   const md = [
-    `### Bundle budget: ${failures.length ? 'FAIL' : 'ok'}`,
+    `### Bundle budget${budget.line ? ` (${budget.line} build${budget.package ? `, ${budget.package}` : ''})` : ''}: ${failures.length ? 'FAIL' : 'ok'}`,
     '',
     '| metric | budget | actual | vs budget | vs base | gate | status |',
     '| --- | --- | --- | --- | --- | --- | --- |',
@@ -176,6 +201,17 @@ export function checkBudgetRaise(baseBudget, headBudget, labels) {
     ) {
       failures.push(
         `${key} raised ${Number.isFinite(after) ? `${before} -> ${after}` : `${before} -> (removed)`} without the \`${GROWTH_LABEL}\` label. Find what grew first (${MODULES_HINT}); the label is put by a human.`,
+      )
+    }
+    const skinnedBefore = baseBudget.skinned?.[key]
+    const skinnedAfter = headBudget?.skinned?.[key]
+    if (
+      Number.isFinite(skinnedBefore) &&
+      !(Number.isFinite(skinnedAfter) && skinnedAfter <= skinnedBefore) &&
+      !has(GROWTH_LABEL)
+    ) {
+      failures.push(
+        `skinned.${key} raised ${Number.isFinite(skinnedAfter) ? `${skinnedBefore} -> ${skinnedAfter}` : `${skinnedBefore} -> (removed)`} without the \`${GROWTH_LABEL}\` label. Find what grew first (${MODULES_HINT}); the label is put by a human.`,
       )
     }
     const ceilBefore = baseBudget.ceiling?.[key] ?? DEFAULT_CEILING[key]

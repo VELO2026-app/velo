@@ -57,7 +57,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
-import { assertBudgetShape, checkBudget } from './lib/bundle-budget.mjs'
+import { assertBudgetShape, budgetFor, checkBudget } from './lib/bundle-budget.mjs'
 
 const frontendDir = fileURLToPath(new URL('..', import.meta.url))
 
@@ -312,7 +312,10 @@ if (argv.includes('--modules')) {
     const basePath = flagValue(argv, '--base')
     const base =
       basePath && existsSync(basePath) ? JSON.parse(readFileSync(basePath, 'utf8')) : null
-    const { md, failures } = checkBudget(sizes, budget, base)
+    // A build with a skin package keeps dist/skin/ (fonts, license); a core
+    // build prunes it. The skinned line holds the production size (FE-230).
+    const skinned = existsSync(join(distDir, 'skin'))
+    const { md, failures } = checkBudget(sizes, budgetFor(budget, skinned), skinned ? null : base)
     console.log(md)
     if (process.env.GITHUB_STEP_SUMMARY) {
       appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${md}\n`)
