@@ -356,7 +356,7 @@ CSS-переменные — движок продукта»), поэтому т
 
 **Что работает (FE-124, PR #31 и #34, в `test`):**
 
-- `frontend/tokens.json` (DTCG, 227 значений после Gen-2 FE-150 — 226 токенов и блок reduced-motion, форма `velo.<ветка>.<имя>`) —
+- `frontend/tokens.json` (DTCG, 240 значений: 239 токенов (226 после Gen-2 FE-150 и 13 из FE-193) и блок reduced-motion, форма `velo.<ветка>.<имя>`) —
   источник; `variables.css` генерируется из него 1:1
   (`scripts/generate-variables.mjs`, гейт дрейфа — в `pnpm test`).
   `scripts/extract-variables-tokens.mjs` — разовый инструмент миграции.
@@ -393,7 +393,7 @@ CSS-переменные — движок продукта»), поэтому т
   не голый `--radius-full`, чтобы скин мог их перекрасить), radius-14 →
   `--radius-md` (фото на `AdminMasterReviewView`, +1px; голый токен — скин
   этот угол больше не меняет), letter-spacing-064 → letter-spacing-05
-  (−0.14px). Итого 226 токенов
+  (−0.14px). Итого 226 токенов (FE-193 добавил 13, см. выше: 239)
   вместо 253; ничего не переименовано, смысл веток не изменился; список — в
   разделе контракта `variables.css` («GENERATION 2»). Продукт читает
   contract `2.x` (`SKIN_CONTRACT_MAJOR = 2`); пакет `1.x` — отказ, пакет,

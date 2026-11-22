@@ -106,7 +106,7 @@ defineEmits<{
 }
 
 .v-segment__item--active {
-  color: var(--velo-on-primary);
+  color: var(--velo-on-accent);
   background: var(--velo-primary);
   border-color: var(--velo-primary);
 }
@@ -144,7 +144,7 @@ defineEmits<{
 }
 
 .v-segment--compact .v-segment__item--active {
-  color: var(--velo-on-primary);
+  color: var(--velo-on-accent);
   background: var(--velo-primary);
   border-color: var(--velo-primary);
 }

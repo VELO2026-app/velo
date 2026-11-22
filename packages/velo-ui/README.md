@@ -117,8 +117,6 @@
 --velo-gap-3
 --velo-gap-6
 --velo-glass-blue-15
---velo-glass-white-20       # VBackButton pill fill (P8 batch 3)
---velo-glass-white-35       # VBackButton pill fill, pressed (P8 batch 3)
 --velo-glass-blue-200-15
 --velo-glass-blue-30
 --velo-glass-blue-60
@@ -163,12 +161,12 @@
 --velo-warning-bg
 --velo-white               # *legacy-ramp (active/danger text on fills, FE-119: IconRequiredDone check stroke)
 # --- FE-193: skin-able surfaces (defaults = the values the components had) ---
---velo-back-bg             # VBackButton fill
---velo-back-fg             # VBackButton arrow
---velo-back-glass-bg       # VBackButton glass variant fill
---velo-frost-border        # VBackButton glass variant outline
---velo-control-border      # VSegment outline
---velo-on-primary          # VSegment active label
+--velo-back-button-bg      # VBackButton fill
+--velo-back-button-fg      # VBackButton arrow
+--velo-back-button-glass-bg # VBackButton glass variant fill
+--velo-frost-border        # VBackButton glass variant outline (also the app's VTabBar, Composer)
+--velo-control-border      # VSegment and VSegmentTrack outline
+--velo-on-accent           # VSegment and VSegmentTrack active label (also the app's VTabBar, Composer)
 --velo-text-on-bg-secondary # VEmptyState title
 --velo-text-on-bg-muted    # VEmptyState description, VSegment item
 # --- P8 batch 1 (tz-ui-package §4 P8): skeleton family, VEmptyState, VMenuRow, field family ---

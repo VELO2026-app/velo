@@ -353,7 +353,7 @@ onBeforeUnmount(() => {
 .v-tabbar__item--active {
   flex-grow: 1;
   max-width: 96px;
-  color: var(--velo-on-primary);
+  color: var(--velo-on-accent);
 }
 
 /* Before the disc is measured, the active button carries the fill itself. */

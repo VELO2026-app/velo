@@ -1000,7 +1000,7 @@ async function onSubmit(): Promise<void> {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border: 1px solid var(--velo-glass-white-35);
+  border: 1px solid var(--velo-frost-border);
   border-radius: var(--radius-full);
   background: transparent;
   transform: translateZ(0);
