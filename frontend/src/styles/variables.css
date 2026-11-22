@@ -427,8 +427,8 @@
     transparent
   ); /* Tab bar active circle (Figma 2212:390): primary with 60% alpha, gives a soft blue-grey on light bg, NOT a saturated solid colour. Distinct from --velo-nav-active-bg (used by VToggle/VMenu/VMenuItem/DiaryComposer) which is opaque. */
   --velo-nav-inactive-bg: color-mix(in srgb, var(--velo-blue-500) 15%, transparent);
-  --velo-frost-border: var(--velo-glass-white-35); /* Tab bar and composer frost: outline */
-  --velo-frost-bg: var(--velo-glass-white-12); /* Tab bar and composer frost: fill */
+  --velo-frost-border: var(--velo-glass-white-35); /* Frosted pills (tab bar, composer): outline */
+  --velo-frost-bg: var(--velo-glass-white-12); /* Frosted pills (tab bar, composer): fill */
   --velo-frost-border-active: var(--velo-glass-white-70); /* Composer in focus: outline */
   --velo-frost-bg-active: var(--velo-glass-white-16); /* Composer in focus: fill */
   --velo-control-border: var(--velo-glass-border); /* Glass controls: outline */
@@ -744,7 +744,7 @@
    *   depth            --velo-shadow-glow(-sm)/glass/toast/switch,
    *                    --velo-write-shadow-*, --velo-effect-focus-glass
    *                    <-> velo.shadow.* / velo.effect.*
-   *   surfaces         --velo-frost-* (tab bar, composer), --velo-control-border,
+   *   surfaces         --velo-frost-* (frosted pills: tab bar, composer; not part of the glass-* ramp), --velo-control-border,
    *                    --velo-on-accent, --velo-picker-*, --velo-back-button-*,
    *                    --velo-text-on-bg-*   <-> velo.frost.*, velo.control.*, velo.on.*,
    *                    velo.picker.*, velo.back.button.*, velo.text.on.bg.*
