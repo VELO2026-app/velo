@@ -29,6 +29,7 @@ BE-194 part 6: the lock on comms v4.0.0 and the bot's token by its seam.
 BE-194 (v0.1.0): the frontend's types by the product's commands.
 BE-194 part 10: the machine's test run -- its Redis, the environment it builds
 Settings from, and CI that must have its storage.
+BE-194 part 11: the skin's build place is where the frontend's build reads it.
 
 The files are read from the repository root -- in the test image they are
 at /, where Path(__file__).resolve().parents[2] lands from /app/tests
@@ -40,7 +41,7 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 import pytest
@@ -652,3 +653,44 @@ def test_ci_must_have_its_storage() -> None:
     not answer there ends the run instead of skipping them quietly."""
     [suite] = [s for s in _steps(BACKEND_TESTS_YML) if "python -m pytest" in s["run"]]
     assert "-e VELO_TESTS_STORAGE=required" in suite["run"]
+
+
+# -- BE-194 part 11: the skin's build place -------------------------------------
+
+
+def _one(pattern: str, path: Path) -> str:
+    """The one match of `pattern` in `path` -- a link of the chain the build
+    reads the skin through; none or two is red, naming the file."""
+    found = re.findall(pattern, path.read_text(encoding="utf-8"), re.M)
+    assert len(found) == 1, f"{path}: {pattern!r} matched {found}"
+    return found[0]
+
+
+def test_the_skin_lands_where_the_frontends_build_reads_it() -> None:
+    """The machine puts the skin package at `path` of the slot's build place,
+    from the build context of the service (contract 3 rule 10). The frontend
+    reads it through three bodies: its Dockerfile copies a directory of the
+    context into the same place and builds there (`pnpm -C <dir> run
+    build`); vite takes `public` under that directory (vite.config.ts) and the
+    skin under it (src/platform/skin.ts). A package anywhere else builds a
+    green frontend with no skin -- the machine cannot see that, this does."""
+    slot = yaml.safe_load(PRIMER.read_text(encoding="utf-8"))["packages"]["skin"]
+    places = [b for b in slot["build"] if b.get("service") == "frontend"]
+    assert len(places) == 1, slot["build"]
+    build = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]["frontend"][
+        "build"
+    ]
+    context = Path(build["context"])
+    place = PurePosixPath(os.path.normpath(context / places[0]["path"]))
+
+    dockerfile = ROOT / context / build["dockerfile"]
+    directory = _one(r"^RUN pnpm -C (\S+) run build", dockerfile)
+    _one(rf"^COPY ({re.escape(directory)} {re.escape(directory)})$", dockerfile)
+    vite = FRONTEND / "vite.config.ts"
+    public = _one(r"const publicDir = join\(frontendDir, '([^']+)'\)", vite)
+    _one(r"(readSkin\(publicDir\))", vite)
+    skin_ts = FRONTEND / "src" / "platform" / "skin.ts"
+    skin = _one(r"loadSkinPackage\(join\(publicDir, '([^']+)'\)", skin_ts)
+
+    read_at = PurePosixPath(directory, public, skin)
+    assert place == read_at, (place, read_at)

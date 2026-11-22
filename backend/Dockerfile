@@ -175,6 +175,10 @@ COPY .github/workflows/ci.yml .github/workflows/backend-tests.yml /.github/workf
 # frontend, no value.
 COPY frontend/nginx.conf frontend/Dockerfile /frontend/
 COPY frontend/scripts/lib/texts-package.mjs frontend/scripts/lib/skin-package.mjs /frontend/scripts/lib/
+# BE-194 part 11: where the frontend's build reads the skin -- vite's
+# publicDir and the skin directory under it (tests/test_primer_env.py).
+COPY frontend/vite.config.ts /frontend/
+COPY frontend/src/platform/skin.ts /frontend/src/platform/
 # The comms product profile, which the suite checks every notification
 # against (tests/notification_guard.py). /comms-profile is where the tests'
 # Path(__file__).resolve().parents[2] / "comms-profile" lands from
