@@ -162,7 +162,7 @@
 
   /* === Typography === */
   --font-body: 'Marmelad', 'Noto Sans', sans-serif;
-  --font-heading: 'Marmelad', 'Noto Sans', sans-serif;
+  --font-heading: var(--font-body);
   --font-mono: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
 
   /* === Spacing === */
