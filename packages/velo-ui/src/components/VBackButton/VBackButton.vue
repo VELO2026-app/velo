@@ -79,8 +79,8 @@ defineEmits<{ click: [] }>()
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-full);
-  background: var(--velo-bg-card-solid);
-  color: var(--velo-text-primary);
+  background: var(--velo-back-bg);
+  color: var(--velo-back-fg);
   cursor: pointer;
   transition: opacity var(--transition-fast);
   position: relative;
@@ -109,8 +109,8 @@ defineEmits<{ click: [] }>()
    through it, just denser. The solid variant stays the DS default everywhere
    else. */
 .v-back--glass {
-  background: var(--velo-glass-white-20);
-  border: 1px solid var(--velo-glass-white-35);
+  background: var(--velo-back-glass-bg);
+  border: 1px solid var(--velo-frost-border);
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
 }

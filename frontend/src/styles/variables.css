@@ -427,6 +427,17 @@
     transparent
   ); /* Tab bar active circle (Figma 2212:390): primary with 60% alpha, gives a soft blue-grey on light bg, NOT a saturated solid colour. Distinct from --velo-nav-active-bg (used by VToggle/VMenu/VMenuItem/DiaryComposer) which is opaque. */
   --velo-nav-inactive-bg: color-mix(in srgb, var(--velo-blue-500) 15%, transparent);
+  --velo-frost-border: var(--velo-glass-white-35); /* Frosted bars: outline */
+  --velo-frost-bg: var(--velo-glass-white-12); /* Frosted bars: fill */
+  --velo-control-border: var(--velo-glass-border); /* Glass controls: outline */
+  --velo-on-primary: var(--velo-white); /* Text/icon on a primary fill */
+  --velo-picker-bg: var(--velo-primary); /* Practice-picker pill: fill */
+  --velo-picker-fg: var(--velo-white); /* Practice-picker pill: label */
+  --velo-text-on-bg-secondary: var(--velo-text-secondary); /* Secondary text on the page */
+  --velo-text-on-bg-muted: var(--velo-text-muted); /* Muted text on the page */
+  --velo-back-bg: var(--velo-bg-card-solid); /* Back button: fill */
+  --velo-back-fg: var(--velo-text-primary); /* Back button: arrow */
+  --velo-back-glass-bg: var(--velo-glass-white-20); /* Back button, glass: fill */
 
   /* === VELΘ: Border === */
   --velo-border-input-focus: var(--velo-border);

@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
      at z:-1 so icon repaints never race the backdrop sampling (the
      iOS-stable shape for glass over moving content). */
   background: transparent;
-  border: 1px solid var(--velo-glass-white-35);
+  border: 1px solid var(--velo-frost-border);
   border-radius: var(--velo-radius-pill);
   box-shadow: var(--velo-shadow-glass);
   z-index: var(--z-sticky);
@@ -266,7 +266,7 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--velo-glass-white-12);
+  background: var(--velo-frost-bg);
   backdrop-filter: blur(12px) saturate(150%);
   -webkit-backdrop-filter: blur(12px) saturate(150%);
   z-index: -1;
@@ -353,7 +353,7 @@ onBeforeUnmount(() => {
 .v-tabbar__item--active {
   flex-grow: 1;
   max-width: 96px;
-  color: var(--velo-white);
+  color: var(--velo-on-primary);
 }
 
 /* Before the disc is measured, the active button carries the fill itself. */

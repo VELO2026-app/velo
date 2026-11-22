@@ -987,7 +987,7 @@ watch(
   font-family: var(--font-body);
   font-size: var(--velo-fs-14);
   font-weight: 400;
-  color: var(--velo-text-secondary);
+  color: var(--velo-text-on-bg-secondary);
   letter-spacing: var(--velo-card-letter-spacing-meta);
   margin-bottom: var(--space-2);
 }
