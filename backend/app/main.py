@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.requests import Request
 
+from app.core.comms import IDEMPOTENCY_HEADER
 from app.core.config import settings
 from app.core.database import dispose_engine
 from app.core.exceptions import VeloError
@@ -428,8 +429,20 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     # B-03: Fetch spec forbids allow_headers=["*"] with allow_credentials=True.
-    # List headers explicitly. X-Request-ID is the request id (protocol 9.6).
-    allow_headers=["Authorization", "Content-Type", REQUEST_ID_HEADER],
+    # List headers explicitly. A header missing here fails the browser's
+    # preflight with 400 and the request itself is never sent (BE-230).
+    # Every header the frontend sets on its API requests must be listed:
+    # tests/test_cors_frontend_headers.py finds them in frontend/src/api/
+    # and holds that set against this list.
+    #   Authorization, Content-Type -- set by frontend/src/api/client.ts.
+    #   Idempotency-Key -- names one intent on the frontend's writes (support
+    #     ticket, diary entry, chat message); read by the routers through
+    #     the same constant.
+    #   X-Request-ID -- a caller may name its request (protocol 9.6). The
+    #     frontend does not send it: it only reads it (expose_headers below).
+    allow_headers=[
+        "Authorization", "Content-Type", IDEMPOTENCY_HEADER, REQUEST_ID_HEADER,
+    ],
     # The frontend is on another origin (domains.frontend) and shows the
     # request id with an error (frontend/src/api/client.ts): a response
     # header it may read only when exposed.

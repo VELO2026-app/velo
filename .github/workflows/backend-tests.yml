@@ -69,6 +69,7 @@ on:
       - frontend/scripts/lib/skin-package.mjs
       - frontend/vite.config.ts
       - frontend/src/platform/skin.ts
+      - frontend/src/api/**
   pull_request:
     branches: [deploy-machine]
     paths:
@@ -85,6 +86,7 @@ on:
       - frontend/scripts/lib/skin-package.mjs
       - frontend/vite.config.ts
       - frontend/src/platform/skin.ts
+      - frontend/src/api/**
 
 concurrency:
   group: backend-tests-${{ github.ref }}
@@ -162,7 +164,8 @@ jobs:
                        "/frontend/nginx.conf", "/frontend/Dockerfile",
                        "/frontend/scripts/lib/texts-package.mjs",
                        "/frontend/scripts/lib/skin-package.mjs",
-                       "/frontend/vite.config.ts", "/frontend/src/platform/skin.ts", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
+                       "/frontend/vite.config.ts", "/frontend/src/platform/skin.ts",
+                       "/frontend/src/api/client.ts", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
               (present if dev else absent)(path)
           for name in ("pytest", "pytest_asyncio", "ruff"):
               module(name, dev)

@@ -179,6 +179,11 @@ COPY frontend/scripts/lib/texts-package.mjs frontend/scripts/lib/skin-package.mj
 # publicDir and the skin directory under it (tests/test_primer_env.py).
 COPY frontend/vite.config.ts /frontend/
 COPY frontend/src/platform/skin.ts /frontend/src/platform/
+# BE-230: the headers the frontend sets on its API requests, found in its
+# client and its calls, against CORS allow_headers
+# (tests/test_cors_frontend_headers.py). Code of the frontend, no value; its
+# own tests are left out by Dockerfile.dockerignore.
+COPY frontend/src/api/ /frontend/src/api/
 # The comms product profile, which the suite checks every notification
 # against (tests/notification_guard.py). /comms-profile is where the tests'
 # Path(__file__).resolve().parents[2] / "comms-profile" lands from
