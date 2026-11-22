@@ -16,6 +16,16 @@ export interface SkinBrand {
   themeColor: string
   backgroundColor: string
   fonts: SkinFont[]
+  /** Contract 2.1: pairs the package keeps under the contrast floor. */
+  contrastExceptions: SkinContrastException[]
+}
+
+export interface SkinContrastException {
+  /** Token path of the text, e.g. `velo.text.secondary`. */
+  text: string
+  /** Token path of the surface under it, e.g. `velo.bg.card.solid`. */
+  surface: string
+  reason: string
 }
 
 export interface LoadedSkinPackage {

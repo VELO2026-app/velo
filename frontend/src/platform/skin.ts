@@ -79,7 +79,9 @@ export function readSkin(publicDir: string): SkinPackage | null {
   if (!existsSync(dir) || !isSkinPackage(dir)) return null
   const brand = loadPackage(publicDir).brand
   if (brand === null) throw new Error('[skin] public/skin: no brand record')
-  return { ...brand }
+  // The build's identity only: contrastExceptions are the validator's.
+  const { displayName, shortName, themeColor, backgroundColor, fonts } = brand
+  return { displayName, shortName, themeColor, backgroundColor, fonts }
 }
 
 /**

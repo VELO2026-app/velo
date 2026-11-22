@@ -15,6 +15,7 @@ import { join } from 'node:path'
 // @ts-expect-error -- *.mjs modules carry no type information
 import { skinBuildGate, validateSkin } from '../../scripts/validate-skin.mjs'
 import {
+  FIXTURE_BRAND,
   FIXTURE_TOKENS,
   cleanupSkinFixtures,
   png,
@@ -278,6 +279,68 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     const dir = writeSkinPackage()
     writeFileSync(join(dir, 'assets', 'apple-touch-icon-180.png'), png(180, 180, 6))
     expect(failsOf(dir)).toContain('assets/apple-touch-icon-180.png: has an alpha channel')
+  })
+})
+
+describe('declared contrast exceptions (contract 2.1, FE-230)', () => {
+  const MANIFEST_21 = 'schema: 1\ncontract: "2.1"\n'
+  const EXCEPTION = {
+    text: 'velo.text.secondary',
+    surface: 'velo.bg.card.solid',
+    reason: 'Secondary text keeps the brand tint.',
+  }
+  /** A package with secondary text `secondary` on a white card. */
+  const pkg = (secondary: string, exceptions?: object[], manifest = MANIFEST_21): string =>
+    writeSkinPackage({
+      manifest,
+      brand: exceptions ? { ...FIXTURE_BRAND, contrastExceptions: exceptions } : FIXTURE_BRAND,
+      tokens: {
+        ...FIXTURE_TOKENS,
+        velo: {
+          ...FIXTURE_TOKENS.velo,
+          text: { secondary: { $value: secondary } },
+          bg: { card: { solid: { $value: '#ffffff' } } },
+        },
+      },
+    })
+  const report = (dir: string): Report => validateSkin(dir, FRONTEND) as Report
+
+  it('a declared pair under 4.5:1 warns with its reason; undeclared, it fails', () => {
+    const declared = report(pkg('rgba(76, 101, 137, 0.7)', [EXCEPTION]))
+    expect(declared.fails).toEqual([])
+    expect(declared.warns.join('\n')).toContain(
+      '--velo-text-secondary on --velo-bg-card-solid is 3.12:1 < 4.5:1 -- declared exception: Secondary text keeps the brand tint.',
+    )
+    expect(failsOf(pkg('rgba(76, 101, 137, 0.7)'))).toContain(
+      'FAIL contrast: --velo-text-secondary on --velo-bg-card-solid is 3.12:1 < 4.5:1',
+    )
+  })
+
+  it('a declaration holds down to 3:1, not below', () => {
+    expect(failsOf(pkg('rgba(76, 101, 137, 0.5)', [EXCEPTION]))).toContain(
+      'a declared exception holds down to 3:1, not below',
+    )
+  })
+
+  it('a declaration for a pair that clears the floor warns to drop it', () => {
+    const passing = report(pkg('#333333', [EXCEPTION]))
+    expect(passing.fails).toEqual([])
+    expect(passing.warns.join('\n')).toContain('clears the floor or is not overridden')
+  })
+
+  it('a pair the gate does not measure, a missing reason, a 2.0 manifest fail', () => {
+    expect(failsOf(pkg('#333333', [{ ...EXCEPTION, surface: 'velo.primary' }]))).toContain(
+      'is not a pair the gate measures',
+    )
+    expect(failsOf(pkg('#333333', [{ ...EXCEPTION, reason: ' ' }]))).toContain(
+      'reason: why the pair stays under the floor',
+    )
+    expect(failsOf(pkg('#333333', [EXCEPTION], 'schema: 1\ncontract: "2.0"\n'))).toContain(
+      'contrastExceptions need contract "2.1" or later, got "2.0"',
+    )
+    expect(failsOf(pkg('#333333', [{ ...EXCEPTION, text: 'velo.text.nope' }]))).toContain(
+      'contrastExceptions: velo.text.nope is not a token of the product',
+    )
   })
 })
 

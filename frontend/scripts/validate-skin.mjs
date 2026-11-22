@@ -18,7 +18,9 @@
 //                single-source rule (§1): velo.tg.header == brand themeColor
 //   contrast     WCAG ratios for the overridden text/background pairs
 //                (4.5:1 body text; 3:1 for the Telegram header chrome, whose
-//                text is white) -- thresholds per the variables.css comments
+//                text is white) -- thresholds per the variables.css comments.
+//                A pair the package declares in contrastExceptions (contract
+//                2.1, FE-230) is a WARN down to EXCEPTION_FLOOR, never below
 //   PNG          dimensions from IHDR; the apple-touch icon must have NO
 //                alpha channel (iOS paints transparency black)
 //   manual       maskable safe-zone (80%) needs pixel inspection -- reported
@@ -53,6 +55,10 @@ const PNG_SIZES = {
   'apple-touch-icon-180.png': [180, 180],
 }
 /** Text/background pairs checked when the skin overrides either side. */
+/** A declared contrast exception holds down to this ratio, not below: the
+ *  WCAG floor for large text and UI parts. The golden secondary text on the
+ *  white card measures 3.12:1 (FE-230). */
+const EXCEPTION_FLOOR = 3.0
 /** @type {[string, string, number][]} */
 const CONTRAST_PAIRS = [
   ['--velo-text-primary', '--velo-bg-card-solid', 4.5],
@@ -226,6 +232,24 @@ export function validateSkin(skinDir, frontendDir) {
     }
     return value
   }
+  // contrastExceptions name token PATHS; the pairs above are CSS names.
+  const cssNameOf = new Map([...goldenTokenMap(goldenDoc)].map(([path, t]) => [path, t.cssName]))
+  const exceptions = brand.contrastExceptions.map((e) => ({
+    ...e,
+    fgName: cssNameOf.get(e.text),
+    bgName: cssNameOf.get(e.surface),
+    used: false,
+  }))
+  for (const e of exceptions)
+    if (!CONTRAST_PAIRS.some(([fg, bg]) => fg === e.fgName && bg === e.bgName))
+      fail(
+        out,
+        `FAIL contrastExceptions: ${e.text} on ${e.surface} is not a pair the gate measures (${CONTRAST_PAIRS.filter(
+          ([, bg]) => bg.startsWith('--'),
+        )
+          .map(([fg, bg]) => `${fg} on ${bg}`)
+          .join(', ')})`,
+      )
   for (const [fgName, bgName, min] of CONTRAST_PAIRS) {
     const fg = resolveToken(fgName)
     const bg = bgName.startsWith('--') ? resolveToken(bgName) : bgName
@@ -241,10 +265,32 @@ export function validateSkin(skinDir, frontendDir) {
       )
       continue
     }
-    if (ratio < min)
-      fail(out, `FAIL contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 < ${min}:1`)
-    else ok(out, `contrast: ${fgName} on ${bgName} ${ratio.toFixed(2)}:1 >= ${min}:1`)
+    const declared = exceptions.find((e) => e.fgName === fgName && e.bgName === bgName)
+    if (declared) declared.used = ratio < min
+    if (ratio >= min) ok(out, `contrast: ${fgName} on ${bgName} ${ratio.toFixed(2)}:1 >= ${min}:1`)
+    else if (declared && ratio >= EXCEPTION_FLOOR)
+      warn(
+        out,
+        `contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 < ${min}:1 -- declared exception: ${declared.reason}`,
+      )
+    else if (declared)
+      fail(
+        out,
+        `FAIL contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 -- a declared exception holds down to ${EXCEPTION_FLOOR}:1, not below`,
+      )
+    else fail(out, `FAIL contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 < ${min}:1`)
   }
+  for (const e of exceptions)
+    if (
+      !e.used &&
+      e.fgName &&
+      e.bgName &&
+      CONTRAST_PAIRS.some(([fg, bg]) => fg === e.fgName && bg === e.bgName)
+    )
+      warn(
+        out,
+        `contrastExceptions: ${e.text} on ${e.surface} clears the floor or is not overridden -- drop the declaration`,
+      )
   // The background photo is the one optional asset that can quietly break a
   // theme: it is the app's bottom layer, and the GOLDEN one is light. A skin
   // that flips --velo-text-primary to a light color while shipping no

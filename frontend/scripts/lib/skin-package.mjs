@@ -9,7 +9,7 @@
 //
 // THE PACKAGE (contract "2.x" of the VELO skin slot; primer guide §4.4):
 //
-//   primer-package.yaml          block form: `schema: 1`, `contract: "2.0"` --
+//   primer-package.yaml          block form: `schema: 1`, `contract: "2.1"` --
 //                                the contract is a quoted POINT "X.Y" (a range
 //                                lives only in the product's packages.skin)
 //   tokens/<name>.tokens.json    W3C DTCG. Token paths are the paths of
@@ -23,7 +23,11 @@
 //                                displayName, shortName, themeColor,
 //                                backgroundColor, fonts? -- the generation-1
 //                                brand.json, moved into the package's only
-//                                data carrier
+//                                data carrier -- and, since contract "2.1",
+//                                contrastExceptions?: the text/surface pairs
+//                                the package knowingly keeps under the
+//                                contrast floor, each with its reason
+//                                (validate-skin warns instead of failing)
 //   assets/<name>.svg|png        the fixed generation-1 asset names
 //   assets/bg/, assets/onboarding/   optional, replace the public/ ones
 //   assets/fonts/<name>.woff2    self-hosted webfonts (no external request
@@ -61,8 +65,13 @@ import { join, resolve } from 'node:path'
  *  token generation 2 (FE-150): 27 token names gone (variables.css, the
  *  GENERATION 2 section), so a 1.x package is refused rather than half-read. */
 export const SKIN_CONTRACT_MAJOR = 2
-/** The contract a package written by this product's tools declares. */
-export const SKIN_CONTRACT = '2.0'
+/** The contract a package written by this product's tools declares.
+ *  2.1 (FE-230): the brand record may carry contrastExceptions. */
+export const SKIN_CONTRACT = '2.1'
+/** The first minor of contract 2 that knows contrastExceptions. */
+const CONTRAST_EXCEPTIONS_MINOR = 1
+/** A contrast exception's reason: plain text, one or two sentences. */
+const REASON_MAX = 300
 export const MANIFEST = 'primer-package.yaml'
 /** The $extensions key of the brand record. */
 export const BRAND_EXTENSION = 'velo-skin'
@@ -423,6 +432,7 @@ function checkBrand(record, files, problems) {
     'backgroundColor',
     'fonts',
     'fontUrl',
+    'contrastExceptions',
   ])
   for (const key of Object.keys(record))
     if (!known.has(key)) problems.push(`${where}.${key}: unknown field`)
@@ -457,7 +467,40 @@ function checkBrand(record, files, problems) {
     themeColor: String(record.themeColor ?? '').trim(),
     backgroundColor: String(record.backgroundColor ?? '').trim(),
     fonts,
+    contrastExceptions: checkContrastExceptions(record.contrastExceptions, where, problems),
   }
+}
+
+/** contrastExceptions: [{ text, surface, reason }] -- token paths of the
+ *  pair and why the package keeps it under the floor. The shape only; that
+ *  the paths are product tokens is checked in loadSkinPackage(), whether the
+ *  pair is one the gate measures -- in validate-skin. */
+function checkContrastExceptions(list, where, problems) {
+  if (list === undefined) return []
+  const at = `${where}.contrastExceptions`
+  if (!Array.isArray(list) || list.length === 0) {
+    problems.push(`${at}: must be a non-empty list of { text, surface, reason }`)
+    return []
+  }
+  const out = []
+  list.forEach((entry, i) => {
+    const here = `${at}[${i}]`
+    if (!isObject(entry)) return problems.push(`${here}: must be an object`)
+    for (const key of Object.keys(entry))
+      if (!['text', 'surface', 'reason'].includes(key))
+        problems.push(`${here}.${key}: unknown field`)
+    for (const key of ['text', 'surface'])
+      if (typeof entry[key] !== 'string' || !/^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/.test(entry[key]))
+        problems.push(`${here}.${key}: a token path, e.g. velo.text.secondary`)
+    const reason = typeof entry.reason === 'string' ? entry.reason.trim() : ''
+    if (reason === '') problems.push(`${here}.reason: why the pair stays under the floor`)
+    else if (reason.length > REASON_MAX)
+      problems.push(`${here}.reason: longer than ${REASON_MAX} characters`)
+    else if (UNSAFE_TEXT.test(reason))
+      problems.push(`${here}.reason: no < > & " or control characters`)
+    out.push({ text: String(entry.text), surface: String(entry.surface), reason })
+  })
+  return out
 }
 
 // -- assets ------------------------------------------------------------------
@@ -610,6 +653,21 @@ export function loadSkinPackage(dir, tokensDoc) {
 
   for (const asset of MANDATORY_ASSETS)
     if (!files.includes(`assets/${asset}`)) problems.push(`assets/${asset}: missing`)
+
+  // contrastExceptions (contract 2.1): a 2.0 reader refuses the field as
+  // unknown, so a package that carries it must say 2.1 or later.
+  const exceptions = brand?.contrastExceptions ?? []
+  if (exceptions.length > 0 && contract !== null) {
+    const minor = Number(contract.split('.')[1])
+    if (minor < CONTRAST_EXCEPTIONS_MINOR)
+      problems.push(
+        `${MANIFEST}: contrastExceptions need contract "2.${CONTRAST_EXCEPTIONS_MINOR}" or later, got "${contract}"`,
+      )
+  }
+  for (const { text, surface } of exceptions)
+    for (const path of [text, surface])
+      if (!golden.has(path))
+        problems.push(`contrastExceptions: ${path} is not a token of the product`)
 
   // A shipped font must be the one --font-body names (by exact family name),
   // or the package ships a font the app never uses. Here, not in the
