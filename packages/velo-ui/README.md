@@ -162,6 +162,15 @@
 --velo-text-stroke-strong
 --velo-warning-bg
 --velo-white               # *legacy-ramp (active/danger text on fills, FE-119: IconRequiredDone check stroke)
+# --- FE-193: skin-able surfaces (defaults = the values the components had) ---
+--velo-back-bg             # VBackButton fill
+--velo-back-fg             # VBackButton arrow
+--velo-back-glass-bg       # VBackButton glass variant fill
+--velo-frost-border        # VBackButton glass variant outline
+--velo-control-border      # VSegment outline
+--velo-on-primary          # VSegment active label
+--velo-text-on-bg-secondary # VEmptyState title
+--velo-text-on-bg-muted    # VEmptyState description, VSegment item
 # --- P8 batch 1 (tz-ui-package §4 P8): skeleton family, VEmptyState, VMenuRow, field family ---
 --velo-border-input-focus  # VSelect focus ring
 --velo-card-height-list    # VSkeletonPracticeCard list-card skeleton height
