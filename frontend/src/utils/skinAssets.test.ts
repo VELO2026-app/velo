@@ -9,6 +9,8 @@
 // =============================================================================
 
 import { describe, expect, it } from 'vitest'
+import { PRECACHED_ICONS, SKIN_ASSETS } from '../../scripts/lib/skin-package.mjs'
+import { SKIN_IMAGE } from './skinAssets'
 
 const sfcs = import.meta.glob<string>(['/src/**/*.vue', '../../../packages/velo-ui/src/**/*.vue'], {
   query: '?raw',
@@ -39,5 +41,15 @@ describe('skin images in templates', () => {
       staticRootPaths(sfc).map((hit) => `${path}: ${hit}`),
     )
     expect(hits).toEqual([])
+  })
+})
+
+describe('skin image names', () => {
+  it('every /icons/ image is an asset name of the skin contract', () => {
+    const icons = Object.values(SKIN_IMAGE)
+      .filter((url) => url.startsWith('/icons/'))
+      .map((url) => url.slice('/icons/'.length))
+    expect(icons.filter((name) => !SKIN_ASSETS.includes(name))).toEqual([])
+    expect(PRECACHED_ICONS.filter((name) => !SKIN_ASSETS.includes(name))).toEqual([])
   })
 })

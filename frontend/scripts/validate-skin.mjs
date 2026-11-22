@@ -43,6 +43,7 @@ import {
   loadSkinPackage,
   readGoldenTokens,
   goldenTokenMap,
+  shipsLogo,
 } from './lib/skin-package.mjs'
 
 /** An assets/bg/background.png above this is warned about: the golden VELO skin ships WebP. */
@@ -357,7 +358,13 @@ export function validateSkin(skinDir, frontendDir) {
         `FAIL assets/${asset}: has an alpha channel (colorType ${info.colorType}) -- iOS paints transparency black`,
       )
   }
-  for (const asset of ['favicon.svg', 'velo-word-filled.svg', 'velo-word-blue.svg']) {
+  // The logo set is optional since contract 2.1 (the engine keeps it whole
+  // or absent); without it the app shows favicon.svg in the logo places.
+  const logo = shipsLogo(pkg.files)
+  if (logo) ok(out, 'logo set present (mandala rings, wordmarks, logo-white)')
+  else ok(out, 'no logo set: the app shows the brand icon (favicon.svg) where the logo goes')
+  const svgs = ['favicon.svg', ...(logo ? ['velo-word-filled.svg', 'velo-word-blue.svg'] : [])]
+  for (const asset of svgs) {
     const head = readFileSync(join(assets, asset), 'utf8').slice(0, 200)
     if (!/<svg|<\?xml/.test(head)) fail(out, `FAIL assets/${asset}: does not look like an SVG`)
   }

@@ -23,11 +23,27 @@
 -->
 
 <template>
+  <!-- No logo set in the skin package (contract 2.1, FE-230): the brand's app
+       icon stands in, static. The white variant is the splash's oversized
+       bleed box, so the icon takes a third of it and the layout keeps its Y. -->
+  <div
+    v-if="!SKIN_HAS_LOGO"
+    class="velo-logo velo-logo--icon"
+    :style="{ width: size + 'px', height: size + 'px' }"
+  >
+    <img
+      class="velo-logo__icon"
+      :src="SKIN_IMAGE.favicon"
+      :width="iconSize"
+      :height="iconSize"
+      :alt="t('common.brandName')"
+    />
+  </div>
   <!-- Spinning white logo: rotating mandala ring under a static filled wordmark.
        The word sits at the ring centre, so rotating around the box centre keeps
        it perfectly still. -->
   <div
-    v-if="spin && variant === 'white'"
+    v-else-if="spin && variant === 'white'"
     class="velo-logo velo-logo--spin"
     :style="{ width: size + 'px', height: size + 'px' }"
   >
@@ -79,10 +95,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { SKIN_HAS_LOGO } from 'virtual:skin-brand'
 import { t } from '@/locales'
 import { SKIN_IMAGE } from '@/utils/skinAssets'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     size?: number
     variant?: 'default' | 'white'
@@ -91,12 +109,23 @@ withDefaults(
   }>(),
   { size: 64, variant: 'default', spin: false },
 )
+
+/** The stand-in icon's side: the whole box, a third of the splash's bleed box. */
+const iconSize = computed(() =>
+  props.variant === 'white' ? Math.round(props.size / 3) : props.size,
+)
 </script>
 
 <style scoped>
 .velo-logo {
   display: block;
   object-fit: contain;
+}
+
+.velo-logo--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .velo-logo--spin,

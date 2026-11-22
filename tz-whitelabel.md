@@ -163,8 +163,8 @@ envsubst'ом в nginx при старте (FE-129); на переходный �
 |---|---|---|
 | `primer-package.yaml` | `schema: 1`, `contract: "2.1"` — точка в кавычках (контракт 3 п.10); продукт читает `2.x` с Gen-2 токенов (FE-150), пакет `1.x` — отказ; `2.1` (FE-230) добавил `contrastExceptions`, пакет `2.0` без них читается как прежде | да |
 | `tokens/*.tokens.json` | W3C DTCG по путям `frontend/tokens.json`: `velo.*` (→ `--velo-*`) и единственный bare `bare.font-body` (→ `--font-body`), включая `velo.tg.header`/`velo.tg.bg` — их читает Telegram-хедер (`platform/telegram.ts:60`). Значение — CSS дословно, ссылка `{velo.…}` или список семейств | да (хотя бы бренд-запись) |
-| `tokens/brand.tokens.json` → `$extensions["velo-skin"]` | display name; short name (≤12 симв. — конвенция PWA); themeColor; backgroundColor; `fonts` — самозахостенные шрифты (опц., см. §7); `contrastExceptions` (опц., с `2.1`) — пары «текст / поверхность» ниже порога контраста, которые пакет оставляет сознательно: `[{ text, surface, reason }]`, пути токенов и причина. Валидатор пишет по такой паре предупреждение вместо отказа, но не ниже 3:1; пара, которую гейт не меряет, — отказ; объявление для пары, которая проходит, — предупреждение | да |
-| `assets/mandala-white.png`, `assets/velo-word-filled.svg` (+ синяя пара), `assets/logo-white.svg` | логотип: `VeloLogo.vue` рендерит `<img src="/icons/…">` — сборка кладёт файлы по тем же путям | да |
+| `tokens/brand.tokens.json` → `$extensions["velo-skin"]` | display name; short name (≤12 симв. — конвенция PWA); themeColor; backgroundColor; `fonts` — самозахостенные шрифты (опц., см. §7); `contrastExceptions` (опц., с `2.1`) — пара «текст / поверхность» ниже порога контраста, которую пакет оставляет сознательно: `[{ text, surface, reason }]`, пути токенов и причина. Объявить можно **только** `velo.text.secondary` на `velo.bg.card.solid` (золотой вторичный текст, 3,12:1); любая другая пара — отказ. Валидатор пишет по ней предупреждение вместо отказа, но не ниже 3:1; объявление для пары, которая проходит, — предупреждение. Предупреждения сборки с пакетом пишутся и в `dist/skin/report.json` (`warnings`, `manual`) — машина читает образ, а не лог | да |
+| `assets/mandala-white.png`, `assets/velo-word-filled.svg` (+ синяя пара), `assets/logo-white.svg` | набор логотипа: `VeloLogo.vue` рендерит `/icons/…` (пути — `utils/skinAssets.ts`), сборка кладёт файлы по тем же путям | с `2.1` нет (FE-230): набор целиком или никак. Без набора на местах логотипа (аватар поддержки, вход, заставка) — иконка бренда `favicon.svg`, на заставке — треть бокса, без вращения. Пакет `2.0` без набора — отказ |
 | `assets/icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `apple-touch-icon-180.png` (непрозрачный — iOS красит прозрачность чёрным), `favicon.svg` | PWA/вкладка | да |
 | `assets/bg/background.webp` или `assets/bg/background.png` | мандала-фон `#app-bg` (рисуется `global.css` через токен `--velo-app-bg-image`, красится первым пикселем экрана). Эталон — WebP (≈44 КБ, качество 92: на q80 тонкие линии мандалы размываются); выпущенные скины с PNG продолжают работать: `materializedSkinTokens` (`platform/skin.ts`) переопределяет токен на тот формат, что лежит в `assets/bg/`, WebP предпочтительнее. Валидатор принимает оба и предупреждает о PNG > 300 КБ (FE-157) | нет — без фото: светлый фон ядра `--velo-bg-start` (FE-230) |
 | `assets/onboarding/*.svg` | иллюстрации онбординга (`/onboarding/…`; шаблоны берут пути из `utils/skinAssets.ts` привязкой `:src`, FE-230) | нет — нейтральные заглушки ядра |
@@ -465,7 +465,14 @@ CSS-переменные — движок продукта»), поэтому т
   `variables.css` идёт под `:root:root`, и `--velo-dur-*` скина его не
   перебивают (проверка — `e2e/skin.spec.ts`);
 - иллюстрации карточек практик (`src/assets/practice-cards/`) прозрачные,
-  цвет карточки — `--velo-primary` под ними (`PracticePlaceholder.vue`).
+  цвет карточки — `--velo-primary` под ними (`PracticePlaceholder.vue`);
+  белый рисунок на `--velo-primary` держит контраст ≥3:1 (пара в
+  validate-skin);
+- у бренда может не быть логотипа (мандалы и словесного знака): пакет `2.1`
+  без набора логотипа получает иконку бренда `favicon.svg` на местах
+  логотипа (решение владельца 22.11; флаг `SKIN_HAS_LOGO` модуля
+  `virtual:skin-brand`). Синтетический пакет CI собирается без набора, так
+  что e2e и матрица проходят этот путь.
 
 ## 4. F3 — редакции на фронте
 

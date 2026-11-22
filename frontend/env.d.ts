@@ -123,7 +123,9 @@ interface Window {
 // FE-157 s5/B: build-time virtual modules served by src/platform/skin-virtual.ts.
 /** The skin token cascade (a stylesheet, imported by app.ts after global.css). */
 declare module 'virtual:skin-tokens.css'
-/** The skin brand text: `null` for the golden build. */
+/** The skin brand facts: the text (`null` without a package) and whether the
+ *  build has a logo set (false: the package left it out, FE-230). */
 declare module 'virtual:skin-brand' {
   export const SKIN_BRAND: string | null
+  export const SKIN_HAS_LOGO: boolean
 }

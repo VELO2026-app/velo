@@ -78,6 +78,7 @@ describe('pwaManifest -- the single manifest', () => {
       themeColor: '#1B2A41',
       backgroundColor: '#F5F1EA',
       fonts: [],
+      hasLogo: true,
     }
     expect(pwaManifestWithPassport({ VITE_BRAND: 'ENV-БРЕНД' }, skin)).toMatchObject({
       name: 'ШКОЛА ГАРМОНИИ',

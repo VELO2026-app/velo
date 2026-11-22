@@ -28,7 +28,12 @@
 //                                the package knowingly keeps under the
 //                                contrast floor, each with its reason
 //                                (validate-skin warns instead of failing)
-//   assets/<name>.svg|png        the fixed generation-1 asset names
+//   assets/<name>.svg|png        the fixed generation-1 asset names: the
+//                                app icons always; the logo set (mandala
+//                                rings, wordmarks, logo-white) whole or not
+//                                at all -- without it the app shows the
+//                                brand's favicon.svg in the logo places
+//                                (contract "2.1", FE-230)
 //   assets/bg/, assets/onboarding/   optional, replace the public/ ones
 //   assets/fonts/<name>.woff2    self-hosted webfonts (no external request
 //                                from a package -- tz-whitelabel §7)
@@ -78,19 +83,43 @@ export const MANIFEST = 'primer-package.yaml'
 /** The $extensions key of the brand record. */
 export const BRAND_EXTENSION = 'velo-skin'
 
-/** Generation-1 mandatory assets, by their file name under assets/. */
+/** Mandatory assets, by their file name under assets/: the app icons. */
 export const MANDATORY_ASSETS = [
-  'mandala-white.png',
-  'mandala-blue.png',
-  'velo-word-filled.svg',
-  'velo-word-blue.svg',
-  'logo-white.svg',
   'favicon.svg',
   'icon-192.png',
   'icon-512.png',
   'icon-maskable-512.png',
   'apple-touch-icon-180.png',
 ]
+/** The logo set: a package ships all of it or none (contract 2.1, FE-230).
+ *  None = the app shows the brand's favicon.svg where the logo goes. */
+export const LOGO_ASSETS = [
+  'mandala-white.png',
+  'mandala-blue.png',
+  'velo-word-filled.svg',
+  'velo-word-blue.svg',
+  'logo-white.svg',
+]
+/** Every fixed asset name the build spills onto /icons/. */
+export const SKIN_ASSETS = [...MANDATORY_ASSETS, ...LOGO_ASSETS]
+/** The /icons/ files of the PWA shell precache (vite.config.ts): the app
+ *  icons and the splash logo layers (LoadingView). */
+export const PRECACHED_ICONS = [
+  'icon-192.png',
+  'icon-512.png',
+  'icon-maskable-512.png',
+  'apple-touch-icon-180.png',
+  'favicon.svg',
+  'mandala-white.png',
+  'velo-word-filled.svg',
+]
+/** The first minor of contract 2 that lets a package leave the logo set out. */
+const OPTIONAL_LOGO_MINOR = 1
+
+/** Does the package (its file list) ship the logo set? */
+export function shipsLogo(files) {
+  return LOGO_ASSETS.every((asset) => files.includes(`assets/${asset}`))
+}
 /** Optional asset directories: each replaces the public/ one of its name. */
 export const ASSET_DIRS = ['bg', 'onboarding']
 
@@ -665,6 +694,23 @@ export function loadSkinPackage(dir, tokensDoc) {
 
   for (const asset of MANDATORY_ASSETS)
     if (!files.includes(`assets/${asset}`)) problems.push(`assets/${asset}: missing`)
+  // The logo set is whole or absent: half a lockup (a ring with no word)
+  // would render as a broken logo. Absent needs 2.1 -- a 2.0 reader
+  // requires the set.
+  const logoShipped = LOGO_ASSETS.filter((asset) => files.includes(`assets/${asset}`))
+  if (logoShipped.length > 0 && logoShipped.length < LOGO_ASSETS.length)
+    for (const asset of LOGO_ASSETS)
+      if (!logoShipped.includes(asset))
+        problems.push(
+          `assets/${asset}: missing -- the logo set (${LOGO_ASSETS.join(', ')}) ships whole or not at all`,
+        )
+  if (logoShipped.length === 0 && contract !== null) {
+    const minor = Number(contract.split('.')[1])
+    if (minor < OPTIONAL_LOGO_MINOR)
+      problems.push(
+        `assets/: no logo set -- leaving it out needs contract "2.${OPTIONAL_LOGO_MINOR}" or later, got "${contract}"`,
+      )
+  }
 
   // contrastExceptions (contract 2.1): a 2.0 reader refuses the field as
   // unknown, so a package that carries it must say 2.1 or later.

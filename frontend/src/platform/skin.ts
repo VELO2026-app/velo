@@ -22,6 +22,7 @@ import {
   isSkinPackage,
   loadSkinPackage,
   readGoldenTokens,
+  shipsLogo,
   skinCss,
   type LoadedSkinPackage,
   type SkinFont,
@@ -43,6 +44,9 @@ export interface SkinPackage {
   backgroundColor: string
   /** Self-hosted webfonts of the package (assets/fonts/); empty = the system stack. */
   fonts: SkinFont[]
+  /** Does the package ship the logo set (assets/mandala-*, velo-word-*,
+   *  logo-white)? No = VeloLogo shows the brand's favicon.svg (FE-230). */
+  hasLogo: boolean
 }
 
 /** The no-skin build: the neutral core (FE-230). Values mirror
@@ -55,6 +59,7 @@ export const CORE_SKIN: SkinPackage = {
   themeColor: '#4c4c4c',
   backgroundColor: '#f2f2f2',
   fonts: [],
+  hasLogo: true,
 }
 
 /** Loads public/skin/ with the engine; throws on the first problems. */
@@ -79,11 +84,19 @@ function loadPackage(publicDir: string): LoadedSkinPackage {
 export function readSkin(publicDir: string): SkinPackage | null {
   const dir = join(publicDir, 'skin')
   if (!existsSync(dir) || !isSkinPackage(dir)) return null
-  const brand = loadPackage(publicDir).brand
+  const pkg = loadPackage(publicDir)
+  const brand = pkg.brand
   if (brand === null) throw new Error('[skin] public/skin: no brand record')
   // The build's identity only: contrastExceptions are the validator's.
   const { displayName, shortName, themeColor, backgroundColor, fonts } = brand
-  return { displayName, shortName, themeColor, backgroundColor, fonts }
+  return {
+    displayName,
+    shortName,
+    themeColor,
+    backgroundColor,
+    fonts,
+    hasLogo: shipsLogo(pkg.files),
+  }
 }
 
 /**

@@ -11,11 +11,14 @@
 // root-relative src into a module import whenever public/ holds no such file,
 // and the build fails. The package files land in dist/ only after the bundle,
 // so the URL must stay a runtime URL. skinAssets.test.ts keeps templates on
-// the bound form.
+// the bound form and every /icons/ name inside the skin contract
+// (scripts/lib/skin-package.mjs SKIN_ASSETS).
 // =============================================================================
 
 /** Public URLs of the images a skin package may replace. */
 export const SKIN_IMAGE = {
+  /** The brand's app icon; VeloLogo shows it when the package has no logo set. */
+  favicon: '/icons/favicon.svg',
   /** Logo ring, light variant (splash spinner). */
   mandalaWhite: '/icons/mandala-white.png',
   /** Logo ring, dark variant (auth screens). */

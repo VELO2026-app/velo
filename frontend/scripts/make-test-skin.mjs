@@ -52,6 +52,9 @@ const distinct = (from, to) => {
   const body = readFileSync(from)
   writeFileSync(to, Buffer.concat([body, Buffer.from(from.endsWith('.svg') ? MARK : 'ci-skin')]))
 }
+// The app icons only: no logo set (contract 2.1), so the skin cell and the
+// e2e builds run the logo fallback -- VeloLogo shows favicon.svg (FE-230).
+// The core build covers the logo set.
 for (const name of MANDATORY_ASSETS)
   distinct(join(publicDir, 'icons', name), join(dir, 'assets', name))
 // The core ships no photo (FE-230): a 1x1 lossless WebP stands in. The build

@@ -11,7 +11,7 @@
 // =============================================================================
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { chmodSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
@@ -183,8 +183,30 @@ describe('the package is data (no code, nothing else)', () => {
     expect(problemsOf(dir)).toBe('')
     const bare = tempDir('velo-skin-bare-')
     writeFileSync(join(bare, 'primer-package.yaml'), 'schema: 1\ncontract: "2.0"\n')
-    expect(problemsOf(bare)).toContain('assets/logo-white.svg: missing')
+    expect(problemsOf(bare)).toContain('assets/favicon.svg: missing')
     expect(problemsOf(bare)).toContain('no brand record')
+  })
+
+  it('the logo set ships whole, or not at all from contract 2.1 (FE-230)', () => {
+    const LOGO = [
+      'mandala-white.png',
+      'mandala-blue.png',
+      'velo-word-filled.svg',
+      'velo-word-blue.svg',
+      'logo-white.svg',
+    ]
+    const without = (manifest: string): string => {
+      const dir = writeSkinPackage({ manifest })
+      for (const name of LOGO) rmSync(join(dir, 'assets', name))
+      return dir
+    }
+    expect(problemsOf(without('schema: 1\ncontract: "2.1"\n'))).toBe('')
+    expect(problemsOf(without('schema: 1\ncontract: "2.0"\n'))).toContain(
+      'no logo set -- leaving it out needs contract "2.1" or later, got "2.0"',
+    )
+    const half = writeSkinPackage()
+    rmSync(join(half, 'assets', 'velo-word-blue.svg'))
+    expect(problemsOf(half)).toContain('assets/velo-word-blue.svg: missing -- the logo set')
   })
 })
 

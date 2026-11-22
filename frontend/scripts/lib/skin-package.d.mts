@@ -42,6 +42,10 @@ export const SKIN_CONTRACT: string
 export const MANIFEST: string
 export const BRAND_EXTENSION: string
 export const MANDATORY_ASSETS: string[]
+export const LOGO_ASSETS: string[]
+export const SKIN_ASSETS: string[]
+export const PRECACHED_ICONS: string[]
+export function shipsLogo(files: string[]): boolean
 export const ASSET_DIRS: string[]
 export const IGNORED_FILES: Set<string>
 export function goldenTokenMap(

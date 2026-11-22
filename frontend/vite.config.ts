@@ -18,7 +18,7 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
-import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
 import { shellOnlyTransform } from './src/pwa/precache-shell'
@@ -35,7 +35,13 @@ import { passportHtmlDefaults } from './src/platform/passport-html'
 // at config time.
 import { readSkin, skinBackgroundFormat } from './src/platform/skin'
 import { skinVirtualModules } from './src/platform/skin-virtual'
-import { ASSET_DIRS, IGNORED_FILES, MANDATORY_ASSETS } from './scripts/lib/skin-package.mjs'
+import {
+  ASSET_DIRS,
+  IGNORED_FILES,
+  PRECACHED_ICONS,
+  SKIN_ASSETS,
+} from './scripts/lib/skin-package.mjs'
+import { validateSkin } from './scripts/validate-skin.mjs'
 import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
 import type { Plugin } from 'vite'
 
@@ -58,7 +64,7 @@ const LOCALE_CORE_CATALOG =
  * core's neutral files are already in dist/, this copies the skin's over them. The
  * publicDir copy also drops the whole package into dist/skin/; only its
  * assets/fonts/ (virtual:skin-tokens.css @font-face points there) and its
- * LICENSE are meant to be served, so everything else -- the manifest, the
+ * LICENSE are meant to be served (plus report.json, written here), so everything else -- the manifest, the
  * token sources, a checkout's .git -- is removed from dist/skin/ here (FE-131). The PWA precache
  * names the fonts only (workbox globPatterns below), so the removal cannot race it.
  * Dev servers see the core's assets (a dev stand with a skin is not a
@@ -68,7 +74,7 @@ function shippable(from: string): boolean {
   return !IGNORED_FILES.has(basename(from))
 }
 
-function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
+function skinAssetSpill(skinDir: string | null, distDir: string, frontendDir: string): Plugin {
   return {
     name: 'velo-skin-asset-spill',
     apply: 'build',
@@ -81,7 +87,7 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
       if (!skinDir) return
       const assets = join(skinDir, 'assets')
       // package assets/ -> /icons/ (logos + PWA icons + favicon)
-      for (const name of MANDATORY_ASSETS) {
+      for (const name of SKIN_ASSETS) {
         const from = join(assets, name)
         if (existsSync(from)) cpSync(from, join(distDir, 'icons', name), { force: true })
       }
@@ -99,6 +105,16 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
       // OFL asks for it; the core no longer carries a font of its own).
       const license = join(skinDir, 'LICENSE')
       if (existsSync(license)) cpSync(license, join(shipped, 'LICENSE'))
+      // The validator's findings ride along (FE-230): a declared contrast
+      // exception is a warning in the build log only, and the machine reads
+      // the image, not the log -- dist/skin/report.json is where it can
+      // show them. Package data only, no paths of this host.
+      const report = validateSkin(skinDir, frontendDir)
+      mkdirSync(shipped, { recursive: true })
+      writeFileSync(
+        join(shipped, 'report.json'),
+        `${JSON.stringify({ warnings: report.warns, manual: report.manual }, null, 2)}\n`,
+      )
     },
   }
 }
@@ -217,7 +233,7 @@ export default defineConfig(({ mode }) => {
       // from memory -- a build writes nothing into tracked files.
       skinVirtualModules(publicDir, skin),
       passportHtmlDefaults(skin),
-      skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist')),
+      skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist'), frontendDir),
       preloadAppChunk(),
       perLocaleManifest(frontendDir),
       precacheReadsOutDir,
@@ -294,7 +310,7 @@ export default defineConfig(({ mode }) => {
             ...(skin && skin.fonts.length > 0 ? ['skin/assets/fonts/*.woff2'] : []),
             // PWA icons, favicon, and the splash logo (LoadingView: spinning
             // mandala ring under the filled wordmark).
-            'icons/{icon-192,icon-512,icon-maskable-512,apple-touch-icon-180,favicon,mandala-white,velo-word-filled}.*',
+            `icons/{${PRECACHED_ICONS.join(',')}}`,
             'assets/*.{js,css}',
           ],
           // Don't precache source maps -- nor the Zoom Meeting SDK chunk.
