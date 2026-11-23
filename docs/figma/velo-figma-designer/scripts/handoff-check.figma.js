@@ -14,18 +14,27 @@
  *   H-03 error  generic layer names (Frame 12, Group 3, Rectangle 84, Vector …)
  *   H-04 error  groups (allowed only as `Art / <name>` vector art)
  *   H-05 error  product text: font Marmelad, text style velo/fs-*
- *   H-06 error  solid fill/stroke without a variable; WARN when the hex is on an
- *               «одобрено» line of the `Новое` note (approved new token, protocol §10)
+ *   H-06 error  solid fill/stroke without a variable; WARN only when the hex is on a
+ *               `Новое` note line that links a token request FE-NNN whose status is
+ *               approved or done (opts.tokenRequests, protocol §10)
  *   H-07 warn   frame with 2+ children and no Auto Layout (except the layers in ABS_OK)
- *   H-08 warn   gap / padding (any side) / radius > 0 without a variable
+ *   H-08 error  gap / padding (any side) / radius > 0 without a variable; WARN under
+ *               the same approved-request rule as H-06
  *   H-09 error  hidden layers
  *   H-10 error  instance of a component that is not in the Kit (missing or remote/unknown main)
  *   H-11 error  raw values or unknown components without a `Новое` note
  *   H-12 error  new icon: COMPONENT `icon/<name>`, square, one colour
+ *
+ * opts.tokenRequests = { 'FE-231': 'approved' | 'done' | 'pending' | 'canceled' } — the status of
+ * each token request (Linear FE issue, label `token`). The sandbox cannot reach Linear, so the
+ * assistant reads the statuses and passes them in (the Linear status -> value table is in
+ * protocol §10 step 6). Only 'approved' and 'done' approve a raw value; 'pending', 'canceled'
+ * and a request missing from the map ('unknown') do not, and are listed in `blockedRequests`.
+ * The screen's own task (`Задача: FE-N`, the section's f2c:issue) is never a token request.
  * Layers inside the note (`Новое`, `Note …`) are not checked.
  */
 const HANDOFF_CHECK = async (nodeId, opts) => {
-  const o = Object.assign({ limit: 6, width: 402, kitPages: /^(Фронт|front)/i }, opts || {});
+  const o = Object.assign({ limit: 6, width: 402, kitPages: /^(Фронт|front)/i, tokenRequests: {} }, opts || {});
   const root = await figma.getNodeByIdAsync(nodeId);
   if (!root) return { error: 'node not found: ' + nodeId };
 
@@ -42,7 +51,12 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
     if (arr.length < o.limit) arr.push(Object.assign({ id: node.id, name: node.name }, extra || {}));
   };
   const E = (r, n, x) => add(errors, r, n, x), W = (r, n, x) => add(warns, r, n, x);
-  const hex = (c) => '#' + [c.r, c.g, c.b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  // `#rrggbb`, plus `aa` when the colour is translucent: `a` is the colour alpha times the paint opacity
+  const hex = (c, opacity) => {
+    const a = (c.a === undefined ? 1 : c.a) * (opacity === undefined ? 1 : opacity);
+    return '#' + [c.r, c.g, c.b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')
+      + (a < 0.996 ? Math.round(a * 255).toString(16).padStart(2, '0') : '');
+  };
   const stats = { frames: 0, screens: 0, texts: 0, instances: 0, nodes: 0 };
   const rawColors = {}, fonts = {}, mains = {};
   let rawValues = 0, unknownMains = 0;
@@ -65,14 +79,32 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
     for (const n of scope.findAll((x) => NOTE.test(x.name))) if (!noteNodes.includes(n)) noteNodes.push(n);
   }
   const hasNote = noteNodes.length > 0;
-  const approvedHex = new Set(), approvedPx = new Set();
+  // A raw value is approved only by a token request: a note line with `FE-NNN` whose status
+  // (opts.tokenRequests) is approved or done. «одобрено» text in the note approves nothing.
+  const OK_STATUS = /^(approved|done)$/;
+  const approvedHex = new Set(), approvedPx = new Set(), requests = {};
+  const screenTasks = new Set(issue ? [issue] : []);
+  const noteLines = [];
   for (const note of noteNodes) {
     const texts = note.type === 'TEXT' ? [note] : note.findAll((x) => x.type === 'TEXT');
     for (const t of texts) for (const line of t.characters.split('\n')) {
-      if (!/одобрен/i.test(line)) continue;
-      (line.match(/#[0-9a-fA-F]{6}\b/g) || []).forEach((h) => approvedHex.add(h.toLowerCase()));
-      (line.match(/\b\d+(\.\d+)?\s*px\b/g) || []).forEach((p) => approvedPx.add(parseFloat(p)));
+      if (/^\s*Задача\s*:/i.test(line)) (line.match(/\bFE-\d+\b/g) || []).forEach((k) => screenTasks.add(k));
+      else noteLines.push(line);
     }
+  }
+  for (const line of noteLines) {
+    const keys = (line.match(/\bFE-\d+\b/g) || []).filter((k) => !screenTasks.has(k));
+    if (!keys.length) continue;
+    // #rrggbb or #rrggbbaa: an opaque approval never covers a translucent fill, and vice versa
+    const hexes = (line.match(/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6})\b/g) || []).map((h) => h.toLowerCase());
+    // `<name> = <value>`: the number after `=`, with or without «px»; a bare `13px` counts too
+    const pxs = [...line.matchAll(/=\s*(\d+(?:\.\d+)?)(?!\s*[\w#])/g)].map((m) => parseFloat(m[1]))
+      .concat([...line.matchAll(/\b(\d+(?:\.\d+)?)\s*px\b/g)].map((m) => parseFloat(m[1])));
+    if (!hexes.length && !pxs.length) continue;
+    const states = keys.map((k) => (requests[k] = o.tokenRequests[k] || 'unknown'));
+    if (!states.some((st) => OK_STATUS.test(st))) continue;
+    hexes.forEach((h) => approvedHex.add(h));
+    pxs.forEach((p) => approvedPx.add(p));
   }
 
   const inNote = (n) => { let p = n; while (p) { if (NOTE.test(p.name)) return true; if (p === root) break; p = p.parent; } return false; };
@@ -105,7 +137,7 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
       if (!arr || arr === figma.mixed) continue;
       for (const p of arr) {
         if (p.visible === false || p.type !== 'SOLID' || bound(p)) continue;
-        const h = hex(p.color);
+        const h = hex(p.color, p.opacity);
         rawColors[h] = (rawColors[h] || 0) + 1; rawValues++;
         if (approvedHex.has(h)) W('H-06', n, { [key]: h, approved: true });
         else E('H-06', n, { [key]: h });
@@ -122,7 +154,11 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
     if ('layoutMode' in n && n.type !== 'INSTANCE') {
       if (n.layoutMode === 'NONE' && n.children && n.children.length >= 2 && !ABS_OK.test(n.name) && !STATE_FRAME.test(n.name)) W('H-07', n, { children: n.children.length });
       const bv = n.boundVariables || {};
-      const raw = (f, v) => { rawValues++; W('H-08', n, { [f]: v, approved: approvedPx.has(v) || undefined }); };
+      const raw = (f, v) => {
+        rawValues++;
+        if (approvedPx.has(v)) W('H-08', n, { [f]: v, approved: true });
+        else E('H-08', n, { [f]: v });
+      };
       if (n.layoutMode !== 'NONE') {
         for (const f of ['itemSpacing', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft']) {
           if (n[f] > 0 && !bv[f]) { raw(f, n[f]); break; }
@@ -152,7 +188,9 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
     ready: nErr === 0,
     errors, warnings: warns, stats,
     fonts, rawColors, components: mains, hasNote,
-    approvedInNote: { colors: [...approvedHex], px: [...approvedPx] },
+    approvedByRequest: { colors: [...approvedHex], px: [...approvedPx] },
+    tokenRequests: requests,
+    blockedRequests: Object.keys(requests).filter((k) => !OK_STATUS.test(requests[k])),
     examples,
   };
 };

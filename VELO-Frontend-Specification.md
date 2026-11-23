@@ -554,7 +554,7 @@ export const api = {
 
 - **Типизация (актуально с CR-01):** бэкенд-типы НЕ пишутся вручную — они
   автогенерируются из OpenAPI в `src/api/generated.ts` (`generate_ts_types.py`,
-  перегенерация при `velo update`, «DO NOT EDIT»). `src/api/types.ts` — единая точка
+  перегенерация -- раздел `types` в `primer.yaml`, «DO NOT EDIT»). `src/api/types.ts` — единая точка
   импорта: реэкспортит всё из `generated.ts` плюс добавляет ТОЛЬКО фронт-онли типы
   (фильтры, UI-юнионы, `ApiError`). Потребители импортируют из `@/api/types`, не из
   `@/api/generated`. (Изначально F1.2 типизировал вручную; codegen введён позже

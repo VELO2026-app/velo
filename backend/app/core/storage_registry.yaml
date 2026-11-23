@@ -3,10 +3,12 @@
 # =============================================================================
 #
 # Read by THREE consumers, none of which carries its own copy:
-#   - velo-storage-init (storage/docker-compose.yml) builds every bucket, its
-#     privacy, its lifecycle rule and every service key's policy from it, on
-#     each `velo update` and each install;
-#   - `velo doctor` checks the live storage against it (same init, check mode);
+#   - velo-storage-init (docker-compose.storage.yml, the job of the stack
+#     velo-storage in primer.yaml) builds every bucket, its privacy, its
+#     lifecycle rule and every service key's policy from it, on every rollout
+#     that changes the stack;
+#   - `pridem verb storage-check` checks the live storage against it (same
+#     init, check mode);
 #   - the backend (app/core/storage_registry.py) resolves buckets from it.
 #
 # A new data type is one entry under `buckets`. A new key (e.g. the read-only
@@ -16,7 +18,7 @@
 #
 # Buckets are never removed by anything automatic: object storage is the one
 # store that is NOT disposable (§0 §4). Dropping an entry here leaves the
-# bucket and its files on disk; `velo doctor` names it as not in the registry.
+# bucket and its files on disk; storage-check names it as not in the registry.
 #
 # Every bucket has a twin `<name><test_bucket_suffix>` with the same rule. The
 # stand's suite works only there -- the service key can create no buckets.
@@ -50,9 +52,10 @@ buckets:
 
 service_keys:
   # The backend's own key. Its NAME is fixed here and nowhere else: only the
-  # secret lives in backend/.env, under the variable named below, so a
-  # reinstall or `velo env set STORAGE_SECRET_KEY` changes the secret of THIS
-  # key instead of minting a second one beside it.
+  # secret lives in the app's environment, under the variable named below
+  # (minted by the deploy machine, primer.yaml env), so a reinstall or a new
+  # secret changes the secret of THIS key instead of minting a second one
+  # beside it.
   velo-app:
     secret_env: STORAGE_SECRET_KEY
     # Objects in, objects out, list -- over every bucket above and its test

@@ -109,6 +109,13 @@ test('push: docs only -> nothing runs', () => {
   })
 })
 
+test('push: a Figma helper script under docs/ counts as code', () => {
+  const { dir, git, commit } = repo()
+  const before = git('rev-parse', 'HEAD')
+  const sha = commit({ 'docs/figma/velo-figma-designer/scripts/x.figma.js': 'const X = 1\n' })
+  assert.equal(classify(dir, '--push', before, sha).frontend, 'full')
+})
+
 test('push: the gate itself -> everything', () => {
   const { dir, git, commit } = repo()
   const before = git('rev-parse', 'HEAD')

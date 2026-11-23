@@ -3,7 +3,7 @@
 # =============================================================================
 # Band 88680-88699 (free window 88680-88699, telegram_id_bands.py).
 #
-# 1. `velo setrole` (scripts/set_role.py main): 0 -- committed or nothing
+# 1. The verb setrole (scripts/set_role.py main): 0 -- committed or nothing
 #    to do; 1 -- refused, nothing committed; 2 -- wrong arguments. Each
 #    branch is driven through main itself, as the machine's verb runs it.
 # 2. dev_admin_simulator --reset-master goes through the projection: a
@@ -141,7 +141,7 @@ async def _keep_another_admin() -> UUID:
 
 @pytest.fixture
 def setrole(monkeypatch: pytest.MonkeyPatch):
-    """Run `velo setrole <args>` through main; the engine stays up."""
+    """Run `set_role.py <args>` through main; the engine stays up."""
 
     async def _keep_engine() -> None:
         return None

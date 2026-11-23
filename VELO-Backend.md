@@ -702,39 +702,16 @@ logger.info("booking.created", booking_id=str(booking.id), user_id=str(user.id))
 Бэкенд — единственный источник правды для API-контракта. TypeScript-типы фронтенда генерируются автоматически из OpenAPI-схемы FastAPI.
 
 **Скрипт:** `backend/scripts/generate_ts_types.py`
-**Вход:** `openapi.json` -- снимается внутри контейнера приложения: `docker compose exec -T app python
-scripts/dump_openapi.py` строит схему через `app.openapi()`, без HTTP (BE-114 п. 2: отдаваемый
-`/openapi.json` наружу закрыт). Тем же `app.openapi()` схему берёт CI.
-**Выход:** `frontend/src/api/generated.ts` (коммитится в git, перегенерируется при каждом `velo update`)
+**Вход:** `openapi.json` -- `scripts/dump_openapi.py` строит схему через `app.openapi()`, без HTTP
+(BE-114 п. 2: отдаваемый `/openapi.json` наружу закрыт). Тем же `app.openapi()` схему берёт CI.
+**Выход:** `frontend/src/api/generated.ts` (коммитится в git).
 
-**Как работает при `velo update`:**
-
-```
-build app -> down -> up app -> migrate -> pytest ->
-exec app dump_openapi.py -> generate_ts_types.py -> generated.ts ->
-[drift? -> velo-bot commit + push origin $BRANCH] ->
-build frontend -> up frontend -> health check
-```
-
-**Авто-коммит типов (важно):** после регенерации `velo update` проверяет дрейф
-(`git status --porcelain generated.ts`). Если файл изменился — коммитит от имени
-`velo-bot <bot@velo.local>` и пушит в `origin/$BRANCH`. Push идёт через SSH-config
-alias `github.com-velo` (deploy-key уже привязан, `GIT_SSH_COMMAND` не нужен).
-Провал push -> `exit 1` (фатально: рассинхрон типов делает сборку фронта
-бессмысленной). Это разрывает порочный круг "регенерил -> не закоммитил ->
-discard на следующем update". Перенесено из рабочей модели проекта CBS Home.
-
-**Как работает при `bash install_velo.sh`:**
-
-```
-build app -> up app -> wait health -> migrate ->
-exec app dump_openapi.py -> generate_ts_types.py -> generated.ts ->
-build frontend -> up frontend
-```
-
-**Ручной запуск:** `velo gen-types` — только регенерирует + предупреждает о дрейфе,
-НЕ коммитит и НЕ пушит (это работа `velo update`). Для итерации над схемой на VPS
-без полного деплоя.
+**Кто регенерирует:** машина -- раздел `types` в `primer.yaml` (`openapi`, `generate`, `out`).
+Обе команды идут в разовом контейнере образа выкачиваемого релиза. На сервере роли test машина
+коммитит отличающийся `generated.ts` от имени `velo-types` (`commit_as`) поверх выкаченного
+коммита и пушит его ключом записи; на `prod` и `preview` отличие -- только отметка в отчёте.
+В CI шаг drift-check (`ci.yml`) держит закоммиченный `generated.ts` равным схеме бэка, поэтому
+поставка, меняющая API, везёт перегенерированный файл сама.
 
 **Правила для response-схем:**
 
@@ -1329,18 +1306,18 @@ En-значения query-параметров (`short|long`, `night|morning|day
 
 ## 8. Тесты
 
-Все запускаются внутри Docker:
+Полная сьюта идёт в CI на каждый пуш (`.github/workflows/backend-tests.yml`) и на сервере роли
+test перед миграциями каждого выката (`primer.yaml` `test.run`):
 
 ```bash
-velo test          # все тесты
-velo lint          # ruff check
+python -m pytest tests/ -v --tb=short
 ```
 
 **Числа прогона здесь нет намеренно.** Раньше в этой строке стояло
 «615 passed, 12 skipped»; на 2026-09-02 фактический прогон дал 1522 passed,
 3 skipped — расхождение в 2.5 раза, и никто его не заметил, потому что
 пересчитать число можно только запустив сьюту. Кодекс говорит, **чем
-измерить**, а не чем измерили однажды: `velo test` печатает актуальное.
+измерить**, а не чем измерили однажды: актуальное печатает прогон сьюты.
 
 ### Диапазоны `telegram_id` — живой реестр, не таблица
 
@@ -1447,7 +1424,7 @@ print('free in 65000-65999:', free_windows(space=(65000, 65999)))
 | **CAL-FLAKE** | ✅ | `tests/test_notifications.py`, `core/config.py`, `main.py`, `tests/conftest.py` | Флак `TestStageDeliver::test_failed_delivery_retries` (attempts 0 вместо 1): фоновый `run_processor()` под `ASGITransport` lifespan гонялся с ручными `_stage_*` через `FOR UPDATE SKIP LOCKED` | ЗАКРЫТО (24 мая): флаг `notification_processor_enabled` (safe default True); тесты выключают его в session-autouse `setup_infrastructure`. Детали — §5.2 |
 | **TD-TGID-56XXX** | ✅ | `tests/test_master_public.py` | Диапазон `telegram_id` 56xxx пересекался между master_public (был 56000-56999) и admin_masters (56001-56010, 56900-56907); оба чистили весь 56xxx — зелено только из-за cleanup между модулями, хрупко | ЗАКРЫТО (24 мая): master_public перенесён в 56500-56599 (мастер 56501, вьюеры 565xx, админ 56590) и чистит только свой поддиапазон. admin_masters не тронут |
 | **TD-NOTIF-RACE** | 🧪 | `tests/test_notifications.py`, `notifications/processor.py` | Рецидив `CAL-FLAKE` после ввода второго live-воркера (авто-финализатор, см. блок-цитату ниже). Постоянный `app`-контейнер крутит lifespan-`run_processor`; тесты `exec`-аются в ТОТ ЖЕ контейнер. Стейдж-тесты зовут ГЛОБАЛЬНЫЕ `_stage_resolve/_stage_deliver/_stage_rollup` (без scope — селектят по всей таблице через `FOR UPDATE SKIP LOCKED`), live-процессор гоняется с ними → нотификация застревает в `processing` или `resolved=0`. Флаг `notification_processor_enabled` НЕ помогает: conftest гасит воркер в pytest-процессе, а не в live-uvicorn того же контейнера. Изолированный прогон `pytest tests/test_notifications.py` всегда зелёный | Временно: 3 класса под `@pytest.mark.skip` — `TestStageResolve`, `TestStageDeliver`, `TestRollup` (единственные, кто зовёт глобальные `_stage_*`). Постоянно: опциональный параметр `scope` стадиям (трогает `processor.py`) — тест дёргает стадию только по своему диапазону; ЛИБО одноразовый тест-контейнер без live-воркеров. Прочие классы нотификаций (`TestCreateNotification/TestTargetResolution/TestTemplateEngine/TestTelegramFormatter`) не тронуты |
-| **TD-LOCK-AUTOGEN** | 🧪 | Инфра, `install_velo.sh` (секция `update`) | `package-lock.json` заменён на `pnpm-lock.yaml` (FE-73, 2026-09-16): синхронизируется с `package.json` через `pnpm install`. Сервер эфемерный (сносится по плану), `pnpm install --frozen-lockfile` в `frontend/Dockerfile` требует синхронный lock из репозитория — рассинхрон валит сборку фронта при пересоздании сервера | Держать `pnpm-lock.yaml` закоммиченным при смене зависимостей — ровно как `generated.ts` (`velo update` его регенерирует и коммитит, «Types are in sync»). Хук — рядом с генерацией типов в секции `update`: при изменении `package.json` → `pnpm install --lockfile-only` → commit/push lock |
+| **TD-LOCK-AUTOGEN** | 🧪 | Инфра | `package-lock.json` заменён на `pnpm-lock.yaml` (FE-73, 2026-09-16): синхронизируется с `package.json` через `pnpm install`. Сервер эфемерный (сносится по плану), `pnpm install --frozen-lockfile` в `frontend/Dockerfile` требует синхронный lock из репозитория — рассинхрон валит сборку фронта при пересоздании сервера | Держать `pnpm-lock.yaml` закоммиченным при смене зависимостей. Хука нет: машина коммитит только `generated.ts` (`primer.yaml` `types`), lock -- забота поставки |
 | **TD-CONFIG-FE-MIRROR** | 🧪 | `core/config.py`, `frontend/src/utils/constants.ts` | Числовые настройки, нужные и бэку, и фронту (`checkin_window_hours`/`CHECKIN_WINDOW_H`, `feedback_window_hours`/`FEEDBACK_WINDOW_H`, лимиты вывода), зеркалируются во фронт ВРУЧНУЮ — фронт собирается в статику и не читает `settings` в рантайме. При смене значения легко забыть обновить вторую сторону → расхождение окон UI vs бэк. Значения меняются крайне редко (окно чек-ина 3→24 за всё время — единственная смена), поэтому ручное зеркало пока приемлемо | Устранимо только инфраструктурой, не уборкой: либо рантайм-эндпоинт `GET /api/v1/config` (фронт тянет значения на старте; +сетевой запрос на крит. пути загрузки, +состояние «ещё не загружено»), либо расширить кодогенерацию (`generate_ts_types.py`) на числовые константы из конфига в `generated.ts` (правка генератора; значения уедут в автоген, который «MUST NOT edit by hand»). Делать как отдельную задачу с проектированием, НЕ заодно. Низкий приоритет (значения статичны) |
 
 > **Источник AUDIT-0520-*:** полный аудит ветки main от 2026-05-20.

@@ -502,7 +502,7 @@ async def test_child_insert_does_not_wait_for_a_credentials_writer(
 async def test_revoke_against_cli_downgrade_does_not_deadlock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """`velo setrole <id> U` (set_role.to_user) takes users first (its
+    """`set_role.py <id> U` (set_role.to_user) takes users first (its
     _find_user) and then writes the profile. It is held after the users
     lock; revoke_master of the same master comes in. revoke takes users
     first too, so it waits for the CLI and then finds the profile already

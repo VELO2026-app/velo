@@ -44,6 +44,10 @@
 # BE-194 part 11: where the build reads the skin (tests/test_primer_env.py).
 !frontend/vite.config.ts
 !frontend/src/platform/skin.ts
+# BE-230: the frontend's API client and calls -- the headers it sets against
+# CORS allow_headers (tests/test_cors_frontend_headers.py). Its own tests stay
+# out (below).
+!frontend/src/api/
 # BE-190 fix: the test stage needs them too (tests/test_primer_env.py).
 !backend/ci.env
 !.github/workflows/ci.yml
@@ -59,3 +63,5 @@
 **/.ruff_cache/
 **/.venv/
 **/*.egg-info/
+# BE-230: the frontend's own tests -- the suite reads only the code.
+frontend/src/api/**/*.test.ts
