@@ -7,7 +7,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { checkoutProblem, cloneEnv, fetchPackage } from './brand-packages.mjs'
 
-const run = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' }).trim()
+// A git hook (pre-push runs these tests) exports GIT_DIR and friends: keep them out.
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
+const run = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8', env }).trim()
 
 let tmp
 let origin
@@ -15,12 +17,12 @@ let sha
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'brand-packages-'))
   origin = join(tmp, 'origin')
-  execFileSync('git', ['init', '--quiet', origin])
+  execFileSync('git', ['init', '--quiet', origin], { env })
   run(origin, 'config', 'user.email', 't@t')
   run(origin, 'config', 'user.name', 't')
   writeFileSync(join(origin, 'a.txt'), 'one')
   run(origin, 'add', '.')
-  run(origin, 'commit', '--quiet', '-m', 'one')
+  run(origin, 'commit', '--quiet', '--no-gpg-sign', '-m', 'one')
   run(origin, 'tag', 'v1.0.0')
   sha = run(origin, 'rev-parse', 'HEAD')
 })
@@ -63,6 +65,11 @@ describe('fetchPackage', () => {
     expect(env.GIT_CONFIG_KEY_0).toBe('http.https://github.com/.extraheader')
     expect(env.GIT_CONFIG_VALUE_0).not.toContain('ghp_secret123')
     expect(cloneEnv('', {})).toEqual({ GIT_TERMINAL_PROMPT: '0' })
+    // a git hook's GIT_DIR must not aim the clone at the caller's repository
+    expect(cloneEnv('', { GIT_DIR: '/repo/.git', PATH: '/bin' })).toEqual({
+      PATH: '/bin',
+      GIT_TERMINAL_PROMPT: '0',
+    })
     const target = join(tmp, 'pkg')
     fetchPackage(pin(), target, { url: `file://${origin}`, token: 'ghp_secret123' })
     expect(readFileSync(join(target, '.git', 'config'), 'utf8')).not.toContain('ghp_secret123')
