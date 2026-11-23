@@ -20,6 +20,8 @@
  * STATUS: not yet run on the production file (writes wait for the owner's approval).
  * First run: in a copy of the file.
  */
+/** The skill version (yyyymmddnn): the agent names it when asked; pack.sh puts it in the archive name. */
+const DESIGNER_LIB_VERSION = 2026112401;
 const DESIGNER = (() => {
   const OWN = /^(Эксперименты · .+|К разработке|Архив|Icons|User App|Master App|Admin Panel)$/;
   const STATUSES = ['эксперимент', 'на согласовании', 'к разработке', 'в работе', 'в коде', 'отменено'];
@@ -74,6 +76,22 @@ const DESIGNER = (() => {
     for (const c of s.children) { c.x = x; c.y = pad; x += c.width + gap; h = Math.max(h, c.height); }
     s.resizeWithoutConstraints(Math.max(x - gap + pad, 400), h + 2 * pad);
   }
+  /**
+   * The copy shows what the source showed: the explicit variable mode of the nearest node up the
+   * source's tree, per collection, set on the copy itself (FE-234: a node with no explicit mode shows
+   * the default mode, the neutral core, and a «Фронт» frame takes gold from its sheet, not itself).
+   */
+  async function keepModes(src, copy) {
+    const kept = {};
+    for (let n = src; n && n.type !== 'DOCUMENT'; n = n.parent) {
+      for (const [cid, mid] of Object.entries(n.explicitVariableModes || {})) if (!(cid in kept)) kept[cid] = mid;
+    }
+    for (const [cid, mid] of Object.entries(kept)) {
+      const col = await figma.variables.getVariableCollectionByIdAsync(cid);
+      if (col) copy.setExplicitVariableModeForCollection(col, mid);
+    }
+    return kept;
+  }
   function clearMirrorData(n) { for (const k of n.getPluginDataKeys()) if (/^(c2f|f2c):/.test(k)) n.setPluginData(k, ''); }
   async function noteLine(s, label, value) {
     // update «<label>: …» in the `Новое` note if it exists (protocol §5); never creates text
@@ -105,6 +123,7 @@ const DESIGNER = (() => {
 
   return {
     options,
+    version: DESIGNER_LIB_VERSION,
 
     /** New experiment page (or reuse) with a copy of a screen to start from. Instances stay linked to the kit. */
     async startExperiment(topic, sourceId) {
@@ -120,6 +139,7 @@ const DESIGNER = (() => {
           else if (src.type === 'COMPONENT_SET') c = (src.defaultVariant || src.children[0]).createInstance();
           else c = src.clone();                                                           // frames: instances inside stay linked
           s.appendChild(c);
+          await keepModes(src, c);                                                        // gold stays gold on the copy
           clearMirrorData(c);                                                             // a copy is not the «Фронт» sheet
           c.setPluginData('f2c:by', WHO); c.setPluginData('f2c:status', 'эксперимент'); c.setPluginData('f2c:from', src.id);
           created.push(c.id); fit(s);

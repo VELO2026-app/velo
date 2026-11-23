@@ -9,7 +9,8 @@
 //
 // This module is the pure part:
 //   - parseModesConfig: validate figma-modes.json (the first mode is the core,
-//     a skin mode names a pinned package, at most MAX_MODES modes);
+//     a skin mode names a brand pinned in .github/brand-skins.json, at most
+//     MAX_MODES modes);
 //   - normalizeSnapshot: a Figma variables dump (docs/figma/front/modes-lib
 //     .figma.js snapshot(), the bridge shape with collections, the REST
 //     shape) into one form, with mode NAMES -- a mode is found by its name,
@@ -41,15 +42,18 @@ export const CORE_SOURCE = 'tokens.json'
 const NAME_RE = /^[a-z][a-z0-9-]*$/
 
 /**
- * Validate figma-modes.json. Throws on the first defect: a wrong config
- * must stop the run, never write the core into a skin mode.
+ * Validate figma-modes.json and attach each skin mode's package pin from
+ * .github/brand-skins.json -- the one pin file: CI builds and shoots the same
+ * packages Figma shows. Throws on the first defect: a wrong config must stop
+ * the run, never write the core into a skin mode.
  *
- * @param {any} cfg the parsed JSON
+ * @param {any} cfg the parsed figma-modes.json
+ * @param {any} brandSkins the parsed .github/brand-skins.json ({brands: {<name>: {repo, tag, sha, dir}}})
  * @returns {{file: string, collection: string, coreOnly: string[], screensMode: string,
- *   modes: Array<{name: string, figmaModeId?: string,
+ *   modes: Array<{name: string, figmaModeId?: string, brand?: string,
  *     package?: {name: string, repo: string, tag: string, sha: string, dir: string}}>}}
  */
-export function parseModesConfig(cfg) {
+export function parseModesConfig(cfg, brandSkins) {
   const fail = (m) => {
     throw new Error(`figma-modes.json: ${m}`)
   }
@@ -60,56 +64,34 @@ export function parseModesConfig(cfg) {
   if (!Array.isArray(modes) || modes.length === 0) fail('no modes')
   if (modes.length > MAX_MODES) fail(`${modes.length} modes, the plan allows ${MAX_MODES}`)
   const seen = new Set()
-  modes.forEach((m, i) => {
+  const out = modes.map((m, i) => {
     if (!m || !NAME_RE.test(m.name ?? '')) fail(`mode ${i}: bad name "${m?.name}"`)
     if (seen.has(m.name)) fail(`mode "${m.name}" is listed twice`)
     seen.add(m.name)
     if (i === 0) {
-      if (m.source !== CORE_SOURCE || m.package)
-        fail(`the first mode is the core: source "${CORE_SOURCE}" and no package`)
-      return
+      if (m.source !== CORE_SOURCE || m.brand !== undefined)
+        fail(`the first mode is the core: source "${CORE_SOURCE}" and no brand`)
+      return { ...m }
     }
     if (m.source !== undefined) fail(`mode "${m.name}": only the first mode reads tokens.json`)
-    const p = m.package
-    if (!p) fail(`mode "${m.name}": a skin mode needs a package`)
-    if (!NAME_RE.test(p.name ?? '')) fail(`mode "${m.name}": bad package name "${p.name}"`)
-    if (!/^[\w.-]+\/[\w.-]+$/.test(p.repo ?? '')) fail(`mode "${m.name}": bad repo "${p.repo}"`)
-    if (!/^v\d+\.\d+\.\d+$/.test(p.tag ?? '')) fail(`mode "${m.name}": bad tag "${p.tag}"`)
-    if (!/^[0-9a-f]{40}$/.test(p.sha ?? '')) fail(`mode "${m.name}": bad sha "${p.sha}"`)
-    if (!/^[\w.-]+$/.test(p.dir ?? '')) fail(`mode "${m.name}": bad dir "${p.dir}"`)
+    const pin = brandSkins?.brands?.[m.brand ?? '']
+    if (!pin) fail(`mode "${m.name}": brand "${m.brand}" is not in .github/brand-skins.json`)
+    const { repo, tag, sha, dir } = pin
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo ?? '')) fail(`${m.brand}: bad repo "${repo}"`)
+    if (!/^v\d+\.\d+\.\d+$/.test(tag ?? '')) fail(`${m.brand}: bad tag "${tag}"`)
+    if (!/^[0-9a-f]{40}$/.test(sha ?? '')) fail(`${m.brand}: bad sha "${sha}"`)
+    if (!/^[\w.-]+$/.test(dir ?? '')) fail(`${m.brand}: bad dir "${dir}"`)
+    return { ...m, package: { name: m.brand, repo, tag, sha, dir } }
   })
-  const ids = modes.filter((m) => m.figmaModeId !== undefined).map((m) => m.figmaModeId)
+  const ids = out.filter((m) => m.figmaModeId !== undefined).map((m) => m.figmaModeId)
   if (ids.some((id) => typeof id !== 'string' || !id)) fail('a figmaModeId must be a string')
   if (new Set(ids).size !== ids.length) fail('two modes pin the same figmaModeId')
-  const screensMode = cfg.screensMode ?? modes[0].name
+  const screensMode = cfg.screensMode ?? out[0].name
   if (!seen.has(screensMode)) fail(`screensMode "${screensMode}" is not a mode`)
   const coreOnly = cfg.coreOnlyCollections ?? []
   if (!Array.isArray(coreOnly) || coreOnly.includes(cfg.collection))
     fail('coreOnlyCollections: a list without the moded collection')
-  return { file: cfg.file, collection: cfg.collection, coreOnly, screensMode, modes }
-}
-
-/**
- * The pins of figma-modes.json against another pin file of the same
- * packages (.github/brand-skins.json: {brands: {<name>: {repo, tag, sha}}}).
- * Two pins of one package must agree, or Figma and CI show different skins.
- *
- * @returns {string[]} the disagreements, empty when they agree
- */
-export function crossCheckPins(modes, brandSkins) {
-  const out = []
-  for (const m of modes) {
-    const p = m.package
-    const other = p && brandSkins?.brands?.[p.name]
-    if (!other) continue
-    for (const key of ['repo', 'tag', 'sha']) {
-      if (other[key] !== p[key])
-        out.push(
-          `${p.name}: ${key} is ${p[key]} in figma-modes.json, ${other[key]} in brand-skins.json`,
-        )
-    }
-  }
-  return out
+  return { file: cfg.file, collection: cfg.collection, coreOnly, screensMode, modes: out }
 }
 
 /**
@@ -228,6 +210,50 @@ function collectionView(snapshot, name) {
   }
 }
 
+/** Canonical text of one stored value: the same function as modesCanon in modes-lib.figma.js. */
+function canon(v) {
+  if (v && typeof v === 'object' && v.type === 'VARIABLE_ALIAS') return `alias:${v.id}`
+  if (v && typeof v === 'object' && 'r' in v) return `rgba:${[v.r, v.g, v.b, v.a ?? 1].join(',')}`
+  return JSON.stringify(v === undefined ? null : v)
+}
+
+/**
+ * FNV-1a (32 bit) over the `name=value` lines of one mode, names sorted --
+ * byte for byte the digest modes-lib.figma.js computes on the live file, so
+ * apply() can tell that Figma still holds what the snapshot held.
+ *
+ * @param {Array<any[]>} rows [variable name, stored value]
+ */
+export function modeDigest(rows) {
+  const text = rows
+    .map(([name, value]) => `${name}=${canon(value)}`)
+    .sort()
+    .join('\n')
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+/**
+ * The collections of the run (the moded one first, then the core-only ones)
+ * and the FE-124 name pairing over all their variables.
+ */
+function pairUp(config, modes, snapshot) {
+  const names = [config.collection, ...config.coreOnly]
+  const found = names.map((n) => collectionView(snapshot, n))
+  const missing = names.filter((_, i) => !found[i])
+  if (missing.length > 0) throw new Error(`snapshot: no collection ${missing.join(', ')}`)
+  const views = /** @type {any[]} */ (found)
+  const allVars = views.flatMap((v) => v.vars)
+  const core = modes[0]
+  const { map, registryOrphans, figmaOrphans } = buildNameMap(core.leaves, allVars)
+  const cssByFigma = new Map([...map].map(([css, fig]) => [fig, css]))
+  return { views, allVars, core, map, registryOrphans, figmaOrphans, cssByFigma }
+}
+
 /**
  * The values every mode must hold, in the payload form modes-lib.figma.js
  * writes. The moded collection gets one value per configured mode; a
@@ -239,14 +265,11 @@ function collectionView(snapshot, name) {
  *   modes: the configured modes in config order, the first is the core
  */
 export function buildModeValues({ config, modes, snapshot, source = {} }) {
-  const names = [config.collection, ...config.coreOnly]
-  const views = names.map((n) => collectionView(snapshot, n))
-  const missing = names.filter((_, i) => !views[i])
-  if (missing.length > 0) throw new Error(`snapshot: no collection ${missing.join(', ')}`)
-  const allVars = views.flatMap((v) => /** @type {any} */ (v).vars)
-  const core = modes[0]
-  const { map, registryOrphans, figmaOrphans } = buildNameMap(core.leaves, allVars)
-  const cssByFigma = new Map([...map].map(([css, fig]) => [fig, css]))
+  const { views, core, map, registryOrphans, figmaOrphans, cssByFigma } = pairUp(
+    config,
+    modes,
+    snapshot,
+  )
   const problems = []
   const collections = views.map((view, i) => {
     const v = /** @type {any} */ (view)
@@ -282,6 +305,15 @@ export function buildModeValues({ config, modes, snapshot, source = {} }) {
   })
   return {
     payload: {
+      // apply() stops when an existing mode no longer matches the snapshot.
+      digests: Object.fromEntries(
+        views.flatMap((v) =>
+          v.col.modes.map((m) => [
+            `${v.col.name}/${m.name}`,
+            modeDigest(v.vars.map((x) => [x.name, x.valuesByMode[m.modeId]])),
+          ]),
+        ),
+      ),
       format: MODES_FORMAT,
       kind: 'payload',
       file: config.file,
@@ -318,14 +350,11 @@ function shown(c) {
  *   unknownModes: string[], registryOrphans: string[], figmaOrphans: string[]}}
  */
 export function modeDrift({ config, modes, snapshot }) {
-  const names = [config.collection, ...config.coreOnly]
-  const views = names.map((n) => collectionView(snapshot, n))
-  const missing = names.filter((_, i) => !views[i])
-  if (missing.length > 0) throw new Error(`snapshot: no collection ${missing.join(', ')}`)
-  const allVars = views.flatMap((v) => /** @type {any} */ (v).vars)
-  const core = modes[0]
-  const { map, registryOrphans, figmaOrphans } = buildNameMap(core.leaves, allVars)
-  const cssByFigma = new Map([...map].map(([css, fig]) => [fig, css]))
+  const { views, allVars, core, map, registryOrphans, figmaOrphans, cssByFigma } = pairUp(
+    config,
+    modes,
+    snapshot,
+  )
   // Aliases point at variable ids; the compact `name:` ids of older dumps too.
   const figmaById = {}
   for (const v of allVars) {

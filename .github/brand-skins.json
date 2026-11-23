@@ -1,0 +1,17 @@
+{
+  "_": "The brand skin packages CI builds and shoots (FE-234): one pin per brand, tag AND commit. Raising a pin is a PR that reads green on the matrix and on visual. Read by .github/scripts/fetch-brand-skins.mjs; docs/delivery.md has the rules.",
+  "brands": {
+    "velo-brand": {
+      "repo": "VELO2026-app/velo-brand",
+      "tag": "v0.1.1",
+      "sha": "4ad725b55ec67440f19b822d25ead7060ed417da",
+      "dir": "skin"
+    },
+    "goodo-brand": {
+      "repo": "VELO2026-app/goodo-brand",
+      "tag": "v0.3.0",
+      "sha": "393c05672d0f0f90cb0f0f2ce0db69994f7c9c8a",
+      "dir": "skin"
+    }
+  }
+}

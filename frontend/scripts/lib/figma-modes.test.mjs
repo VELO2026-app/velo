@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   buildModeValues,
-  crossCheckPins,
+  modeDigest,
   figmaValueFor,
   modeDrift,
   modeRegistry,
@@ -13,7 +13,11 @@ import {
 } from './figma-modes.mjs'
 
 const SHA = 'a'.repeat(40)
-const pkg = (name) => ({ name, repo: `org/${name}`, tag: 'v1.0.0', sha: SHA, dir: 'skin' })
+const pin = (name) => ({ repo: `org/${name}`, tag: 'v1.0.0', sha: SHA, dir: 'skin' })
+const brands = () => ({
+  brands: { 'velo-brand': pin('velo-brand'), 'goodo-brand': pin('goodo-brand') },
+})
+/** @returns {any} */
 const baseConfig = () => ({
   file: 'F',
   collection: 'velo',
@@ -21,52 +25,66 @@ const baseConfig = () => ({
   screensMode: 'gold',
   modes: [
     { name: 'core', source: 'tokens.json' },
-    { name: 'gold', figmaModeId: '1:0', package: pkg('velo-brand') },
-    { name: 'goodo', package: pkg('goodo-brand') },
+    { name: 'gold', figmaModeId: '1:0', brand: 'velo-brand' },
+    { name: 'goodo', brand: 'goodo-brand' },
   ],
 })
 
 describe('parseModesConfig', () => {
-  it('accepts the repo config: core first, gold pinned to the former Default', () => {
-    const url = new URL('../../design/figma-modes.json', import.meta.url)
-    const cfg = parseModesConfig(JSON.parse(readFileSync(url, 'utf8')))
-    expect(cfg.modes.map((m) => m.name)).toEqual(['core', 'gold', 'goodo'])
-    expect(cfg.modes[1]?.figmaModeId).toBe('3905:0')
-    expect(cfg.screensMode).toBe('gold')
+  it('a skin mode takes its package pin from brand-skins.json, the one pin file', () => {
+    const cfg = parseModesConfig(baseConfig(), brands())
+    expect(cfg.modes[2]?.package).toEqual({ name: 'goodo-brand', ...pin('goodo-brand') })
+    expect(cfg.modes[0]?.package).toBeUndefined()
   })
-  it('refuses a config that would put a package in the core or the core elsewhere', () => {
-    const skinFirst = baseConfig()
-    skinFirst.modes.reverse()
-    expect(() => parseModesConfig(skinFirst)).toThrow(/first mode is the core/)
-    const twoCores = baseConfig()
-    twoCores.modes[2] = { name: 'goodo', source: 'tokens.json' }
-    expect(() => parseModesConfig(twoCores)).toThrow(/only the first mode/)
-  })
-  it('refuses more modes than the plan allows, a bad pin and a duplicate', () => {
-    const five = baseConfig()
-    five.modes.push({ name: 'a', package: pkg('a') }, { name: 'b', package: pkg('b') })
-    expect(() => parseModesConfig(five)).toThrow(/plan allows 4/)
-    const badSha = baseConfig()
-    const goodoMode = /** @type {any} */ (badSha.modes[2])
-    goodoMode.package.sha = 'main'
-    expect(() => parseModesConfig(badSha)).toThrow(/bad sha/)
-    const dup = baseConfig()
-    dup.modes[2].name = 'gold'
-    expect(() => parseModesConfig(dup)).toThrow(/twice/)
-  })
-})
-
-describe('crossCheckPins', () => {
-  it('two pin files of one package must agree', () => {
-    const { modes } = parseModesConfig(baseConfig())
-    const same = { brands: { 'velo-brand': { repo: 'org/velo-brand', tag: 'v1.0.0', sha: SHA } } }
-    expect(crossCheckPins(modes, same)).toEqual([])
-    const moved = {
-      brands: { 'goodo-brand': { repo: 'org/goodo-brand', tag: 'v1.1.0', sha: SHA } },
-    }
-    expect(crossCheckPins(modes, moved)).toEqual([
-      'goodo-brand: tag is v1.0.0 in figma-modes.json, v1.1.0 in brand-skins.json',
+  it('the repo config resolves against the repo pin file', () => {
+    const read = (rel) => JSON.parse(readFileSync(new URL(rel, import.meta.url), 'utf8'))
+    const cfg = parseModesConfig(
+      read('../../design/figma-modes.json'),
+      read('../../../.github/brand-skins.json'),
+    )
+    expect(cfg.modes.map((m) => [m.name, m.package?.name])).toEqual([
+      ['core', undefined],
+      ['gold', 'velo-brand'],
+      ['goodo', 'goodo-brand'],
     ])
+  })
+  /** @type {Array<[string, (c: any) => unknown, RegExp]>} */
+  const broken = [
+    ['a skin first', (c) => c.modes.reverse(), /first mode is the core/],
+    ['the core with a brand', (c) => (c.modes[0].brand = 'velo-brand'), /first mode is the core/],
+    [
+      'a second core',
+      (c) => (c.modes[2] = { name: 'goodo', source: 'tokens.json' }),
+      /only the first mode/,
+    ],
+    [
+      'five modes',
+      (c) => c.modes.push({ name: 'a', brand: 'velo-brand' }, { name: 'b', brand: 'velo-brand' }),
+      /plan allows 4/,
+    ],
+    [
+      'a brand with no pin',
+      (c) => (c.modes[2].brand = 'nobody'),
+      /not in .github\/brand-skins.json/,
+    ],
+    ['a duplicate name', (c) => (c.modes[2].name = 'gold'), /twice/],
+    ['two modes on one Figma id', (c) => (c.modes[2].figmaModeId = '1:0'), /same figmaModeId/],
+    ['screens in an unknown mode', (c) => (c.screensMode = 'night'), /screensMode "night"/],
+    [
+      'the moded collection as core-only',
+      (c) => (c.coreOnlyCollections = ['velo']),
+      /coreOnlyCollections/,
+    ],
+  ]
+  it.each(broken)('refuses %s', (_, mutate, error) => {
+    const cfg = baseConfig()
+    mutate(cfg)
+    expect(() => parseModesConfig(cfg, brands())).toThrow(error)
+  })
+  it('refuses a malformed pin in brand-skins.json', () => {
+    const b = brands()
+    b.brands['goodo-brand'].sha = 'main'
+    expect(() => parseModesConfig(baseConfig(), b)).toThrow(/goodo-brand: bad sha/)
   })
 })
 
@@ -147,7 +165,7 @@ const snapshot = normalizeSnapshot({
     variable('font/body', 'STRING', 'cl', { '1:1': "'Marmelad', 'Noto Sans', sans-serif" }),
   ],
 })
-const config = parseModesConfig(baseConfig())
+const config = parseModesConfig(baseConfig(), brands())
 const modes = [
   { name: 'core', leaves: core },
   { name: 'gold', leaves: gold },
@@ -181,6 +199,41 @@ describe('figmaValueFor', () => {
       value: { string: '0 1px 2px red' },
     })
     expect(figmaValueFor('none', 'COLOR', byName, names)).toMatchObject({ ok: false })
+  })
+  it('a string reference with no Figma variable follows to the text it names', () => {
+    const fonts = new Map([['--font-body', { value: 'Manrope, sans-serif' }]])
+    expect(figmaValueFor('var(--font-body)', 'STRING', fonts, new Map())).toEqual({
+      ok: true,
+      value: { string: 'Manrope, sans-serif' },
+    })
+    expect(figmaValueFor('var(--font-none)', 'STRING', fonts, new Map())).toMatchObject({
+      ok: false,
+      reason: expect.stringContaining('does not resolve'),
+    })
+  })
+  it('a duration in seconds, a number that is not one, a type no token fits', () => {
+    expect(figmaValueFor('0.3s', 'TIMING', byName, names)).toEqual({
+      ok: true,
+      value: { float: 0.3 },
+    })
+    expect(figmaValueFor('auto', 'FLOAT', byName, names)).toMatchObject({
+      ok: false,
+      reason: 'not a number: auto',
+    })
+    expect(figmaValueFor('1', 'BOOLEAN', byName, names)).toMatchObject({ ok: false })
+  })
+})
+
+describe('modeDigest', () => {
+  it('the payload carries the digest of every existing mode; a changed value changes it', () => {
+    const { payload } = buildModeValues({ config, modes, snapshot })
+    expect(Object.keys(payload.digests)).toEqual(['velo/gold', 'legacy/Default'])
+    const veloVars = snapshot.variables.filter((v) => v.collectionId === 'cv')
+    const rows = veloVars.map((v) => [v.name, v.valuesByMode['1:0']])
+    expect(payload.digests['velo/gold']).toBe(modeDigest(rows))
+    expect(modeDigest([...rows].reverse())).toBe(modeDigest(rows))
+    rows[0] = [rows[0][0], rgb(98, 122, 157)]
+    expect(modeDigest(rows)).not.toBe(payload.digests['velo/gold'])
   })
 })
 

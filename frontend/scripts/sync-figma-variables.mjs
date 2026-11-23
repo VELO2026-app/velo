@@ -1,72 +1,53 @@
 // =============================================================================
-// FE-124 track T, stage 2 -- the Figma Variables autosync
-// (tz-whitelabel.md §3.3, track T: the auto-PR stage of the token track).
+// The Figma Variables sync: the modes of the `velo` collection from the code
+// (FE-124 track T; three modes since FE-234 item 6).
 // =============================================================================
 //
-// Direction (owner's decision 2026-11-09, tz-whitelabel.md §3.3): the code
-// is the source of truth -- tokens.json is the registry the generator builds
-// variables.css from (the FE-124 pipeline), and Figma is a mirror updated
-// FROM it. Today the useful mode is the dry-run --snapshot drift report
-// (no Figma token involved); --apply and --rest serve a possible future
-// "Figma -> code" direction and stay dormant until then.
-// This CLI is the bridge stage: it reads the Figma variable collections
-// (velo/legacy of the token file), pairs them with the registry by the
-// FE-124 name rule, compares by VALUE (not by string -- see
-// lib/figma-token-sync.mjs), and produces:
+// Direction (owner's decision 2026-11-09, tz-whitelabel.md §3.3): the code is
+// the source of truth, Figma is a mirror updated FROM it.
 //
-//   - a drift REPORT (markdown, ready for the auto-PR body): every token
-//     where Figma and the registry disagree, plus BOTH orphan lists (a new
-//     designer token, a renamed code token);
-//   - with --apply: the LOSSLESS updates written into tokens.json ($value
-//     only -- the pridem formatting extensions stay untouched) and
-//     variables.css regenerated from the updated registry; everything
-//     lossy (a broken alias, a unit-less dimension rewrite, a mix with a
-//     moved base) stays report-only for the human review the plan
-//     requires (token diffs review like code).
-//
-// THREE MODES (FE-234 item 6, owner's decision 23.11.2026): the `velo`
-// collection holds `core` (the neutral tokens.json) first, then one mode per
-// skin package (`gold` = velo-brand, `goodo` = goodo-brand), pinned by tag
-// and commit in frontend/design/figma-modes.json. A mode is found by its
-// NAME, never by its position: the old "core = the first mode" rule would
-// pour the neutral core into `gold` while `gold` is still the first mode.
+// Modes (owner's decision 23.11.2026, frontend/design/figma-modes.json):
+// `core` first -- the neutral tokens.json; then one mode per skin --
+// tokens.json plus the overrides of its brand's package, pinned (tag and
+// commit) in .github/brand-skins.json. A mode is found by its NAME, never by
+// its position. Names pair by the FE-124 rule, values compare by VALUE
+// (lib/figma-token-sync.mjs, lib/figma-modes.mjs).
 //
 // INPUT
-//   --snapshot <file>  a dump of the Figma variables WITH mode names: the
-//                      snapshot() of docs/figma/front/modes-lib.figma.js
-//                      (also the bridge shape with variableCollections, the
-//                      REST shape). The old compact single-mode dump is refused.
-//   --rest             the Variables REST API (GET /v1/files/{fileKey}/variables;
-//                      env FIGMA_TOKEN, --file-key; Enterprise-locked, dormant).
-//   Packages: each skin mode's package is cloned at its pinned tag and its
-//   commit is checked (a private repo reads the git credentials or
-//   BRAND_REPO_TOKEN); --pkg <mode>=<dir> uses a local checkout instead (its
-//   HEAD must be the pinned commit). --only <mode,...> limits the run.
+//   --snapshot <file>  a dump WITH mode names: snapshot() of
+//                      docs/figma/front/modes-lib.figma.js (also the bridge
+//                      shape with variableCollections, the REST shape). The
+//                      old compact single-mode dump is refused.
+//   --rest             the Variables REST API (GET /v1/files/{key}/variables/local;
+//                      env FIGMA_TOKEN; Enterprise-locked, dormant).
+//   Packages           cloned at the pinned tag, the commit checked; a private
+//                      repo reads git credentials or BRAND_REPO_TOKEN (sent as
+//                      a header, never in the URL). --pkg <mode>=<checkout>: a
+//                      local checkout at the pinned commit with a clean tree.
+//                      --only <mode,...> limits the drift report.
 //
 // COMMANDS
-//   --snapshot|--rest            drift report for EVERY mode: core vs
-//                                tokens.json, a skin mode vs tokens.json + its
-//                                package; a configured mode Figma lacks and a
-//                                Figma mode the config lacks are drift too.
-//     --apply                    the dormant Figma -> code direction: the
-//                                lossless updates of the CORE mode only, into
-//                                tokens.json (+ variables.css).
+//   --snapshot|--rest   drift report for EVERY mode (core vs tokens.json, a
+//                       skin mode vs tokens.json + package); a configured mode
+//                       Figma lacks and a Figma mode the config lacks are drift.
+//     --apply           the dormant Figma -> code direction: lossless updates of
+//                       the CORE mode only into tokens.json (+ variables.css).
 //   --skin --snapshot <file> --payload <out.json>
-//                                the values of every mode for the Figma writer
-//                                (modes-lib.figma.js apply()); the report
-//                                lists what changes against the snapshot and
-//                                what Figma cannot hold.
+//                       the values of every mode for modes-lib.figma.js apply(),
+//                       with a digest of every existing mode (apply stops when
+//                       Figma changed since the snapshot); the report lists what
+//                       changes and what Figma cannot hold.
 //   --skin <dir> --mode <id> --dry-run
-//                                (FE-219) one local package against the core,
-//                                a report only -- for a package not tagged yet.
+//                       (FE-219) one local package against the core, a report
+//                       only -- for a package not tagged yet.
 //
-// Exit codes: 0 up-to-date/clean · 1 error · 2 drift found (dry-run) --
-// the CI autosync turns 2 into the auto-PR; a human reviews it as code.
+// Exit codes: 0 clean · 1 error · 2 drift found -- the dormant CI autosync
+// (token-sync.yml) turns 2 into an auto-PR; a human reviews it as code.
 //
 // Run from frontend/:  node scripts/sync-figma-variables.mjs --snapshot dump.json
 // =============================================================================
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { join, dirname, resolve } from 'node:path'
@@ -74,10 +55,10 @@ import process from 'node:process'
 import { collectLeaves, buildNameMap, reconstructCss } from './lib/figma-token-sync.mjs'
 import { generateVariables } from './generate-variables.mjs'
 import { loadSkinPackage } from './lib/skin-package.mjs'
+import { checkoutProblem, fetchPackage } from './lib/brand-packages.mjs'
 import { skinModeReport, formatSkinModeReport, parseSkinArgs } from './lib/skin-mode.mjs'
 import {
   buildModeValues,
-  crossCheckPins,
   modeDrift,
   modeRegistry,
   normalizeSnapshot,
@@ -118,7 +99,16 @@ const dryRun = args.includes('--dry-run')
 const skinArgs = parseSkinArgs(args)
 if (skinArgs && 'error' in skinArgs) die(skinArgs.error)
 
-const config = parseModesConfig(JSON.parse(readFileSync(modesPath, 'utf8')))
+const config = (() => {
+  try {
+    return parseModesConfig(
+      JSON.parse(readFileSync(modesPath, 'utf8')),
+      JSON.parse(readFileSync(brandSkinsPath, 'utf8')),
+    )
+  } catch (e) {
+    return die(e instanceof Error ? e.message : String(e))
+  }
+})()
 const fileKey = argValue('--file-key') ?? config.file
 const only = argValue('--only')?.split(',').filter(Boolean)
 if (only && only.some((n) => !config.modes.some((m) => m.name === n))) {
@@ -161,71 +151,32 @@ async function loadSnapshot() {
 // --- packages ----------------------------------------------------------------
 const git = (cwd, ...a) => execFileSync('git', ['-C', cwd, ...a], { encoding: 'utf8' }).trim()
 
-/** The directory of a skin mode's package: a local checkout (--pkg) or a
- *  fresh clone at the pinned tag. The commit must be the pinned one. */
-function packageDir(mode, scratch) {
-  const p = mode.package
-  const local = pkgDirs.get(mode.name)
-  if (local) {
-    let head
-    try {
-      head = git(local, 'rev-parse', 'HEAD')
-    } catch {
-      die(`--pkg ${mode.name}=${local}: not a git checkout, the pinned commit cannot be checked`)
-    }
-    if (head !== p.sha)
-      die(`--pkg ${mode.name}: HEAD is ${head}, figma-modes.json pins ${p.tag} ${p.sha}`)
-    return join(local, p.dir)
-  }
-  const target = join(scratch, mode.name)
-  const token = process.env.BRAND_REPO_TOKEN ?? ''
-  const url = token
-    ? `https://x-access-token:${token}@github.com/${p.repo}.git`
-    : `https://github.com/${p.repo}.git`
-  try {
-    // The URL may carry the token: keep git's own output out of the log.
-    execFileSync(
-      'git',
-      [
-        '-c',
-        'advice.detachedHead=false',
-        'clone',
-        '--quiet',
-        '--depth',
-        '1',
-        '--branch',
-        p.tag,
-        url,
-        target,
-      ],
-      { stdio: ['ignore', 'ignore', 'pipe'] },
-    )
-  } catch {
-    die(
-      `cannot clone ${p.repo} at ${p.tag} (a private repo needs git credentials or BRAND_REPO_TOKEN; or pass --pkg ${mode.name}=<checkout>)`,
-    )
-  }
-  const head = git(target, 'rev-parse', 'HEAD')
-  if (head !== p.sha)
-    die(`${p.repo} ${p.tag} is ${head}, figma-modes.json pins ${p.sha}: the tag moved`)
-  return join(target, p.dir)
-}
-
-/** core + one entry per skin mode: {name, leaves}. */
+/**
+ * core + one entry per skin mode: {name, leaves, source}. A package comes
+ * from a local checkout (--pkg: the pinned commit, a clean tree) or a fresh
+ * clone at the pinned tag. Throws; the clones are removed on every exit path.
+ */
 function loadModes(doc, leaves) {
-  if (existsSync(brandSkinsPath)) {
-    const disagree = crossCheckPins(config.modes, JSON.parse(readFileSync(brandSkinsPath, 'utf8')))
-    if (disagree.length > 0) die(`the package pins disagree:\n  ${disagree.join('\n  ')}`)
-  }
   const wanted = config.modes.filter((m, i) => i === 0 || !only || only.includes(m.name))
   const scratch = mkdtempSync(join(tmpdir(), 'figma-modes-'))
   try {
     return wanted.map((m, i) => {
       if (i === 0) return { name: m.name, leaves, source: 'frontend/tokens.json' }
       const p = /** @type {NonNullable<typeof m.package>} */ (m.package)
-      const pkg = loadSkinPackage(packageDir(m, scratch), doc)
+      const local = pkgDirs.get(m.name)
+      let root = local
+      if (local) {
+        const problem = checkoutProblem(local, p.sha)
+        if (problem) throw new Error(`--pkg ${m.name}: ${problem} (${p.tag})`)
+      } else {
+        root = join(scratch, m.name)
+        fetchPackage(p, root, { token: process.env.BRAND_REPO_TOKEN ?? '' })
+      }
+      const pkg = loadSkinPackage(join(/** @type {string} */ (root), p.dir), doc)
       if (pkg.problems.length > 0) {
-        die(`${p.name} ${p.tag} is not a valid skin package:\n  ${pkg.problems.join('\n  ')}`)
+        throw new Error(
+          `${p.name} ${p.tag} is not a valid skin package:\n  ${pkg.problems.join('\n  ')}`,
+        )
       }
       return {
         name: m.name,
@@ -265,7 +216,13 @@ if (skinArgs && 'skinDir' in skinArgs) {
 const doc = JSON.parse(readFileSync(tokensPath, 'utf8'))
 const leaves = collectLeaves(doc)
 const snapshot = await loadSnapshot().catch((e) => die(e instanceof Error ? e.message : String(e)))
-const modes = loadModes(doc, leaves)
+/** @type {ReturnType<typeof loadModes>} */
+let modes = []
+try {
+  modes = loadModes(doc, leaves)
+} catch (e) {
+  die(e instanceof Error ? e.message : String(e))
+}
 const scoped = {
   ...config,
   modes: config.modes.filter((m) => modes.some((x) => x.name === m.name)),

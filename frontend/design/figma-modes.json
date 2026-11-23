@@ -1,5 +1,5 @@
 {
-  "about": "Modes of the Figma `velo` collection (FE-234 item 6, owner's decision 23.11.2026; docs/figma-protocol.md §8.4). The first mode is the core: the neutral values of frontend/tokens.json. Every other mode is a skin: tokens.json plus the overrides of a skin package, pinned by tag and commit. Nobody edits a mode by hand: scripts/sync-figma-variables.mjs --skin computes the values, docs/figma/front/modes-lib.figma.js writes them. figmaModeId pins a mode that already exists in Figma (gold = the former Default, 3905:0: kit swatches and the Skin / gold section are set to it). Figma Professional allows 4 modes per collection. coreOnlyCollections have one mode and get the core values (a skin that overrides one of their tokens is reported, not stored).",
+  "about": "Modes of the Figma `velo` collection (FE-234 item 6, owner's decision 23.11.2026; docs/figma-protocol.md §8.4). The first mode is the core: the neutral values of frontend/tokens.json. Every other mode is a skin: tokens.json plus the overrides of the skin package of its `brand`, pinned by tag and commit in .github/brand-skins.json (the one pin file: CI builds and shoots the same packages). Nobody edits a mode by hand: scripts/sync-figma-variables.mjs --skin computes the values, docs/figma/front/modes-lib.figma.js writes them. figmaModeId pins a mode that already exists in Figma (gold = the former Default, 3905:0: kit swatches and the Skin / gold section are set to it). Figma Professional allows 4 modes per collection. coreOnlyCollections have one mode and get the core values (a skin that overrides one of their tokens is reported, not stored).",
   "file": "IV92js0q2cBHmHmDxB0zxM",
   "collection": "velo",
   "coreOnlyCollections": ["legacy"],
@@ -9,23 +9,11 @@
     {
       "name": "gold",
       "figmaModeId": "3905:0",
-      "package": {
-        "name": "velo-brand",
-        "repo": "VELO2026-app/velo-brand",
-        "tag": "v0.1.1",
-        "sha": "4ad725b55ec67440f19b822d25ead7060ed417da",
-        "dir": "skin"
-      }
+      "brand": "velo-brand"
     },
     {
       "name": "goodo",
-      "package": {
-        "name": "goodo-brand",
-        "repo": "VELO2026-app/goodo-brand",
-        "tag": "v0.3.0",
-        "sha": "393c05672d0f0f90cb0f0f2ce0db69994f7c9c8a",
-        "dir": "skin"
-      }
+      "brand": "goodo-brand"
     }
   ]
 }

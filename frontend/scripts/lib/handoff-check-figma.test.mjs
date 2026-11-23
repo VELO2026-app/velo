@@ -296,3 +296,162 @@ test('SIMILAR_TOKENS: reads the gold mode, not the first one (FE-234: the core c
   assert.equal((await fn('#627a9c')).advice, 'use-existing')
   assert.equal((await fn('#787878', { mode: 'core' })).advice, 'use-existing')
 })
+
+test('SIMILAR_TOKENS: a collection with several modes and no gold is an error, not the core', async () => {
+  const col = {
+    name: 'velo',
+    defaultModeId: 'core',
+    modes: [
+      { modeId: 'core', name: 'core' },
+      { modeId: 'n', name: 'night' },
+    ],
+  }
+  const v = {
+    id: 'v',
+    resolvedType: 'COLOR',
+    name: 'color/primary',
+    variableCollectionId: 'c1',
+    valuesByMode: { core: rgb('#787878'), n: rgb('#000000') },
+  }
+  const figma = {
+    variables: {
+      getLocalVariablesAsync: () => Promise.resolve([v]),
+      getVariableCollectionByIdAsync: () => Promise.resolve(col),
+      getVariableByIdAsync: () => Promise.resolve(null),
+    },
+  }
+  const fn = runInNewContext(`${SIMILAR}\n;SIMILAR_TOKENS`, { figma })
+  const r = await fn('#787878')
+  assert.match(r.error, /no mode "gold" in velo/)
+  assert.equal(r.exact, undefined)
+})
+
+test('F2C_INSPECT: a variable value in the mode of the nearest node with an explicit mode', async () => {
+  const INSPECT = script('inspect.figma.js')
+  const col = {
+    id: 'c1',
+    name: 'velo',
+    defaultModeId: 'core',
+    modes: [
+      { modeId: 'core', name: 'core' },
+      { modeId: 'g', name: 'gold' },
+    ],
+  }
+  const v = {
+    id: 'v',
+    resolvedType: 'COLOR',
+    name: 'color/primary',
+    variableCollectionId: 'c1',
+    valuesByMode: { core: rgb('#787878'), g: rgb('#627a9c') },
+  }
+  const pageNode = { type: 'PAGE', name: 'Эксперименты · x', explicitVariableModes: {} }
+  /** @type {any} */
+  const sectionNode = {
+    type: 'SECTION',
+    name: 'S',
+    parent: pageNode,
+    explicitVariableModes: { c1: 'g' },
+  }
+  const leaf = {
+    id: '1:2',
+    type: 'RECTANGLE',
+    name: 'Box',
+    parent: sectionNode,
+    visible: true,
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 },
+    fills: [{ type: 'SOLID', color: rgb('#627a9c'), boundVariables: { color: { id: 'v' } } }],
+    explicitVariableModes: {},
+  }
+  const figma = {
+    mixed: Symbol('mixed'),
+    getNodeByIdAsync: () => Promise.resolve(leaf),
+    getStyleByIdAsync: () => Promise.resolve(null),
+    variables: {
+      getVariableByIdAsync: () => Promise.resolve(v),
+      getVariableCollectionByIdAsync: () => Promise.resolve(col),
+    },
+  }
+  const fn = runInNewContext(`${INSPECT}\n;F2C_INSPECT`, { figma, Object, JSON, Math })
+  const r = await fn('1:2')
+  assert.deepEqual(
+    {
+      mode: r.variables['velo/color/primary'].mode,
+      value: r.variables['velo/color/primary'].value,
+    },
+    { mode: 'gold', value: '#627a9c' },
+  )
+  sectionNode.explicitVariableModes = {}
+  const r2 = await runInNewContext(`${INSPECT}\n;F2C_INSPECT`, { figma, Object, JSON, Math })('1:2')
+  assert.equal(r2.variables['velo/color/primary'].mode, 'core')
+})
+
+test('DESIGNER.startExperiment: the copy keeps the mode its source showed (gold from the sheet)', async () => {
+  const LIB = script('designer-lib.figma.js')
+  const col = { id: 'c1', name: 'velo' }
+  /** @returns {any} */
+  const mkNode = (type, name, extra = {}) => ({
+    type,
+    name,
+    x: 0,
+    y: 0,
+    width: 10,
+    height: 10,
+    children: [],
+    parent: null,
+    data: {},
+    explicitVariableModes: {},
+    getPluginData(k) {
+      return this.data[k] || ''
+    },
+    setPluginData(k, v) {
+      this.data[k] = v
+    },
+    getPluginDataKeys() {
+      return Object.keys(this.data)
+    },
+    appendChild(c) {
+      c.parent = this
+      this.children.push(c)
+    },
+    setExplicitVariableModeForCollection(c, m) {
+      this.explicitVariableModes = { ...this.explicitVariableModes, [c.id]: m }
+    },
+    resizeWithoutConstraints() {},
+    ...extra,
+  })
+  const front = mkNode('PAGE', 'Фронт · Экраны')
+  const sheet = mkNode('SECTION', 'Legacy screen / user.dashboard / Dashboard', {
+    explicitVariableModes: { c1: 'g' },
+  })
+  front.appendChild(sheet)
+  const frame = mkNode('FRAME', 'Dashboard / Default / 402', { id: 'f1' })
+  frame.clone = () => mkNode('FRAME', frame.name)
+  sheet.appendChild(frame)
+  /** @type {any} */
+  const docRoot = { type: 'DOCUMENT', children: [front] }
+  front.parent = docRoot
+  const figma = {
+    root: docRoot,
+    loadAllPagesAsync: () => Promise.resolve(),
+    getNodeByIdAsync: () => Promise.resolve(frame),
+    createPage: () => {
+      const p = mkNode('PAGE', '', { loadAsync: () => Promise.resolve() })
+      docRoot.children.push(p)
+      return p
+    },
+    createSection: () => mkNode('SECTION', ''),
+    saveVersionHistoryAsync: () => Promise.resolve(),
+    variables: { getVariableCollectionByIdAsync: () => Promise.resolve(col) },
+  }
+  const DESIGNER = runInNewContext(`${LIB}\n;DESIGNER`, { figma, Object, JSON, Math, Date })
+  const r = await DESIGNER.startExperiment('Тест', 'f1')
+  const page = docRoot.children.find((/** @type {any} */ p) => p.name === 'Эксперименты · Тест')
+  const copy = page.children[0].children[0]
+  assert.equal(r.created.length, 1)
+  assert.deepEqual(copy.explicitVariableModes, { c1: 'g' })
+  assert.equal(DESIGNER.version > 2026112400, true)
+})

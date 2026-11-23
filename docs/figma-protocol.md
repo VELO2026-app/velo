@@ -304,38 +304,45 @@ PR это не задерживает: обновление «Фронт» ид�
 - Токены — только из кода: `frontend/scripts/sync-figma-variables.mjs` (FE-124). Его проверка
   дрейфа (`--snapshot`) показывает, если переменную в Figma поменяли руками.
 
-**Режимы коллекции `velo` (FE-234, решение владельца 23.11).** Режимы и их источники закреплены
-в `frontend/design/figma-modes.json`:
+**Режимы коллекции `velo` (FE-234, решение владельца 23.11).** Режимы названы в
+`frontend/design/figma-modes.json`, пакеты скинов закреплены (тег и коммит) в
+`.github/brand-skins.json` — тот же файл, по которому CI собирает и снимает скины:
 
 | Режим | Значения | Кто показывает |
 |---|---|---|
 | `core` (первый, по умолчанию) | `frontend/tokens.json`, нейтральное ядро | узлы без выставленного режима; секция `Skin / core` |
-| `gold` (id `3905:0`, бывший `Default`) | `tokens.json` + пакет `velo-brand` (тег и коммит из конфига) | страница `Фронт · Экраны`, кит, секция `Skin / gold` |
+| `gold` (id `3905:0`, бывший `Default`) | `tokens.json` + пакет `velo-brand` | `Фронт · Экраны`, кит, `Skin / gold` — явным режимом |
 | `goodo` | `tokens.json` + пакет `goodo-brand` | секция `Skin / goodo` |
 
 Лимит тарифа Professional — 4 режима: одно место свободно. Коллекция `legacy` (один режим)
 получает значения ядра; что скин переопределяет в ней (сейчас `--font-body`), Figma не хранит —
 скрипт это перечисляет. Руками режимы не правят. Режим ищется по имени, не по позиции.
 
-Порядок записи (агент фронта, figma-console):
+Порядок записи (агент фронта, figma-console; `front-lib.figma.js`, затем `modes-lib.figma.js`):
 
-1. Снимок: `MODES.snapshot()` из `docs/figma/front/modes-lib.figma.js` → JSON-файл.
-2. Проверка дрейфа по каждому режиму, из `frontend/`:
-   `pnpm tokens:sync --snapshot <снимок>` (код 2 — есть расхождение). Пакеты скинов скрипт
-   клонирует по тегу из конфига и сверяет коммит; для приватного репо нужны права git
-   (`gh auth setup-git`) или `BRAND_REPO_TOKEN`; `--pkg <режим>=<checkout>` — локальная копия.
-3. Значения: `node scripts/sync-figma-variables.mjs --skin --snapshot <снимок> --payload <файл>`.
-   Отчёт перечисляет, что изменится и чего Figma не хранит.
-4. `MODES.plan(<payload>)` — только чтение: что будет создано и изменено, или почему нельзя.
-5. `MODES.apply(<payload>, { createModes, makeCoreDefault })`: сначала все проверки (режим `gold`
-   узнаётся по id и имени, лишний режим или пятый режим — стоп), потом именованная версия, потом
-   запись только изменившихся значений.
-6. Снова снимок и шаг 2: дрейфа нет ни в одном режиме.
+1. Снимок: `MODES.snapshot()` → JSON-файл.
+2. Дрейф по каждому режиму, из `frontend/`: `pnpm tokens:sync --snapshot <снимок>` (код 2 — есть
+   расхождение). Пакеты скрипт клонирует по тегу и сверяет коммит; приватному репо нужны права git
+   (`gh auth setup-git`) или `BRAND_REPO_TOKEN` (идёт заголовком, не в URL). `--pkg <режим>=<checkout>` —
+   локальная копия на закреплённом коммите без незакоммиченных правок.
+3. Значения: `node scripts/sync-figma-variables.mjs --skin --snapshot <снимок> --payload <файл>`. В payload
+   — значения всех режимов и отпечаток каждого существующего режима.
+4. `MODES.plan(<payload>)` на полном payload — только чтение: что будет создано и изменено, какие узлы
+   «Фронт» ещё без явного режима, или почему нельзя.
+5. `FRONT.acquire` страниц «Фронт»; `MODES.apply(<payload>, { createModes: true })`. До первой записи
+   `apply` проверяет: замок этого треда на `Фронт · Kit и токены`; отпечатки — Figma не правили после
+   снимка (иначе шаги 1–4 заново); `gold` по id и имени; нет лишнего и пятого режима; у каждой
+   переменной есть значение для нового режима (новый режим рождается копией `gold`). Потом версия
+   и запись только изменившихся значений.
+6. Явный режим: `MODES.pin(PAYLOAD, <узел>, 'gold')` внутри `FRONT.write` — каждой странице `Фронт · …`
+   и каждому её узлу верхнего уровня (секции `Skin / core` и `Skin / goodo` — своим режимом).
+7. `MODES.apply(<payload>, { makeCoreDefault: true })` — отказывает, пока на «Фронт» есть страница или
+   узел верхнего уровня без явного режима. Порядок режимов и режим по умолчанию — в ответе.
+8. Снова снимок и шаг 2: дрейфа нет ни в одном режиме.
 
-Режим по умолчанию показывают все узлы без выставленного режима. Поэтому перед тем, как `core`
-станет режимом по умолчанию, страницы и секции, которые должны остаться в `gold`, получают
-явный режим (`MODES.pin(<узел>, 'gold')` внутри `FRONT.write`). Страницы дизайнера — только с
-«да» владельца. Новый тег пакета — правка `figma-modes.json` в PR, затем шаги 1–6.
+Режим по умолчанию (`core`) показывают все узлы без явного режима. Копия кадра «Фронт» у дизайнера
+(`DESIGNER.startExperiment`) получает режим, который показывал оригинал. Новый тег пакета — правка
+`.github/brand-skins.json` в PR (CI проверит сборку и снимки), затем шаги 1–8.
 - Пока листов экранов мало (сейчас 4 legacy-листа), «покажи отличие от фронта» сравнивает
   со скриншотом стенда; лист заводит агент фронта по запросу.
 
@@ -448,7 +455,7 @@ PR это не задерживает: обновление «Фронт» ид�
    переменная в коллекции на `Фронт · Kit и токены` через figma-console (`figma_create_variable`
    или `figma_batch_create_variables`), значения всех режимов — шагами §8.4, не руками. Заявка
    задаёт значение для gold. Брендовое значение (цвет VELO) в ядро не идёт: ядро нейтральное
-   (FE-230), значение gold живёт в пакете `velo-brand` (новый тег, правка `figma-modes.json`);
+   (FE-230), значение gold живёт в пакете `velo-brand` (новый тег, правка `.github/brand-skins.json`);
    иное значение для goodo — отдельной строкой заявки, в пакете `goodo-brand`. `pnpm tokens:sync
    --snapshot <снимок>` — проверка нулевого расхождения по каждому режиму (скрипт Figma только
    читает); PR. Заявка → Done после мержа.
@@ -504,10 +511,9 @@ PR это не задерживает: обновление «Фронт» ид�
 - Библиотеки записи агента фронта: `docs/figma/front/front-lib.figma.js` (`makeFront`,
   `c2fSeal`, `c2fInventory`) и `docs/figma/front/fss-lib.figma.js` (построители FSS); тест
   `frontend/scripts/lib/front-lib-figma.test.mjs`.
-- Режимы `velo` (§8.4): конфиг `frontend/design/figma-modes.json`, расчёт
-  `frontend/scripts/sync-figma-variables.mjs` (`lib/figma-modes.mjs`), запись
-  `docs/figma/front/modes-lib.figma.js` (`makeModes`); тесты `figma-modes.test.mjs`,
-  `modes-lib-figma.test.mjs`.
+- Режимы `velo` (§8.4): режимы `frontend/design/figma-modes.json`, пины пакетов
+  `.github/brand-skins.json`, расчёт `frontend/scripts/sync-figma-variables.mjs` (`lib/figma-modes.mjs`,
+  `lib/brand-packages.mjs`), запись `docs/figma/front/modes-lib.figma.js` (`makeModes`).
 - Стандарт кадра FSS и код → Figma: `~/.claude/skills/code-to-figma-pixel-perfect/`.
 - Листы «Фронт» и PR → листы: манифест `frontend/design/figma-front-sheets.json`, скрипт
   `frontend/scripts/front-sheets.mjs` (§8).

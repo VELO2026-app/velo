@@ -15,8 +15,9 @@
  *   near   colour within `colorDistance` (max channel difference, 0..255, default 12) or
  *          a number within `numberDistance` px (default 2): offer it to the designer first
  * Mode: values are read in the mode named `opts.mode` (default `gold`, the skin the screens are
- * drawn in); a collection without that mode (legacy) gives its default mode. Never the first
- * mode by position: since FE-234 the first mode of `velo` is the neutral core.
+ * drawn in) and the result names it; a one-mode collection (legacy) gives its own mode. A
+ * collection with several modes and none of that name returns { error }: since FE-234 the first
+ * mode of `velo` is the neutral core, and reading it would offer the wrong tokens.
  */
 const SIMILAR_TOKENS = async (value, opts) => {
   const o = Object.assign({ colorDistance: 12, numberDistance: 2, limit: 8, mode: 'gold' }, opts || {});
@@ -35,15 +36,21 @@ const SIMILAR_TOKENS = async (value, opts) => {
     return cols[id];
   };
   const colName = async (id) => { const c = await colOf(id); return c ? c.name : id; };
-  // The mode named o.mode, else the collection's default mode, else the first value.
+  // The mode named o.mode; a one-mode collection (legacy) has only its own. A collection with
+  // several modes and none named o.mode is an error: silently reading another mode (the core)
+  // would offer the wrong tokens.
+  const missingMode = new Set();
   const modeOf = async (v) => {
     const c = await colOf(v.variableCollectionId);
     const modes = (c && c.modes) || [];
-    const m = modes.find((x) => x.name === o.mode) || modes.find((x) => x.modeId === c.defaultModeId);
+    const m = modes.find((x) => x.name === o.mode) || (modes.length === 1 ? modes[0] : null);
+    if (!m && modes.length > 1) { missingMode.add(c.name); return null; }
     return m && m.modeId in v.valuesByMode ? m.modeId : Object.keys(v.valuesByMode)[0];
   };
   const resolve = async (v, depth) => {
-    let val = v.valuesByMode[await modeOf(v)];
+    const modeId = await modeOf(v);
+    if (modeId === null) return null;
+    let val = v.valuesByMode[modeId];
     if (val && val.type === 'VARIABLE_ALIAS' && depth < 8) {
       const t = await figma.variables.getVariableByIdAsync(val.id);
       return t ? resolve(t, depth + 1) : null;
@@ -70,7 +77,9 @@ const SIMILAR_TOKENS = async (value, opts) => {
     }
   }
   near.sort((a, b) => a.distance - b.distance);
+  if (missingMode.size > 0) return { error: 'no mode "' + o.mode + '" in ' + [...missingMode].join(', ') + ': pass { mode: \'<name>\' } (protocol §8.4)', mode: o.mode };
   return {
+    mode: o.mode,
     kind: isColor ? 'color' : 'number', value, exact: exact.slice(0, o.limit), near: near.slice(0, o.limit),
     advice: exact.length ? 'use-existing' : near.length ? 'offer-near-first' : 'no-similar',
   };
