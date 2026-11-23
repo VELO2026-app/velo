@@ -420,7 +420,7 @@ function skinLayout(source, files, brand, distDir, html, css) {
   return problems
 }
 
-function snapshot(cell, skins, goldenDecls) {
+function snapshot(cell, skins, goldenDecls, coreName) {
   const distDir = join(frontendDir(), 'dist')
   const html = readFileSync(join(distDir, 'index.html'), 'utf8')
   const assetsDir = join(distDir, 'assets')
@@ -441,7 +441,9 @@ function snapshot(cell, skins, goldenDecls) {
   if (cell.skin) {
     const { brand, decls, files } = skinRecord(cell.skin)
     facts.brandMissing = !bundleHas(js, brand.displayName)
-    facts.tokensMissing = decls.filter((d) => !cssHasDecl(css, d))
+    // A declaration the core's variables.css already makes verbatim (a brand
+    // that keeps a core value) is merged by the CSS minifier: nothing to find.
+    facts.tokensMissing = decls.filter((d) => !goldenDecls.has(d) && !cssHasDecl(css, d))
     facts.layout = skinLayout(
       cell.skin.source,
       files,
@@ -454,7 +456,12 @@ function snapshot(cell, skins, goldenDecls) {
     facts.leaked = existsSync(join(distDir, 'skin')) ? ['dist/skin/ (a package shipped)'] : []
     for (const skin of skins) {
       const { brand, decls } = skinRecord(skin)
-      if (bundleHas(js, brand.displayName) || html.includes(brand.displayName))
+      // A brand named like the core's own default ("VELO", the gold skin)
+      // cannot be told from the core by its name; its tokens still can.
+      if (
+        brand.displayName !== coreName &&
+        (bundleHas(js, brand.displayName) || html.includes(brand.displayName))
+      )
         facts.leaked.push(`${skin.label} displayName`)
       const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
       if (foreign.length > 0) facts.leaked.push(`${skin.label} tokens (${foreign.join(', ')})`)
@@ -619,7 +626,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       console.log(`\n== build-matrix: ${cell.name} (PRIMER_EDITION=${cell.edition}) ==`)
       await stageSkin(cell.skin)
       build(cell.edition)
-      facts[cell.name] = snapshot(cell, skins, goldenDecls)
+      facts[cell.name] = snapshot(cell, skins, goldenDecls, await coreBrand())
       expected[cell.name] = await expectationOf(cell)
       if (args.factsOut)
         writeFileSync(

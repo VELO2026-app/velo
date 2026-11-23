@@ -1,0 +1,16 @@
+{
+  "_": "sha256 of the identity assets of velo-brand v0.1.1 (the golden VELO skin). validate-skin warns when another brand ships a byte-identical file. Hashes only: no brand file lives in this repo.",
+  "source": "VELO2026-app/velo-brand@v0.1.1",
+  "assets": {
+    "apple-touch-icon-180.png": "448f866fc7ae0814bff7e54154bdfe47159d634cb95c2a6c683203364de4bca8",
+    "favicon.svg": "2fd312a1724f49efee3d71e05ec18bf02d1b33feae09884a915ba07d8b6a629c",
+    "icon-192.png": "c5482fe8a177af4ff0536ae66bcc90263f4bc5e903a6f5fca34faa448bc43655",
+    "icon-512.png": "520eb5ce9845fc700ba8595dbe4f5877268dd6b6a4758b503dd6c9b70bfa7889",
+    "icon-maskable-512.png": "3634452ad3e9403f2be8a6c079fadba3647760ca71bc8a5631e66f24a13cf962",
+    "logo-white.svg": "569c4b1dd060a44e6e3e3442fc842dee933b6748a772a31e24137c883e2781c6",
+    "mandala-blue.png": "92fa4c394837649a77bed132b7aa44164515ab41f2e1882c0f5bd1ded895aad0",
+    "mandala-white.png": "a778ba38d8add34999ba08391bb832e5fae30f885ce6df9708adea8507911fb2",
+    "velo-word-blue.svg": "6341130ab0d1c874b15a61a52f1988bf56fc43efd461330026fa537985429577",
+    "velo-word-filled.svg": "498eafea8d0e9ed10cfa0eb7dcefd45d922250e3145e9eb248498747212babe6"
+  }
+}

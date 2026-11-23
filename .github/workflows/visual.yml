@@ -109,11 +109,18 @@ jobs:
   # no visual path and carries no visual label never gets a check of that
   # name, and the merge would wait for it forever.
   visual:
-    name: visual — base vs head${{ needs.visual-scope.outputs.run != 'true' && ' (not run)' || '' }}
+    name: visual — base vs head (${{ matrix.skin }})${{ needs.visual-scope.outputs.run != 'true' && ' (not run)' || '' }}
     needs: visual-scope
     if: needs.visual-scope.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    # FE-234: one comparison per brand skin (gold = velo-brand, goodo-brand),
+    # at the tags of .github/brand-skins.json: a change that only shows on one
+    # skin is seen on that skin. The runners work in parallel.
+    strategy:
+      fail-fast: false
+      matrix:
+        skin: [velo-brand, goodo-brand]
     continue-on-error: ${{ needs.visual-scope.outputs.strict != 'true' }}
     container: mcr.microsoft.com/playwright:v1.64.1-noble
     steps:
@@ -153,19 +160,30 @@ jobs:
           v=$(pnpm exec playwright --version | awk '{print $2}')
           [ "$v" = "1.64.1" ] || { echo "playwright $v does not match the image tag v1.64.1 -- update container: above"; exit 1; }
 
-      # FE-204: vite only (types are the typecheck job's). FE-230: both builds
-      # carry the synthetic skin package, each from its own make-test-skin.mjs
-      # -- the core is neutral, and a change that only shows under a skin
-      # (a logo layer, a token the skin sets) must still show up here.
+      # FE-234: the brand packages at their pinned tags.
+      - name: Fetch the brand skin packages
+        env:
+          BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
+        run: node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands" > /dev/null
+
+      # FE-204: vite only (types are the typecheck job's). FE-230: the core is
+      # neutral, so both builds carry the brand package of the matrix cell
+      # (FE-234; whole, as the machine copies it): a change that only shows
+      # under a skin (a logo layer, a token the skin sets) must still show up
+      # here. The synthetic package is the build matrix's and the sweep's.
       - name: Build head
+        env:
+          SKIN: ${{ matrix.skin }}
         run: |
-          node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          node frontend/scripts/apply-skin.mjs "$RUNNER_TEMP/brands/$SKIN/skin"
           pnpm -C frontend exec vite build
 
       - name: Build base
         working-directory: ${{ runner.temp }}/base
+        env:
+          SKIN: ${{ matrix.skin }}
         run: |
-          node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          node frontend/scripts/apply-skin.mjs "$RUNNER_TEMP/brands/$SKIN/skin"
           pnpm -C frontend exec vite build
 
       - name: Shoot both builds and compare
@@ -177,7 +195,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: visual-out
+          name: visual-out-${{ matrix.skin }}
           path: |
             frontend/visual-out
             frontend/test-results

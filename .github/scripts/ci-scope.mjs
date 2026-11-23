@@ -83,6 +83,9 @@ const FORCE_ALL = [
   /^\.github\/workflows\/ci\.yml$/,
   /^\.github\/scripts\/ci-scope\.mjs$/,
   /^\.github\/scripts\/ci-scope\.test\.mjs$/,
+  // FE-234: the brand pins and the script that fetches them feed the matrix.
+  /^\.github\/brand-skins\.json$/,
+  /^\.github\/scripts\/fetch-brand-skins(\.test)?\.mjs$/,
   /^frontend\/src\/api\/generated\.ts$/,
 ]
 const DOCS = [/^docs\//, /^diagrams\//, /^Design_prototype\//]
@@ -104,6 +107,7 @@ const VISUAL = [
   // e2e/sweep/routes.ts (changes with every new route; typecheck and the
   // sweep cover it, and screens.ts throws on a row it cannot open).
   /^\.github\/workflows\/visual\.yml$/,
+  /^\.github\/brand-skins\.json$/,
   /^frontend\/e2e\/visual\//,
   /^frontend\/playwright\.config\.ts$/,
   /^frontend\/e2e\/support\/settle\.ts$/,

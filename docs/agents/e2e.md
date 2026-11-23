@@ -118,9 +118,9 @@ Sweep только читает. Два экрана пишут при откр�
 
 ### Как читать отчёт
 
-Artifact `visual-out` у job `visual` (в step summary — список изменившихся экранов). `report.html`: для каждого изменившегося экрана base, head и diff, число отличающихся пикселей. Пустой отчёт — визуально ничего не изменилось. Экран, снятый только с одной стороны, или с другим размером, считается изменившимся.
+Artifact `visual-out-<скин>` у job `visual — base vs head (<скин>)` (в step summary — список изменившихся экранов). `report.html`: для каждого изменившегося экрана base, head и diff, число отличающихся пикселей. Пустой отчёт — визуально ничего не изменилось. Экран, снятый только с одной стороны, или с другим размером, считается изменившимся.
 
-Локально (из `frontend/`): `node scripts/make-test-skin.mjs public/skin && pnpm build` (с FE-230 CI собирает обе стороны с синтетическим пакетом), затем `sh e2e/visual/run.sh <dist-базы> dist`. Базу собрать из `test` отдельным worktree. `VISUAL_STRICT=1` — выходной код 1 при любом отличии.
+Локально (из `frontend/`): `node scripts/apply-skin.mjs <пакет> && pnpm build` (с FE-234 CI собирает обе стороны с настоящим пакетом скина — `velo-brand` и `goodo-brand`, по job на скин: вместо `make-test-skin.mjs` — `node scripts/apply-skin.mjs <пакет>`), затем `sh e2e/visual/run.sh <dist-базы> dist`. Базу собрать из `test` отдельным worktree. `VISUAL_STRICT=1` — выходной код 1 при любом отличии.
 
 ### Если job упал не на отчёте
 
