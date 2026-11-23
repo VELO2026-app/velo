@@ -3,21 +3,27 @@
  * proposed value. Run it BEFORE filing a token request (docs/figma-protocol.md §10).
  * Runs in the Figma plugin sandbox through figma-console `figma_execute`:
  *     <this file> + one line:  return await SIMILAR_TOKENS('#a1e0c7');   // colour
+ *                              return await SIMILAR_TOKENS('#a1e0c780'); // colour with alpha (rrggbbaa)
  *                              return await SIMILAR_TOKENS(12);          // spacing or radius, px
  * The variables on the page «Фронт · Kit и токены» are the only approved tokens; they are
  * synced from frontend/tokens.json. Never changes the file.
  * Result: { kind, value, exact: [...], near: [...], advice }
  *   exact  the same value: use this token, do not file a request
+ *          Alpha counts as a channel: a translucent token never equals an opaque colour.
+ *          Numbers are compared only with spacing and radius variables (`space/`, `app/`,
+ *          `radius/`, the H-08 list of the protocol), not with font sizes or other floats.
  *   near   colour within `colorDistance` (max channel difference, 0..255, default 12) or
  *          a number within `numberDistance` px (default 2): offer it to the designer first
  */
 const SIMILAR_TOKENS = async (value, opts) => {
   const o = Object.assign({ colorDistance: 12, numberDistance: 2, limit: 8 }, opts || {});
-  const isColor = typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.trim());
+  const isColor = typeof value === 'string' && /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(value.trim());
   const isNumber = typeof value === 'number' && isFinite(value);
-  if (!isColor && !isNumber) return { error: 'value must be a #rrggbb string or a number of px' };
-  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const toHex = (c) => '#' + [c.r, c.g, c.b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  if (!isColor && !isNumber) return { error: 'value must be a #rrggbb or #rrggbbaa string, or a number of px' };
+  // [r, g, b, a] on a 0..255 scale; a missing alpha is opaque
+  const rgb = (h) => [1, 3, 5, 7].map((i) => (i < h.length ? parseInt(h.slice(i, i + 2), 16) : 255));
+  const toHex = (c) => '#' + [c.r, c.g, c.b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')
+    + (c.a !== undefined && c.a < 1 ? Math.round(c.a * 255).toString(16).padStart(2, '0') : '');
   const want = isColor ? rgb(value.trim().toLowerCase()) : null;
   const vars = await figma.variables.getLocalVariablesAsync(isColor ? 'COLOR' : 'FLOAT');
   const cols = {};
@@ -47,7 +53,7 @@ const SIMILAR_TOKENS = async (value, opts) => {
       if (d === 0) exact.push(row); else if (d <= o.colorDistance) near.push(row);
     } else {
       if (typeof val !== 'number') continue;
-      if (/^font\//.test(v.name)) continue; // font sizes are not spacing or radius tokens
+      if (!/^(space|radius|app)\//.test(v.name)) continue; // spacing and radius only (protocol H-08)
       const d = Math.abs(val - value);
       Object.assign(row, { value: val, distance: d });
       if (d === 0) exact.push(row); else if (d <= o.numberDistance) near.push(row);

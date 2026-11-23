@@ -27,9 +27,10 @@
  *
  * opts.tokenRequests = { 'FE-231': 'approved' | 'done' | 'pending' | 'canceled' } — the status of
  * each token request (Linear FE issue, label `token`). The sandbox cannot reach Linear, so the
- * assistant reads the statuses and passes them in. A request that is missing from the map counts
- * as unknown, so it does NOT approve anything. Todo / In Progress / In Review, or an «одобрено»
- * comment from the owner = 'approved'; Done = 'done'; Backlog = 'pending'.
+ * assistant reads the statuses and passes them in (the Linear status -> value table is in
+ * protocol §10 step 6). Only 'approved' and 'done' approve a raw value; 'pending', 'canceled'
+ * and a request missing from the map ('unknown') do not, and are listed in `blockedRequests`.
+ * The screen's own task (`Задача: FE-N`, the section's f2c:issue) is never a token request.
  * Layers inside the note (`Новое`, `Note …`) are not checked.
  */
 const HANDOFF_CHECK = async (nodeId, opts) => {
@@ -77,17 +78,25 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
   // (opts.tokenRequests) is approved or done. «одобрено» text in the note approves nothing.
   const OK_STATUS = /^(approved|done)$/;
   const approvedHex = new Set(), approvedPx = new Set(), requests = {};
+  const screenTasks = new Set(issue ? [issue] : []);
   for (const note of noteNodes) {
     const texts = note.type === 'TEXT' ? [note] : note.findAll((x) => x.type === 'TEXT');
     for (const t of texts) for (const line of t.characters.split('\n')) {
-      if (/^\s*Задача\s*:/i.test(line)) continue; // the screen's own task, not a token request
-      const keys = line.match(/\b[A-Z]+-\d+\b/g) || [];
+      if (/^\s*Задача\s*:/i.test(line)) { (line.match(/\bFE-\d+\b/g) || []).forEach((k) => screenTasks.add(k)); }
+    }
+  }
+  for (const note of noteNodes) {
+    const texts = note.type === 'TEXT' ? [note] : note.findAll((x) => x.type === 'TEXT');
+    for (const t of texts) for (const line of t.characters.split('\n')) {
+      if (/^\s*Задача\s*:/i.test(line)) continue;
+      const keys = (line.match(/\bFE-\d+\b/g) || []).filter((k) => !screenTasks.has(k));
       if (!keys.length) continue;
       const hexes = (line.match(/#[0-9a-fA-F]{6}\b/g) || []).map((h) => h.toLowerCase());
-      const pxs = (line.match(/\b\d+(\.\d+)?\s*px\b/g) || []).map(parseFloat);
+      // `<name> = <value>`: the number after `=`, with or without «px»; a bare `13px` counts too
+      const pxs = [...line.matchAll(/=\s*(\d+(?:\.\d+)?)(?!\s*[\w#])/g)].map((m) => parseFloat(m[1]))
+        .concat([...line.matchAll(/\b(\d+(?:\.\d+)?)\s*px\b/g)].map((m) => parseFloat(m[1])));
       if (!hexes.length && !pxs.length) continue;
-      const states = keys.map((k) => o.tokenRequests[k] || 'unknown');
-      for (const k of keys) requests[k] = o.tokenRequests[k] || 'unknown';
+      const states = keys.map((k) => (requests[k] = o.tokenRequests[k] || 'unknown'));
       if (!states.some((st) => OK_STATUS.test(st))) continue;
       hexes.forEach((h) => approvedHex.add(h));
       pxs.forEach((p) => approvedPx.add(p));
@@ -177,6 +186,7 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
     fonts, rawColors, components: mains, hasNote,
     approvedByRequest: { colors: [...approvedHex], px: [...approvedPx] },
     tokenRequests: requests,
+    blockedRequests: Object.keys(requests).filter((k) => !OK_STATUS.test(requests[k])),
     examples,
   };
 };

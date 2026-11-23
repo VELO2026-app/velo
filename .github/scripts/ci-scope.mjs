@@ -130,7 +130,9 @@ const COMMENT_BY_EXT = {
 }
 
 const SPEC = /^tz-[^/]+\.md$/
-const isDocs = (f) => DOCS.some((re) => re.test(f)) || (f.endsWith('.md') && !CODE_TREES.test(f))
+// FE-228: the Figma helper scripts under docs/ are code with tests in the `scripts` project.
+const FIGMA_SCRIPT = /^docs\/.*\.figma\.js$/
+const isDocs = (f) => !FIGMA_SCRIPT.test(f) && (DOCS.some((re) => re.test(f)) || (f.endsWith('.md') && !CODE_TREES.test(f)))
 
 function isCommentOnly(file) {
   const re = COMMENT_BY_EXT[file.split('.').pop()]
