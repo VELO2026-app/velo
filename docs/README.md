@@ -7,12 +7,12 @@
 **Документ живёт там, где умирает его предмет.** Если факт теряет смысл вместе с компонентом — он в коде (шапки и комментарии файла: инварианты, семантика состояний, «здесь так, потому что»). Если факт должен пережить переписывание компонента — он здесь: rulings владельца, эталоны-спеки, кросс-модульные контракты, процесс. Текст не дублируется: одна строка-указатель в коде (образец — `binding`-ссылки на `support-sections-integration.md` в `backend/app/modules/support/`), рассуждение — в единственном доме. Задачный контекст (план, AC, отчёты приёмки) живёт в Linear, не в коде и не здесь.
 
 ## Поставка
-- `delivery.md` — читать перед созданием ветки, PR или мержем: ветки (deploy-machine / test / main), порядок PR и трейлер `Task:`, стенды, задания CI, фронт под машиной Праймера; блок «Состояние» с датой.
+- `delivery.md` — читать перед созданием ветки, PR или мержем: ветки (deploy-machine / test / main), порядок PR и трейлер `Task:`, стенды, задания CI, фронт под машиной Праймера, проверка пакета скина до выката (как машина при `apply: build`); блок «Состояние» с датой.
 
 ## Фабрика разработки
 - `ai-dev-factory-tz.md` — ТЗ фабрики v0.11: конвейер, инфраструктурный слой, фазы 0–6, tgqa, Figma → код.
 - `agents/` — реестр managed agents: карточки, TTM-базлайн, трекер фаз (см. `agents/README.md`).
-- `figma-protocol.md` — протокол общего файла Figma: страницы и права агентов, статусы кадра, передача в разработку, два агента в одном файле (FE-218). Рядом `figma/`: скилл агента дизайнера (`velo-figma-designer/`, установка `install.sh`/`pack.sh`), инструкция дизайнеру, план перестройки файла.
+- `figma-protocol.md` — протокол общего файла Figma: страницы и права агентов, статусы кадра, передача в разработку, два агента в одном файле (FE-218). Рядом `figma/`: скилл агента дизайнера (`velo-figma-designer/`, установка `install.sh`/`pack.sh`), инструкция дизайнеру, план перестройки файла. Памятка PM по одобрению кадров — [документ Linear](https://linear.app/velo-space/document/pamyatka-dlya-pm-kak-odobryat-makety-k-razrabotke-f7f3379b46da).
 - `frontend/design/` — дизайн-контур фабрики: `component-map.md` (DS-компоненты Vue ↔ узлы Figma-зеркала), `GAPS.md` (что зеркало не выражает), `design.rules.md` (правила дизайн→код, ТЗ п. 11.2).
 
 ## Живые ТЗ (корень репо, статус на 2026-11-09)
@@ -35,7 +35,7 @@
 - `support-sections-integration.md` — контракт секций поддержки с comms; **binding**-ссылки в `backend/app/modules/support/*` и в миграции.
 
 ## Удалено 2026-09-17 (история в git)
-`seed-context.md` (описывал seed-систему до пересоздания репо; истина теперь — `velo seed --profile` + `backend/scripts/seed.py`), `probekit-sweep-2026-08.md` (снапшот-отчёт из git-ignored `.tmp`), `comms-handover-corrections.md` (опровержения к передаче comms; передача состоялась), `support-operator-model.md` (предстроительный рекон; рабочий контракт — `support-sections-integration.md`). Обоснования — в коммите.
+`seed-context.md` (описывал seed-систему до пересоздания репо; истина теперь — `seeds` и глаголы посева в `primer.yaml` + `backend/scripts/seed.py`), `probekit-sweep-2026-08.md` (снапшот-отчёт из git-ignored `.tmp`), `comms-handover-corrections.md` (опровержения к передаче comms; передача состоялась), `support-operator-model.md` (предстроительный рекон; рабочий контракт — `support-sections-integration.md`). Обоснования — в коммите.
 
 ## Удалено 2026-09-29 по решению владельца (история в git)
 `attendance-accounting.md`, `device-verification-findings.md`, `diary-behaviour-map.md` + `diary-behaviour-spec.md`, `external-activity-frontend-task.md`, `t26-notification-prefs-recon.md`, `deliberately-not-fixed.md`, `owner-parked-roadmap.md`, `owner-decisions-2026-07-25.md`, `number-key.md`, `primer-b35-doctor-gate.md` — массовая чистка не-фабричных доков (ruling владельца 2026-09-29); обоснование — в коммите. `voice-input-frontend-task.md` снят с индекса: файла в репо уже не было на момент чистки — висячие ссылки из `useVoiceRecorder.ts`/`constants.ts` восстановить или снять при FE-75 Шаге 2. Намеренно остался: `support-sections-integration.md` — живой контракт с binding-ссылками из бэкенда (`support/service.py:8`, `models.py:23`, миграция `ab1c2d3e4f5a`); файлы бэка вне зоны FE-агента — перенос контракта в шапку `service.py` и удаление документа делегированы бэкенду (BE-91).

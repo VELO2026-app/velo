@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 # =============================================================================
-# VELO Backend -- Role management CLI (velo setrole)
+# VELO Backend -- Role management CLI (verb setrole of primer.yaml)
 # =============================================================================
 #
 # Sets a user's role (admin / master / user) by Telegram ID, or -- with no
 # arguments -- lists the current admins and masters.
 #
-# Invoked from the host through the `velo` wrapper:
-#     velo setrole <telegram_id> <A|M|U> [--yes]
-#     velo setrole                      # list current admins & masters.
+# Invoked through the deploy machine (primer.yaml verbs, always --yes):
+#     pridem verb setrole telegram_id=<telegram_id> role=<A|M|U>
 # which runs, inside the app container:
-#     python scripts/set_role.py <args>
+#     python scripts/set_role.py --yes <telegram_id> <role>
+# The listing (no arguments) has no verb: the verb takes both arguments.
+# Directly, inside the app container:
+#     python scripts/set_role.py <telegram_id> <A|M|U> [--yes]
+#     python scripts/set_role.py         # list current admins & masters.
 #
 # NON-STANDARD BITS THIS SCRIPT RELIES ON (verified against the codebase):
 #   * ORM only -- no raw SQL. Own async session via get_session_factory(),
@@ -598,7 +601,7 @@ _HANDLERS = {
 
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="velo setrole",
+        prog="set_role.py",
         description=(
             "Set a user's role (admin/master/user) by Telegram ID. "
             "With no arguments, lists the current admins and masters."

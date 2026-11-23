@@ -166,19 +166,21 @@ def _extract_client_ip(scope: Scope) -> str | None:
     address that fits the audit column. Otherwise the ASGI peer address is
     used. X-Forwarded-For is not read at all.
 
-    WHY X-REAL-IP AND NOT X-FORWARDED-FOR (BE-40). Nginx sets both
-    (scripts/nginx-render.sh), but not in the same way. X-Forwarded-For is
-    $proxy_add_x_forwarded_for: nginx APPENDS the real address to whatever
-    the client sent, so the first hop is written by the sender and the
-    header as a whole is client-controlled. X-Real-IP is $remote_addr:
-    nginx REPLACES any client-sent X-Real-IP with the address of the TCP
-    connection it accepted (checked live on nginx 1.24: a single, a
-    duplicated and a lower-case client header all arrive as one header
-    carrying the connection address). Before BE-40 the first XFF hop was
-    taken, so any sender chose the address in the five-year audit trail
-    and the key of every per-source limit -- a private address in the
-    header switched the pre-HMAC login limit off, random public ones gave
-    an unbounded number of fresh buckets.
+    WHY X-REAL-IP AND NOT X-FORWARDED-FOR (BE-40). The proxy in front of the
+    app is the deploy machine's nginx, its route `api` of primer.yaml
+    host.routes (drawn by pridem, pridem/stacks/routes.py). X-Real-IP is
+    $remote_addr there: nginx REPLACES any client-sent X-Real-IP with the
+    address of the TCP connection it accepted (checked live on nginx 1.24: a
+    single, a duplicated and a lower-case client header all arrive as one
+    header carrying the connection address). X-Forwarded-For makes no such
+    promise by itself: its usual form, $proxy_add_x_forwarded_for, APPENDS the
+    real address to whatever the client sent, so the first hop is written by
+    the sender. The machine's nginx sets it to $remote_addr alone today, but
+    reading it would make this function depend on that choice of the proxy's
+    config. Before BE-40 the first XFF hop was taken, so any sender chose the
+    address in the five-year audit trail and the key of every per-source limit
+    -- a private address in the header switched the pre-HMAC login limit off,
+    random public ones gave an unbounded number of fresh buckets.
 
     T-47, three separate problems the checks below close:
 
@@ -235,8 +237,7 @@ def _extract_client_ip(scope: Scope) -> str | None:
     the one place that knows what stands in front of it. Reading
     X-Forwarded-For here -- first hop, last hop or N-th from the right --
     is the rejected alternative: it would make the application a second
-    place that has to know the proxy chain. scripts/nginx-render.sh points
-    back here.
+    place that has to know the proxy chain.
     """
     client = scope.get("client")
     peer = client[0] if client else None

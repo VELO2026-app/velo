@@ -21,8 +21,10 @@
 #   E2E_LOG_DIR   where the two servers log (default: /tmp/velo-e2e)
 #
 # The velo-dev stand (~/work/velo-dev) does not need this: there it is
-#   python frontend/e2e/stack/seed_e2e.py && velo setrole 607031 A --yes
-# (`velo seed` cannot see the profile: it lives in frontend/e2e/stack/seed/)
+#   python frontend/e2e/stack/seed_e2e.py
+#   python backend/scripts/set_role.py 607031 A --yes
+# (the wrapper because the profile lives in frontend/e2e/stack/seed/, not
+# in backend/scripts/seed_profiles/ where seed.py looks)
 # =============================================================================
 set -eu
 

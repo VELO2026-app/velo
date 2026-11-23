@@ -37,7 +37,7 @@ Sweep дополнительно проверяет, что вместо экр�
 
 ```sh
 sh ~/work/velo-dev/velo-dev-up.sh
-python frontend/e2e/stack/seed_e2e.py && velo setrole 607031 A --yes   # один раз; сид — обёртка, `velo seed` профиль не видит
+python frontend/e2e/stack/seed_e2e.py && python backend/scripts/set_role.py 607031 A --yes   # один раз; сид -- обёртка: профиль не в seed_profiles/
 pnpm -C frontend build                                     # golden-сборка для vite preview
 pnpm -C frontend e2e:sweep
 ```

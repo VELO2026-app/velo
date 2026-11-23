@@ -1,20 +1,20 @@
 # =============================================================================
 # VELO CI -- the backend pytest suite on branch deploy-machine (BE-197)
 #
-# WHY. The stand rolls out only `test`, and ci.yml has no backend suite, so
-# without this job nothing checks the backend on deploy-machine: BE-191,
-# BE-189 and BE-192 would meet their first test run on the machine's
-# velo-test, all at once.
+# WHY. ci.yml has no backend suite, and the deploy machine runs the suite
+# only on a rollout to a box of the role test (primer.yaml test.run, before
+# the migrations): without this job a push to deploy-machine reaches no
+# backend test at all.
 #
-# TEMPORARY. When velo-test on the deploy machine is green and deploy-machine
-# is merged into `test`, the machine itself runs the tests before every
-# migration (protocol test.run), and this workflow is deleted -- it never
-# runs on `test` anyway (the branch filter below).
+# TEMPORARY. When velo-test on the deploy machine is green, the machine itself
+# runs the tests before every migration (protocol test.run), and this
+# workflow is deleted.
 #
 # THE SUITE AS THE DEPLOY MACHINE RUNS IT, NOT A SUITE OF ITS OWN. The
-# command is the one of the stand, `python -m pytest tests/ -v --tb=short`
-# with SERVER_ROLE=test (BE-192), and it runs in the stage `test` of
-# backend/Dockerfile (BE-189: the suite no longer ships in the runtime
+# command is `python -m pytest tests/ -v --tb=short` with SERVER_ROLE=test
+# (BE-192) -- the tests of primer.yaml test.run; only the switches differ
+# (there --junitxml, the machine's report) -- and it runs in the stage `test`
+# of backend/Dockerfile (BE-189: the suite no longer ships in the runtime
 # image), built from the repository root with the build arguments the deploy
 # machine gives. The database is the machine's (protocol 7.1, BE-191): a
 # ready `velo_test`, created by the Postgres service itself (POSTGRES_DB)
@@ -69,6 +69,7 @@ on:
       - frontend/scripts/lib/skin-package.mjs
       - frontend/vite.config.ts
       - frontend/src/platform/skin.ts
+      - frontend/src/api/**
   pull_request:
     branches: [deploy-machine]
     paths:
@@ -85,6 +86,7 @@ on:
       - frontend/scripts/lib/skin-package.mjs
       - frontend/vite.config.ts
       - frontend/src/platform/skin.ts
+      - frontend/src/api/**
 
 concurrency:
   group: backend-tests-${{ github.ref }}
@@ -162,7 +164,8 @@ jobs:
                        "/frontend/nginx.conf", "/frontend/Dockerfile",
                        "/frontend/scripts/lib/texts-package.mjs",
                        "/frontend/scripts/lib/skin-package.mjs",
-                       "/frontend/vite.config.ts", "/frontend/src/platform/skin.ts", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
+                       "/frontend/vite.config.ts", "/frontend/src/platform/skin.ts",
+                       "/frontend/src/api/client.ts", "/opt/venv/bin/pytest", "/opt/venv/bin/ruff"):
               (present if dev else absent)(path)
           for name in ("pytest", "pytest_asyncio", "ruff"):
               module(name, dev)

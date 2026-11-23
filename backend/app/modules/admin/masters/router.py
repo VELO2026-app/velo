@@ -154,7 +154,7 @@ async def revoke_master_endpoint(
 ) -> RevokeMasterAdvisory:
     """Revoke a master's capability, preserving all data (A1, operator Б).
 
-    Mirrors CLI `velo setrole <tg> user` (set_role.py to_user): role -> user
+    Mirrors set_role.py to_user (the verb setrole, role U): role -> user
     (if master) + profile soft-frozen (status=suspended, is_accepting=false).
     Never blocks on the advisory guard signals. Re-grant = the existing
     "Сделать мастером" make_master re-verify branch.

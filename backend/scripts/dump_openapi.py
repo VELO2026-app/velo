@@ -3,13 +3,13 @@
 # VELO Backend -- OpenAPI schema to stdout, without HTTP (BE-114 item 2)
 # =============================================================================
 #
-# Usage, from the host, through the running app container:
-#   docker compose exec -T app python scripts/dump_openapi.py > openapi.json
+# Usage: the deploy machine runs it in the app's image as the `openapi`
+# command of primer.yaml (stacks.velo.types). By hand, from backend/:
+#   python scripts/dump_openapi.py > openapi.json
 #
-# WHY NOT `curl http://127.0.0.1:8000/openapi.json`. That was how `velo
-# update`, `velo gen-types` and the installer got the schema, and it needed
-# the schema to be served over HTTP -- which made it public on every box the
-# API is reachable from. The schema is built in-process here instead, the
+# WHY NOT `curl http://127.0.0.1:8000/openapi.json`. That needs the schema
+# served over HTTP -- which makes it public on every box the API is
+# reachable from. The schema is built in-process here instead, the
 # way CI already builds it (.github/workflows/ci.yml): the app no longer
 # serves the schema at all (BE-114 item 2, app/main.py), and the type
 # generation does not lose its input.

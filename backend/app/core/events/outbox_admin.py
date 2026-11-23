@@ -3,7 +3,7 @@
 # =============================================================================
 #
 # Service-level operations behind the `comms-outbox` CLI
-# (scripts/comms_outbox.py -> `velo comms-outbox ...` via velo-manage.sh):
+# (scripts/comms_outbox.py -> the comms-outbox-* verbs of primer.yaml):
 # see and revive dead-lettered outbox rows without hand-written psql.
 #
 # Importable ON PURPOSE: the integration tests exercise these functions
