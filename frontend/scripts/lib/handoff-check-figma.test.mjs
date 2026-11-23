@@ -59,7 +59,7 @@ const solid = (hex) => ({ type: 'SOLID', color: rgb(hex) })
  * fill and a raw 13 px gap, and a `Новое` note with the given lines.
  * @param {string[]} noteLines
  */
-function section(noteLines) {
+function section(noteLines, fillOpacity) {
   const sec = new Node('SECTION', 'Handoff / FE-5 / Home')
   sec.data['f2c:issue'] = 'FE-5'
   const screen = sec.appendChild(
@@ -76,7 +76,9 @@ function section(noteLines) {
     new Node('FRAME', 'Card', {
       layoutMode: 'VERTICAL',
       itemSpacing: 13,
-      fills: [solid('#a1e0c7')],
+      fills: [
+        { ...solid('#a1e0c7'), ...(fillOpacity === undefined ? {} : { opacity: fillOpacity }) },
+      ],
       boundVariables: {},
     }),
   )
@@ -86,8 +88,8 @@ function section(noteLines) {
 }
 
 /** Runs HANDOFF_CHECK on a section with the given token-request statuses. */
-function check(noteLines, tokenRequests) {
-  const sec = section(noteLines)
+function check(noteLines, tokenRequests, fillOpacity) {
+  const sec = section(noteLines, fillOpacity)
   const figma = {
     mixed: Symbol('mixed'),
     getNodeByIdAsync: (id) => Promise.resolve(id === sec.id ? sec : null),
@@ -180,6 +182,31 @@ test('a request approves only the values on its own line', async () => {
   )
   assert.equal(r.warnings['H-06'], 1)
   assert.equal(r.errors['H-08'], 1, '13 px is not on an approved line')
+})
+
+test('an opaque approval does not cover a translucent fill, and #rrggbbaa covers it', async () => {
+  const opaque = await check(
+    ['Новые токены: accent/mint = #a1e0c7, gap 13px — FE-231'],
+    { 'FE-231': 'approved' },
+    0.5,
+  )
+  assert.equal(opaque.errors['H-06'], 1, 'the 50 % fill is another colour than #a1e0c7')
+  const withAlpha = await check(
+    ['Новые токены: accent/mint-50 = #a1e0c780, gap 13px — FE-231'],
+    { 'FE-231': 'approved' },
+    0.5,
+  )
+  assert.equal(withAlpha.errors['H-06'], undefined)
+  assert.equal(withAlpha.warnings['H-06'], 1)
+  const alphaOnOpaque = await check(
+    ['Новые токены: accent/mint-50 = #a1e0c780, gap 13px — FE-231'],
+    { 'FE-231': 'approved' },
+  )
+  assert.equal(
+    alphaOnOpaque.errors['H-06'],
+    1,
+    'a translucent approval does not cover an opaque fill',
+  )
 })
 
 // --- SIMILAR_TOKENS --------------------------------------------------------------------

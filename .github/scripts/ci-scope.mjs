@@ -130,7 +130,7 @@ const COMMENT_BY_EXT = {
 }
 
 const SPEC = /^tz-[^/]+\.md$/
-// FE-228: the Figma helper scripts under docs/ are code with tests in the `scripts` project.
+// The Figma helper scripts under docs/ are code with tests in the `scripts` project.
 const FIGMA_SCRIPT = /^docs\/.*\.figma\.js$/
 const isDocs = (f) => !FIGMA_SCRIPT.test(f) && (DOCS.some((re) => re.test(f)) || (f.endsWith('.md') && !CODE_TREES.test(f)))
 

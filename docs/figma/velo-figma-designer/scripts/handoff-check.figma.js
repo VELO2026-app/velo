@@ -51,7 +51,12 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
     if (arr.length < o.limit) arr.push(Object.assign({ id: node.id, name: node.name }, extra || {}));
   };
   const E = (r, n, x) => add(errors, r, n, x), W = (r, n, x) => add(warns, r, n, x);
-  const hex = (c) => '#' + [c.r, c.g, c.b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  // `#rrggbb`, plus `aa` when the colour is translucent: `a` is the colour alpha times the paint opacity
+  const hex = (c, opacity) => {
+    const a = (c.a === undefined ? 1 : c.a) * (opacity === undefined ? 1 : opacity);
+    return '#' + [c.r, c.g, c.b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')
+      + (a < 0.996 ? Math.round(a * 255).toString(16).padStart(2, '0') : '');
+  };
   const stats = { frames: 0, screens: 0, texts: 0, instances: 0, nodes: 0 };
   const rawColors = {}, fonts = {}, mains = {};
   let rawValues = 0, unknownMains = 0;
@@ -79,28 +84,27 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
   const OK_STATUS = /^(approved|done)$/;
   const approvedHex = new Set(), approvedPx = new Set(), requests = {};
   const screenTasks = new Set(issue ? [issue] : []);
+  const noteLines = [];
   for (const note of noteNodes) {
     const texts = note.type === 'TEXT' ? [note] : note.findAll((x) => x.type === 'TEXT');
     for (const t of texts) for (const line of t.characters.split('\n')) {
-      if (/^\s*Задача\s*:/i.test(line)) { (line.match(/\bFE-\d+\b/g) || []).forEach((k) => screenTasks.add(k)); }
+      if (/^\s*Задача\s*:/i.test(line)) (line.match(/\bFE-\d+\b/g) || []).forEach((k) => screenTasks.add(k));
+      else noteLines.push(line);
     }
   }
-  for (const note of noteNodes) {
-    const texts = note.type === 'TEXT' ? [note] : note.findAll((x) => x.type === 'TEXT');
-    for (const t of texts) for (const line of t.characters.split('\n')) {
-      if (/^\s*Задача\s*:/i.test(line)) continue;
-      const keys = (line.match(/\bFE-\d+\b/g) || []).filter((k) => !screenTasks.has(k));
-      if (!keys.length) continue;
-      const hexes = (line.match(/#[0-9a-fA-F]{6}\b/g) || []).map((h) => h.toLowerCase());
-      // `<name> = <value>`: the number after `=`, with or without «px»; a bare `13px` counts too
-      const pxs = [...line.matchAll(/=\s*(\d+(?:\.\d+)?)(?!\s*[\w#])/g)].map((m) => parseFloat(m[1]))
-        .concat([...line.matchAll(/\b(\d+(?:\.\d+)?)\s*px\b/g)].map((m) => parseFloat(m[1])));
-      if (!hexes.length && !pxs.length) continue;
-      const states = keys.map((k) => (requests[k] = o.tokenRequests[k] || 'unknown'));
-      if (!states.some((st) => OK_STATUS.test(st))) continue;
-      hexes.forEach((h) => approvedHex.add(h));
-      pxs.forEach((p) => approvedPx.add(p));
-    }
+  for (const line of noteLines) {
+    const keys = (line.match(/\bFE-\d+\b/g) || []).filter((k) => !screenTasks.has(k));
+    if (!keys.length) continue;
+    // #rrggbb or #rrggbbaa: an opaque approval never covers a translucent fill, and vice versa
+    const hexes = (line.match(/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6})\b/g) || []).map((h) => h.toLowerCase());
+    // `<name> = <value>`: the number after `=`, with or without «px»; a bare `13px` counts too
+    const pxs = [...line.matchAll(/=\s*(\d+(?:\.\d+)?)(?!\s*[\w#])/g)].map((m) => parseFloat(m[1]))
+      .concat([...line.matchAll(/\b(\d+(?:\.\d+)?)\s*px\b/g)].map((m) => parseFloat(m[1])));
+    if (!hexes.length && !pxs.length) continue;
+    const states = keys.map((k) => (requests[k] = o.tokenRequests[k] || 'unknown'));
+    if (!states.some((st) => OK_STATUS.test(st))) continue;
+    hexes.forEach((h) => approvedHex.add(h));
+    pxs.forEach((p) => approvedPx.add(p));
   }
 
   const inNote = (n) => { let p = n; while (p) { if (NOTE.test(p.name)) return true; if (p === root) break; p = p.parent; } return false; };
@@ -133,7 +137,7 @@ const HANDOFF_CHECK = async (nodeId, opts) => {
       if (!arr || arr === figma.mixed) continue;
       for (const p of arr) {
         if (p.visible === false || p.type !== 'SOLID' || bound(p)) continue;
-        const h = hex(p.color);
+        const h = hex(p.color, p.opacity);
         rawColors[h] = (rawColors[h] || 0) + 1; rawValues++;
         if (approvedHex.has(h)) W('H-06', n, { [key]: h, approved: true });
         else E('H-06', n, { [key]: h });
