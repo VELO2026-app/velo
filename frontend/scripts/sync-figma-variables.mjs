@@ -24,47 +24,73 @@
 //     moved base) stays report-only for the human review the plan
 //     requires (token diffs review like code).
 //
-// INPUT MODES
-//   --snapshot <file>  a JSON dump of the Figma variables (the shape the
-//                      Desktop Bridge / figma_get_variables returns: at
-//                      least {variables:[{id,name,resolvedType,valuesByMode}]})
-//   --skin <dir> --mode <id> --dry-run   (FE-219) the values a skin package
-//                      gives mode <id>: token -> gold -> skin, plus what Figma
-//                      cannot hold. Without --dry-run it refuses (item 3, the
-//                      Figma write, is not built).
-//   --rest             the published-variables REST API
-//                      (GET /v1/files/{fileKey}/variables; env FIGMA_TOKEN,
-//                      --file-key, default IV92js0q2cBHmHmDxB0zxM). The
-//                      Local Variables endpoint is Enterprise-locked; the
-//                      file's library must be published. CI runs this mode
-//                      (.github/workflows/token-sync.yml).
+// THREE MODES (FE-234 item 6, owner's decision 23.11.2026): the `velo`
+// collection holds `core` (the neutral tokens.json) first, then one mode per
+// skin package (`gold` = velo-brand, `goodo` = goodo-brand), pinned by tag
+// and commit in frontend/design/figma-modes.json. A mode is found by its
+// NAME, never by its position: the old "core = the first mode" rule would
+// pour the neutral core into `gold` while `gold` is still the first mode.
+//
+// INPUT
+//   --snapshot <file>  a dump of the Figma variables WITH mode names: the
+//                      snapshot() of docs/figma/front/modes-lib.figma.js
+//                      (also the bridge shape with variableCollections, the
+//                      REST shape). The old compact single-mode dump is refused.
+//   --rest             the Variables REST API (GET /v1/files/{fileKey}/variables;
+//                      env FIGMA_TOKEN, --file-key; Enterprise-locked, dormant).
+//   Packages: each skin mode's package is cloned at its pinned tag and its
+//   commit is checked (a private repo reads the git credentials or
+//   BRAND_REPO_TOKEN); --pkg <mode>=<dir> uses a local checkout instead (its
+//   HEAD must be the pinned commit). --only <mode,...> limits the run.
+//
+// COMMANDS
+//   --snapshot|--rest            drift report for EVERY mode: core vs
+//                                tokens.json, a skin mode vs tokens.json + its
+//                                package; a configured mode Figma lacks and a
+//                                Figma mode the config lacks are drift too.
+//     --apply                    the dormant Figma -> code direction: the
+//                                lossless updates of the CORE mode only, into
+//                                tokens.json (+ variables.css).
+//   --skin --snapshot <file> --payload <out.json>
+//                                the values of every mode for the Figma writer
+//                                (modes-lib.figma.js apply()); the report
+//                                lists what changes against the snapshot and
+//                                what Figma cannot hold.
+//   --skin <dir> --mode <id> --dry-run
+//                                (FE-219) one local package against the core,
+//                                a report only -- for a package not tagged yet.
 //
 // Exit codes: 0 up-to-date/clean · 1 error · 2 drift found (dry-run) --
 // the CI autosync turns 2 into the auto-PR; a human reviews it as code.
 //
 // Run from frontend/:  node scripts/sync-figma-variables.mjs --snapshot dump.json
 // =============================================================================
-import { readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import process from 'node:process'
-import {
-  collectLeaves,
-  indexByCssName,
-  buildNameMap,
-  parseCssValue,
-  figmaToComparableTyped,
-  compareValues,
-  reconstructCss,
-} from './lib/figma-token-sync.mjs'
+import { collectLeaves, buildNameMap, reconstructCss } from './lib/figma-token-sync.mjs'
 import { generateVariables } from './generate-variables.mjs'
 import { loadSkinPackage } from './lib/skin-package.mjs'
 import { skinModeReport, formatSkinModeReport, parseSkinArgs } from './lib/skin-mode.mjs'
+import {
+  buildModeValues,
+  crossCheckPins,
+  modeDrift,
+  modeRegistry,
+  normalizeSnapshot,
+  parseModesConfig,
+} from './lib/figma-modes.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const tokensPath = join(here, '..', 'tokens.json')
-const cssPath = join(here, '..', 'src', 'styles', 'variables.css')
-const DEFAULT_FILE_KEY = 'IV92js0q2cBHmHmDxB0zxM' // the token file
+const frontendDir = join(here, '..')
+const repoRoot = join(frontendDir, '..')
+const tokensPath = join(frontendDir, 'tokens.json')
+const cssPath = join(frontendDir, 'src', 'styles', 'variables.css')
+const modesPath = join(frontendDir, 'design', 'figma-modes.json')
+const brandSkinsPath = join(repoRoot, '.github', 'brand-skins.json')
 
 // --- args --------------------------------------------------------------------
 const args = process.argv.slice(2)
@@ -72,239 +98,328 @@ function argValue(flag) {
   const i = args.indexOf(flag)
   return i >= 0 ? args[i + 1] : undefined
 }
+function argValues(flag) {
+  return args.flatMap((a, i) => (a === flag && args[i + 1] ? [args[i + 1]] : []))
+}
+/**
+ * @param {string} message
+ * @returns {never}
+ */
+function die(message) {
+  console.error(`error: ${message}`)
+  process.exit(1)
+}
 const snapshotPath = argValue('--snapshot')
 const useRest = args.includes('--rest')
 const apply = args.includes('--apply')
 const reportPath = argValue('--report')
-const fileKey = argValue('--file-key') ?? DEFAULT_FILE_KEY
-const skinArgs = parseSkinArgs(args)
-if (skinArgs && 'error' in skinArgs) {
-  console.error(`error: ${skinArgs.error}`)
-  process.exit(1)
-}
+const payloadPath = argValue('--payload')
 const dryRun = args.includes('--dry-run')
+const skinArgs = parseSkinArgs(args)
+if (skinArgs && 'error' in skinArgs) die(skinArgs.error)
+
+const config = parseModesConfig(JSON.parse(readFileSync(modesPath, 'utf8')))
+const fileKey = argValue('--file-key') ?? config.file
+const only = argValue('--only')?.split(',').filter(Boolean)
+if (only && only.some((n) => !config.modes.some((m) => m.name === n))) {
+  die(`--only ${only.join(',')}: the modes are ${config.modes.map((m) => m.name).join(', ')}`)
+}
+const pkgDirs = new Map()
+for (const spec of argValues('--pkg')) {
+  const eq = spec.indexOf('=')
+  if (eq <= 0) die(`--pkg ${spec}: use <mode>=<package dir>`)
+  pkgDirs.set(spec.slice(0, eq), resolve(spec.slice(eq + 1)))
+}
+
+function output(text) {
+  if (reportPath) {
+    writeFileSync(reportPath, `${text}\n`)
+    console.log(`report: ${reportPath}`)
+  } else {
+    console.log(text)
+  }
+}
 
 // --- input -------------------------------------------------------------------
-async function loadFigmaVariables() {
-  if (snapshotPath) {
-    const raw = JSON.parse(readFileSync(snapshotPath, 'utf8')).variables
-    // Two snapshot shapes: the bridge's own ({id,name,resolvedType,
-    // valuesByMode}) and the compact execute dump ({n, t, c:[rgba]|a:name|v})
-    // -- the latter is what `--bridge-hint` below documents; normalize both.
-    if (raw.length > 0 && raw[0].n !== undefined) {
-      return raw.map((entry) => {
-        let value
-        if (entry.c) {
-          const [r, g, b, a] = entry.c
-          value = { r: r / 255, g: g / 255, b: b / 255, a }
-        } else if (entry.a) {
-          value = { type: 'VARIABLE_ALIAS', id: `name:${entry.a}` }
-        } else {
-          value = entry.v
-        }
-        return {
-          id: `name:${entry.n}`,
-          name: entry.n,
-          resolvedType: entry.t,
-          valuesByMode: { m: value },
-        }
-      })
-    }
-    return raw
-  }
+async function loadSnapshot() {
+  if (snapshotPath) return normalizeSnapshot(JSON.parse(readFileSync(snapshotPath, 'utf8')))
   if (useRest) {
     const token = process.env.FIGMA_TOKEN
-    if (!token) {
-      throw new Error(
-        '--rest needs FIGMA_TOKEN in the environment (the published-variables REST API)',
-      )
-    }
-    const res = await fetch(`https://api.figma.com/v1/files/${fileKey}/variables`, {
+    if (!token) throw new Error('--rest needs FIGMA_TOKEN in the environment')
+    const res = await fetch(`https://api.figma.com/v1/files/${fileKey}/variables/local`, {
       headers: { 'X-Figma-Token': token },
     })
-    if (!res.ok) {
-      throw new Error(`Figma REST ${res.status}: ${await res.text()}`)
-    }
+    if (!res.ok) throw new Error(`Figma REST ${res.status}: ${await res.text()}`)
     /** @type {any} */
     const json = await res.json()
     if (json.error) throw new Error(`Figma REST: ${JSON.stringify(json.error)}`)
-    // Published variables arrive as {variables:[{id,name,resolvedType,
-    // valuesByMode}]}, the same shape the bridge snapshot carries.
-    return json.variables
+    return normalizeSnapshot(json)
   }
   throw new Error('pass --snapshot <file> or --rest')
 }
 
-// --- skin mode (FE-219) --------------------------------------------------------
-// --skin <package dir> --mode <id>: the values a skin package gives the
-// `velo` collection's mode <id> (gold + the package's overrides). Only the
-// dry-run report exists; writing the mode into Figma is FE-219 item 3.
-if (skinArgs) {
-  const { skinDir, modeId } = skinArgs
-  if (!dryRun) {
-    console.error(
-      'error: writing a skin mode is not implemented yet (FE-219 item 3); use --dry-run',
-    )
-    process.exit(1)
+// --- packages ----------------------------------------------------------------
+const git = (cwd, ...a) => execFileSync('git', ['-C', cwd, ...a], { encoding: 'utf8' }).trim()
+
+/** The directory of a skin mode's package: a local checkout (--pkg) or a
+ *  fresh clone at the pinned tag. The commit must be the pinned one. */
+function packageDir(mode, scratch) {
+  const p = mode.package
+  const local = pkgDirs.get(mode.name)
+  if (local) {
+    let head
+    try {
+      head = git(local, 'rev-parse', 'HEAD')
+    } catch {
+      die(`--pkg ${mode.name}=${local}: not a git checkout, the pinned commit cannot be checked`)
+    }
+    if (head !== p.sha)
+      die(`--pkg ${mode.name}: HEAD is ${head}, figma-modes.json pins ${p.tag} ${p.sha}`)
+    return join(local, p.dir)
   }
-  const goldDoc = JSON.parse(readFileSync(tokensPath, 'utf8'))
-  const goldLeaves = collectLeaves(goldDoc)
-  const pkg = loadSkinPackage(skinDir, goldDoc)
-  if (pkg.problems.length > 0) {
-    console.error(
-      `error: skin package is not valid:\n${pkg.problems.map((p) => `  - ${p}`).join('\n')}`,
+  const target = join(scratch, mode.name)
+  const token = process.env.BRAND_REPO_TOKEN ?? ''
+  const url = token
+    ? `https://x-access-token:${token}@github.com/${p.repo}.git`
+    : `https://github.com/${p.repo}.git`
+  try {
+    // The URL may carry the token: keep git's own output out of the log.
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'advice.detachedHead=false',
+        'clone',
+        '--quiet',
+        '--depth',
+        '1',
+        '--branch',
+        p.tag,
+        url,
+        target,
+      ],
+      { stdio: ['ignore', 'ignore', 'pipe'] },
     )
-    process.exit(1)
+  } catch {
+    die(
+      `cannot clone ${p.repo} at ${p.tag} (a private repo needs git credentials or BRAND_REPO_TOKEN; or pass --pkg ${mode.name}=<checkout>)`,
+    )
+  }
+  const head = git(target, 'rev-parse', 'HEAD')
+  if (head !== p.sha)
+    die(`${p.repo} ${p.tag} is ${head}, figma-modes.json pins ${p.sha}: the tag moved`)
+  return join(target, p.dir)
+}
+
+/** core + one entry per skin mode: {name, leaves}. */
+function loadModes(doc, leaves) {
+  if (existsSync(brandSkinsPath)) {
+    const disagree = crossCheckPins(config.modes, JSON.parse(readFileSync(brandSkinsPath, 'utf8')))
+    if (disagree.length > 0) die(`the package pins disagree:\n  ${disagree.join('\n  ')}`)
+  }
+  const wanted = config.modes.filter((m, i) => i === 0 || !only || only.includes(m.name))
+  const scratch = mkdtempSync(join(tmpdir(), 'figma-modes-'))
+  try {
+    return wanted.map((m, i) => {
+      if (i === 0) return { name: m.name, leaves, source: 'frontend/tokens.json' }
+      const p = /** @type {NonNullable<typeof m.package>} */ (m.package)
+      const pkg = loadSkinPackage(packageDir(m, scratch), doc)
+      if (pkg.problems.length > 0) {
+        die(`${p.name} ${p.tag} is not a valid skin package:\n  ${pkg.problems.join('\n  ')}`)
+      }
+      return {
+        name: m.name,
+        leaves: modeRegistry(leaves, pkg.decls),
+        source: `${p.repo} ${p.tag} ${p.sha.slice(0, 8)}`,
+      }
+    })
+  } finally {
+    rmSync(scratch, { recursive: true, force: true })
+  }
+}
+
+// --- one local package, report only (FE-219) -----------------------------------
+if (skinArgs && 'skinDir' in skinArgs) {
+  const { skinDir, modeId } = skinArgs
+  if (!dryRun)
+    die('--skin <dir> --mode <id> is a report only: add --dry-run (the payload: --skin --payload)')
+  const doc = JSON.parse(readFileSync(tokensPath, 'utf8'))
+  const coreLeaves = collectLeaves(doc)
+  const pkg = loadSkinPackage(skinDir, doc)
+  if (pkg.problems.length > 0) {
+    die(`skin package is not valid:\n${pkg.problems.map((p) => `  - ${p}`).join('\n')}`)
   }
   // Names are paired by the FE-124 rule only when a Figma snapshot is given.
   const figmaNames = snapshotPath
-    ? buildNameMap(goldLeaves, await loadFigmaVariables()).map
+    ? buildNameMap(coreLeaves, (await loadSnapshot()).variables).map
     : undefined
-  const skinReport = formatSkinModeReport(skinModeReport(goldLeaves, pkg.decls, figmaNames), {
-    skinPath: skinDir,
-    modeId,
-  })
-  if (reportPath) {
-    writeFileSync(reportPath, `${skinReport}\n`)
-    console.log(`report: ${reportPath}`)
-  } else {
-    console.log(skinReport)
-  }
+  output(
+    formatSkinModeReport(skinModeReport(coreLeaves, pkg.decls, figmaNames), {
+      skinPath: skinDir,
+      modeId,
+    }),
+  )
   process.exit(0)
 }
 
-// --- main --------------------------------------------------------------------
 const doc = JSON.parse(readFileSync(tokensPath, 'utf8'))
 const leaves = collectLeaves(doc)
-const byCssName = indexByCssName(leaves)
-const figmaVariables = await loadFigmaVariables()
-
-const figmaById = Object.fromEntries(figmaVariables.map((v) => [v.id, v]))
-const figmaByName = Object.fromEntries(figmaVariables.map((v) => [v.name, v]))
-// The compact dump's aliases point at NAMES: give them a resolvable id view.
-for (const v of figmaVariables) {
-  figmaById[`name:${v.name}`] = v
-}
-const { map, registryOrphans, figmaOrphans } = buildNameMap(leaves, figmaVariables)
-const cssNameByFigmaName = new Map([...map].map(([k, v]) => [v, k]))
-
-const updates = [] // {leaf, newValue}
-const drift = [] // {cssName, registry, figma, note}
-const review = [] // {cssName, reason}
-
-for (const leaf of leaves) {
-  const figmaName = map.get(leaf.cssName)
-  if (!figmaName) continue // a registry orphan -- reported below
-  const figVar = figmaByName[figmaName]
-  if (!figVar) {
-    review.push({ cssName: leaf.cssName, reason: 'figma variable missing at sync time' })
-    continue
-  }
-  const modeId = Object.keys(figVar.valuesByMode)[0]
-  const regComparable = parseCssValue(leaf.value)
-  const figComparable = figmaToComparableTyped(
-    figVar.valuesByMode[modeId],
-    figVar.resolvedType,
-    figmaById,
-    map,
-    cssNameByFigmaName,
-  )
-  const verdict = compareValues(regComparable, figComparable, byCssName)
-  if (verdict.status === 'match') continue
-  if (verdict.status === 'review') {
-    review.push({ cssName: leaf.cssName, reason: verdict.reason })
-    continue
-  }
-  const newValue = reconstructCss(regComparable, figComparable, figVar.resolvedType)
-  const shownFig =
-    figComparable.kind === 'color'
-      ? `rgba(${(figComparable.rgb ?? []).join(', ')}, ${figComparable.a.toFixed(3)})`
-      : figComparable.kind === 'dim'
-        ? `${figComparable.value}${figComparable.unit}`
-        : figComparable.kind === 'ref'
-          ? figComparable.cssName
-          : `"${figComparable.text}"`
-  drift.push({ cssName: leaf.cssName, registry: leaf.value.trim(), figma: shownFig })
-  if (newValue !== null && apply) {
-    updates.push({ leaf, newValue })
-  }
+const snapshot = await loadSnapshot().catch((e) => die(e instanceof Error ? e.message : String(e)))
+const modes = loadModes(doc, leaves)
+const scoped = {
+  ...config,
+  modes: config.modes.filter((m) => modes.some((x) => x.name === m.name)),
 }
 
-// --- apply -------------------------------------------------------------------
-if (apply && updates.length > 0) {
-  for (const { leaf, newValue } of updates) {
+// --- the payload for the Figma writer (--skin) ----------------------------------
+if (skinArgs && 'all' in skinArgs) {
+  if (!payloadPath)
+    die('--skin needs --payload <out.json> (the file modes-lib.figma.js apply() reads)')
+  if (only) die('--skin writes every mode: drop --only')
+  let commit = 'unknown'
+  try {
+    commit = git(repoRoot, 'rev-parse', 'HEAD')
+  } catch {
+    /* not a git checkout: the payload says so */
+  }
+  const sources = Object.fromEntries(modes.map((m) => [m.name, m.source]))
+  const built = buildModeValues({ config, modes, snapshot, source: { commit, modes: sources } })
+  writeFileSync(/** @type {string} */ (payloadPath), `${JSON.stringify(built.payload, null, 2)}\n`)
+  const drift = modeDrift({ config, modes, snapshot })
+  const lines = [
+    `## Figma modes payload -- ${payloadPath}`,
+    '',
+    `Collection \`${config.collection}\`: ${config.modes.map((m) => `\`${m.name}\``).join(' -> ')} (core first; screens in \`${config.screensMode}\`).`,
+    '',
+    '| mode | source | in Figma | values that change |',
+    '|---|---|---|---|',
+  ]
+  for (const row of drift.modes) {
+    const src = row.collection === config.collection ? sources[row.name] : 'frontend/tokens.json'
+    const label = row.collection === config.collection ? row.name : `${row.collection} (one mode)`
+    const change = row.missing ? 'all (new mode)' : String(row.drift.length + row.review.length)
+    lines.push(`| ${label} | ${src} | ${row.missing ? 'missing' : 'yes'} | ${change} |`)
+  }
+  if (drift.unknownModes.length > 0) {
+    lines.push(
+      '',
+      `Figma modes the config does not know (apply() stops): ${drift.unknownModes.join(', ')}`,
+    )
+  }
+  lines.push('', `### Not stored in Figma (${built.problems.length})`, '')
+  if (built.problems.length === 0) lines.push('None.')
+  for (const p of built.problems)
+    lines.push(`- ${p.mode} \`${p.cssName}\` (\`${p.figmaName}\`): ${p.reason}`)
+  if (built.registryOrphans.length > 0) {
+    lines.push(
+      '',
+      `### Tokens with no Figma variable (${built.registryOrphans.length}) -- create the variable first`,
+      '',
+    )
+    for (const n of built.registryOrphans) lines.push(`- \`${n}\``)
+  }
+  if (built.figmaOrphans.length > 0) {
+    lines.push(
+      '',
+      `### Figma variables with no token (${built.figmaOrphans.length}) -- not written`,
+      '',
+    )
+    for (const n of built.figmaOrphans) lines.push(`- \`${n}\``)
+  }
+  output(lines.join('\n'))
+  process.exit(0)
+}
+
+// --- drift report, every mode ------------------------------------------------------
+const result = modeDrift({ config: scoped, modes, snapshot })
+const coreRow = result.modes.find(
+  (r) => r.collection === config.collection && r.name === modes[0].name,
+)
+const updates = []
+if (apply) {
+  if (!coreRow || coreRow.missing)
+    die('--apply reads the core mode, and Figma has no mode named core')
+  // The core of the core-only collections joins the core mode's updates.
+  for (const row of result.modes.filter((r) => r.name === modes[0].name && !r.missing)) {
+    for (const d of row.drift) {
+      const newValue = reconstructCss(d.regComparable, d.figComparable, d.resolvedType)
+      if (newValue !== null) updates.push({ cssName: d.cssName, newValue })
+    }
+  }
+  const byName = new Map(leaves.map((l) => [l.cssName, l]))
+  for (const { cssName, newValue } of updates) {
     // The registry value keeps its authored leading space ("  --name: VALUE;")
     // -- the generator's verbatim emit depends on it.
-    leaf.node.$value = newValue.startsWith(' ') ? newValue : ` ${newValue}`
+    ;/** @type {any} */ (byName.get(cssName)).node.$value = newValue.startsWith(' ')
+      ? newValue
+      : ` ${newValue}`
   }
-  // indent=2 + trailing newline: byte-identical with the committed file's
-  // serialization (verified against the FE-124 extractor's output).
-  writeFileSync(tokensPath, `${JSON.stringify(doc, null, 2)}\n`)
-  writeFileSync(cssPath, generateVariables(doc))
+  if (updates.length > 0) {
+    // indent=2 + trailing newline: byte-identical with the committed file's
+    // serialization (verified against the FE-124 extractor's output).
+    writeFileSync(tokensPath, `${JSON.stringify(doc, null, 2)}\n`)
+    writeFileSync(cssPath, generateVariables(doc))
+  }
 }
 
-// --- report ------------------------------------------------------------------
-const lines = []
-lines.push('## Figma Variables drift report (track T stage 2)')
-lines.push('')
+const lines = ['## Figma Variables drift report (FE-234: one section per mode)', '']
 lines.push(
-  `Registry: ${leaves.length} tokens · Figma: ${figmaVariables.length} variables · mapped: ${map.size}`,
+  `Registry: ${leaves.length} tokens · Figma: ${snapshot.variables.length} variables · modes: ${scoped.modes.map((m) => m.name).join(', ')}`,
 )
-if (registryOrphans.length > 0) {
-  lines.push('')
-  lines.push(
-    `### Registry tokens with NO Figma pair (${registryOrphans.length}) -- a Figma import is missing them`,
-  )
-  for (const n of registryOrphans) lines.push(`- \`${n}\``)
+if (result.unknownModes.length > 0) {
+  lines.push('', `### Figma modes the config does not know (${result.unknownModes.length})`)
+  for (const n of result.unknownModes) lines.push(`- \`${n}\``)
 }
-if (figmaOrphans.length > 0) {
-  lines.push('')
+if (result.registryOrphans.length > 0) {
   lines.push(
-    `### Figma variables with NO registry pair (${figmaOrphans.length}) -- new designer tokens, code has no owner yet`,
+    '',
+    `### Registry tokens with NO Figma pair (${result.registryOrphans.length}) -- a Figma import is missing them`,
   )
-  for (const n of figmaOrphans) lines.push(`- \`${n}\``)
+  for (const n of result.registryOrphans) lines.push(`- \`${n}\``)
 }
-if (drift.length > 0) {
-  lines.push('')
+if (result.figmaOrphans.length > 0) {
   lines.push(
-    `### Value drift (${drift.length}) -- Figma is the designer's word, the registry the code's`,
+    '',
+    `### Figma variables with NO registry pair (${result.figmaOrphans.length}) -- new designer tokens, code has no owner yet`,
   )
-  lines.push('')
-  lines.push('| token | registry | Figma | applied |')
-  lines.push('|---|---|---|---|')
-  for (const d of drift) {
-    const applied = apply && updates.some((u) => u.leaf.cssName === d.cssName) ? '✅' : ''
-    lines.push(`| \`${d.cssName}\` | \`${d.registry}\` | \`${d.figma}\` | ${applied} |`)
+  for (const n of result.figmaOrphans) lines.push(`- \`${n}\``)
+}
+for (const row of result.modes) {
+  const title =
+    row.collection === config.collection
+      ? `mode \`${row.name}\``
+      : `\`${row.collection}\` (one mode, core)`
+  const src = modes.find((m) => m.name === row.name)?.source
+  if (row.missing) {
+    lines.push('', `### ${title}: MISSING in Figma (${src})`)
+    continue
   }
+  if (row.drift.length === 0 && row.review.length === 0) {
+    lines.push('', `### ${title}: in sync (${src})`)
+    continue
+  }
+  lines.push('', `### ${title}: ${row.drift.length} drift, ${row.review.length} to review (${src})`)
+  if (row.drift.length > 0) {
+    lines.push('', '| token | code | Figma | applied |', '|---|---|---|---|')
+    for (const d of row.drift) {
+      const done =
+        updates.some((u) => u.cssName === d.cssName) && row.name === modes[0].name ? '✅' : ''
+      lines.push(`| \`${d.cssName}\` | \`${d.registry}\` | \`${d.figma}\` | ${done} |`)
+    }
+  }
+  for (const r of row.review) lines.push(`- \`${r.cssName}\`: ${r.reason}`)
 }
-if (review.length > 0) {
-  lines.push('')
-  lines.push(`### Needs a human decision (${review.length})`)
-  for (const r of review) lines.push(`- \`${r.cssName}\`: ${r.reason}`)
-}
-if (
-  drift.length === 0 &&
-  review.length === 0 &&
-  registryOrphans.length === 0 &&
-  figmaOrphans.length === 0
-) {
-  lines.push('')
-  lines.push('**In sync.** No drift, no orphans.')
-}
-const report = lines.join('\n')
-
-if (reportPath) writeFileSync(reportPath, `${report}\n`)
-
-if (reportPath === undefined) console.log(report)
-else console.log(`report: ${reportPath}`)
-
-if (apply && updates.length > 0) {
+const drifted =
+  result.unknownModes.length > 0 ||
+  result.registryOrphans.length > 0 ||
+  result.figmaOrphans.length > 0 ||
+  result.modes.some((r) => r.missing || r.drift.length > 0 || r.review.length > 0)
+if (!drifted) lines.push('', '**In sync.** Every mode, no orphans.')
+output(lines.join('\n'))
+if (updates.length > 0) {
   console.log(
-    `applied: ${updates.length} lossless value update(s) into tokens.json + regenerated variables.css`,
+    `applied: ${updates.length} lossless core update(s) into tokens.json + regenerated variables.css`,
   )
 }
-
 // The exit code IS the automation contract: 2 = a PR is needed.
-const drifted =
-  drift.length > 0 || review.length > 0 || registryOrphans.length > 0 || figmaOrphans.length > 0
 process.exit(drifted ? 2 : 0)

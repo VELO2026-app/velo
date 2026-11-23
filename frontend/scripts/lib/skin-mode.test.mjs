@@ -42,16 +42,16 @@ describe('resolveForFigma', () => {
 })
 
 describe('skinModeReport', () => {
-  it('reports gold -> skin per token, gold resolved on the gold values', () => {
+  it('reports core -> skin per token, core resolved on the core values', () => {
     const r = skinModeReport(gold, [
       ['--velo-blue-500', '#120054'],
       ['--velo-primary', 'var(--velo-blue-500)'],
       ['--velo-hover', 'color-mix(in srgb, var(--velo-blue-500) 10%, transparent)'],
     ])
     const hover = r.rows.find((x) => x.cssName === '--velo-hover')
-    expect(hover).toMatchObject({ gold: '#0000FF @ 0.1', skin: '#120054 @ 0.1', changed: true })
+    expect(hover).toMatchObject({ core: '#0000FF @ 0.1', skin: '#120054 @ 0.1', changed: true })
     const primary = r.rows.find((x) => x.cssName === '--velo-primary')
-    expect(primary).toMatchObject({ gold: '#0000FF', skin: '#120054', changed: true })
+    expect(primary).toMatchObject({ core: '#0000FF', skin: '#120054', changed: true })
     expect(r.inexpressible).toEqual([])
   })
   it('lists what Figma cannot hold, and accepts the rest', () => {
@@ -123,13 +123,13 @@ describe('skin mode details', () => {
     expect(lit).toMatchObject({ text: '16px' })
   })
 
-  it('refuses a --skin or --mode without a value, and --mode gold; accepts a full pair', () => {
-    expect(parseSkinArgs(['--skin'])).toHaveProperty('error')
+  it('refuses a --skin or --mode without a value, and --mode core; bare --skin is every pinned mode', () => {
+    expect(parseSkinArgs(['--skin'])).toEqual({ all: true })
     expect(parseSkinArgs(['--skin', '--apply', '--mode', 'goodo'])).toHaveProperty('error')
     expect(parseSkinArgs(['--skin', '/p', '--mode'])).toHaveProperty('error')
     expect(parseSkinArgs(['--mode', 'goodo'])).toHaveProperty('error')
     expect(parseSkinArgs(['--skin', '/p'])).toHaveProperty('error')
-    expect(parseSkinArgs(['--skin', '/p', '--mode', 'Gold'])).toHaveProperty('error')
+    expect(parseSkinArgs(['--skin', '/p', '--mode', 'Core'])).toHaveProperty('error')
     expect(parseSkinArgs(['--skin', '/p', '--mode', 'goodo'])).toEqual({
       skinDir: '/p',
       modeId: 'goodo',

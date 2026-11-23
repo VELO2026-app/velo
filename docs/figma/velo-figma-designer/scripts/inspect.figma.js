@@ -16,7 +16,9 @@
  *   kind      'icon' | 'illustration' | 'component' | 'screen' | 'frame' (a guess; the agent decides)
  *   tree      nodes with geometry relative to the root, layout, fills, strokes,
  *             radius, effects, text props; `vars` = bound variable names per field
- *   variables every bound variable once: name, collection, value in the first mode
+ *   variables every bound variable once: name, collection, value in the mode the root node
+ *             shows (its resolvedVariableModes: an explicit mode or the collection default);
+ *             since FE-234 the first mode of `velo` is the neutral core, so never by position
  *   texts     every visible text: characters, font, size, line-height, style name
  *   instances every instance: main component name/key + component set + props
  *   colors    every raw (unbound) solid colour → count (hardcode suspects)
@@ -43,7 +45,9 @@ const F2C_INSPECT = async (nodeId, opts) => {
       const v = await figma.variables.getVariableByIdAsync(id);
       if (v) {
         const col = await figma.variables.getVariableCollectionByIdAsync(v.variableCollectionId);
-        const modeId = col ? col.modes[0].modeId : Object.keys(v.valuesByMode)[0];
+        const shown = col && root.resolvedVariableModes ? root.resolvedVariableModes[col.id] : null;
+        const modeId = shown && shown in v.valuesByMode ? shown
+          : col ? col.defaultModeId || col.modes[0].modeId : Object.keys(v.valuesByMode)[0];
         let val = v.valuesByMode[modeId];
         // resolve one alias hop for the human-readable value
         if (val && val.type === 'VARIABLE_ALIAS') {

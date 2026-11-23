@@ -3,11 +3,13 @@
 // =============================================================================
 //
 // A skin package (scripts/lib/skin-package.mjs, the same engine the build
-// uses) overrides golden tokens with CSS text: `#120054`, `rgba(...)`,
+// uses) overrides core tokens (tokens.json, neutral since FE-230) with CSS text: `#120054`, `rgba(...)`,
 // `color-mix(...)`, `var(--velo-...)` for `{velo.…}` references. A Figma mode
 // holds PRIMITIVES (a color, a float, an alias). This module computes, for
-// every token the package sets, the golden value, the skin value, and the
+// every token the package sets, the core value, the skin value, and the
 // Figma-shaped RESOLVED value -- or the reason it cannot be expressed.
+// The report of ONE local package (`--skin <dir> --mode <id> --dry-run`); the
+// payload of every pinned mode is lib/figma-modes.mjs (FE-234).
 //
 // PURE (no fs, no network). The dry-run CLI is sync-figma-variables.mjs.
 // =============================================================================
@@ -29,13 +31,14 @@ function resolveDim(parsed, byCssName, seen = new Set()) {
 }
 
 /**
- * Check the --skin / --mode arguments. A flag without a value must stop the
- * run: silently falling through would take the gold path (and --apply
- * rewrites tokens.json). The gold mode is refused as a target: the gold
- * sync owns the first mode of the collection.
+ * Check the --skin / --mode arguments. `--skin` alone is the payload of every
+ * pinned mode (FE-234). `--skin <dir> --mode <id>` is one local package; there
+ * a flag without a value must stop the run: silently falling through would
+ * take the drift path (and --apply rewrites tokens.json). The core mode is
+ * refused as a target: it is tokens.json, no package sets it.
  *
  * @param {string[]} args process arguments
- * @returns {{error: string} | {skinDir: string, modeId: string} | null} null = not a skin run
+ * @returns {{error: string} | {all: true} | {skinDir: string, modeId: string} | null} null = not a skin run
  */
 export function parseSkinArgs(args) {
   const valueOf = (flag) => {
@@ -47,12 +50,13 @@ export function parseSkinArgs(args) {
   const skinDir = valueOf('--skin')
   const modeId = valueOf('--mode')
   if (skinDir === undefined && modeId === undefined) return null
+  if (skinDir === null && modeId === undefined) return { all: true }
   if (skinDir === null) return { error: '--skin needs a package directory' }
   if (modeId === null) return { error: '--mode needs a mode id (e.g. goodo)' }
   if (skinDir === undefined) return { error: '--mode needs --skin <package directory>' }
   if (modeId === undefined) return { error: '--skin needs --mode <id> (e.g. goodo)' }
-  if (modeId.toLowerCase() === 'gold') {
-    return { error: '--mode gold is refused: gold is the first mode, owned by the gold sync' }
+  if (modeId.toLowerCase() === 'core') {
+    return { error: '--mode core is refused: the core mode is tokens.json, no package sets it' }
   }
   return { skinDir, modeId }
 }
@@ -79,47 +83,47 @@ export function resolveForFigma(css, byCssName) {
 }
 
 /**
- * The mode report: golden leaves + the package's declarations.
+ * The mode report: core leaves + the package's declarations.
  *
- * @param {Array<{cssName: string, value: string}>} leaves golden token leaves
+ * @param {Array<{cssName: string, value: string}>} leaves core token leaves
  * @param {Array<[string, string]>} decls the package's `[cssName, css]` overrides
  * @param {Map<string, string>} [figmaNames] cssName -> Figma variable name, when a snapshot is given
  * @returns {{rows: object[], inexpressible: object[], unknown: string[], derived: object[]}}
- *   rows: every token the package sets (gold, skin, resolved values, whether it
+ *   rows: every token the package sets (core, skin, resolved values, whether it
  *   differs); inexpressible: rows Figma cannot hold, with the reason; unknown:
- *   package names the golden registry lacks (the engine refuses these, kept as
+ *   package names the core registry lacks (the engine refuses these, kept as
  *   a guard).
  */
 export function skinModeReport(leaves, decls, figmaNames) {
-  const gold = new Map(
+  const core = new Map(
     leaves.map((l) => [l.cssName, { value: l.value.trim().replace(/\s+/g, ' ') }]),
   )
-  const skin = new Map(gold)
+  const skin = new Map(core)
   const unknown = []
   for (const [name, value] of decls) {
-    if (!gold.has(name)) unknown.push(name)
+    if (!core.has(name)) unknown.push(name)
     skin.set(name, { value: value.trim().replace(/\s+/g, ' ') })
   }
   const rows = []
   const inexpressible = []
   for (const [name] of decls) {
-    const goldEntry = gold.get(name)
+    const coreEntry = core.get(name)
     const skinEntry = skin.get(name)
-    if (!goldEntry || !skinEntry) continue
-    const goldCss = goldEntry.value
+    if (!coreEntry || !skinEntry) continue
+    const coreCss = coreEntry.value
     const skinCss = skinEntry.value
-    const goldRes = resolveForFigma(goldCss, gold)
+    const coreRes = resolveForFigma(coreCss, core)
     const skinRes = resolveForFigma(skinCss, skin)
     const row = {
       cssName: name,
       figmaName: figmaNames ? (figmaNames.get(name) ?? null) : undefined,
-      gold: goldRes.ok ? goldRes.text : goldCss,
+      core: coreRes.ok ? coreRes.text : coreCss,
       skin: skinRes.ok ? skinRes.text : skinCss,
-      goldCss,
+      coreCss,
       skinCss,
       changed: false,
     }
-    row.changed = row.gold !== row.skin
+    row.changed = row.core !== row.skin
     rows.push(row)
     if (!skinRes.ok) inexpressible.push({ cssName: name, reason: skinRes.reason })
     else if (figmaNames && row.figmaName === null) {
@@ -134,12 +138,12 @@ export function skinModeReport(leaves, decls, figmaNames) {
   // base by itself, but a baked value must be written into the mode too.
   const set = new Set(decls.map(([n]) => n))
   const derived = []
-  for (const [name, g] of gold) {
+  for (const [name, g] of core) {
     if (set.has(name)) continue
-    const before = resolveForFigma(g.value, gold)
+    const before = resolveForFigma(g.value, core)
     const after = resolveForFigma(g.value, skin)
     if (before.ok && after.ok && before.text !== after.text) {
-      derived.push({ cssName: name, css: g.value, gold: before.text, skin: after.text })
+      derived.push({ cssName: name, css: g.value, core: before.text, skin: after.text })
     }
   }
   return { rows, inexpressible, unknown, derived }
@@ -151,21 +155,21 @@ export function formatSkinModeReport(report, { skinPath, modeId }) {
   const lines = [
     `## Skin mode \`${modeId}\` -- dry-run (FE-219), nothing written to Figma`,
     '',
-    `Package: ${skinPath} · tokens set: ${report.rows.length} · differ from gold: ${changed.length} · moved by reference: ${report.derived.length}`,
+    `Package: ${skinPath} · tokens set: ${report.rows.length} · differ from core: ${changed.length} · moved by reference: ${report.derived.length}`,
     '',
-    `| token | Figma name | gold | ${modeId} |`,
+    `| token | Figma name | core | ${modeId} |`,
     '|---|---|---|---|',
   ]
   for (const r of report.rows) {
     const name = r.figmaName ? `\`${r.figmaName}\`` : r.figmaName === null ? 'none' : 'not checked'
-    lines.push(`| \`${r.cssName}\` | ${name} | \`${r.gold}\` | \`${r.skin}\` |`)
+    lines.push(`| \`${r.cssName}\` | ${name} | \`${r.core}\` | \`${r.skin}\` |`)
   }
   lines.push('', `### Moved by a reference, not set by the package (${report.derived.length})`, '')
   if (report.derived.length === 0) lines.push('None.')
   else {
-    lines.push('| token | CSS | gold | ' + modeId + ' |', '|---|---|---|---|')
+    lines.push('| token | CSS | core | ' + modeId + ' |', '|---|---|---|---|')
     for (const d of report.derived) {
-      lines.push(`| \`${d.cssName}\` | \`${d.css}\` | \`${d.gold}\` | \`${d.skin}\` |`)
+      lines.push(`| \`${d.cssName}\` | \`${d.css}\` | \`${d.core}\` | \`${d.skin}\` |`)
     }
   }
   lines.push('', `### Not expressible in Figma (${report.inexpressible.length})`)

@@ -268,3 +268,31 @@ test('SIMILAR_TOKENS: numbers are compared with spacing and radius only, not fon
   assert.ok(r.near.every((t) => !t.name.startsWith('font/')))
   assert.equal(r.near[0].name, 'app/gap-12')
 })
+
+test('SIMILAR_TOKENS: reads the gold mode, not the first one (FE-234: the core comes first)', async () => {
+  const col = {
+    name: 'velo',
+    defaultModeId: 'core',
+    modes: [
+      { modeId: 'core', name: 'core' },
+      { modeId: 'g', name: 'gold' },
+    ],
+  }
+  const v = {
+    id: 'v',
+    resolvedType: 'COLOR',
+    name: 'color/primary',
+    variableCollectionId: 'c1',
+    valuesByMode: { core: rgb('#787878'), g: rgb('#627a9c') },
+  }
+  const figma = {
+    variables: {
+      getLocalVariablesAsync: () => Promise.resolve([v]),
+      getVariableCollectionByIdAsync: () => Promise.resolve(col),
+      getVariableByIdAsync: () => Promise.resolve(null),
+    },
+  }
+  const fn = runInNewContext(`${SIMILAR}\n;SIMILAR_TOKENS`, { figma })
+  assert.equal((await fn('#627a9c')).advice, 'use-existing')
+  assert.equal((await fn('#787878', { mode: 'core' })).advice, 'use-existing')
+})
