@@ -11,7 +11,7 @@
 //   GET    /api/v1/users/timezones -- time zone catalog for the picker (BE-157)
 //
 // UserResponse / UserUpdate are generated from the backend OpenAPI schema
-// (see api/generated.ts, refreshed on `velo update` / `velo gen-types`).
+// (see api/generated.ts, held to the backend by CI's drift-check).
 // onboarding_completed is part of both: it lives in the credentials JSONB
 // on the backend but is surfaced as a plain bool on UserResponse and is
 // settable via UserUpdate. phone / bio follow the same JSONB pattern and are

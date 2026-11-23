@@ -19,7 +19,7 @@
 
 Both fields required, `min_length=1`; empty string, missing field or over-long value → 422.
 Called through OUR proxy like every other comms endpoint — the frontend never talks to comms.
-The token already exists in `backend/.env`; the installer delivers it.
+The token is a seam of comms (`COMMS_SERVICE_TOKEN`); the deploy machine gives it.
 
 ## 2 · CREATE-OR-FIND, not upsert — three consequences
 
@@ -39,7 +39,7 @@ pre-check.
 ## 3 · THE HARD RULE: never persist the section id
 
 **Call it LAZILY, from product code, every time the id is needed** — not at application start,
-not from the installer, not once by hand. Caching in process memory is fine.
+not from a deploy step, not once by hand. Caching in process memory is fine.
 
 **The id must not survive a teardown: not in env, not in config, not in a table of ours, not in a
 migration, not as a frontend constant.** The section lives in the comms database, and
@@ -84,14 +84,12 @@ practice a single operator; or ask them for a pool push, which becomes a trigger
 
 ## 6 · Operational notes worth keeping
 
-- The comms image has no `curl` (deps-only Dockerfile). Probe endpoints from inside the box with
-  Python's `urllib` via `docker exec -i comms-app python3 -`. **The `-i` is mandatory** — without
-  it stdin is not attached, the script silently reads EOF, and you see neither error nor output.
+- The comms image has no `curl` (deps-only Dockerfile), and on a box of the deploy machine
+  nothing but `pridem` runs: an endpoint is probed through OUR proxy, not from inside the box.
 - To prove the SAME row came back rather than a recreated one, compare `created_at` to the
   microsecond, not `id`. An upsert would have matched the id too.
 - The key `support` is ours and collides with nothing: keys are unique per installation, and each
   product has its own server, comms stack and database.
-- Their CLI gained `start`/`stop`, so `velo stop` now brings down the WHOLE box including the
-  comms stack, and `velo start` raises it in dependency order. **Only `install_velo.sh` and the
-  `velo` commands are ever executed on the server** — running their deploy script directly is
-  forbidden, not merely discouraged.
+- `pridem stop` brings down the WHOLE box including the comms stack, and `pridem start` raises
+  it in dependency order. **Only `pridem` is ever executed on the box** -- anything else on the
+  server is forbidden, not merely discouraged.

@@ -803,7 +803,7 @@ onUnmounted(pause)
   margin: 0;
   align-self: center;
   text-align: center;
-  color: var(--velo-text-muted);
+  color: var(--velo-text-on-bg-muted);
 }
 
 .dashboard__zoom-note {

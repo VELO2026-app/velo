@@ -4,10 +4,10 @@
 #
 # The read path of integration design ID-9: velo's proxy routers call
 # the INTERNAL comms HTTP API (arch decision 14: the frontend never
-# talks to comms; DD-5: comms has no public port) over the
-# aivis-shared docker network, authenticating as the PRODUCT with the
-# shared service token ("Authorization: Bearer <token>", comms
-# app/api/deps.py).
+# talks to comms; DD-5: comms has no public port) at its seam
+# (COMMS_API_URL, from the deploy machine), authenticating as the
+# PRODUCT with the shared service token ("Authorization: Bearer
+# <token>", comms app/api/deps.py).
 #
 # TRUST MODEL (frozen with the 3b contract): comms trusts every
 # recipient_id this client sends -- the caller (proxy router) is the

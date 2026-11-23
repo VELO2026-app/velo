@@ -93,9 +93,9 @@ defineEmits<{
   padding: var(--space-2) var(--space-3);
   font-family: var(--font-body);
   font-size: var(--velo-fs-16);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-on-bg-muted);
   background: var(--velo-glass-blue-15);
-  border: 1px solid var(--velo-glass-border);
+  border: 1px solid var(--velo-control-border);
   border-radius: var(--radius-xl);
   cursor: pointer;
   transition:
@@ -106,7 +106,7 @@ defineEmits<{
 }
 
 .v-segment__item--active {
-  color: var(--velo-white);
+  color: var(--velo-on-accent);
   background: var(--velo-primary);
   border-color: var(--velo-primary);
 }
@@ -128,7 +128,7 @@ defineEmits<{
   gap: var(--velo-gap-2);
   padding: var(--velo-gap-2);
   background: var(--velo-glass-blue-15);
-  border: var(--velo-border-width) solid var(--velo-glass-border);
+  border: var(--velo-border-width) solid var(--velo-control-border);
   border-radius: var(--radius-xl);
 }
 
@@ -144,7 +144,7 @@ defineEmits<{
 }
 
 .v-segment--compact .v-segment__item--active {
-  color: var(--velo-white);
+  color: var(--velo-on-accent);
   background: var(--velo-primary);
   border-color: var(--velo-primary);
 }

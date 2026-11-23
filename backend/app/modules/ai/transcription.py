@@ -120,9 +120,10 @@ logger = structlog.get_logger()
 # is a third larger again.
 #
 # nginx must pass more than this or the ceiling here never fires and the real
-# limit becomes an HTML 413 with no machine code. scripts/nginx-render.sh
-# carries client_max_body_size on the API server blocks for exactly that
-# reason, and the two numbers are meant to be read together.
+# limit becomes an HTML 413 with no machine code. The deploy machine's nginx
+# takes its client_max_body_size from max_body of the route `api` in
+# primer.yaml (host.routes) for exactly that reason, and the two numbers are
+# meant to be read together.
 MAX_AUDIO_BYTES = 2 * 1024 * 1024
 
 

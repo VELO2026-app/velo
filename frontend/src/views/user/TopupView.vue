@@ -239,7 +239,7 @@ onMounted(() => {
   display: block;
   font-family: var(--font-body);
   font-size: var(--velo-fs-16);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-on-bg-muted);
   margin-bottom: var(--space-2);
 }
 
@@ -253,7 +253,7 @@ onMounted(() => {
 .topup__section-title {
   font-family: var(--font-body);
   font-size: var(--velo-fs-16);
-  color: var(--velo-text-secondary);
+  color: var(--velo-text-on-bg-secondary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }

@@ -16,9 +16,8 @@
 # before anything is flushed. Redis serves 16 databases (0..15) by default;
 # docker-compose.yml starts redis-server without --databases.
 #
-# The rule lives HERE ONLY. velo-manage.sh passes nothing: `velo update`
-# runs from a snapshot of the PREVIOUS script, so a rule in the deploy
-# script would act one deploy late, while this module ships in the image
+# The rule lives HERE ONLY: the deploy machine gives the tests nothing but
+# DATABASE_URL (primer.yaml test.run), and this module ships in the image
 # the tests run in.
 # =============================================================================
 

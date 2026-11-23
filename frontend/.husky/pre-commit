@@ -2,6 +2,6 @@
 # files with prettier and lints the staged ts/vue with eslint (cached,
 # zero warnings); the masks live in the root package.json "lint-staged"
 # block. The full gate (`pnpm -r verify`) is not run here any more -- it
-# stays in CI and in the AGENTS.md "before handing over" rule. Hooks run
+# stays in CI and in the before-handing-over check (`pnpm verify`). Hooks run
 # from the workspace root, hence no cd.
 pnpm exec lint-staged

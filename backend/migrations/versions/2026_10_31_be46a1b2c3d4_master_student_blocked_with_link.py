@@ -21,14 +21,14 @@ code. A lawful block whose only link was a membership (which the block
 itself deleted) cannot be told from a stranger's: no table keeps a trace of
 the membership. It stays unmarked -- still blocked, no longer shown (owner,
 2026-10-31: option (a)). BLOCKED_WITHOUT_LINK_SQL counts those rows; the
-BE-46 report gives the owner the `velo` command to run it before release.
+BE-46 report gives the owner the read-only query to run before release.
 
-DEPLOY WINDOW: `velo update` starts the new app before it runs this
-revision, as for every revision here (neighbours add columns the same way).
-For those seconds every query that reads master_student by entity fails on
-the missing column -- the dossier, block and unblock, a tag, «Ученики» and
-«Удалённые»; nothing is written wrong, the requests answer 500 until the
-column exists.
+DEPLOY WINDOW: the deploy machine runs this revision in a one-off container
+of the new image while the old app still serves (primer.yaml declares no
+stop_for_migrate), then `up` replaces the app. In that window the old code
+runs on the new column without knowing it: its writes take the server
+default (false), which the check constraint allows, so nothing fails -- but
+a block the old app makes in those seconds stays unmarked.
 """
 
 from collections.abc import Sequence

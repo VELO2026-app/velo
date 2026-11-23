@@ -1042,8 +1042,8 @@ async def main_async(args: argparse.Namespace) -> int:
 
     if args.reset_all:
         # BE-106 item 3: wipe what every profile seeded and stop. comms is
-        # NOT touched here -- velo-manage.sh runs the resync after this
-        # exits 0, and only when the operator asked for --resync-comms.
+        # NOT touched here, and velo has no verb that realigns it (see
+        # _warn_comms_projection_diverged).
         session_factory = get_session_factory()
         try:
             async with session_factory() as session:

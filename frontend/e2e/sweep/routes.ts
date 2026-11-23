@@ -68,7 +68,12 @@ export interface SweepVisit {
   allow?: (role: SweepRole) => CrashAllowance[]
 }
 
-/** A route the sweep does not open, and why. */
+/**
+ * A route the sweep does not open, and why. Also the quarantine of a screen
+ * that fails (FE-222, docs/testing.md): the reason starts with the key of
+ * the task that brings the screen back, `FE-123 <why>` (the coverage test
+ * checks it).
+ */
 export interface SweepSkip {
   path: string
   skip: string

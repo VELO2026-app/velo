@@ -68,6 +68,10 @@ export * from './icons'
 // no-op default. Kit fields (VInput/VTextarea, P6) and host views resolve
 // the same key.
 export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from './useBodyScrollLock'
+// The Escape stack (FE-215): one Escape closes only the top open layer.
+// VModal/VBottomSheet register through it; a host layer that also closes on
+// Escape (the app's diary search bar) joins the same stack.
+export { useEscapeLayer } from './escapeStack'
 export { KEYBOARD_FIELD_SCROLL_INJECTION_KEY, useKeyboardFieldScroll } from './keyboardFieldScroll'
 // The loading system's delayed-flag rule (P8 batch 5): the no-flash hold the
 // swap component and host screens share -- nothing shows before LOADING_DELAY_MS,

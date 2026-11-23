@@ -11,30 +11,23 @@ arch doc (decision 12 / §2.3): `comms-profile/` at the PRODUCT REPO
 ROOT, next to `backend/` and `frontend/` -- a contract with comms,
 not a part of the backend and not deploy mechanics.
 
-## Delivery: a bind, not a copy
+## Delivery: data of the deploy machine
 
-comms reads THIS directory, from the velo checkout on the box (comms
-`deploy/INTEGRATION.md` §3). The velo installer writes
-`PROFILE_DIR=/opt/velo/repo/comms-profile` into `/opt/comms/.env`
-(`scripts/install_velo.sh`), and the comms compose file bind-mounts
-`${PROFILE_DIR}` read-only into the comms processes as `TEMPLATES_DIR`.
-There is no second copy to keep in step, and none may be made: a copy
-does not follow the repo, and after a protocol change comms refuses to
-start on the stale one.
+comms v4 takes this directory as data of the deploy machine
+(`primer.yaml`: `dependencies.comms.data.profile`, form D of protocol
+4.5): it is copied from this repository and checked by
+`comms validate --profile <dir>` before the rollout, and comms reads it
+as `TEMPLATES_DIR` (the `accepts.profile` of comms' own `primer.yaml`).
+The copy is the machine's, made from the release it rolls out; no copy
+is kept by hand anywhere else.
 
-`velo update` pulls the repo and, because the profile is bound into
-this checkout, restarts the comms stack (`comms-deploy.sh restart`),
-so the profile it just pulled is the one being served. Nothing else
-is run by hand.
-
-A broken profile FAILS THE COMMS STARTUP (fail-at-startup validation:
-schema version, the closed type record -- an unknown key other than
-`x-...` refuses startup --, template dry-run, chat-baseline `msg.*`
-categories, routes into channels the deploy did not configure, the
-external-domain fence). `velo update` names the profile as the likely
-cause when the restart fails; recovery is to revert the commit and
-roll out again. The green line in the comms log is `profile_installed`
-with `types=` the number of types in `types.yaml`.
+A broken profile FAILS THAT CHECK, and the comms startup too
+(fail-at-startup validation: schema version, the closed type record --
+an unknown key other than `x-...` refuses startup --, template dry-run,
+chat-baseline `msg.*` categories, routes into channels the deploy did
+not configure, the external-domain fence). Recovery is to revert the
+commit and roll out again. The green line in the comms log is
+`profile_installed` with `types=` the number of types in `types.yaml`.
 
 Channels are routed HERE, never by the request: every velo-emitted
 type declares `channels: [in_app, telegram]`. comms v4 starts with a
@@ -43,7 +36,7 @@ outcome "channel unavailable", the type's other channels go on. velo
 keeps telegram on by `options_required: [telegram]` in `primer.yaml`.
 
 Editing notification texts = editing the YAML here, commit to the
-velo repo, `velo update`. No velo code or comms code is involved
+velo repo, roll out (`pridem update`). No velo code or comms code is involved
 (integration design ID-3).
 
 ## HTML escaping -- who owns it (read before editing templates)

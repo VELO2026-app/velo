@@ -104,7 +104,7 @@ const emit = defineEmits<{
   display: flex;
   gap: var(--velo-gap-2);
   background: var(--velo-glass-blue-200-15);
-  border: 1px solid var(--velo-glass-border);
+  border: 1px solid var(--velo-control-border);
   border-radius: var(--radius-xl);
 }
 
@@ -122,7 +122,7 @@ const emit = defineEmits<{
 
 .v-segment-track__btn--active {
   background: var(--velo-primary);
-  color: var(--velo-white);
+  color: var(--velo-on-accent);
 }
 
 /* Toggle: compact auto-width pills (dashboard + analytics period toggles). */
@@ -148,14 +148,14 @@ const emit = defineEmits<{
   padding: var(--velo-gap-6) var(--velo-gap-11);
 }
 
-/* Active label is white on the primary fill-pill. Declared at variant
+/* Active label is on-accent (white by default) on the primary fill-pill. Declared at variant
    specificity (and after the variant rules) so it wins over the inactive
    per-variant colour above — otherwise `.v-segment-track--toggle
    .v-segment-track__btn` (0,2,0) overrides `.v-segment-track__btn--active`
    (0,1,0) and the active text stays dark. */
 .v-segment-track--toggle .v-segment-track__btn--active,
 .v-segment-track--tabs .v-segment-track__btn--active {
-  color: var(--velo-white);
+  color: var(--velo-on-accent);
 }
 
 /* -- Scrollable (VSegment's --scrollable recipe, mirrored): many tabs on one
