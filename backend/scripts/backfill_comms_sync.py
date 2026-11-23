@@ -16,16 +16,16 @@
 #
 # WHEN TO RUN (operator ritual, run BY HAND after deploy):
 #
-#     docker compose exec app python scripts/backfill_comms_sync.py
+#     pridem verb backfill-comms        (primer.yaml verbs)
 #
 #   - once after the T0 deploy (comms up + velo updated) -- projects
 #     everyone who existed before the sync went live;
 #   - again after ANY seed run (scripts/seed*.py create User rows
 #     directly, bypassing the instrumented auth path -- the backfill
 #     is how seeded users reach comms);
-#   - inside `velo resync-comms`, after its TRUNCATE of recipients:
-#     the cascade empties the section rosters too, and this run is what
-#     declares them again.
+#   - after the comms database was emptied (`pridem db reset comms`, role
+#     test only): the section rosters are gone with it, and this run is
+#     what declares them again.
 #
 # IDEMPOTENCY: every sync event is naturally idempotent per the comms
 # contract (user_upserted is a snapshot upsert; group_changed and

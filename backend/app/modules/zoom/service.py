@@ -993,10 +993,10 @@ _PUBLIC_CODE_ALPHABET = (
 #   backend/tests/test_zoom_public_link.py
 #   frontend/src/composables/useAuth.test.ts
 # Each side runs its own decoder against its own copy (catching "I changed
-# the codec and not the table"), and `velo test` / `velo update` additionally
-# diff the two copies against each other in a container that can see both
-# trees (catching "I changed one side's codec AND its table, leaving the
-# other side behind" -- which no single-sided test can see).
+# the codec and not the table"), and the CI job codec vector
+# (.github/workflows/codec-vector.yml) additionally compares the two copies
+# (catching "I changed one side's codec AND its table, leaving the other
+# side behind" -- which no single-sided test can see).
 # CHANGE THIS DECODER ONLY IN PAIRS: this function, useAuth.ts's
 # decodePracticeCode, and BOTH copies of the vector. T-44 was opened because
 # this comment used to be the only thing holding them together, and the two

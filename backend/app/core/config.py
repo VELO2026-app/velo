@@ -419,10 +419,11 @@ class Settings(BaseSettings):
 
     # -- Comms integration: outbox relay (Phase 6 / T0) --
     # The transactional-outbox relay ships domain events to the comms
-    # Redis Stream (core/events/relay.py). COMMS_REDIS_URL and friends
-    # are written into .env by the Phase 5 installer hand-over
-    # (comms-deploy.sh install, pass 2); an EMPTY url disables the
-    # relay with a log line -- local dev has no comms stack.
+    # Redis Stream (core/events/relay.py). COMMS_REDIS_URL is put
+    # together in docker-compose.yml from the seams of comms the deploy
+    # machine gives (COMMS_EVENTS_ADDRESS, COMMS_EVENTS_PASSWORD); an
+    # EMPTY url disables the relay with a log line -- local dev has no
+    # comms stack.
     comms_redis_url: str = ""
     # Stream name the relay XADDs into. The default MIRRORS the comms
     # consumer default (comms app/core/config.py:66
@@ -462,9 +463,9 @@ class Settings(BaseSettings):
 
     # -- Comms integration: HTTP proxy (Phase 6 / T1) --
     # The read path of ID-9: velo proxies inbox/badge/prefs to the
-    # comms HTTP API over aivis-shared. COMMS_API_URL and
-    # COMMS_SERVICE_TOKEN are written into .env by the Phase 5
-    # installer hand-over (comms-deploy.sh install, pass 2); an EMPTY
+    # comms HTTP API at its seam. COMMS_API_URL and
+    # COMMS_SERVICE_TOKEN are seams of comms the deploy machine gives
+    # (primer.yaml env, `source: seam, from: comms`); an EMPTY
     # url makes the proxy answer 502 -- local dev has no comms stack.
     comms_api_url: str = ""
     comms_service_token: str = ""

@@ -102,9 +102,9 @@ VELO — платформа для мастеров практик (медита
 |-----------|------------|
 | Контейнеризация | Docker + Docker Compose |
 | Хостинг | VPS (Hetzner, NL) |
-| Reverse proxy | Nginx (на хосте) |
+| Reverse proxy | Nginx машины `pridem` (маршруты -- `primer.yaml` `host`) |
 | SSL | Let's Encrypt (certbot) |
-| Деплой | Ручной: `velo update` (git pull + rebuild + migrate + restart) |
+| Деплой | Машина Праймера: `pridem update` по `primer.yaml` (сборка, тесты на роли test, migrate, up) |
 
 ---
 
@@ -302,8 +302,7 @@ velo/                              -- GitHub repo root
 │   ├── Dockerfile
 │   └── package.json
 ├── docker-compose.yml             -- Весь стек: app + frontend + postgres + redis
-├── scripts/
-│   └── install_velo.sh            -- Первоначальная установка на VPS
+├── primer.yaml                    -- Что ставит машина pridem: стеки, env, глаголы, посевы
 ├── diagrams/                      -- Mermaid-схемы (УСТАРЕЛИ, не источник правды)
 ├── velo-mockups/                  -- HTML-прототипы (UI-reference, не источник кода)
 └── VELO-Design-Document.md        -- Этот файл

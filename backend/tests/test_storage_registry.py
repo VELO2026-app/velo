@@ -1,8 +1,9 @@
 """BE-133: the object storage registry -- the real file, and every way to break it.
 
-storage_registry.yaml is the one source the storage init, `velo doctor` and the
-backend all read. These tests need no storage: they pin what the file says
-today, and that a malformed file is refused instead of read with defaults.
+storage_registry.yaml is the one source the storage init (and its check mode,
+`pridem verb storage-check`) and the backend all read. These tests need no
+storage: they pin what the file says today, and that a malformed file is
+refused instead of read with defaults.
 Axes: REPEAT (a key written twice), EMPTINESS (empty sections), SHORTAGE
 (a missing field), plus wrong shapes.
 """

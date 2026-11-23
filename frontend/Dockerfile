@@ -4,8 +4,7 @@
 #
 # MULTI-STAGE BUILD:
 #   Stage 1 ("source"):  pnpm install --frozen-lockfile + source copied -- deps
-#                        ready, NOTHING executed. `velo test` builds up to here
-#                        and runs the suite ONCE, with live output.
+#                        ready, NOTHING executed; the builder starts from it.
 #   Stage 2 ("builder"): pnpm run build -> produces dist/ + build-info.json
 #   Stage 3 ("runtime"): nginx serves dist/; /config.json rendered at start
 #
@@ -13,20 +12,16 @@
 # exactly PRIMER_RELEASE, PRIMER_COMMIT -- and PRIMER_EDITION only to builds
 # with an apply:build package (FE-130). apiBaseUrl, bot url, locales, brand
 # ride the runtime /config.json, rendered by the entrypoint's envsubst from
-# the container environment (nginx/config.json.template). The interim shell
-# deploy keeps its vite.env source by feeding the frontend service's
-# `environment` (docker-compose.yml) instead of build args.
+# the container environment (nginx/config.json.template), which
+# docker-compose.yml fills from primer.yaml `env`.
 #
 # NO TESTS IN THE BUILD ANCESTRY (FE-149 §3): the machine builds runtime on
 # every rollout of every instance -- a suite inside builder would run on each
-# of those builds, prod included. The gate lives in CI (job frontend);
-# `velo test` still runs the suite against --target source.
+# of those builds, prod included. The gate lives in CI (job frontend).
 #
-# WHY "source" EXISTS. `velo test` used to build --target builder (which runs
-# the whole suite inside the build, silently, behind `-q`) and THEN run the
-# suite again in a container -- the same ~3.5 minutes twice, the first half
-# with no output at all. Building --target source instead means the suite runs
-# exactly once, in the place whose output a human is actually reading.
+# "source" IS A STAGE OF ITS OWN, though no build targets it today: the
+# builder starts from it, and folding the two together is a change of the
+# build rather than of its description.
 #
 # BUILD CONTEXT = REPOSITORY ROOT (FE-116): the pnpm workspace -- the
 # lockfile, pnpm-workspace.yaml and every member manifest -- lives at the
@@ -73,9 +68,8 @@ COPY frontend/package.json frontend/
 COPY packages/velo-ui/package.json packages/velo-ui/
 RUN npm install -g pnpm@12.4.2 && pnpm install --frozen-lockfile --trust-lockfile --filter velo-frontend...
 
-# Copy source. This stage deliberately ENDS here: it is what `velo test`
-# builds, so building it must not execute the suite that `velo test` is
-# about to run itself.
+# Copy source. This stage deliberately ENDS here: nothing of the source
+# runs in it.
 COPY frontend frontend
 COPY packages packages
 # FE-130: vite.config.ts reads the "edition -> modules" table from the repo
@@ -92,8 +86,7 @@ FROM source AS builder
 
 # Build identity (primer guide §3.1, contract 3 rule 19): the machine passes
 # PRIMER_RELEASE (tag or branch) and PRIMER_COMMIT (sha) to EVERY build, and
-# a build without them is red on the machine -- checked here, fail fast. The
-# interim shell deploy passes neutral defaults through compose build.args.
+# a build without them is red on the machine -- checked here, fail fast.
 # They surface as build-info.json next to index.html: BE-149's naming-files
 # rule (never keep a stale build name) applies to it too -- nginx.conf serves
 # it with no-cache.
@@ -101,8 +94,8 @@ ARG PRIMER_RELEASE
 ARG PRIMER_COMMIT
 # FE-130: the edition channel -- the machine passes PRIMER_EDITION exactly to
 # builds of services with an apply:build package (ours: the skin); vite
-# resolves it through editions.json. Absent in the interim shell build -> the
-# golden all-on set (rule 19: this is the machine's third and last argument).
+# resolves it through editions.json. Absent -> the golden all-on set (rule
+# 19: this is the machine's third and last argument).
 ARG PRIMER_EDITION
 RUN test -n "$PRIMER_RELEASE" && test -n "$PRIMER_COMMIT"
 

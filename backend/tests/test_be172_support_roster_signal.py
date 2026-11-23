@@ -272,7 +272,8 @@ class TestPaths:
         self, client: AsyncClient, db_session: AsyncSession,
     ) -> None:
         """The stand's live-check path (BE-172 gate): an admin who holds a
-        verified master profile -- `velo setrole <id> M`, then `A`.
+        verified master profile -- `pridem verb setrole telegram_id=<id>
+        role=M`, then `role=A`.
 
         M drops the admin capability (role master, marker cleared) and
         leaves the profile as it was; A gives the capability back. The

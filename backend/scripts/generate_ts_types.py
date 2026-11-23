@@ -9,14 +9,14 @@
 # Usage:
 #   python scripts/generate_ts_types.py openapi.json ../frontend/src/api/generated.ts
 #
-# On a server, the schema comes out of the app container (BE-114 item 2 --
-# the app does not serve /openapi.json at all):
-#   docker compose exec -T app python scripts/dump_openapi.py > openapi.json
-#   python3 backend/scripts/generate_ts_types.py openapi.json \
-#     frontend/src/api/generated.ts
+# The schema comes out of the app itself, never over HTTP (BE-114 item 2 --
+# the app does not serve /openapi.json at all): scripts/dump_openapi.py. On a
+# box of the role test the deploy machine runs both, in the app's image, as
+# the `openapi` and `generate` commands of primer.yaml (stacks.velo.types)
+# and commits the result as `velo-types`.
 #
 # Output is deterministic: same input JSON always produces the same .ts file.
-# This allows `diff` to detect drift in CI / velo update.
+# This allows `diff` to detect drift in CI (the drift-check step of ci.yml).
 #
 # SUPPORTED OPENAPI PATTERNS:
 #   - Simple types (string, integer, number, boolean)
