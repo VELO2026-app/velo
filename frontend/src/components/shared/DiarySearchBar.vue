@@ -12,7 +12,8 @@
   remembers the query and drops the keyboard (flushing any pending live
   pass); a recent tap applies its query immediately. The small inner x
   behaves like backspacing to empty; the OUTER x emits `cancel` -- the parent
-  resets everything and returns the header row. Esc emits `close`.
+  resets everything and returns the header row. Esc emits `close` while the
+  search mode is up (`active`).
 
   Recent queries persist in localStorage, capped at MAX_RECENTS,
   most-recent-first, de-duplicated case-insensitively (carried over from the
@@ -20,6 +21,7 @@
 
   Usage:
     <DiarySearchBar
+      :active="searchMode"
       :initial="feedFilters.search ?? ''"
       @live="onLiveSearch"
       @cancel="onSearchCancel"
@@ -125,12 +127,15 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { onDocumentEvent, offDocumentEvent } from '@/platform/dom'
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useEscapeLayer } from '@/components/ui'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 
 const props = defineProps<{
   /** The ACTIVE search, to prefill/sync the field ('' = none). */
   initial?: string
+  /** The search mode is up. The bar stays mounted while it is down (the
+   *  parent only crossfades it), so Escape listens only while this is true. */
+  active?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -198,17 +203,18 @@ watch(
   { immediate: true },
 )
 
-// Esc closes the search mode. Listeners live only while mounted (the view
-// v-ifs the whole bar, so unmount is the teardown).
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') {
+// Esc closes the search mode. The bar is a layer of the kit's Escape stack
+// (FE-215) while the search mode is up -- the parent keeps the bar mounted
+// and only crossfades it, so mounting says nothing. An overlay opened over
+// the feed takes Escape first, and only the next press closes the search.
+useEscapeLayer(
+  () => props.active,
+  () => {
     inputEl.value?.blur()
     emit('close')
-  }
-}
-onMounted(() => onDocumentEvent('keydown', onKeydown))
+  },
+)
 onBeforeUnmount(() => {
-  offDocumentEvent('keydown', onKeydown)
   if (liveTimer) {
     clearTimeout(liveTimer)
     liveTimer = null
@@ -340,7 +346,7 @@ defineExpose({ focus })
      out-of-flow clear (below) keep the pill rock-solid at 50. */
   height: var(--velo-size-50);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border: 1px solid var(--velo-glass-white-35);
+  border: 1px solid var(--velo-frost-border);
   border-radius: var(--radius-full);
 }
 
@@ -410,7 +416,7 @@ defineExpose({ focus })
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-2);
-  border: 1px solid var(--velo-glass-white-35);
+  border: 1px solid var(--velo-frost-border);
   border-radius: var(--radius-md);
   background: var(--velo-glass-white-90);
   backdrop-filter: blur(18px) saturate(180%);

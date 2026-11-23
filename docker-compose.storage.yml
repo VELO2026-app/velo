@@ -187,8 +187,8 @@ services:
           done
 
           # Every registry key gets its CURRENT secret and policy on every run:
-          # a reinstall, `velo env set` of the secret and a new bucket in the
-          # registry all reach the storage this way. Output goes to /dev/null --
+          # a reinstall, a new minted secret and a new bucket in the registry
+          # all reach the storage this way. Output goes to /dev/null --
           # `create` prints the secret it was given.
           for key in $$keys; do
             env_name=$$(jq -r --arg k "$$key" '.service_keys[$$k].secret_env' "$$reg")

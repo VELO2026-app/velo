@@ -69,7 +69,7 @@ async def _set_role(
 async def _cli_demote_to_user(
     db_session: AsyncSession, telegram_id: int
 ) -> None:
-    """Simulate `velo setrole <id> U`: set role=user AND clear the marker.
+    """Simulate `set_role.py <id> U`: set role=user AND clear the marker.
 
     Mirrors scripts.set_role._set_role. That module cannot be imported here
     (scripts/ is not a package), so this calls the SAME real helper it uses
@@ -415,7 +415,7 @@ async def test_demoted_ex_admin_cannot_self_restore_admin(
         "home_role"
     ) == "admin"
 
-    # CLI demotion (velo setrole U) clears the marker.
+    # CLI demotion (set_role.py U) clears the marker.
     await _cli_demote_to_user(db_session, 89497)
     user = await _get_user(db_session, 89497)
     assert "home_role" not in (user.credentials or {}).get("role_switch", {})

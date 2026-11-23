@@ -2,5 +2,5 @@
 # workspace member (frontend + @velo/ui; vue-tsc, incremental) plus the unit
 # tests that the diff against origin/test touches (vitest --changed). The
 # full verify and the production builds run in CI and before handing a task
-# over (AGENTS.md). The hook runs from the workspace root, hence no cd.
+# over (`pnpm verify`). The hook runs from the workspace root, hence no cd.
 pnpm -r typecheck && pnpm -r exec vitest run --changed origin/test --passWithNoTests

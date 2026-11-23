@@ -2,8 +2,9 @@
 
 The YAML file next to this module is the ONE source of what velo-storage
 holds -- buckets, their lifetime and readers, and the service keys with their
-policy. The storage init container and `velo doctor` read the same file; this
-module is how the backend reads it. Nothing here talks to the storage.
+policy. The storage init container reads the same file (and so does its
+check mode, `pridem verb storage-check`); this module is how the backend
+reads it. Nothing here talks to the storage.
 
 The file is validated strictly on load: an unknown field, a missing field or
 a value of the wrong shape is a ``RegistryError``, never a default. A typo in

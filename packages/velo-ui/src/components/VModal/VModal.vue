@@ -20,9 +20,10 @@
     `closeLabel` prop and the application barrel re-anchors the localized
     t('ui.close') default until P3 (the VLoader pattern, pinned app-side
     by VModal.localized.test.ts).
-  - document access lives behind the kit's own seam (src/platform/dom.ts)
-    for the document-level Escape keydown, and the ref-counted body-scroll
-    lock is the kit's own (src/useBodyScrollLock.ts) -- both landed in P5.
+  - the ref-counted body-scroll lock is the kit's own
+    (src/useBodyScrollLock.ts, landed in P5). Escape goes through the
+    kit's Escape stack (src/escapeStack.ts, FE-215): only the top open
+    overlay closes on one press.
 
   Usage:
     <VModal :open="showModal" close-label="Close" @close="showModal = false">
@@ -64,9 +65,9 @@
 </template>
 
 <script setup lang="ts">
-import { onDocumentEvent, offDocumentEvent } from '../../platform/dom'
-import { onMounted, onUnmounted, watch, onDeactivated, useAttrs } from 'vue'
+import { onUnmounted, watch, onDeactivated, useAttrs } from 'vue'
 import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
+import { useEscapeLayer } from '../../escapeStack'
 import { IconClose } from '../../icons'
 
 defineOptions({ inheritAttrs: false })
@@ -105,11 +106,11 @@ function onOverlayClick(): void {
   }
 }
 
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && props.open) {
-    emit('close')
-  }
-}
+// Escape closes only the top open overlay, not every open one (FE-215).
+useEscapeLayer(
+  () => props.open,
+  () => emit('close'),
+)
 
 // Lock body scroll when modal is open. Ref-counted (W16, PROMPT №409) so a
 // second overlay (e.g. a VBottomSheet opened from inside this modal) closing
@@ -133,12 +134,7 @@ watch(
   { immediate: true },
 )
 
-onMounted(() => {
-  onDocumentEvent('keydown', onKeydown)
-})
-
 onUnmounted(() => {
-  offDocumentEvent('keydown', onKeydown)
   // Ensure the lock is released if the component unmounts while open.
   if (locked) {
     locked = false

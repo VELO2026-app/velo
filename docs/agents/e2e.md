@@ -27,7 +27,7 @@ Sweep дополнительно проверяет, что вместо экр�
 
 - **После изменений в `src/views/`, `src/router/`, `src/api/`, `src/stores/` — обязательно `e2e:sweep`** (и `pnpm verify`, как всегда).
 - После изменений бэка, которые меняют ответы API, — тоже `e2e:sweep`: переименованное поле ломает экран, не трогая фронт.
-- В CI: job `e2e-stack` на каждый PR (фронт или бэк), ночной прогон на `test` в Chromium и WebKit (`.github/workflows/e2e-stack.yml`). Первые две недели job не блокирует мерж.
+- В CI: job `e2e-stack` на каждый PR (фронт или бэк), ночной прогон на `deploy-machine` в Chromium и WebKit (`.github/workflows/e2e-stack.yml`). С FE-222 job блокирует мерж: красный sweep — красный `CI — gate`. Если экран падает по известной причине, он уходит в карантин строкой `skip: 'FE-123 <почему>'` в `e2e/sweep/routes.ts` (правило 22 в `docs/testing.md`).
 
 ## Как запустить локально
 
@@ -37,7 +37,7 @@ Sweep дополнительно проверяет, что вместо экр�
 
 ```sh
 sh ~/work/velo-dev/velo-dev-up.sh
-python frontend/e2e/stack/seed_e2e.py && velo setrole 607031 A --yes   # один раз; сид — обёртка, `velo seed` профиль не видит
+python frontend/e2e/stack/seed_e2e.py && python backend/scripts/set_role.py 607031 A --yes   # один раз; сид -- обёртка: профиль не в seed_profiles/
 pnpm -C frontend build                                     # golden-сборка для vite preview
 pnpm -C frontend e2e:sweep
 ```

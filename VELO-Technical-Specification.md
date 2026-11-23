@@ -3120,7 +3120,7 @@ TD-DIARY-CANCEL-COMMENT (причина отмены в snapshot), TD-ASK-MASTER
 
 - Race condition на `_redis_client` — теоретически возможен, но `init_redis()` вызывается однократно в lifespan до приёма запросов
 - `.env` в Docker image — уже исключён через `.dockerignore`
-- Dev-зависимости в production image — осознанный выбор: тесты запускаются в том же контейнере через `velo test`. Образ чуть больше, но единая среда (Phase 0.6)
+- Dev-зависимости в production image — решение Phase 0.6 (тесты в том же контейнере) отменено BE-189: тесты и dev-зависимости живут только в стадии `test` образа бэка, рантайм их не несёт
 
 ---
 

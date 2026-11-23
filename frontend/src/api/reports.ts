@@ -9,9 +9,9 @@
 // existed before this).
 //
 // Hand-written, not generated: mirrors groups.ts's own reasoning -- no local
-// server to regenerate generated.ts against. Reconciles automatically at the
-// next `velo update` regen. Does not touch api/types.ts (its header forbids
-// manual backend-type additions).
+// server to regenerate generated.ts against. Reconciles at the next
+// regeneration of generated.ts. Does not touch api/types.ts (its header
+// forbids manual backend-type additions).
 //
 // ⚠ DUPLICATE HANDLING -- MEASURED, corrects the PROMPT's own assumption:
 // reports/router.py's create_report_endpoint returns HTTP 200 (NOT 409) on

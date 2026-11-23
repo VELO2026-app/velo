@@ -20,7 +20,8 @@
 #
 # AFTER RUNNING:
 #   Semaphore 2.1 should return OK (SUM = 0).
-#   Seed data still needs `velo seed --reset` because seed topups
+#   Seed data still needs a reset of its profile (`pridem verb seed-reset
+#   profile=<name>`) because seed topups
 #   use reason 'seed:topup' (handled by CompanyLedger reason LIKE 'seed:%').
 # =============================================================================
 
@@ -86,7 +87,7 @@ async def repair(dry_run: bool = False) -> None:
 async def _repair(session: AsyncSession, dry_run: bool) -> None:
     """Core repair logic."""
     # Find all real topup UserLedger entries (reason starts with 'payment:').
-    # Seed topups ('seed:topup') are excluded — they need `velo seed --reset`.
+    # Seed topups ('seed:topup') are excluded — they need the verb seed-reset.
     stmt = select(UserLedger).where(
         UserLedger.reason.like("payment:%"),
         UserLedger.amount_cents > 0,
@@ -160,7 +161,14 @@ async def _repair(session: AsyncSession, dry_run: bool) -> None:
         )).scalar_one()
 
         global_sum = user_sum + master_sum + company_sum
-        status = f"{G}OK{N}" if global_sum == 0 else f"{Y}STILL {global_sum}{N} (run `velo seed --reset` to fix seed data)"
+        status = (
+            f"{G}OK{N}"
+            if global_sum == 0
+            else (
+                f"{Y}STILL {global_sum}{N} (reset the seed's profile -- "
+                "`pridem verb seed-reset` -- to fix seed data)"
+            )
+        )
         log(f"2.1 global sum after repair: {status}")
 
 

@@ -5,7 +5,7 @@
 // The decoder lives in router/deepLinks.ts (with the rest of the startapp
 // parsing, tested in router/deepLinks.test.ts). This file keeps ONLY the
 // shared vector, at the path its two other readers name:
-// scripts/velo-manage.sh (run_codec_vector_diff) and
+// .github/workflows/codec-vector.yml (its comparison and its `paths`) and
 // backend/tests/test_zoom_public_link.py. Moving it means changing both.
 // =============================================================================
 
@@ -24,9 +24,9 @@ import { decodePracticeCode } from '@/router/deepLinks'
 // TWO MECHANISMS, catching two different mistakes:
 //   1. THIS FILE runs the real decodePracticeCode against its own copy --
 //      catches "I changed the codec and forgot the table".
-//   2. `velo test` / `velo update` run a container that mounts the whole
-//      checkout and diffs the two copies against each other -- catches "I
-//      changed one side's codec AND its table", which neither side's own
+//   2. The CI job codec vector (.github/workflows/codec-vector.yml) reads
+//      both files from the checkout and compares the two copies -- catches
+//      "I changed one side's codec AND its table", which neither side's own
 //      suite can possibly see, because each is internally consistent.
 //
 // EDITING RULE: change the JSON here and the JSON there in the same commit.

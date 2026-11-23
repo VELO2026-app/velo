@@ -9,8 +9,19 @@ import { PARAM_KEYS, SWEEP } from '../../e2e/sweep/routes'
 // The sweep (frontend/e2e/sweep/) opens every named route of the router under
 // the roles its table lists. This test is what keeps the table whole: a new
 // screen without a row fails here, in the fast gate, long before anyone runs
-// the sweep. A row either visits the route or skips it WITH a reason.
+// the sweep. A row either visits the route or skips it WITH a task: a skip
+// is the quarantine of a screen (FE-222, docs/testing.md), and its reason
+// starts with the key of the task that brings the screen back.
 // =============================================================================
+
+/**
+ * A skip reason that names its task: the key of one of our teams, a space,
+ * then the why. The table has no skip row today, so the predicate is pinned
+ * on examples below as well.
+ */
+function startsWithTask(reason: string): boolean {
+  return /^(?:FE|BE|PM|DSGN|DM|MEET)-\d+ \S/.test(reason)
+}
 
 const named = router
   .getRoutes()
@@ -18,6 +29,16 @@ const named = router
   .map((r) => ({ name: r.name as string, path: r.path }))
 
 describe('e2e sweep table (e2e/sweep/routes.ts)', () => {
+  it.each([
+    ['FE-123 why it fails', true],
+    ['BE-7 the backend answers 500', true],
+    ['why it fails', false],
+    ['FE-123', false],
+    ['fe-123 why', false],
+  ])('a skip reason %j names its task: %s', (reason, ok) => {
+    expect(startsWithTask(reason)).toBe(ok)
+  })
+
   it('has a row for every named route', () => {
     const missing = named.filter((r) => !(r.name in SWEEP)).map((r) => `${r.name} ${r.path}`)
     expect(missing, 'add these routes to e2e/sweep/routes.ts (visit or skip)').toEqual([])
@@ -33,9 +54,13 @@ describe('e2e sweep table (e2e/sweep/routes.ts)', () => {
   })
 
   it.each(Object.entries(SWEEP))(
-    '%s: a skip has a reason, a visit has roles and every parameter',
+    '%s: a skip has a task and a reason, a visit has roles and every parameter',
     (name, row) => {
       if ('skip' in row) {
+        expect(
+          startsWithTask(row.skip),
+          `${name}: a skip starts with its task, "FE-123 <why>"`,
+        ).toBe(true)
         expect(row.skip.trim().length, `${name}: skip without a reason`).toBeGreaterThan(10)
         return
       }
