@@ -72,5 +72,5 @@ node frontend/scripts/apply-skin.mjs --remove      # назад к золото�
 
 - `deploy-machine` — ветка по умолчанию; все PR идут в неё. `test` заморожен (`44083fba`) и слит 12.11 (`1f65faca`).
 - С FE-222 sweep блокирующий (`ci.yml` → `e2e-stack`), сводный джоб — `CI — gate`. Ruleset ветки на 22.11 не применён (`deploy-machine` не защищена): его применяет админ по `docs/ci/deploy-machine-ruleset.md`.
-- Соседи: comms закреплён в `primer.lock`; машина — тегом и sha256 в `primer-check.yml` (письмо Праймера 17.11). Серверы на машине (velo-test, инстанс Goodo) и их прогресс — в Linear (DM-23, DM-114), не в репо.
+- Соседи: comms закреплён в `primer.lock`; машина — тегом и sha256 в `primer-check.yml` (`v0.1.8`, письмо Праймера 23.11). Серверы на машине (velo-test, инстанс Goodo) и их прогресс — в Linear (DM-23, DM-114), не в репо.
 - 22.11, FE-227: `deploy-machine` на `f3fa1471` собирается со скином `goodo-brand` `v0.2.0` по проверке выше (validate-skin — 0 отказов; образ фронта отдаёт манифест и `<title>` Goodo, `theme_color` `#120054`, иконки пакета — заглушки v0.2.0, перекрашенные знаки VELO). Серверный инстанс Goodo — в Linear (DM-114).

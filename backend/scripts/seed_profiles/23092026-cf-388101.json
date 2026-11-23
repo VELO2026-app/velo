@@ -27,7 +27,7 @@
     "завершённая практика -> FeedbackView с той же шкалой.",
     "",
     "Откат демо (только эти две практики):",
-    "  pridem verb seed-reset-only profile=23092026-cf-388101 --confirm <сервер>",
+    "  pridem seed velo --profile 23092026-cf-388101 --reset-only --confirm <сервер>",
     "Вернуть куратора (по желанию): pridem verb setrole telegram_id=388101199",
     "role=M. Кураторского профиля 22092026-388101 нет ни в seed_profiles/,",
     "ни в seeds primer.yaml -- пересеять его нечем."

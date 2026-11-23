@@ -3,15 +3,20 @@
 # VELO Backend -- Profile-driven database seed
 # =============================================================================
 #
-# USAGE, through the deploy machine (primer.yaml, BE-195):
-#   seed <profile>              -- a seed of the stack `velo`: one per file of
-#                                  seed_profiles/, `--profile <file name>`
-#   seed-reset <profile>        -- verb: wipe that profile's data, then seed
-#   seed-reset-only <profile>   -- verb: wipe that profile's data, stop
-#   seed-reset-all              -- verb: wipe the data of EVERY profile, stop
-# The three resets are `destructive` and limited to the roles test and
-# preview in primer.yaml; the seeds get their roles when the machine takes
-# `roles` on a seed.
+# USAGE, through the deploy machine (primer.yaml, BE-194 part 12): one seed
+# of the stack `velo` per file of seed_profiles/; the operator names it by
+# its key in primer.yaml -- the file's name in lower case (fe-54 for
+# FE-54.json):
+#   pridem seed velo --profile <key>                           -- `run`: seed
+#   pridem seed velo --profile <key> --reset --confirm <srv>   -- `reset`: wipe
+#                                                 that profile's data, then seed
+#   pridem seed velo --profile <key> --reset-only --confirm <srv>
+#                                  -- `reset_only`: wipe that profile's data, stop
+#   pridem seed velo --reset-all --confirm <srv>
+#                     -- `seeds_reset_all`: wipe the data of EVERY profile, stop
+# Each command names the profile's file literally (`--profile <file name>`).
+# The machine runs them on the roles of the profile only -- test and
+# preview -- and a reset only with the server's name.
 #
 # DIRECTLY (inside the app container):
 #   python scripts/seed.py --profile NAME [--reset | --reset-only] [--dry-run]
@@ -183,11 +188,11 @@ def list_profiles() -> list[str]:
 
 
 def load_profile(name: str) -> dict:
-    """The profile NAME -- one of list_profiles(), nothing else. The name is
-    the argument of a verb of the machine, so it is matched against the
-    files of seed_profiles/ before any path is built from it: ``../x``, a
-    name with a slash or one that is simply not there is refused (exit 1,
-    with the list) and no file outside the directory is read."""
+    """The profile NAME -- one of list_profiles(), nothing else. The name
+    comes from the command line, so it is matched against the files of
+    seed_profiles/ before any path is built from it: ``../x``, a name with a
+    slash or one that is simply not there is refused (exit 1, with the list)
+    and no file outside the directory is read."""
     available = list_profiles()
     if name not in available:
         raise SystemExit(

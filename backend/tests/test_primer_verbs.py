@@ -8,9 +8,12 @@ machine itself only reads the form; what the commands are is ours. So:
   seed -- a profile added without a seed, or a seed whose file is gone,
   is red here, not on the stand;
 * every command names a script that exists in this tree;
-* a verb that deletes is `destructive`, and a reset of the seeds is never
-  allowed on prod (`roles`);
-* the two scripts read their arguments in the form the verbs give them:
+* a verb that deletes is `destructive`; the seeds are reset by the machine's
+  `pridem seed ... --reset` (machine v0.1.8), by the commands `reset`,
+  `reset_only` of each seed and `seeds_reset_all` of the stack -- no verb
+  runs seed.py, and no seed, so no reset, runs on prod (`roles`);
+* the three commands of a seed name its one file and a mode seed.py has;
+* the two scripts read their arguments in the form primer.yaml gives them:
   `ids` of comms_outbox.py as one comma-joined value, the profile of
   seed.py as a name of seed_profiles/ and nothing else.
 
@@ -36,13 +39,9 @@ PROFILES = SCRIPTS / "seed_profiles"
 
 # The machine's name of a seed or a verb (DM-78).
 MACHINE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,62}")
-DESTRUCTIVE = {
-    "comms-outbox-requeue-all",
-    "seed-reset",
-    "seed-reset-only",
-    "seed-reset-all",
-}
+DESTRUCTIVE = {"comms-outbox-requeue-all"}
 NOT_ON_PROD = ["test", "preview"]
+SEED_PY = ["python", "scripts/seed.py"]
 
 
 def _primer() -> dict:
@@ -91,9 +90,13 @@ def _verbs() -> dict:
 def test_every_profile_is_a_seed_and_every_seed_a_profile() -> None:
     """Each file of seed_profiles/ is a seed, and each seed is a file -- run
     on command, and on the roles test and preview only: a profile is demo
-    people and their data (BE-195 part 2). The set of roles is NOT_ON_PROD,
-    the same as the resets of the seeds. Was `{run, when}` exactly -- right
-    while the machine took no `roles` on a seed."""
+    people and their data (BE-195 part 2). The machine's resets of a seed
+    run on the seed's roles, so NOT_ON_PROD keeps them off prod too.
+
+    Was `{run, when, roles}` exactly -- right while the resets were verbs of
+    primer.yaml. Machine v0.1.8 resets a seed by the seed's own commands
+    `reset` and `reset_only` (BE-194 part 12), so the seed carries them,
+    each naming the profile's file literally: the machine puts nothing in."""
     files = sorted(p.stem for p in PROFILES.glob("*.json"))
     assert files, f"{PROFILES} holds profiles"
     seeds = _seeds()
@@ -102,6 +105,8 @@ def test_every_profile_is_a_seed_and_every_seed_a_profile() -> None:
         spec = seeds[stem.lower()]
         assert spec == {
             "run": f"python scripts/seed.py --profile {stem}",
+            "reset": f"python scripts/seed.py --reset --profile {stem}",
+            "reset_only": f"python scripts/seed.py --reset-only --profile {stem}",
             "when": "command",
             "roles": NOT_ON_PROD,
         }, stem
@@ -129,15 +134,29 @@ def test_every_command_names_a_script_of_this_tree() -> None:
 
 
 def test_a_verb_that_deletes_is_destructive_and_a_reset_never_runs_on_prod() -> None:
+    """A verb that deletes is `destructive`; the seeds are reset by the
+    machine's `pridem seed`, never by a verb.
+
+    Was: every verb on seed.py is destructive and on test and preview -- right
+    while the resets were the verbs seed-reset, seed-reset-only and
+    seed-reset-all (BE-195). Machine v0.1.8 runs a reset by the commands of
+    the seed and of the stack (BE-194 part 12): a verb on seed.py would be a
+    second way to the same reset, so none is left. The pair: every seed has
+    both resets and the stack has seeds_reset_all, on roles that keep them
+    off prod -- `--reset-all` runs on the roles every profile allows."""
     verbs = _verbs()
     marked = {n for n, v in verbs.items() if v.get("destructive") is True}
     assert marked == DESTRUCTIVE
-    # The resets are found among the verbs the app runs: a verb on a job has
-    # no script (machine 24b4ea8); `marked` above still covers every verb.
-    for name, verb in _app_verbs().items():
-        if _script(verb) == "scripts/seed.py":
-            assert verb.get("destructive") is True, name
-            assert verb.get("roles") == NOT_ON_PROD, name
+    # A verb on a job has no script (machine 24b4ea8); the jobs' verbs are
+    # held whole by test_storage_check_is_the_jobs_check_and_ci_runs_it_so.
+    on_seed = [n for n, v in _app_verbs().items() if _script(v) == SEED_PY[1]]
+    assert not on_seed, f"a verb runs seed.py: {on_seed}"
+    seeds = _seeds()
+    for name, spec in seeds.items():
+        assert spec.get("reset") and spec.get("reset_only"), name
+    assert _primer()["stacks"]["velo"].get("seeds_reset_all")
+    every = set.intersection(*(set(spec["roles"]) for spec in seeds.values()))
+    assert every == set(NOT_ON_PROD), "--reset-all runs on test and preview only"
     assert "comms-outbox" not in verbs, "the verb with `command` is gone"
 
 
@@ -263,15 +282,48 @@ def test_the_profile_is_named_or_the_run_stands_alone(argv: list[str]) -> None:
     assert refused.value.code == 2
 
 
-def test_the_verbs_forms_of_the_seed_parse() -> None:
-    plain = seed._parse_args(["--profile", "15082026"])
-    assert (plain.profile, plain.reset, plain.reset_only) == ("15082026", False, False)
-    reset = seed._parse_args(["--reset", "--profile", "15082026"])
-    assert (reset.reset, reset.reset_only) == (True, False)
-    only = seed._parse_args(["--reset-only", "--profile", "15082026"])
-    assert (only.reset, only.reset_only) == (True, True)
-    every = seed._parse_args(["--reset-all"])
-    assert (every.reset_all, every.profile) == (True, None)
+# What seed.py does by each command of primer.yaml, as its parsed arguments:
+# (reset, reset_only, reset_all). `--reset-only` sets `reset` too (seed.py).
+MODES = {
+    "run": (False, False, False),
+    "reset": (True, False, False),
+    "reset_only": (True, True, False),
+}
+
+
+def _parsed(command: str):
+    words = shlex.split(command)
+    assert words[:2] == SEED_PY, command
+    assert (SCRIPTS.parent / SEED_PY[1]).is_file()
+    return seed._parse_args(words[2:])
+
+
+def test_the_commands_of_each_seed_name_its_file_and_a_mode_of_seed_py() -> None:
+    """The three commands of a seed, as seed.py itself parses them: each
+    names the seed's one file of seed_profiles/, and each is the mode its
+    field means -- seed, reset and seed, reset alone. `seeds_reset_all` is
+    the mode that takes back every profile and names none.
+
+    Replaces a test that parsed the four forms written into it -- right
+    while the forms lived in the verbs, as literals of their own. Since
+    machine v0.1.8 (BE-194 part 12) the forms are the commands of
+    primer.yaml, so they are read from there: a flag renamed in seed.py, or
+    a command naming another profile's file, is red here, not on the box."""
+    files = {p.stem.lower(): p.stem for p in PROFILES.glob("*.json")}
+    seeds = _seeds()
+    assert seeds and sorted(seeds) == sorted(files)
+    for name, spec in seeds.items():
+        for field, mode in MODES.items():
+            args = _parsed(spec[field])
+            assert args.profile == files[name], (name, field)
+            assert (args.reset, args.reset_only, args.reset_all) == mode, (
+                name,
+                field,
+            )
+            assert (args.dry_run, args.list) == (False, False), (name, field)
+    every = _parsed(_primer()["stacks"]["velo"]["seeds_reset_all"])
+    assert (every.reset_all, every.profile, every.reset) == (True, None, False)
+    assert (every.dry_run, every.list) == (False, False)
 
 
 @pytest.mark.parametrize("name", ["../x", "x/../x", "sub/x", "", "nope", "X"])

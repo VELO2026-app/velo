@@ -48,19 +48,56 @@ stacks:
       generate: python scripts/generate_ts_types.py <openapi> <out>
       out: frontend/src/api/generated.ts
       commit_as: velo-types
-    # Demo people and their data: never on prod (the machine refuses a seed
-    # outside its roles; the resets of primer.yaml's verbs have the same).
+    # Demo people and their data: never on prod -- the machine refuses a
+    # seed, and a reset of it, outside its roles. Each profile names its file
+    # of backend/scripts/seed_profiles/ in all three commands, literally: the
+    # machine runs a command as written and puts nothing in (machine v0.1.8).
+    # `run` -- seed (`pridem seed velo --profile <n>`); `reset` -- take the
+    # profile's data back and seed it again (`--reset --confirm <server>`);
+    # `reset_only` -- take it back alone (`--reset-only --confirm <server>`).
+    # A reset deletes rows, the bookings of live people on seeded practices
+    # included. backend/tests/test_primer_verbs.py holds the three to one file.
     seeds:
-      02102026-demo:            { run: python scripts/seed.py --profile 02102026-demo, when: command, roles: [test, preview] }
-      02102026-invest_demo_new: { run: python scripts/seed.py --profile 02102026-invest_demo_new, when: command, roles: [test, preview] }
-      11102026-loadtest:        { run: python scripts/seed.py --profile 11102026-loadtest, when: command, roles: [test, preview] }
-      "15082026":               { run: python scripts/seed.py --profile 15082026, when: command, roles: [test, preview] }
-      23092026-cf-388101:       { run: python scripts/seed.py --profile 23092026-cf-388101, when: command, roles: [test, preview] }
-      "26082026":               { run: python scripts/seed.py --profile 26082026, when: command, roles: [test, preview] }
-      26082026-1:               { run: python scripts/seed.py --profile 26082026-1, when: command, roles: [test, preview] }
-      # The key is the machine's name (lower case, DM-78); the profile is
-      # the file seed_profiles/FE-54.json.
-      fe-54:                    { run: python scripts/seed.py --profile FE-54, when: command, roles: [test, preview] }
+      02102026-demo:            { run:        python scripts/seed.py --profile 02102026-demo,
+                                  reset:      python scripts/seed.py --reset --profile 02102026-demo,
+                                  reset_only: python scripts/seed.py --reset-only --profile 02102026-demo,
+                                  when: command, roles: [test, preview] }
+      02102026-invest_demo_new: { run:        python scripts/seed.py --profile 02102026-invest_demo_new,
+                                  reset:      python scripts/seed.py --reset --profile 02102026-invest_demo_new,
+                                  reset_only: python scripts/seed.py --reset-only --profile 02102026-invest_demo_new,
+                                  when: command, roles: [test, preview] }
+      11102026-loadtest:        { run:        python scripts/seed.py --profile 11102026-loadtest,
+                                  reset:      python scripts/seed.py --reset --profile 11102026-loadtest,
+                                  reset_only: python scripts/seed.py --reset-only --profile 11102026-loadtest,
+                                  when: command, roles: [test, preview] }
+      "15082026":               { run:        python scripts/seed.py --profile 15082026,
+                                  reset:      python scripts/seed.py --reset --profile 15082026,
+                                  reset_only: python scripts/seed.py --reset-only --profile 15082026,
+                                  when: command, roles: [test, preview] }
+      23092026-cf-388101:       { run:        python scripts/seed.py --profile 23092026-cf-388101,
+                                  reset:      python scripts/seed.py --reset --profile 23092026-cf-388101,
+                                  reset_only: python scripts/seed.py --reset-only --profile 23092026-cf-388101,
+                                  when: command, roles: [test, preview] }
+      "26082026":               { run:        python scripts/seed.py --profile 26082026,
+                                  reset:      python scripts/seed.py --reset --profile 26082026,
+                                  reset_only: python scripts/seed.py --reset-only --profile 26082026,
+                                  when: command, roles: [test, preview] }
+      26082026-1:               { run:        python scripts/seed.py --profile 26082026-1,
+                                  reset:      python scripts/seed.py --reset --profile 26082026-1,
+                                  reset_only: python scripts/seed.py --reset-only --profile 26082026-1,
+                                  when: command, roles: [test, preview] }
+      # The key is the machine's name (lower case, DM-78) and the operator
+      # names it: `pridem seed velo --profile fe-54`; the commands name the
+      # file seed_profiles/FE-54.json.
+      fe-54:                    { run:        python scripts/seed.py --profile FE-54,
+                                  reset:      python scripts/seed.py --reset --profile FE-54,
+                                  reset_only: python scripts/seed.py --reset-only --profile FE-54,
+                                  when: command, roles: [test, preview] }
+    # `pridem seed velo --reset-all --confirm <server>`: the data of every
+    # profile back, nothing seeded again. The machine allows it on the roles
+    # every profile allows (test, preview); seed.py takes back every file of
+    # seed_profiles/, which are exactly the profiles above.
+    seeds_reset_all: python scripts/seed.py --reset-all
   velo-storage:
     compose: docker-compose.storage.yml
     persistent: true
@@ -188,10 +225,7 @@ verbs:
   comms-outbox-list-dead:   { run: python scripts/comms_outbox.py list-dead }
   comms-outbox-requeue:     { run: python scripts/comms_outbox.py requeue, args: [ids] }
   comms-outbox-requeue-all: { run: python scripts/comms_outbox.py requeue --all, destructive: true }
-  # Resets of the seeds: they delete rows, the bookings of live people on
-  # seeded practices included -- destructive, and never on prod.
-  seed-reset:      { run: python scripts/seed.py --reset --profile, args: [profile], destructive: true, roles: [test, preview] }
-  seed-reset-only: { run: python scripts/seed.py --reset-only --profile, args: [profile], destructive: true, roles: [test, preview] }
-  seed-reset-all:  { run: python scripts/seed.py --reset-all, destructive: true, roles: [test, preview] }
+  # No verb resets the seeds: that is `pridem seed velo ... --reset`, by the
+  # commands of stacks.velo.seeds and seeds_reset_all (machine v0.1.8).
 
 report: { health: /health, ready: /ready, logs: json, junit: true }

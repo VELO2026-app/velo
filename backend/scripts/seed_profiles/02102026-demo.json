@@ -12,7 +12,7 @@
     "  pridem seed velo --profile 02102026-demo --dry-run   -- план, ничего не пишет;",
     "  pridem seed velo --profile 02102026-demo             -- посев; идемпотентен:",
     "     повторный запуск не дублирует (совпадение по мастеру + заголовку);",
-    "  pridem verb seed-reset profile=02102026-demo --confirm <сервер> -- снести своё и пересеять.",
+    "  pridem seed velo --profile 02102026-demo --reset --confirm <сервер> -- снести своё и пересеять.",
     "",
     "ПРАВИЛА, НАРУШЕНИЕ КОТОРЫХ МОЛЧА ЛОМАЕТ ПОКАЗ:",
     "  1. ДАТЫ ОТНОСИТЕЛЬНЫЕ: day_offset считается от дня прогона, hour/minute —",
