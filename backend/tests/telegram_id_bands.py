@@ -945,11 +945,11 @@ def render_map() -> str:
 # #      A copy of someone else's ranges drifts silently and we did not
 # #      notice for nine days.
 # #
-# # AND WHEN THE TRIGGER FIRES, THE DATA IS ALREADY DIRTY: velo's suite
-# # runs against a live stand whose relay ships `user_upserted` into
-# # comms, so phantom recipients carrying velo test numbers are sitting
-# # in the comms database right now. Whoever acts on this marker has to
-# # clean rows, not just rules.
+# # AND WHEN THE TRIGGER FIRES, THE DATA MAY ALREADY BE DIRTY: velo's
+# # suite once ran against a live stand whose relay shipped
+# # `user_upserted` into comms, so a comms database that lived through
+# # those runs may hold phantom recipients carrying velo test numbers.
+# # Whoever acts on this marker has to check rows, not just rules.
 
 
 if __name__ == "__main__":

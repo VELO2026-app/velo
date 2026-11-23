@@ -6,7 +6,42 @@
  *   size, texts (added / removed), kit components used (counts), variables used,
  *   raw colours, fonts, top-level blocks of `Content` (order and names).
  * Pixels: take two figma_take_screenshot PNGs (same scale) and look at them side by side.
+ * `frontSheet.intact` (protocol §9.7): false = the «Фронт» sheet was changed after its capture
+ * (by hand or by a kit update): say so instead of comparing with it as the code.
  */
+/**
+ * Structure fingerprint of a «Фронт» sheet, version 2 (protocol §9.7). The front agent writes it
+ * (docs/figma/front/front-lib.figma.js); this copy only checks it. KEEP IDENTICAL to c2fSeal there
+ * (frontend/scripts/lib/front-lib-figma.test.mjs compares the two).
+ */
+function c2fSeal(root) {
+  let h = 0x811c9dc5; let n = 0;
+  const add = (s) => { for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } };
+  const hex = (c) => [c.r, c.g, c.b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  const paint = (p) => {
+    if (p.type === 'IMAGE') return 'img:' + p.imageHash + ':' + p.scaleMode;
+    if (p.type !== 'SOLID') return p.type;
+    if (p.boundVariables && p.boundVariables.color) return 'v:' + p.boundVariables.color.id;
+    return hex(p.color) + '/' + (p.opacity === undefined ? 1 : Math.round(p.opacity * 1000) / 1000);
+  };
+  const paints = (arr) => (arr === figma.mixed ? 'mixed' : (arr || []).filter((p) => p.visible !== false).map(paint).join(','));
+  const effects = (arr) => (arr === figma.mixed ? 'mixed' : (arr || []).filter((e) => e.visible !== false).map((e) => e.type + ':' + Math.round(e.radius || 0)).join(','));
+  const font = (x) => (x.type !== 'TEXT' ? '' : x.fontName === figma.mixed ? 'mixed' : x.fontName.family + ' ' + x.fontName.style + ' ' + (x.fontSize === figma.mixed ? 'mixed' : x.fontSize));
+  const walk = (x, depth) => {
+    n++;
+    const geo = depth === 0 ? [0, 0] : [Math.round(x.x || 0), Math.round(x.y || 0)];
+    let text = x.type === 'TEXT' ? x.characters : '';
+    if (x.type === 'INSTANCE') text = x.findAll((t) => t.type === 'TEXT').map((t) => t.characters).join('\u0001');
+    add([depth, x.type, x.name, x.visible === false ? 0 : 1, x.opacity === undefined ? 1 : Math.round(x.opacity * 100),
+      Math.round(x.width || 0), Math.round(x.height || 0), geo[0], geo[1],
+      'fills' in x ? paints(x.fills) : '', 'strokes' in x ? paints(x.strokes) + '@' + (x.strokeWeight === figma.mixed ? 'mixed' : x.strokeWeight || 0) : '',
+      'effects' in x ? effects(x.effects) : '', font(x), text].join('|') + '\n');
+    if (x.type !== 'INSTANCE' && 'children' in x) for (const c of x.children) walk(c, depth + 1);
+  };
+  walk(root, 0);
+  return 'v2:' + n + ':' + h.toString(16).padStart(8, '0');
+}
+
 const COMPARE_FRAMES = async (aId, bId, opts) => {
   const o = Object.assign({ limit: 40 }, opts || {});
   const hex = (c) => '#' + [c.r, c.g, c.b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
@@ -41,6 +76,16 @@ const COMPARE_FRAMES = async (aId, bId, opts) => {
     await walk(root);
     return s;
   }
+  async function frontSheet(id) {
+    // the sheet section that holds the seal: the node itself or its nearest ancestor with c2f:seal
+    let s = await figma.getNodeByIdAsync(id);
+    while (s && s.type !== 'PAGE' && !s.getPluginData('c2f:seal')) s = s.parent;
+    if (!s || s.type === 'PAGE') return { seal: null, intact: null, commit: null, captured: null };
+    const seal = s.getPluginData('c2f:seal');
+    // a seal of another algorithm version cannot be compared: say so instead of «edited»
+    const sameVersion = seal.split(':')[0] === c2fSeal(s).split(':')[0];
+    return { id: s.id, name: s.name, seal, intact: sameVersion ? seal === c2fSeal(s) : null, note: sameVersion ? null : 'old seal version: the front agent must restamp the sheet', commit: s.getPluginData('c2f:commit') || null, captured: s.getPluginData('c2f:captured') || null };
+  }
   const A = await summary(aId), B = await summary(bId);
   if (A.error || B.error) return { error: A.error || B.error };
   const minus = (x, y) => [...x].filter((v) => !y.has(v));
@@ -55,7 +100,6 @@ const COMPARE_FRAMES = async (aId, bId, opts) => {
     componentsChanged: comps,
     variablesAdded: minus(A.vars, B.vars), variablesRemoved: minus(B.vars, A.vars),
     rawColorsInDesign: [...A.raw], fontsInDesign: [...A.fonts],
-    frontSeal: (await figma.getNodeByIdAsync(bId)).getPluginData('c2f:seal') || null,
-    frontCommit: (await figma.getNodeByIdAsync(bId)).getPluginData('c2f:commit') || null,
+    frontSheet: await frontSheet(bId), // intact false = changed after the capture; null = no seal yet
   };
 };

@@ -198,6 +198,10 @@ export type { Toast, ToastApi, ToastVariant } from '@velo/ui'
 // The keyboard field-scroll seam lives behind its own door instead: see
 // composables/useKeyboardFieldScroll.ts (the app half of the seam).
 export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from '@velo/ui'
+// FE-215: the kit's Escape stack. One Escape closes only the top open layer;
+// a host layer that closes on Escape (DiarySearchBar) registers through it so
+// a kit overlay opened over it takes the key first.
+export { useEscapeLayer } from '@velo/ui'
 
 // Types re-exported for barrel consumers (verbatimModuleSyntax-aware).
 export type { SegmentOption } from '@velo/ui'

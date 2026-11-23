@@ -179,7 +179,8 @@ def test_oversized_audio_is_refused_with_its_own_code() -> None:
     """One byte over the named ceiling, and the pair one byte under it.
 
     The ceiling is a constant rather than a literal precisely so that this
-    test and scripts/nginx-render.sh can be read against the same number.
+    test and max_body of the route `api` in primer.yaml can be read against
+    the same number.
     """
     over = base64.b64encode(b"\x00" * (MAX_AUDIO_BYTES + 1)).decode()
     with pytest.raises(VeloError) as exc:

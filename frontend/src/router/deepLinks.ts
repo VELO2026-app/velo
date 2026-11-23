@@ -15,9 +15,9 @@
 // isSchoolInviteParam().
 //
 // The T-44 codec vector for decodePracticeCode stays in
-// composables/useAuth.test.ts: `velo test` (scripts/velo-manage.sh) and the
-// backend's twin (backend/tests/test_zoom_public_link.py) read it from that
-// path.
+// composables/useAuth.test.ts: the CI job codec vector
+// (.github/workflows/codec-vector.yml) and the backend's twin
+// (backend/tests/test_zoom_public_link.py) read it from that path.
 // =============================================================================
 
 import { isOptionEnabled } from '@/platform/instance'
@@ -53,10 +53,10 @@ export interface DeepLinkTarget {
  *   frontend/src/composables/useAuth.test.ts
  *   backend/tests/test_zoom_public_link.py
  * Each side runs its own decoder against its own copy (catching "I changed
- * the codec and not the table"), and `velo test` / `velo update` additionally
- * diff the two copies against each other in a container that can see both
- * trees (catching "I changed one side's codec AND its table, leaving the
- * other side behind" -- which no single-sided test can see).
+ * the codec and not the table"), and the CI job codec vector
+ * (.github/workflows/codec-vector.yml) additionally compares the two copies
+ * (catching "I changed one side's codec AND its table, leaving the other
+ * side behind" -- which no single-sided test can see).
  * CHANGE THIS DECODER ONLY IN PAIRS: this function, decode_practice_code in
  * backend/app/modules/zoom/service.py, and BOTH copies of the vector. T-44
  * was opened because the comments were the only thing holding them together,

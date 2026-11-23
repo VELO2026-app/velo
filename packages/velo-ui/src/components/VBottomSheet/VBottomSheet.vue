@@ -12,10 +12,10 @@
   cancel) is caller copy, so the kit component is pure as-is. The §7.2
   attrs-root seam IS cut by the move: inheritAttrs:false + an explicit
   v-bind merge onto the teleported OVERLAY root (see the titleStrong
-  paragraph below for the fallthrough gap that retires). Document access
-  (the Escape keydown) lives behind the kit's own seam
-  (src/platform/dom.ts) and the ref-counted body-scroll lock is the kit's
-  own (src/useBodyScrollLock.ts) -- both landed in P5.
+  paragraph below for the fallthrough gap that retires). The ref-counted
+  body-scroll lock is the kit's own (src/useBodyScrollLock.ts, landed in
+  P5). Escape goes through the kit's Escape stack (src/escapeStack.ts,
+  FE-215): only the top open overlay closes on one press.
 
   Usage:
     <VBottomSheet :open="open" title="Practice date" save-label="Save"
@@ -142,9 +142,9 @@
 </template>
 
 <script setup lang="ts">
-import { onDocumentEvent, offDocumentEvent } from '../../platform/dom'
-import { ref, watch, onMounted, onUnmounted, onDeactivated, useAttrs } from 'vue'
+import { ref, watch, onUnmounted, onDeactivated, useAttrs } from 'vue'
 import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
+import { useEscapeLayer } from '../../escapeStack'
 
 defineOptions({ inheritAttrs: false })
 const attrs = useAttrs()
@@ -206,9 +206,11 @@ function onOverlay(): void {
   if (props.closeOnOverlay) emit('close')
 }
 
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && props.open) emit('close')
-}
+// Escape closes only the top open overlay, not every open one (FE-215).
+useEscapeLayer(
+  () => props.open,
+  () => emit('close'),
+)
 
 // Swipe-to-close from the grab zone (handle + title). The zone is
 // touch-action:none, so the gesture never competes with the body's own
@@ -301,9 +303,7 @@ watch(
   { immediate: true },
 )
 
-onMounted(() => onDocumentEvent('keydown', onKeydown))
 onUnmounted(() => {
-  offDocumentEvent('keydown', onKeydown)
   if (locked) {
     locked = false
     unlockBodyScroll()

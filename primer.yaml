@@ -141,7 +141,10 @@ packages:
     # passport is package-missing.
     optional: true
     build:
-      - { service: frontend, path: public/skin }
+      # From the frontend's build context, the repository root: the build
+      # copies frontend/ and vite reads frontend/public/skin
+      # (tests/test_primer_env.py holds the three).
+      - { service: frontend, path: frontend/public/skin }
   # Texts of the instance (BE-207, FE-133): overlays of the product's wording,
   # applied at the start of the container. The package is mounted whole, so
   # validate-texts gets its root (primer-package.yaml, ui/<lang>.json) and
