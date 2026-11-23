@@ -203,7 +203,7 @@ describe('modes-lib.figma.js', () => {
     await lib().apply(payload(), { createModes: true })
     const p = payload()
     await expect(lib().apply(p, { makeCoreDefault: true })).rejects.toThrow(
-      /no explicit mode on page "Фронт · Экраны".*Dashboard/s,
+      /not pinned.*page "Фронт · Экраны" \(no explicit mode\).*Dashboard/s,
     )
     expect(file.col.defaultModeId).toBe('3905:0')
     pinFront()
@@ -301,11 +301,39 @@ describe('modes-lib.figma.js', () => {
     const plan = await lib().plan(payload())
     expect(plan.ok).toBe(true)
     expect(plan.unpinned).toEqual([
-      'page "Фронт · Экраны"',
-      '"Фронт · Экраны" / "Legacy screen / user.dashboard / Dashboard"',
-      `page "${KIT}"`,
-      `"${KIT}" / "Component / Actions"`,
+      'page "Фронт · Экраны" (no explicit mode)',
+      '"Фронт · Экраны" / "Legacy screen / user.dashboard / Dashboard" (no explicit mode)',
+      `page "${KIT}" (no explicit mode)`,
+      `"${KIT}" / "Component / Actions" (no explicit mode)`,
     ])
+  })
+
+  it('a pin must be the mode the node shows: gold, or its own mode for a Skin / <mode> card', async () => {
+    await lib().apply(payload(), { createModes: true })
+    pinFront()
+    const coreId = file.col.modes.find((m) => m.name === 'core').modeId
+    const goodoId = file.col.modes.find((m) => m.name === 'goodo').modeId
+    file.screens.children[0].explicitVariableModes = { cv: coreId }
+    file.kit.children.push(node('Skin / goodo'))
+    file.kit.children[1].explicitVariableModes = { cv: goodoId }
+    const plan = await lib().plan(payload())
+    expect(plan.unpinned).toEqual([
+      '"Фронт · Экраны" / "Legacy screen / user.dashboard / Dashboard" (mode core, expected gold)',
+    ])
+    await expect(lib().apply(payload(), { makeCoreDefault: true })).rejects.toThrow(
+      /mode core, expected gold/,
+    )
+  })
+
+  it('refuses to change the gold mode without the owner-approved flag', async () => {
+    const p = payload()
+    p.collections[0].values['color/blue-500'].gold = { color: [99, 122, 156, 1] }
+    await expect(lib().apply(p, { createModes: true })).rejects.toThrow(
+      /1 value\(s\) of the gold mode would change/,
+    )
+    expect(versions).toEqual([])
+    const r = await lib().apply(p, { createModes: true, allowScreensModeChanges: true })
+    expect(r.changes.gold).toBe(1)
   })
 
   it('pin() sets the mode of the payload collection, only inside FRONT.write', async () => {

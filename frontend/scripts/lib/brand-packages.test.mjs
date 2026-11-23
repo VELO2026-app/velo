@@ -5,26 +5,37 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { checkoutProblem, cloneEnv, fetchPackage } from './brand-packages.mjs'
+import { checkoutProblem, cloneEnv, fetchPackage, gitEnv } from './brand-packages.mjs'
 
-// A git hook (pre-push runs these tests) exports GIT_DIR and friends: keep them out.
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_')))
+// A git hook (pre-push runs these tests) exports GIT_DIR and friends: the fixture drops them
+// (gitEnv) and reads no global or system config; the author comes from the environment.
+const env = {
+  ...gitEnv(process.env),
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_AUTHOR_NAME: 'fixture',
+  GIT_AUTHOR_EMAIL: 'fixture@test.invalid',
+  GIT_COMMITTER_NAME: 'fixture',
+  GIT_COMMITTER_EMAIL: 'fixture@test.invalid',
+}
 const run = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8', env }).trim()
 
 let tmp
 let origin
 let sha
+/** A repository with one commit tagged v1.0.0. */
+function makeRepo(dir, text = 'one') {
+  execFileSync('git', ['init', '--quiet', dir], { env })
+  writeFileSync(join(dir, 'a.txt'), text)
+  run(dir, 'add', '.')
+  run(dir, 'commit', '--quiet', '--no-gpg-sign', '-m', 'one')
+  run(dir, 'tag', 'v1.0.0')
+  return run(dir, 'rev-parse', 'HEAD')
+}
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'brand-packages-'))
   origin = join(tmp, 'origin')
-  execFileSync('git', ['init', '--quiet', origin], { env })
-  run(origin, 'config', 'user.email', 't@t')
-  run(origin, 'config', 'user.name', 't')
-  writeFileSync(join(origin, 'a.txt'), 'one')
-  run(origin, 'add', '.')
-  run(origin, 'commit', '--quiet', '--no-gpg-sign', '-m', 'one')
-  run(origin, 'tag', 'v1.0.0')
-  sha = run(origin, 'rev-parse', 'HEAD')
+  sha = makeRepo(origin)
 })
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
@@ -65,7 +76,6 @@ describe('fetchPackage', () => {
     expect(env.GIT_CONFIG_KEY_0).toBe('http.https://github.com/.extraheader')
     expect(env.GIT_CONFIG_VALUE_0).not.toContain('ghp_secret123')
     expect(cloneEnv('', {})).toEqual({ GIT_TERMINAL_PROMPT: '0' })
-    // a git hook's GIT_DIR must not aim the clone at the caller's repository
     expect(cloneEnv('', { GIT_DIR: '/repo/.git', PATH: '/bin' })).toEqual({
       PATH: '/bin',
       GIT_TERMINAL_PROMPT: '0',
@@ -73,6 +83,46 @@ describe('fetchPackage', () => {
     const target = join(tmp, 'pkg')
     fetchPackage(pin(), target, { url: `file://${origin}`, token: 'ghp_secret123' })
     expect(readFileSync(join(target, '.git', 'config'), 'utf8')).not.toContain('ghp_secret123')
+  })
+})
+
+describe('a git hook environment', () => {
+  it('GIT_DIR / GIT_INDEX_FILE of the caller reach neither the checks nor the clone', () => {
+    const decoy = join(tmp, 'decoy')
+    makeRepo(decoy, 'decoy') // another commit: a leaked GIT_DIR shows up as a wrong HEAD
+    const before = [
+      run(decoy, 'rev-parse', 'HEAD'),
+      readFileSync(join(decoy, '.git', 'config'), 'utf8'),
+    ]
+    const saved = { GIT_DIR: process.env.GIT_DIR, GIT_INDEX_FILE: process.env.GIT_INDEX_FILE }
+    process.env.GIT_DIR = join(decoy, '.git')
+    process.env.GIT_INDEX_FILE = join(decoy, '.git', 'index')
+    try {
+      writeFileSync(join(decoy, 'a.txt'), 'edited') // dirty decoy: a leaked GIT_DIR would report it
+      expect(checkoutProblem(origin, sha)).toBeNull()
+      const target = join(tmp, 'pkg')
+      fetchPackage(pin(), target, { url: `file://${origin}` })
+      expect(run(target, 'rev-parse', 'HEAD')).toBe(sha)
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+    }
+    expect([
+      run(decoy, 'rev-parse', 'HEAD'),
+      readFileSync(join(decoy, '.git', 'config'), 'utf8'),
+    ]).toEqual(before)
+  })
+  it('keeps credential helpers: only the repository-local variables go', () => {
+    const base = {
+      GIT_DIR: '/repo/.git',
+      GIT_INDEX_FILE: '/repo/.git/index',
+      GIT_ASKPASS: '/askpass',
+      GIT_SSH_COMMAND: 'ssh',
+      PATH: '/bin',
+    }
+    expect(gitEnv(base)).toEqual({ GIT_ASKPASS: '/askpass', GIT_SSH_COMMAND: 'ssh', PATH: '/bin' })
   })
 })
 

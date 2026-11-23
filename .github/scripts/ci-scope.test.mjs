@@ -25,8 +25,16 @@ const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'ci-scope.mjs')
 const ROOTS = []
 after(() => ROOTS.forEach((r) => rmSync(r, { recursive: true, force: true })))
 
+// git's repository-local variables (GIT_DIR, GIT_INDEX_FILE ...) are dropped: under a git hook
+// they would aim the fixture's init and commits at the caller's repository. No global or
+// system config either: the author comes from the variables below.
+const LOCAL_VARS = new Set(
+  execFileSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' }).split('\n').filter(Boolean),
+)
 const GIT_ENV = {
-  ...process.env,
+  ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !LOCAL_VARS.has(k))),
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
   GIT_AUTHOR_NAME: 'ci-scope test',
   GIT_AUTHOR_EMAIL: 'ci-scope@test.invalid',
   GIT_COMMITTER_NAME: 'ci-scope test',

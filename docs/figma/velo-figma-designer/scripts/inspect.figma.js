@@ -17,8 +17,8 @@
  *   tree      nodes with geometry relative to the root, layout, fills, strokes,
  *             radius, effects, text props; `vars` = bound variable names per field
  *   variables every bound variable once: name, collection, mode, value in the mode the root
- *             shows (the explicit mode of the nearest node up the tree, else the collection
- *             default); since FE-234 the first mode of `velo` is the neutral core
+ *             shows (resolvedVariableModes; else the explicit mode of the nearest node up the
+ *             tree; else the collection default); since FE-234 the first mode of `velo` is core
  *   texts     every visible text: characters, font, size, line-height, style name
  *   instances every instance: main component name/key + component set + props
  *   colors    every raw (unbound) solid colour → count (hardcode suspects)
@@ -37,9 +37,12 @@ const F2C_INSPECT = async (nodeId, opts) => {
   // ---- variables ---------------------------------------------------------------
   const varCache = {};
   const variables = {};
-  // The mode the root shows: the explicit mode of the nearest node up the tree (the root itself,
-  // a section, the page), else the collection default. Never the first mode by position.
+  // The mode the root shows: Figma's own answer (resolvedVariableModes: it also knows a mode an
+  // instance takes from its main component); else the explicit mode of the nearest node up the
+  // tree; else the collection default. Never the first mode by position.
   function modeShown(col) {
+    const resolved = root.resolvedVariableModes && root.resolvedVariableModes[col.id];
+    if (resolved) return resolved;
     for (let n = root; n; n = n.parent) {
       const m = n.explicitVariableModes && n.explicitVariableModes[col.id];
       if (m) return m;

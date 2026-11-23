@@ -17,16 +17,29 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import process from 'node:process'
 
-/** The caller's environment without GIT_* (a git hook's GIT_DIR / GIT_INDEX_FILE would aim our
- *  git calls at the caller's repository). */
-function withoutGit(base) {
-  return Object.fromEntries(Object.entries(base).filter(([k]) => !k.startsWith('GIT_')))
+/** @type {Set<string> | null} */
+let localVars = null
+
+/**
+ * The caller's environment without git's repository-local variables (the list of
+ * `git rev-parse --local-env-vars`: GIT_DIR, GIT_INDEX_FILE, GIT_WORK_TREE ...). A git hook
+ * exports them, and they would aim our git calls at the caller's repository. Credential
+ * helpers (GIT_ASKPASS, GIT_SSH_COMMAND) and the global config stay.
+ */
+export function gitEnv(base = process.env) {
+  localVars ??= new Set(
+    execFileSync('git', ['rev-parse', '--local-env-vars'], { encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean),
+  )
+  const drop = localVars
+  return Object.fromEntries(Object.entries(base).filter(([k]) => !drop.has(k)))
 }
 
 /** The environment of a clone: no prompt; a token as a basic-auth header. */
 export function cloneEnv(token = '', base = process.env) {
   /** @type {Record<string, string | undefined>} */
-  const env = { ...withoutGit(base), GIT_TERMINAL_PROMPT: '0' }
+  const env = { ...gitEnv(base), GIT_TERMINAL_PROMPT: '0' }
   if (token) {
     const basic = Buffer.from(`x-access-token:${token}`).toString('base64')
     env.GIT_CONFIG_COUNT = '1'
@@ -47,7 +60,7 @@ const git = (dir, ...args) =>
   execFileSync('git', ['-C', dir, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: withoutGit(process.env),
+    env: gitEnv(process.env),
   }).trim()
 
 /**

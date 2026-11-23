@@ -30,12 +30,14 @@
  *   - every value fits its variable (type, alias target of the same type); a mode apply creates
  *     gets a value for EVERY variable of the collection -- a new mode starts as a copy of the
  *     default one (gold), and a variable left out would keep the gold value in core;
- *   - makeCoreDefault refuses while a `Фронт · …` page or one of its top-level nodes has no
- *     explicit mode of the collection: those nodes would turn to core;
+ *   - no value of the screens mode (gold) changes, unless allowScreensModeChanges (a new package
+ *     tag, the owner's yes): a change there is a hand edit or a stale payload;
+ *   - makeCoreDefault refuses while a `Фронт · …` page or top-level node is not pinned to the mode
+ *     it must show (gold; a `Skin / <mode>` card its own mode): those nodes would turn to core;
  *   - a named version is saved first; no version -> stop; only values that differ are written.
  */
 /** Numeric version (yyyymmddnn), compared as a number. */
-const MODES_LIB_VERSION = 2026112401;
+const MODES_LIB_VERSION = 2026112402;
 /** Same values as frontend/scripts/lib/figma-modes.mjs (pinned by modes-lib-figma.test.mjs). */
 const MODES_FORMAT = 'velo-figma-modes/1';
 const MODES_MAX = 4;
@@ -131,13 +133,25 @@ function makeModes(o) {
     try { return JSON.parse(page.getPluginData('f2c:lock') || 'null'); } catch (e) { return null; }
   }
 
-  /** `Фронт · …` pages and top-level nodes with no explicit mode of the collection. */
-  async function unpinned(col) {
+  /**
+   * `Фронт · …` pages and top-level nodes whose explicit mode is not the one they must show:
+   * the screens mode (gold), or for a skin card `Skin / <mode>` its own mode.
+   */
+  async function unpinned(payload, col) {
     await figma.loadAllPagesAsync();
+    const nameOf = (id) => (col.modes.find((m) => m.modeId === id) || {}).name;
+    const want = payload.screensMode;
     const out = [];
+    const check = (label, n, mode) => {
+      const has = nameOf((n.explicitVariableModes || {})[col.id]);
+      if (has !== mode) out.push(label + (has ? ' (mode ' + has + ', expected ' + mode + ')' : ' (no explicit mode)'));
+    };
     for (const p of figma.root.children.filter((x) => MODES_FRONT_PAGE.test(x.name))) {
-      if (!(p.explicitVariableModes || {})[col.id]) out.push('page "' + p.name + '"');
-      for (const n of p.children) if (!(n.explicitVariableModes || {})[col.id]) out.push('"' + p.name + '" / "' + n.name + '"');
+      check('page "' + p.name + '"', p, want);
+      for (const n of p.children) {
+        const card = /^Skin \/ (.+)$/.exec(n.name);
+        check('"' + p.name + '" / "' + n.name + '"', n, card ? card[1] : want);
+      }
     }
     return out;
   }
@@ -221,13 +235,19 @@ function makeModes(o) {
         }
       }
     }
+    // The screens mode (gold) is what the mirror shows and the snapshot proved in sync with the
+    // code: a change there is a new package tag or a hand edit -- only with the owner's yes.
+    const screens = payload.screensMode;
+    if (screens && changes[screens] > 0 && !opts.allowScreensModeChanges) {
+      problems.push(changes[screens] + ' value(s) of the ' + screens + ' mode would change: stop (a new package tag: allowScreensModeChanges with the owner\'s yes)');
+    }
     return { ok: problems.length === 0, problems, col, create, modeId, changes, writes, order: col.modes.map((m) => m.name), defaultMode: (col.modes.find((m) => m.modeId === col.defaultModeId) || {}).name };
   }
 
   /** Read-only: what apply would create and change, or the problems that stop it. */
   async function plan(payload, opts) {
     const r = await check(payload, Object.assign({ createModes: true }, opts));
-    const unpinnedNodes = r.col ? await unpinned(r.col) : [];
+    const unpinnedNodes = r.col ? await unpinned(payload, r.col) : [];
     return { ok: r.ok, problems: r.problems, create: r.create, changes: r.changes, order: r.order, defaultMode: r.defaultMode, unpinned: unpinnedNodes, lib: MODES_LIB_VERSION };
   }
 
@@ -243,8 +263,8 @@ function makeModes(o) {
     const coreName = payload.modes && payload.modes[0] && payload.modes[0].name;
     if (opts.makeCoreDefault && r.col) {
       if (r.create.includes(coreName)) r.problems.push('makeCoreDefault: mode ' + coreName + ' does not exist yet: apply({ createModes: true }) first');
-      const loose = await unpinned(r.col);
-      if (loose.length > 0) r.problems.push('makeCoreDefault: no explicit mode on ' + loose.join(', ') + ': MODES.pin them first, they would turn to ' + coreName);
+      const loose = await unpinned(payload, r.col);
+      if (loose.length > 0) r.problems.push('makeCoreDefault: not pinned to the mode they must show: ' + loose.join(', ') + '. MODES.pin them first, or they turn to ' + coreName);
     }
     if (r.problems.length > 0) fail('stopped before any change:\n  - ' + r.problems.join('\n  - '));
     const col = r.col;

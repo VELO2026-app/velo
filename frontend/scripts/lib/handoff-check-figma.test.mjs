@@ -352,6 +352,7 @@ test('F2C_INSPECT: a variable value in the mode of the nearest node with an expl
     parent: pageNode,
     explicitVariableModes: { c1: 'g' },
   }
+  /** @type {any} */
   const leaf = {
     id: '1:2',
     type: 'RECTANGLE',
@@ -387,6 +388,10 @@ test('F2C_INSPECT: a variable value in the mode of the nearest node with an expl
   sectionNode.explicitVariableModes = {}
   const r2 = await runInNewContext(`${INSPECT}\n;F2C_INSPECT`, { figma, Object, JSON, Math })('1:2')
   assert.equal(r2.variables['velo/color/primary'].mode, 'core')
+  // Figma's resolved mode comes first (an instance can take gold from its main component)
+  leaf.resolvedVariableModes = { c1: 'g' }
+  const r3 = await runInNewContext(`${INSPECT}\n;F2C_INSPECT`, { figma, Object, JSON, Math })('1:2')
+  assert.equal(r3.variables['velo/color/primary'].mode, 'gold')
 })
 
 test('DESIGNER.startExperiment: the copy keeps the mode its source showed (gold from the sheet)', async () => {
