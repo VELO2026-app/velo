@@ -47,7 +47,7 @@ const router = useRouter()
 .not-found__text {
   font-family: var(--font-body);
   font-size: var(--velo-fs-20);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-on-bg-muted);
   margin-bottom: var(--space-5);
 }
 .not-found__btn {

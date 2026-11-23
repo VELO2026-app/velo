@@ -122,13 +122,13 @@ const isError = computed(
 
 .v-empty__title {
   font-size: var(--velo-fs-18);
-  color: var(--velo-text-secondary);
+  color: var(--velo-text-on-bg-secondary);
   margin-bottom: var(--space-1);
 }
 
 .v-empty__desc {
   font-size: var(--velo-fs-16);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-on-bg-muted);
   line-height: 1.5;
 }
 

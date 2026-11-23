@@ -564,8 +564,8 @@ onActivated(() => {
   align-items: center;
   justify-content: space-between;
   height: var(--velo-size-50);
-  background: var(--velo-primary);
-  border: 1px solid var(--velo-glass-border);
+  background: var(--velo-picker-bg);
+  border: 1px solid var(--velo-control-border);
   border-radius: var(--radius-full);
   transition: opacity var(--transition-fast);
 }
@@ -591,7 +591,7 @@ onActivated(() => {
 .calendar__select-label {
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
-  color: var(--velo-white);
+  color: var(--velo-picker-fg);
 }
 
 .calendar__funnel {
@@ -600,7 +600,7 @@ onActivated(() => {
   align-items: center;
   justify-content: center;
   padding: 0 var(--space-5) 0 var(--space-3);
-  color: var(--velo-white);
+  color: var(--velo-picker-fg);
   background: transparent;
   border: 0;
   border-radius: var(--radius-full);

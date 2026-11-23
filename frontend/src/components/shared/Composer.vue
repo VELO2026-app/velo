@@ -563,7 +563,7 @@ defineExpose({ focus: focusField, discardDraft })
   /* Owns the ::before/::after layers (relative anchor) and their stacking
      context (translateZ) -- the frost child's z:-1 stays contained. */
   transform: translateZ(0);
-  border: 1px solid var(--velo-glass-white-35);
+  border: 1px solid var(--velo-frost-border);
   border-radius: var(--velo-radius-22);
   background: transparent;
   box-shadow: var(--velo-shadow-glass);
@@ -637,7 +637,7 @@ defineExpose({ focus: focusField, discardDraft })
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: var(--velo-glass-white-12);
+  background: var(--velo-frost-bg);
   transition: background-color 0.2s ease;
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -666,12 +666,12 @@ defineExpose({ focus: focusField, discardDraft })
    sharpens, a hairline white halo and a SOFT COLD glow breathe around the
    pill -- no bright blue border, no neon, no geometry change. */
 .composer__field:focus-within {
-  border-color: var(--velo-glass-white-70);
+  border-color: var(--velo-frost-border-active);
   box-shadow: var(--velo-write-shadow-active);
 }
 
 .composer__field:focus-within::before {
-  background: var(--velo-glass-white-16);
+  background: var(--velo-frost-bg-active);
 }
 
 /* Accessibility, same language: keyboard navigation (:focus-visible) gets a
@@ -775,7 +775,7 @@ defineExpose({ focus: focusField, discardDraft })
   border-radius: var(--radius-full);
   cursor: pointer;
   background: var(--velo-nav-active-bg);
-  color: var(--velo-white);
+  color: var(--velo-on-accent);
   /* [Liquid Glass fix] position + z 1 lift the disc ABOVE the field's ::after
      soft-light sheen: a positioned pseudo paints over non-positioned
      children, and the white sheen was washing the slate disc out to
