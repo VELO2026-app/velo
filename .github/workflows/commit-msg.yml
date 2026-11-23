@@ -1,0 +1,44 @@
+# =============================================================================
+# Commit msg -- the CI backstop for the FE-226 subject gate. The local
+# frontend/.husky/commit-msg hook is bypassable with --no-verify; this is
+# where that closes (the same house pattern as pre-commit -> CI). One
+# job, no toolchain install, seconds per run: every non-merge commit the
+# PR contributes goes through scripts/check-commit-msg.sh --ci (the one
+# description of the allowed formats lives in the script). Skipped for
+# bot PRs (dependabot and friends: their commits are machinery) and for
+# trunk-to-trunk PRs (head = deploy-machine/test/main), which carry
+# pre-rule subjects wholesale and are not this gate's business. No
+# branch filter: PRs ride to whatever trunk is current.
+# =============================================================================
+name: Commit msg
+
+on:
+  pull_request:
+
+concurrency:
+  group: commit-msg-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  subjects:
+    name: commit subjects
+    if: >-
+      ${{ !endsWith(github.event.pull_request.user.login, '[bot]') &&
+      !contains(fromJson('["deploy-machine", "test", "main"]'),
+      github.event.pull_request.head.ref) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # merge-base needs the history on both sides of the range.
+          fetch-depth: 0
+
+      - name: Check every commit the PR contributes
+        run: |
+          git fetch origin "$GITHUB_BASE_REF"
+          base=$(git merge-base FETCH_HEAD HEAD)
+          status=0
+          for sha in $(git rev-list --no-merges "$base..HEAD"); do
+            git show -s --format=%B "$sha" | scripts/check-commit-msg.sh --ci - || status=1
+          done
+          exit $status
