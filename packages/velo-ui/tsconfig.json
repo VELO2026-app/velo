@@ -18,6 +18,9 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUncheckedSideEffectImports": true,
     "forceConsistentCasingInFileNames": true,
 
     /* Emit (typecheck config; dts emission uses tsconfig.build.json) */
@@ -38,8 +41,5 @@
     "vite.config.ts",
     "vitest.config.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "exclude": ["node_modules", "dist"]
 }
