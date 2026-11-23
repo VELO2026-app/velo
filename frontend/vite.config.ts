@@ -18,7 +18,7 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
-import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { pwaManifestWithPassport } from './src/pwa/manifest'
 import { shellOnlyTransform } from './src/pwa/precache-shell'
@@ -30,12 +30,18 @@ import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest
 // vitest, so the test cannot import this config file).
 import { passportHtmlDefaults } from './src/platform/passport-html'
 // tz-whitelabel F2 (§3): the skin package (public/skin/, deploy-supplied).
-// No package = the golden build; the derivatives (the skin-tokens cascade,
+// No package = the neutral core build (FE-230); the derivatives (the skin-tokens cascade,
 // index.html theme-color/font, manifest identity/colours) materialize HERE,
 // at config time.
-import { readSkin } from './src/platform/skin'
+import { readSkin, skinBackgroundFormat } from './src/platform/skin'
 import { skinVirtualModules } from './src/platform/skin-virtual'
-import { ASSET_DIRS, IGNORED_FILES, MANDATORY_ASSETS } from './scripts/lib/skin-package.mjs'
+import {
+  ASSET_DIRS,
+  IGNORED_FILES,
+  PRECACHED_ICONS,
+  SKIN_ASSETS,
+} from './scripts/lib/skin-package.mjs'
+import { validateSkin } from './scripts/validate-skin.mjs'
 import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
 import type { Plugin } from 'vite'
 
@@ -55,20 +61,20 @@ const LOCALE_CORE_CATALOG =
  * the package into public/skin/ (FE-131: the machine's format, assets under
  * assets/), and its files must WIN on the canonical public paths (VeloLogo
  * renders /icons/..., the mandala lives on /bg/...). Runs at closeBundle: the
- * golden files are already in dist/, this copies the skin's over them. The
+ * core's neutral files are already in dist/, this copies the skin's over them. The
  * publicDir copy also drops the whole package into dist/skin/; only its
- * assets/fonts/ is meant to be served (virtual:skin-tokens.css @font-face points
- * there), so everything else -- the manifest, the token sources, a checkout's
- * .git -- is removed from dist/skin/ here (FE-131). The PWA precache ignores
- * skin/** (workbox globIgnores below), so the removal cannot race it.
- * Dev servers see the golden assets (a dev stand with a skin is not a
+ * assets/fonts/ (virtual:skin-tokens.css @font-face points there) and its
+ * LICENSE are meant to be served (plus report.json, written here), so everything else -- the manifest, the
+ * token sources, a checkout's .git -- is removed from dist/skin/ here (FE-131). The PWA precache
+ * names the fonts only (workbox globPatterns below), so the removal cannot race it.
+ * Dev servers see the core's assets (a dev stand with a skin is not a
  * supported flow; build with the skin instead). */
 /** OS litter of a local working copy never reaches dist. */
 function shippable(from: string): boolean {
   return !IGNORED_FILES.has(basename(from))
 }
 
-function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
+function skinAssetSpill(skinDir: string | null, distDir: string, frontendDir: string): Plugin {
   return {
     name: 'velo-skin-asset-spill',
     apply: 'build',
@@ -81,7 +87,7 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
       if (!skinDir) return
       const assets = join(skinDir, 'assets')
       // package assets/ -> /icons/ (logos + PWA icons + favicon)
-      for (const name of MANDATORY_ASSETS) {
+      for (const name of SKIN_ASSETS) {
         const from = join(assets, name)
         if (existsSync(from)) cpSync(from, join(distDir, 'icons', name), { force: true })
       }
@@ -95,6 +101,20 @@ function skinAssetSpill(skinDir: string | null, distDir: string): Plugin {
       if (existsSync(fonts)) {
         cpSync(fonts, join(shipped, 'assets', 'fonts'), { recursive: true, filter: shippable })
       }
+      // The package's license ships with the files it covers (the font's
+      // OFL asks for it; the core no longer carries a font of its own).
+      const license = join(skinDir, 'LICENSE')
+      if (existsSync(license)) cpSync(license, join(shipped, 'LICENSE'))
+      // The validator's findings ride along (FE-230): a declared contrast
+      // exception is a warning in the build log only, and the machine reads
+      // the image, not the log -- dist/skin/report.json is where it can
+      // show them. Package data only, no paths of this host.
+      const report = validateSkin(skinDir, frontendDir)
+      mkdirSync(shipped, { recursive: true })
+      writeFileSync(
+        join(shipped, 'report.json'),
+        `${JSON.stringify({ warnings: report.warns, manual: report.manual }, null, 2)}\n`,
+      )
     },
   }
 }
@@ -213,7 +233,7 @@ export default defineConfig(({ mode }) => {
       // from memory -- a build writes nothing into tracked files.
       skinVirtualModules(publicDir, skin),
       passportHtmlDefaults(skin),
-      skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist')),
+      skinAssetSpill(skin ? join(publicDir, 'skin') : null, join(frontendDir, 'dist'), frontendDir),
       preloadAppChunk(),
       perLocaleManifest(frontendDir),
       precacheReadsOutDir,
@@ -254,7 +274,7 @@ export default defineConfig(({ mode }) => {
         // Include these file types in precache.
         workbox: {
           // FE-157 s2 (owner decision R1): the precache is the SHELL only --
-          // the entry, its CSS and static imports, the font, the PWA icons,
+          // the entry, its CSS and static imports, the PWA icons,
           // the background photo and the splash logo. The app has no offline
           // mode (every screen needs the API), so precaching all routes bought
           // nothing and cost every install the whole build, and every deploy a
@@ -278,20 +298,26 @@ export default defineConfig(({ mode }) => {
           // runtime rule below); there is no offline mode to lose.
           globPatterns: [
             'registerSW.js',
-            'fonts/*.woff2',
             // The background photo paints the first frame of every screen;
-            // already-released skins ship it as PNG (platform/skin.ts).
-            'bg/background.{webp,png}',
+            // already-released skins ship it as PNG (platform/skin.ts). The
+            // core has no photo (FE-230): the pattern joins only when the
+            // package brings one, so a core build has no empty glob.
+            ...(skinBackgroundFormat(publicDir) ? ['bg/background.{webp,png}'] : []),
+            // The skin's webfont paints the first text of every screen: an
+            // offline first start without it would draw the fallback face
+            // (FE-230). Only with a package that ships fonts -- the core has
+            // none, and an empty glob warns.
+            ...(skin && skin.fonts.length > 0 ? ['skin/assets/fonts/*.woff2'] : []),
             // PWA icons, favicon, and the splash logo (LoadingView: spinning
             // mandala ring under the filled wordmark).
-            'icons/{icon-192,icon-512,icon-maskable-512,apple-touch-icon-180,favicon,mandala-white,velo-word-filled}.*',
+            `icons/{${PRECACHED_ICONS.join(',')}}`,
             'assets/*.{js,css}',
           ],
           // Don't precache source maps -- nor the Zoom Meeting SDK chunk.
-          // skin/** (FE-131): the package copy in dist/skin/ is pruned to
-          // its fonts at closeBundle -- precaching it would race the prune;
-          // the fonts ride the runtime cache below.
-          globIgnores: ['**/*.map', '**/zoom-sdk-*.js', 'skin/**'],
+          // dist/skin/ (FE-131) is pruned to its fonts and license at
+          // closeBundle; the patterns above name the fonts only, so nothing
+          // else of the package copy can reach the precache.
+          globIgnores: ['**/*.map', '**/zoom-sdk-*.js'],
           manifestTransforms: [shellOnly],
           navigateFallback: null,
           // Runtime caching also gives the service worker a valid strategy

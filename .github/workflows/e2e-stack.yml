@@ -19,7 +19,8 @@
 # The stack: Postgres 16 and Redis 7 as job services (the majors and images of
 # docker-compose.yml), the backend installed with pip (not the app image: its
 # build is slower than the whole sweep), the comms stub, uvicorn on :8000, the
-# golden build under `vite preview` (its /api proxy goes to :8000).
+# build with the synthetic skin package (make-test-skin.mjs) under `vite
+# preview` (its /api proxy goes to :8000).
 # Telegram: a fake bot token and the comms stub; Stripe: the stub of SERVER_ROLE=test;
 # Zoom: no stub since BE-192, so a meeting create at seed time fails against zoom.us
 # with the invented keys of ci.env (the practice is seeded without a link) -- the
@@ -154,9 +155,12 @@ jobs:
         run: pnpm exec playwright install-deps webkit
 
       # FE-204: vite only -- this job needs the dist. vue-tsc runs in the
-      # typecheck job and the skin validation in the build job.
-      - name: Build the app (golden)
-        run: pnpm -C frontend exec vite build
+      # typecheck job and the skin validation in the build job. FE-230: with
+      # the synthetic skin package, as the smoke job in ci.yml.
+      - name: Build the app (synthetic skin)
+        run: |
+          node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          pnpm -C frontend exec vite build
 
       - name: Sweep
         working-directory: frontend

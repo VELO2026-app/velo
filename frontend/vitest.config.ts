@@ -42,7 +42,7 @@ const NODE_ONLY = globSync(NODE_DIRS, { cwd: fileURLToPath(new URL('.', import.m
 )
 
 export default defineConfig({
-  // tz-whitelabel §3: the unit suite ALWAYS runs against the GOLDEN build --
+  // tz-whitelabel §3: the unit suite ALWAYS runs against the core build --
   // the virtual skin modules are served with no skin, whatever sits in
   // public/skin/ of the working tree (a skin demo must not leak into tests).
   plugins: [skinVirtualModules(fileURLToPath(new URL('./public', import.meta.url)), null), vue()],

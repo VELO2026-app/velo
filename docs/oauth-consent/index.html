@@ -22,7 +22,9 @@
   константа бэка, сниппет их не касается.
 
   Все значения захардкожены из frontend/src/styles/variables.css (токен указан
-  у каждого значения): var(--velo-*) на эту страницу не доедет. Шрифт —
+  у каждого значения): var(--velo-*) на эту страницу не доедет. С FE-230
+  значения ядра нейтральные (серые); золотые жили здесь до FE-230, их копия
+  в бэке (oauth.py) — зона BE-234. Шрифт —
   'Noto Sans', sans-serif (стек --font-body без Marmelad: self-hosted woff2 —
   отдельное решение владельца, НЕ здесь).
 -->
@@ -40,7 +42,7 @@
   max-width: 480px;
   margin: 0 auto;
   min-height: auto; /* в проде .vc растягивается на весь вьюпорт */
-  outline: 1px solid rgba(171, 191, 218, 0.5);
+  outline: 1px solid rgba(189, 189, 189, 0.5);
 }
 
 /* ===== Сниппет (BE-181: весь блок ниже — 1:1 в _STYLE) ==================== */
@@ -62,16 +64,16 @@ body {
    VELO (frontend/src/styles/variables.css), захардкоженные для standalone. */
 .vc {
   /* палитра */
-  --vc-header: #334d6e;               /* --velo-tg-header (шапка/акцент) */
-  --vc-text: #4c6589;                 /* --velo-text-primary */
-  --vc-text-2: rgba(76, 101, 137, .7);/* --velo-text-secondary */
-  --vc-primary: #627a9c;              /* --velo-primary */
-  --vc-primary-dark: #4c6589;         /* --velo-primary-dark (hover primary) */
+  --vc-header: #4c4c4c;               /* --velo-tg-header (шапка/акцент) */
+  --vc-text: #646464;                 /* --velo-text-primary */
+  --vc-text-2: rgba(100, 100, 100, .95);/* --velo-text-secondary */
+  --vc-primary: #787878;              /* --velo-primary */
+  --vc-primary-dark: #646464;         /* --velo-primary-dark (hover primary) */
   --vc-coral: #f795a2;                /* --velo-pink-300 («Отказать») */
   --vc-danger-text: #ad3444;          /* --velo-danger-text */
   --vc-error-bg: rgba(253, 226, 226, .4); /* --velo-error-bg (pink-100 @40%) */
-  --vc-border: #abbfda;               /* --velo-border (blue-200) */
-  --vc-glass: rgba(98, 122, 156, .15);/* --velo-glass-blue-15 */
+  --vc-border: #bdbdbd;               /* --velo-border (blue-200) */
+  --vc-glass: rgba(120, 120, 120, .15);/* --velo-glass-blue-15 */
   --vc-white: #ffffff;                /* --velo-white */
 
   /* карточная пластика */

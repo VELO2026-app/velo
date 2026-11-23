@@ -4,25 +4,10 @@
  * CSS reset + base typography.
  * Imported once in main.ts, applies to the entire app.
  *
- * Marmelad is self-hosted (@font-face below, preloaded from index.html), so
- * there is no third-party font request on the golden build.
+ * Fonts: the core uses the platform's system font stack (--font-body); a
+ * skin package brings its own self-hosted webfont (FE-131: @font-face in the
+ * skin-tokens module, preload in index.html). No font request without one.
  * =========================================================================== */
-
-/* === Font === */
-/* Cyrillic+latin subset of Marmelad Regular (OFL 1.1; text in
-   public/fonts/OFL.txt). `swap` shows the fallback stack at once. A skin that
-   sets brand.json fontUrl replaces the preload in index.html; this face then
-   simply goes unused and is never fetched. */
-@font-face {
-  /* The face NAME this rule declares (the descriptor --font-body points at),
-     not a property use -- the FE-154 token gate does not apply. */
-  /* stylelint-disable-next-line declaration-property-value-allowed-list */
-  font-family: 'Marmelad';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/marmelad-subset.woff2') format('woff2');
-}
 
 /* === Reset === */
 *,
@@ -256,9 +241,10 @@ h4,
 h5,
 h6 {
   font-family: var(--font-body);
-  /* Headings a touch heavier (operator 2026-06-17). Marmelad ships a single 400
-     weight, so the browser synthesizes the heavier face — 600 is the lightest
-     step that triggers it (500 would silently fall back to 400). */
+  /* Headings a touch heavier (operator 2026-06-17). A single-weight skin font
+     (the golden Marmelad ships only 400) gets a synthesized heavier face — 600
+     is the lightest step that triggers it (500 would fall back to 400). The
+     core's system stack has a real 600. */
   font-weight: 600;
   line-height: 1.3;
   color: var(--velo-text-primary);
@@ -395,12 +381,12 @@ ol {
    ============================================================================= */
 
 /* === Photo background layer (PROMPT №383) === */
-/* The photo URL is a token so a skin can swap the FORMAT: the golden ships
-   WebP, while already-released skins carry assets/bg/background.png. The build
-   (platform/skin.ts materializedSkinTokens) re-points this to whichever file
-   the skin package really holds. Also read by the two onboarding overlays. */
+/* The photo URL is a token: the core has no photo (FE-230), the plain
+   --velo-bg-start color shows. A skin package that ships assets/bg/ gets the
+   token re-pointed at its file, WebP or the legacy PNG (platform/skin.ts
+   materializedSkinTokens). Also read by the two onboarding overlays. */
 :root {
-  --velo-app-bg-image: url('/bg/background.webp');
+  --velo-app-bg-image: none;
 }
 
 /* `#app-bg` is a STATIC element in index.html (first child of <body>, before
@@ -599,8 +585,8 @@ html.is-keyboard-open .mobile-layout__main--fog {
 }
 
 /* === Faux-bold (DS canon) ===
-   Marmelad ships a single 400 weight; some titles fake extra weight with a hair
-   stroke. Single source for that technique — one line to change app-wide (or to
+   A single-weight skin font (the golden Marmelad ships only 400) cannot go
+   bolder, so some titles fake extra weight with a hair stroke. Single source for that technique — one line to change app-wide (or to
    retire if a real bold face ever lands). Apply as a class, or reference the
    --velo-text-stroke-strong token directly in a scoped rule. */
 .velo-text-strong {

@@ -12,7 +12,7 @@
 // is gitignored, this is a local/stand step BEFORE `pnpm build`.
 //
 // Usage: node scripts/apply-skin.mjs <package dir>  (e.g. `pnpm skin ../goodo-brand/skin`)
-//        node scripts/apply-skin.mjs --remove      (back to the golden build)
+//        node scripts/apply-skin.mjs --remove      (back to the neutral core build)
 // =============================================================================
 
 import { cpSync, existsSync, rmSync } from 'node:fs'
@@ -26,7 +26,7 @@ const arg = process.argv[2]
 
 if (arg === '--remove' || arg === 'remove') {
   rmSync(target, { recursive: true, force: true })
-  console.log('apply-skin: package removed -- the next build is the golden VELO')
+  console.log('apply-skin: package removed -- the next build is the neutral core (FE-230)')
   process.exit(0)
 }
 

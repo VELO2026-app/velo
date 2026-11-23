@@ -25,7 +25,8 @@
     Both finish paths emit a single `done` event; the parent persists the flag
     and hides the overlay (no navigation).
 
-  Illustrations live in public/onboarding/ (extracted from the design SVGs).
+  Illustrations come from the skin package on /onboarding/ (the core ships
+  neutral ones on the same paths; utils/skinAssets.ts).
 -->
 
 <template>
@@ -65,26 +66,27 @@
 import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { VPaginationDots } from '@/components/ui'
+import { SKIN_IMAGE } from '@/utils/skinAssets'
 
 const emit = defineEmits<{
   /** Carousel finished (completed or skipped). Parent persists + hides. */
   done: []
 }>()
 
-// -- Intro slides. Illustrations served from public/onboarding/. --
+// -- Intro slides. Illustrations: /onboarding/ (the skin's, or the core's neutral ones). --
 const SLIDES = [
   {
-    image: '/onboarding/master-welcome.svg',
+    image: SKIN_IMAGE.masterWelcome,
     title: t('masterScreens.masterOnboarding.welcome.title'),
     text: t('masterScreens.masterOnboarding.welcome.text'),
   },
   {
-    image: '/onboarding/master-space.svg',
+    image: SKIN_IMAGE.masterSpace,
     title: t('masterScreens.masterOnboarding.space.title'),
     text: t('masterScreens.masterOnboarding.space.text'),
   },
   {
-    image: '/onboarding/master-analytics.svg',
+    image: SKIN_IMAGE.masterAnalytics,
     title: t('masterScreens.masterOnboarding.analytics.title'),
     text: t('masterScreens.masterOnboarding.analytics.text'),
   },

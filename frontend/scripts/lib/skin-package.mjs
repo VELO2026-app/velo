@@ -9,7 +9,7 @@
 //
 // THE PACKAGE (contract "2.x" of the VELO skin slot; primer guide §4.4):
 //
-//   primer-package.yaml          block form: `schema: 1`, `contract: "2.0"` --
+//   primer-package.yaml          block form: `schema: 1`, `contract: "2.1"` --
 //                                the contract is a quoted POINT "X.Y" (a range
 //                                lives only in the product's packages.skin)
 //   tokens/<name>.tokens.json    W3C DTCG. Token paths are the paths of
@@ -23,8 +23,17 @@
 //                                displayName, shortName, themeColor,
 //                                backgroundColor, fonts? -- the generation-1
 //                                brand.json, moved into the package's only
-//                                data carrier
-//   assets/<name>.svg|png        the fixed generation-1 asset names
+//                                data carrier -- and, since contract "2.1",
+//                                contrastExceptions?: the text/surface pairs
+//                                the package knowingly keeps under the
+//                                contrast floor, each with its reason
+//                                (validate-skin warns instead of failing)
+//   assets/<name>.svg|png        the fixed generation-1 asset names: the
+//                                app icons always; the logo set (mandala
+//                                rings, wordmarks, logo-white) whole or not
+//                                at all -- without it the app shows the
+//                                brand's favicon.svg in the logo places
+//                                (contract "2.1", FE-230)
 //   assets/bg/, assets/onboarding/   optional, replace the public/ ones
 //   assets/fonts/<name>.woff2    self-hosted webfonts (no external request
 //                                from a package -- tz-whitelabel §7)
@@ -61,25 +70,56 @@ import { join, resolve } from 'node:path'
  *  token generation 2 (FE-150): 27 token names gone (variables.css, the
  *  GENERATION 2 section), so a 1.x package is refused rather than half-read. */
 export const SKIN_CONTRACT_MAJOR = 2
-/** The contract a package written by this product's tools declares. */
-export const SKIN_CONTRACT = '2.0'
+/** The contract a package written by this product's tools declares.
+ *  2.1 (FE-230): the brand record may carry contrastExceptions. */
+export const SKIN_CONTRACT = '2.1'
+/** The first minor of contract 2 that knows contrastExceptions. */
+const CONTRAST_EXCEPTIONS_MINOR = 1
+/** A contrast exception's reason: plain text, one or two sentences. */
+const REASON_MAX = 300
+/** A token path of a contrast exception: dot-separated token names. */
+const TOKEN_PATH = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/
 export const MANIFEST = 'primer-package.yaml'
 /** The $extensions key of the brand record. */
 export const BRAND_EXTENSION = 'velo-skin'
 
-/** Generation-1 mandatory assets, by their file name under assets/. */
+/** Mandatory assets, by their file name under assets/: the app icons. */
 export const MANDATORY_ASSETS = [
-  'mandala-white.png',
-  'mandala-blue.png',
-  'velo-word-filled.svg',
-  'velo-word-blue.svg',
-  'logo-white.svg',
   'favicon.svg',
   'icon-192.png',
   'icon-512.png',
   'icon-maskable-512.png',
   'apple-touch-icon-180.png',
 ]
+/** The logo set: a package ships all of it or none (contract 2.1, FE-230).
+ *  None = the app shows the brand's favicon.svg where the logo goes. */
+export const LOGO_ASSETS = [
+  'mandala-white.png',
+  'mandala-blue.png',
+  'velo-word-filled.svg',
+  'velo-word-blue.svg',
+  'logo-white.svg',
+]
+/** Every fixed asset name the build spills onto /icons/. */
+export const SKIN_ASSETS = [...MANDATORY_ASSETS, ...LOGO_ASSETS]
+/** The /icons/ files of the PWA shell precache (vite.config.ts): the app
+ *  icons and the splash logo layers (LoadingView). */
+export const PRECACHED_ICONS = [
+  'icon-192.png',
+  'icon-512.png',
+  'icon-maskable-512.png',
+  'apple-touch-icon-180.png',
+  'favicon.svg',
+  'mandala-white.png',
+  'velo-word-filled.svg',
+]
+/** The first minor of contract 2 that lets a package leave the logo set out. */
+const OPTIONAL_LOGO_MINOR = 1
+
+/** Does the package (its file list) ship the logo set? */
+export function shipsLogo(files) {
+  return LOGO_ASSETS.every((asset) => files.includes(`assets/${asset}`))
+}
 /** Optional asset directories: each replaces the public/ one of its name. */
 export const ASSET_DIRS = ['bg', 'onboarding']
 
@@ -423,6 +463,7 @@ function checkBrand(record, files, problems) {
     'backgroundColor',
     'fonts',
     'fontUrl',
+    'contrastExceptions',
   ])
   for (const key of Object.keys(record))
     if (!known.has(key)) problems.push(`${where}.${key}: unknown field`)
@@ -457,7 +498,50 @@ function checkBrand(record, files, problems) {
     themeColor: String(record.themeColor ?? '').trim(),
     backgroundColor: String(record.backgroundColor ?? '').trim(),
     fonts,
+    contrastExceptions: checkContrastExceptions(record.contrastExceptions, where, problems),
   }
+}
+
+/** contrastExceptions: [{ text, surface, reason }] -- token paths of the
+ *  pair and why the package keeps it under the floor. The shape only; that
+ *  the paths are product tokens is checked in loadSkinPackage(), whether the
+ *  pair is one the gate measures -- in validate-skin. */
+function checkContrastExceptions(list, where, problems) {
+  if (list === undefined) return []
+  const at = `${where}.contrastExceptions`
+  if (!Array.isArray(list) || list.length === 0) {
+    problems.push(`${at}: must be a non-empty list of { text, surface, reason }`)
+    return []
+  }
+  const out = []
+  const pairs = new Set()
+  list.forEach((entry, i) => {
+    const here = `${at}[${i}]`
+    if (!isObject(entry)) return problems.push(`${here}: must be an object`)
+    // Package data: a key is quoted, never echoed raw into a build log.
+    for (const key of Object.keys(entry))
+      if (!['text', 'surface', 'reason'].includes(key))
+        problems.push(`${here}: unknown field ${JSON.stringify(key)}`)
+    let valid = true
+    for (const key of ['text', 'surface'])
+      if (typeof entry[key] !== 'string' || !TOKEN_PATH.test(entry[key])) {
+        problems.push(`${here}.${key}: a token path, e.g. velo.text.secondary`)
+        valid = false
+      }
+    const reason = typeof entry.reason === 'string' ? entry.reason.trim() : ''
+    if (reason === '') problems.push(`${here}.reason: why the pair stays under the floor`)
+    else if (reason.length > REASON_MAX)
+      problems.push(`${here}.reason: longer than ${REASON_MAX} characters`)
+    else if (UNSAFE_TEXT.test(reason))
+      problems.push(`${here}.reason: no < > & " or control characters`)
+    // Only well-formed paths travel on: later messages print them.
+    if (!valid) return
+    const pair = `${entry.text} on ${entry.surface}`
+    if (pairs.has(pair)) return problems.push(`${here}: ${pair} is declared twice`)
+    pairs.add(pair)
+    out.push({ text: entry.text, surface: entry.surface, reason })
+  })
+  return out
 }
 
 // -- assets ------------------------------------------------------------------
@@ -610,6 +694,38 @@ export function loadSkinPackage(dir, tokensDoc) {
 
   for (const asset of MANDATORY_ASSETS)
     if (!files.includes(`assets/${asset}`)) problems.push(`assets/${asset}: missing`)
+  // The logo set is whole or absent: half a lockup (a ring with no word)
+  // would render as a broken logo. Absent needs 2.1 -- a 2.0 reader
+  // requires the set.
+  const logoShipped = LOGO_ASSETS.filter((asset) => files.includes(`assets/${asset}`))
+  if (logoShipped.length > 0 && logoShipped.length < LOGO_ASSETS.length)
+    for (const asset of LOGO_ASSETS)
+      if (!logoShipped.includes(asset))
+        problems.push(
+          `assets/${asset}: missing -- the logo set (${LOGO_ASSETS.join(', ')}) ships whole or not at all`,
+        )
+  if (logoShipped.length === 0 && contract !== null) {
+    const minor = Number(contract.split('.')[1])
+    if (minor < OPTIONAL_LOGO_MINOR)
+      problems.push(
+        `assets/: no logo set -- leaving it out needs contract "2.${OPTIONAL_LOGO_MINOR}" or later, got "${contract}"`,
+      )
+  }
+
+  // contrastExceptions (contract 2.1): a 2.0 reader refuses the field as
+  // unknown, so a package that carries it must say 2.1 or later.
+  const exceptions = brand?.contrastExceptions ?? []
+  if (exceptions.length > 0 && contract !== null) {
+    const minor = Number(contract.split('.')[1])
+    if (minor < CONTRAST_EXCEPTIONS_MINOR)
+      problems.push(
+        `${MANIFEST}: contrastExceptions need contract "2.${CONTRAST_EXCEPTIONS_MINOR}" or later, got "${contract}"`,
+      )
+  }
+  for (const { text, surface } of exceptions)
+    for (const path of [text, surface])
+      if (!golden.has(path))
+        problems.push(`contrastExceptions: ${path} is not a token of the product`)
 
   // A shipped font must be the one --font-body names (by exact family name),
   // or the package ships a font the app never uses. Here, not in the

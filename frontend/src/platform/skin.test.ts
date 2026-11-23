@@ -48,7 +48,17 @@ describe('readSkin (tz-whitelabel §3)', () => {
       fonts: [
         { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
       ],
+      hasLogo: true,
     })
+  })
+
+  it('a package without the logo set reads hasLogo: false (VeloLogo shows its icon)', () => {
+    const dir = withPackage({ manifest: 'schema: 1\ncontract: "2.1"\n' })
+    for (const name of ['mandala-white', 'mandala-blue'])
+      rmSync(join(dir, 'skin', 'assets', `${name}.png`))
+    for (const name of ['velo-word-filled', 'velo-word-blue', 'logo-white'])
+      rmSync(join(dir, 'skin', 'assets', `${name}.svg`))
+    expect(readSkin(dir)?.hasLogo).toBe(false)
   })
 
   it('a malformed package THROWS the build -- never ships half-skinned', () => {

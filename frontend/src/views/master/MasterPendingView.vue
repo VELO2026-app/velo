@@ -55,7 +55,7 @@
       <template v-else-if="profileStatus === 'verified'">
         <VCard class="pending-view__card">
           <img
-            src="/onboarding/master-verdict-approved.svg"
+            :src="SKIN_IMAGE.verdictApproved"
             alt=""
             class="pending-view__illu pending-view__illu--lg"
           />
@@ -77,7 +77,7 @@
       <template v-else-if="profileStatus === 'rejected'">
         <VCard class="pending-view__card">
           <img
-            src="/onboarding/master-verdict-reject.svg"
+            :src="SKIN_IMAGE.verdictReject"
             alt=""
             class="pending-view__illu pending-view__illu--lg"
           />
@@ -113,7 +113,7 @@
            invitation to leave). -->
       <template v-else>
         <VCard class="pending-view__card">
-          <img src="/onboarding/master-verdict-sent.svg" alt="" class="pending-view__illu" />
+          <img :src="SKIN_IMAGE.verdictSent" alt="" class="pending-view__illu" />
           <h2 class="pending-view__title">
             {{ t('masterScreens.masterPending.toast.sent') }}
           </h2>
@@ -155,6 +155,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { SKIN_IMAGE } from '@/utils/skinAssets'
 import { VButton, VLoader, VCard, VConfirmDialog } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'

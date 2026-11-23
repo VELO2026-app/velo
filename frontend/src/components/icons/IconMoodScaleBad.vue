@@ -26,19 +26,19 @@
     />
     <path
       d="M304.34 188.625L272.012 214.617L310.16 230.91"
-      style="stroke: var(--velo-primary-dark, #4c6589)"
+      style="stroke: var(--velo-primary-dark)"
       stroke-width="11.2308"
       stroke-linecap="round"
     />
     <path
       d="M55.5952 188.625L87.9229 214.617L49.7752 230.91"
-      style="stroke: var(--velo-primary-dark, #4c6589)"
+      style="stroke: var(--velo-primary-dark)"
       stroke-width="11.2308"
       stroke-linecap="round"
     />
     <path
       d="M227.64 251.323C197.305 231.822 158.379 231.822 128.044 251.323"
-      style="stroke: var(--velo-primary-dark, #4c6589)"
+      style="stroke: var(--velo-primary-dark)"
       stroke-width="11.2308"
       stroke-linecap="round"
     />

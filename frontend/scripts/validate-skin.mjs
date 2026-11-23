@@ -18,7 +18,9 @@
 //                single-source rule (§1): velo.tg.header == brand themeColor
 //   contrast     WCAG ratios for the overridden text/background pairs
 //                (4.5:1 body text; 3:1 for the Telegram header chrome, whose
-//                text is white) -- thresholds per the variables.css comments
+//                text is white) -- thresholds per the variables.css comments.
+//                A pair the package declares in contrastExceptions (contract
+//                2.1, FE-230) is a WARN down to EXCEPTION_FLOOR, never below
 //   PNG          dimensions from IHDR; the apple-touch icon must have NO
 //                alpha channel (iOS paints transparency black)
 //   manual       maskable safe-zone (80%) needs pixel inspection -- reported
@@ -27,7 +29,7 @@
 //
 // Usage: node scripts/validate-skin.mjs [skinDir] [--build]  (default: public/skin)
 // Exits 1 on any FAIL. --build is the `pnpm build` gate (FE-148): an absent
-// package passes (golden build), a present one must pass in full (the slot
+// package passes (the core build), a present one must pass in full (the slot
 // of an apply:build package has no `validate:` -- contract 3 rule 31 -- so
 // this gate inside the build IS the package check).
 // validateSkin() and skinBuildGate() are exported for the unit suite.
@@ -41,9 +43,10 @@ import {
   loadSkinPackage,
   readGoldenTokens,
   goldenTokenMap,
+  shipsLogo,
 } from './lib/skin-package.mjs'
 
-/** An assets/bg/background.png above this is warned about: the golden ships WebP. */
+/** An assets/bg/background.png above this is warned about: the golden VELO skin ships WebP. */
 const BG_PNG_WARN_KB = 300
 
 const PNG_SIZES = {
@@ -52,13 +55,25 @@ const PNG_SIZES = {
   'icon-maskable-512.png': [512, 512],
   'apple-touch-icon-180.png': [180, 180],
 }
-/** Text/background pairs checked when the skin overrides either side. */
+/** Text/background pairs checked when the skin overrides a token side. A
+ *  side is a token (`--velo-*`) or a fixed color (`#ffffff`). */
 /** @type {[string, string, number][]} */
 const CONTRAST_PAIRS = [
   ['--velo-text-primary', '--velo-bg-card-solid', 4.5],
   ['--velo-text-secondary', '--velo-bg-card-solid', 4.5],
   ['--velo-tg-header', '#ffffff', 3.0],
+  // The practice-card art is white on the card color (PracticePlaceholder,
+  // FE-230): a light primary would make the glyph disappear. 3:1 -- the
+  // WCAG floor for graphics.
+  ['#ffffff', '--velo-primary', 3.0],
 ]
+/** The only pair a package may declare in contrastExceptions (FE-230): the
+ *  golden secondary text on the white card (3.12:1). Body text and the rest
+ *  hold their floor. */
+const EXCEPTION_PAIRS = [['--velo-text-secondary', '--velo-bg-card-solid']]
+/** A declared contrast exception holds down to this ratio, not below: the
+ *  WCAG floor for large text and UI parts. */
+const EXCEPTION_FLOOR = 3.0
 
 // -- tiny helpers ------------------------------------------------------------
 
@@ -142,7 +157,7 @@ function deprecatedTokens(tokensDoc) {
 // -- the check ---------------------------------------------------------------
 
 /** Validates the skin package at `skinDir`. `frontendDir` anchors
- * tokens.json (the token names a skin may set, and the golden values the
+ * tokens.json (the token names a skin may set, and the core values the
  * contrast pairs resolve against). Returns the report; `fails.length === 0`
  * means the package may ship. */
 export function validateSkin(skinDir, frontendDir) {
@@ -192,16 +207,18 @@ export function validateSkin(skinDir, frontendDir) {
       )
     } else ok(out, '§1 single source: velo.tg.header == brand themeColor')
   } else {
+    // The core's header color, read from tokens.json (not mirrored here).
+    const coreHeader = (goldenTokenMap(goldenDoc).get('velo.tg.header')?.value ?? '').toLowerCase()
     warn(
       out,
-      'the package does not override velo.tg.header: the Telegram header stays the golden #334d6e',
+      `the package does not override velo.tg.header: the Telegram header stays the core's ${coreHeader}`,
     )
-    if (brand.themeColor.toLowerCase() !== '#334d6e') {
+    if (brand.themeColor.toLowerCase() !== coreHeader) {
       // The HTML meta and the manifest WILL carry themeColor (materialized),
       // so a mismatched native header is almost certainly unintended.
       fail(
         out,
-        'FAIL §1 single source: themeColor != #334d6e but the package never overrides velo.tg.header -- the Telegram header would stay VELO-colored',
+        `FAIL §1 single source: themeColor != ${coreHeader} but the package never overrides velo.tg.header -- the Telegram header would keep the core's color`,
       )
     }
   }
@@ -226,11 +243,26 @@ export function validateSkin(skinDir, frontendDir) {
     }
     return value
   }
+  // contrastExceptions name token PATHS; the pairs above are CSS names.
+  const cssNameOf = new Map([...goldenTokenMap(goldenDoc)].map(([path, t]) => [path, t.cssName]))
+  const exceptions = brand.contrastExceptions.map((e) => {
+    const fgName = cssNameOf.get(e.text)
+    const bgName = cssNameOf.get(e.surface)
+    const allowed = EXCEPTION_PAIRS.some(([fg, bg]) => fg === fgName && bg === bgName)
+    return { ...e, fgName, bgName, allowed, used: false }
+  })
+  for (const e of exceptions)
+    if (!e.allowed)
+      fail(
+        out,
+        `FAIL contrastExceptions: ${e.text} on ${e.surface} may not be declared -- only ${EXCEPTION_PAIRS.map(([fg, bg]) => `${fg} on ${bg}`).join(', ')} (FE-230)`,
+      )
+  const side = (name) => (name.startsWith('--') ? resolveToken(name) : name)
   for (const [fgName, bgName, min] of CONTRAST_PAIRS) {
-    const fg = resolveToken(fgName)
-    const bg = bgName.startsWith('--') ? resolveToken(bgName) : bgName
+    const fg = side(fgName)
+    const bg = side(bgName)
     if (tokens[fgName] === undefined && tokens[bgName] === undefined && !bgName.startsWith('#'))
-      continue // nothing overridden -- the golden pair is already accepted
+      continue // nothing overridden -- the core pair is already accepted
     const ratio = fg === undefined || bg === undefined ? null : contrast(fg, bg)
     if (ratio === null) {
       // An overridden pair the gate cannot evaluate is refused, not waved
@@ -241,17 +273,35 @@ export function validateSkin(skinDir, frontendDir) {
       )
       continue
     }
-    if (ratio < min)
-      fail(out, `FAIL contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 < ${min}:1`)
-    else ok(out, `contrast: ${fgName} on ${bgName} ${ratio.toFixed(2)}:1 >= ${min}:1`)
+    const declared = exceptions.find((e) => e.allowed && e.fgName === fgName && e.bgName === bgName)
+    if (declared) declared.used = ratio < min
+    if (ratio >= min) ok(out, `contrast: ${fgName} on ${bgName} ${ratio.toFixed(2)}:1 >= ${min}:1`)
+    else if (declared && ratio >= EXCEPTION_FLOOR)
+      warn(
+        out,
+        `contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 < ${min}:1 -- declared exception: ${declared.reason}`,
+      )
+    else if (declared)
+      fail(
+        out,
+        `FAIL contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 -- a declared exception holds down to ${EXCEPTION_FLOOR}:1, not below`,
+      )
+    else fail(out, `FAIL contrast: ${fgName} on ${bgName} is ${ratio.toFixed(2)}:1 < ${min}:1`)
   }
+  for (const e of exceptions)
+    if (e.allowed && !e.used)
+      warn(
+        out,
+        `contrastExceptions: ${e.text} on ${e.surface} clears the floor or is not overridden -- drop the declaration`,
+      )
   // The background photo is the one optional asset that can quietly break a
-  // theme: it is the app's bottom layer, and the GOLDEN one is light. A skin
-  // that flips --velo-text-primary to a light color while shipping no
-  // assets/bg/background.* paints light text over the light photo -- unreadable
+  // theme: it is the app's bottom layer, and without it the core's light
+  // --velo-bg-start shows (FE-230: the core has no photo). A skin that flips
+  // --velo-text-primary to a light color while shipping no
+  // assets/bg/background.* paints light text over a light ground -- unreadable
   // (the velo_test_front_bot incident). Light-on-light skins may omit it.
   // Two formats are accepted, WebP preferred: released skins carry
-  // background.png, the golden ships background.webp (platform/skin.ts
+  // background.png, the golden VELO skin ships background.webp (platform/skin.ts
   // re-points --velo-app-bg-image at whichever one lies there; FE-157).
   const bgWebp = join(assets, 'bg', 'background.webp')
   const bgPng = join(assets, 'bg', 'background.png')
@@ -265,12 +315,12 @@ export function validateSkin(skinDir, frontendDir) {
     } else if (textPrimary && textPrimary.lum > 0.35) {
       fail(
         out,
-        'FAIL assets/bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the golden light photo stays and the light text on it is unreadable. Ship the full package including assets/bg/, or use dark text tokens.',
+        'FAIL assets/bg/background: missing (neither .webp nor .png) while --velo-text-primary is LIGHT -- the light core background stays and the light text on it is unreadable. Ship the full package including assets/bg/, or use dark text tokens.',
       )
     } else {
       warn(
         out,
-        'assets/bg/background missing: the golden light photo stays (fine for a light-on-light skin)',
+        'assets/bg/background missing: the light core background stays (fine for a light-on-light skin)',
       )
     }
   } else if (existsSync(bgWebp)) {
@@ -308,7 +358,13 @@ export function validateSkin(skinDir, frontendDir) {
         `FAIL assets/${asset}: has an alpha channel (colorType ${info.colorType}) -- iOS paints transparency black`,
       )
   }
-  for (const asset of ['favicon.svg', 'velo-word-filled.svg', 'velo-word-blue.svg']) {
+  // The logo set is optional since contract 2.1 (the engine keeps it whole
+  // or absent); without it the app shows favicon.svg in the logo places.
+  const logo = shipsLogo(pkg.files)
+  if (logo) ok(out, 'logo set present (mandala rings, wordmarks, logo-white)')
+  else ok(out, 'no logo set: the app shows the brand icon (favicon.svg) where the logo goes')
+  const svgs = ['favicon.svg', ...(logo ? ['velo-word-filled.svg', 'velo-word-blue.svg'] : [])]
+  for (const asset of svgs) {
     const head = readFileSync(join(assets, asset), 'utf8').slice(0, 200)
     if (!/<svg|<\?xml/.test(head)) fail(out, `FAIL assets/${asset}: does not look like an SVG`)
   }
@@ -326,7 +382,7 @@ export function validateSkin(skinDir, frontendDir) {
 // -- build gate -----------------------------------------------------------------
 
 /** The build-time gate (FE-148): an invalid skin package fails the build.
- * No `skinDir` at all = the golden build, nothing to check (returns null).
+ * No `skinDir` at all = the core build, nothing to check (returns null).
  * A PRESENT directory is validated in full -- including one without
  * primer-package.yaml, which the build itself would silently treat as "no
  * skin" (`readSkin` keys on the manifest), so a half-delivered package can
@@ -348,7 +404,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     ? skinBuildGate(skinDir, frontendDir)
     : validateSkin(skinDir, frontendDir)
   if (report === null) {
-    console.log(`validate-skin: no skin package at ${skinDir} -- golden build`)
+    console.log(`validate-skin: no skin package at ${skinDir} -- the core build`)
     process.exit(0)
   }
   for (const line of [...report.fails, ...report.warns, ...report.manual, ...report.passed])

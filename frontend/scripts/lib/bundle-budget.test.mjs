@@ -6,6 +6,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   assertBudgetShape,
+  budgetFor,
   checkBudget,
   checkBudgetRaise,
   suggestBudget,
@@ -17,6 +18,7 @@ const BUDGET = {
   entryGzip: 100000,
   precacheBytes: 500000,
   ceiling: { entryGzip: 150000, precacheBytes: 1000000 },
+  skinned: { package: 'brand 1.0.0', entryGzip: 100500, precacheBytes: 600000 },
 }
 const at = (entryGzip, precacheBytes) => ({ entryGzip, precacheBytes })
 
@@ -133,9 +135,35 @@ test('both raised needs both labels', () => {
 })
 
 test('removing a value or the ceiling counts as a raise', () => {
-  const noCeiling = { entryGzip: 100000, precacheBytes: 500000 }
+  const noCeiling = { entryGzip: 100000, precacheBytes: 500000, skinned: BUDGET.skinned }
   assert.equal(checkBudgetRaise(BUDGET, noCeiling, []).length, 2)
-  assert.equal(checkBudgetRaise(BUDGET, { ceiling: BUDGET.ceiling }, []).length, 2)
+  assert.equal(
+    checkBudgetRaise(BUDGET, { ceiling: BUDGET.ceiling, skinned: BUDGET.skinned }, []).length,
+    2,
+  )
+})
+
+// --- the skinned line (FE-230) ---------------------------------------------
+
+test('a skinned build is checked against the skinned line and the shared ceiling', () => {
+  const skinned = budgetFor(BUDGET, true)
+  assert.deepEqual(checkBudget(at(100500, 600000), skinned).failures, [])
+  // The core line would call the same build too big.
+  assert.equal(checkBudget(at(100500, 600000), budgetFor(BUDGET, false)).failures.length, 1)
+  const { failures, md } = checkBudget(at(100500, 500000), skinned)
+  assert.match(failures[0], /lower the budget to \d+ \(skinned\.precacheBytes/)
+  assert.match(md, /Bundle budget \(skinned build, brand 1\.0\.0\): FAIL/)
+})
+
+test('raising the skinned line needs the growth label; a skinned build needs the line', () => {
+  const head = { ...BUDGET, skinned: { ...BUDGET.skinned, precacheBytes: 600001 } }
+  assert.match(checkBudgetRaise(BUDGET, head, [])[0], /skinned\.precacheBytes raised/)
+  assert.deepEqual(checkBudgetRaise(BUDGET, head, [GROWTH_LABEL]), [])
+  assert.throws(
+    () => assertBudgetShape({ ...BUDGET, skinned: { precacheBytes: 1 } }),
+    /skinned\.entryGzip/,
+  )
+  assert.throws(() => budgetFor({ ...BUDGET, skinned: undefined }, true), /no `skinned` line/)
 })
 
 test('a base without a ceiling has the FE-157 targets: introducing them is no raise, a higher ceiling is', () => {

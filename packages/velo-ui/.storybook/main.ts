@@ -26,10 +26,10 @@ const SKINS_MODULE = 'virtual:velo-skins'
  *  `VELO_SKINS=../goodo-brand/skin pnpm storybook`) --
  *  converted to its token layer by the SAME engine the app build uses
  *  (FE-131: the packages are DTCG, the browser cannot read them as CSS).
- *  The showcase keeps the golden font, so the @font-face rules are left out.
+ *  The showcase keeps the core font stack, so the @font-face rules are left out.
  *  A broken package fails the storybook build, named. velo carries no skins
  *  (FE-131: partner brands live in their own repositories): without
- *  VELO_SKINS the switcher offers golden only. */
+ *  VELO_SKINS the switcher offers the core only. */
 function veloSkins(): Plugin {
   return {
     name: 'velo-skins',

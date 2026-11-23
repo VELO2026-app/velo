@@ -16,6 +16,16 @@ export interface SkinBrand {
   themeColor: string
   backgroundColor: string
   fonts: SkinFont[]
+  /** Contract 2.1: pairs the package keeps under the contrast floor. */
+  contrastExceptions: SkinContrastException[]
+}
+
+export interface SkinContrastException {
+  /** Token path of the text, e.g. `velo.text.secondary`. */
+  text: string
+  /** Token path of the surface under it, e.g. `velo.bg.card.solid`. */
+  surface: string
+  reason: string
 }
 
 export interface LoadedSkinPackage {
@@ -32,6 +42,10 @@ export const SKIN_CONTRACT: string
 export const MANIFEST: string
 export const BRAND_EXTENSION: string
 export const MANDATORY_ASSETS: string[]
+export const LOGO_ASSETS: string[]
+export const SKIN_ASSETS: string[]
+export const PRECACHED_ICONS: string[]
+export function shipsLogo(files: string[]): boolean
 export const ASSET_DIRS: string[]
 export const IGNORED_FILES: Set<string>
 export function goldenTokenMap(

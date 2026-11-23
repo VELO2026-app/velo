@@ -10,7 +10,7 @@
 // -- the machine puts it into the build context): the machine's DTCG format,
 // primer-package.yaml + tokens/*.tokens.json + assets/ (tz-whitelabel §3.2).
 // Reading and converting it is scripts/lib/skin-package.mjs -- the same
-// engine validate-skin.mjs checks with. NO package = the golden VELO build;
+// engine validate-skin.mjs checks with. NO package = the neutral core build (FE-230);
 // a MALFORMED one throws here so a broken deploy fails the build instead of
 // shipping a half-skinned app (`pnpm build` runs validate-skin --build first;
 // this throw is the backstop for a bare `vite build`).
@@ -22,6 +22,7 @@ import {
   isSkinPackage,
   loadSkinPackage,
   readGoldenTokens,
+  shipsLogo,
   skinCss,
   type LoadedSkinPackage,
   type SkinFont,
@@ -41,18 +42,24 @@ export interface SkinPackage {
    *  against the package's velo.tg.header. */
   themeColor: string
   backgroundColor: string
-  /** Self-hosted webfonts of the package (assets/fonts/); empty = Marmelad. */
+  /** Self-hosted webfonts of the package (assets/fonts/); empty = the system stack. */
   fonts: SkinFont[]
+  /** Does the package ship the logo set (assets/mandala-*, velo-word-*,
+   *  logo-white)? No = VeloLogo shows the brand's favicon.svg (FE-230). */
+  hasLogo: boolean
 }
 
-/** The no-skin build. Values mirror index.html/manifest.ts/variables.css —
- *  the same mirror-and-pin discipline as telegram.ts ↔ variables.css. */
-export const GOLDEN_SKIN: SkinPackage = {
+/** The no-skin build: the neutral core (FE-230). Values mirror
+ *  manifest.ts/variables.css (--velo-tg-header) — the same mirror-and-pin
+ *  discipline as telegram.ts ↔ variables.css. The name stays until FE-231
+ *  moves it into the brand package. */
+export const CORE_SKIN: SkinPackage = {
   displayName: 'VELO',
   shortName: 'VELO',
-  themeColor: '#334D6E',
-  backgroundColor: '#ffffff',
+  themeColor: '#4c4c4c',
+  backgroundColor: '#f2f2f2',
   fonts: [],
+  hasLogo: true,
 }
 
 /** Loads public/skin/ with the engine; throws on the first problems. */
@@ -70,16 +77,26 @@ function loadPackage(publicDir: string): LoadedSkinPackage {
 /**
  * The skin package for this build.
  *
- * @returns Null when the golden one ships.
+ * @returns Null when no package ships (the neutral core build).
  *
  * @param publicDir - The frontend/public directory.
  */
 export function readSkin(publicDir: string): SkinPackage | null {
   const dir = join(publicDir, 'skin')
   if (!existsSync(dir) || !isSkinPackage(dir)) return null
-  const brand = loadPackage(publicDir).brand
+  const pkg = loadPackage(publicDir)
+  const brand = pkg.brand
   if (brand === null) throw new Error('[skin] public/skin: no brand record')
-  return { ...brand }
+  // The build's identity only: contrastExceptions are the validator's.
+  const { displayName, shortName, themeColor, backgroundColor, fonts } = brand
+  return {
+    displayName,
+    shortName,
+    themeColor,
+    backgroundColor,
+    fonts,
+    hasLogo: shipsLogo(pkg.files),
+  }
 }
 
 /**
@@ -101,7 +118,7 @@ export function skinBackgroundFormat(publicDir: string): 'webp' | 'png' | null {
 
 /** Content of the virtual module virtual:skin-tokens.css: the package's DTCG
  *  tokens converted to CSS custom properties (plus an \@font-face rule per
- *  self-hosted font), or the golden stub. Served by platform/skin-virtual.ts
+ *  self-hosted font), or the empty stub of the core build. Served by platform/skin-virtual.ts
  *  at build time so the CSS import order in app.ts (variables, then global,
  *  then skin) is mechanical, never hopeful (tz-whitelabel §3, the cascade
  *  paragraph). */
@@ -116,7 +133,7 @@ export function materializedSkinTokens(publicDir: string, skin: SkinPackage | nu
 `
   }
   // The photo URL token follows the file that really lies in assets/bg/
-  // (the build spills it over the canonical /bg/ path). No bg/ = the golden
+  // (the build spills it over the canonical /bg/ path). No bg/ = the core's
   // default from global.css stays. A SEPARATE :root block after the
   // package's: the file on disk wins over any token the package sets.
   const bgFormat = skinBackgroundFormat(publicDir)

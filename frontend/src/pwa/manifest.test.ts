@@ -25,7 +25,7 @@ import { join } from 'node:path'
 import { SUPPORTED_LOCALES } from '@/platform/instance'
 import { MANIFEST_LOCALES } from '@/pwa/manifest'
 import { pwaManifest, pwaManifestWithPassport, manifestForLocale } from '@/pwa/manifest'
-import { GOLDEN_SKIN } from '@/platform/skin'
+import { CORE_SKIN } from '@/platform/skin'
 
 /** Files under public/icons, keyed as their served path (/icons/x.png). */
 const iconFiles = new Set(
@@ -78,6 +78,7 @@ describe('pwaManifest -- the single manifest', () => {
       themeColor: '#1B2A41',
       backgroundColor: '#F5F1EA',
       fonts: [],
+      hasLogo: true,
     }
     expect(pwaManifestWithPassport({ VITE_BRAND: 'ENV-БРЕНД' }, skin)).toMatchObject({
       name: 'ШКОЛА ГАРМОНИИ',
@@ -85,10 +86,10 @@ describe('pwaManifest -- the single manifest', () => {
       theme_color: '#1B2A41',
       background_color: '#F5F1EA',
     })
-    // The golden skin record resolves to the golden manifest.
-    expect(pwaManifestWithPassport({}, GOLDEN_SKIN)).toMatchObject({
+    // The core's skin record resolves to the core manifest.
+    expect(pwaManifestWithPassport({}, CORE_SKIN)).toMatchObject({
       name: 'VELO',
-      theme_color: '#334D6E',
+      theme_color: '#4c4c4c',
     })
   })
 
@@ -102,13 +103,13 @@ describe('pwaManifest -- the single manifest', () => {
 
   it('theme_color and the index.html meta share the SKIN placeholder (F2, §1)', () => {
     // The source carries %VELO_THEME_COLOR%; passport-html resolves it (to
-    // the golden default with no skin -- pinned in passport-html.test.ts).
+    // the core default with no skin -- pinned in passport-html.test.ts).
     // The mirror holds by construction: both consumers resolve the SAME
     // brand-record value at build time.
     const meta = attr(/<meta name="theme-color"[^>]*>/, 'content')
 
     expect(meta).toBe('%VELO_THEME_COLOR%')
-    expect(pwaManifest.theme_color?.toLowerCase()).toBe('#334d6e') // golden default
+    expect(pwaManifest.theme_color?.toLowerCase()).toBe('#4c4c4c') // the core default
   })
 
   it('icons: "any" and "maskable" are SEPARATE entries -- no combined purpose', () => {
@@ -190,7 +191,7 @@ describe('instance part of the manifest (FE-155)', () => {
     expect(m).toMatchObject({
       lang: 'en',
       description: 'A platform',
-      theme_color: '#334D6E',
+      theme_color: '#4c4c4c',
       name: 'VELO',
     })
     expect(m.icons).toBe(pwaManifest.icons)

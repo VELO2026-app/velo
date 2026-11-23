@@ -23,8 +23,9 @@
 // (any FAIL = exit 1), all of it read from dist/:
 //
 //   a. identity: title + theme-color equal the cell's source of record --
-//      the skin's brand record, or the golden defaults (VITE_BRAND ?? 'VELO',
-//      #334D6E) for golden cells;
+//      the skin's brand record, or the core defaults (VITE_BRAND ?? 'VELO',
+//      #4c4c4c) for golden cells. "golden" names the cells WITHOUT a skin
+//      package; since FE-230 that build is the neutral core, not VELO;
 //   b. brand grep: a skin cell's bundle carries the skin's displayName and
 //      every one of its token declarations; a golden cell carries NO
 //      matrix skin's displayName and none of its distinctive declarations
@@ -71,7 +72,7 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
-import { MANDATORY_ASSETS, loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
+import { SKIN_ASSETS, loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
 
 // Resolved lazily: under vitest import.meta.url is not file:// (the same
 // reason passport-html tests anchor to process.cwd()), and the unit suite
@@ -85,10 +86,10 @@ export const MODULE_CHUNKS = {
   ai: [/AiSummary/, /AiConnections/],
 }
 
-/** GOLDEN_SKIN.themeColor (platform/skin.ts) -- the skinless build's header
+/** CORE_SKIN.themeColor (platform/skin.ts) -- the skinless build's header
  *  color, pinned here the same mirror-and-pin way passport-html.test.ts and
  *  the manifest comments pin it. No env seam exists for colors (§1). */
-const GOLDEN_THEME = '#334D6E'
+const CORE_THEME = '#4c4c4c'
 
 /** The edition every skin cell is built at: `full` while editions.json has
  *  it, and the one edition there is once the file holds a single one
@@ -226,7 +227,7 @@ export function evaluateMatrix({ cells, facts, expected }) {
         )
       for (const problem of f.layout ?? []) fails.push(`${cell.name}: ${problem}`)
     } else if ((f.leaked ?? []).length > 0) {
-      fails.push(`${cell.name}: skin leaked into a golden build: ${f.leaked.join(', ')}`)
+      fails.push(`${cell.name}: skin leaked into a core build: ${f.leaked.join(', ')}`)
     }
 
     // c. DCE per module
@@ -381,7 +382,8 @@ function skinRecord(skin) {
 function skinLayout(source, files, brand, distDir, html, css) {
   const problems = []
   const same = (a, b) => existsSync(b) && readFileSync(a).equals(readFileSync(b))
-  for (const name of MANDATORY_ASSETS)
+  // The logo set is optional (contract 2.1): only what the package ships.
+  for (const name of SKIN_ASSETS.filter((n) => files.includes(`assets/${n}`)))
     if (!same(join(source, 'assets', name), join(distDir, 'icons', name)))
       problems.push(`dist/icons/${name} is not the package's assets/${name}`)
   for (const file of files.filter((f) => /^assets\/(bg|onboarding)\//.test(f)))
@@ -398,8 +400,16 @@ function skinLayout(source, files, brand, distDir, html, css) {
     }
   }
   walk('')
-  const extra = shipped.filter((f) => !f.startsWith('assets/fonts/'))
-  if (extra.length > 0) problems.push(`dist/skin/ ships more than the fonts: ${extra.join(', ')}`)
+  const extra = shipped.filter(
+    (f) => !f.startsWith('assets/fonts/') && f !== 'LICENSE' && f !== 'report.json',
+  )
+  if (extra.length > 0)
+    problems.push(
+      `dist/skin/ ships more than the fonts, the license and report.json: ${extra.join(', ')}`,
+    )
+  if (!shipped.includes('report.json')) problems.push('dist/skin/report.json missing')
+  if (files.includes('LICENSE') && !same(join(source, 'LICENSE'), join(distDir, 'skin', 'LICENSE')))
+    problems.push("dist/skin/LICENSE is not the package's LICENSE")
   for (const font of brand.fonts) {
     if (!shipped.includes(font.file)) problems.push(`dist/skin/${font.file} missing`)
     if (!css.includes(`/skin/${font.file}`))
@@ -455,7 +465,7 @@ function snapshot(cell, skins, goldenDecls) {
 
 /** The skinless build's identity, resolved EXACTLY as passport-html resolves
  *  %VELO_BRAND% at build time: process.env -> .env files -> 'VELO'. */
-async function goldenBrand() {
+async function coreBrand() {
   // Lazy: `--list` must run without node_modules.
   const { loadEnv } = await import('vite')
   const fromFiles = loadEnv('production', frontendDir(), 'VITE_').VITE_BRAND
@@ -463,7 +473,7 @@ async function goldenBrand() {
 }
 
 async function expectationOf(cell) {
-  if (!cell.skin) return { title: await goldenBrand(), theme: GOLDEN_THEME }
+  if (!cell.skin) return { title: await coreBrand(), theme: CORE_THEME }
   const { brand } = skinRecord(cell.skin)
   return { title: brand.displayName, theme: brand.themeColor }
 }

@@ -3,8 +3,9 @@
 // =============================================================================
 // The витрина acts as the HOST for tokens: the package itself carries no
 // theme values (принцип 2: токены не уезжают), so the showcase imports the
-// GOLDEN variables.css from the application by a pinned relative path --
-// exactly what the app's cascade hands the package in a golden build
+// core variables.css from the application by a pinned relative path (neutral
+// since FE-230) -- exactly what the app's cascade hands the package in a build
+// without a skin
 // (variables.css -> @velo/ui css -> virtual:skin-tokens.css). A skinned showcase
 // stays a storybook build-time concern, never a package one -- §3.7 made
 // it a MANDATED one: the skin switcher below is that build-time concern.
@@ -17,11 +18,11 @@
 //
 // SKIN MODE (tz-ui-package.md §3.7, шаг 1 витрины): a toolbar "Skin" select
 // injects an etalon skin's token layer as ONE override appended after
-// the golden base -- the same cascade shape the app builds in app.ts
+// the core base -- the same cascade shape the app builds in app.ts
 // (variables.css -> kit css -> virtual:skin-tokens.css). The kit components consume
 // var(--velo-*) only, so the switch repaints every story with no component
-// change: значения = данные. Golden removes the layer entirely (the base IS
-// golden). The layers come from the virtual module of main.ts, which
+// change: значения = данные. "Core" removes the layer entirely (the base IS
+// the core, neutral since FE-230). The layers come from the virtual module of main.ts, which
 // converts the DTCG packages listed in VELO_SKINS (velo carries no skins --
 // partner brands live in their own repositories) with the app's
 // own skin engine (FE-131) -- a new skin package joins with no edit here;
@@ -77,14 +78,14 @@ function applySkinLayer(selection: string): void {
   let layer = document.getElementById(SKIN_LAYER_ID)
   const css = SKIN_LAYERS[selection]
   if (css === undefined) {
-    // Golden (the default): the base layer IS golden -- remove the override.
+    // Core (the default): the base layer IS the core -- remove the override.
     layer?.remove()
     return
   }
   if (layer === null) {
     layer = document.createElement('style')
     layer.id = SKIN_LAYER_ID
-    // Appended LAST: the override must win the cascade over the golden base
+    // Appended LAST: the override must win the cascade over the core base
     // and the kit's own css, the way the app (app.ts) orders virtual:skin-tokens.css.
     document.head.appendChild(layer)
   }
@@ -103,12 +104,12 @@ const preview: Preview = {
   globalTypes: {
     veloSkin: {
       name: 'Skin',
-      description: 'The token layer over the golden base (§3.7 skin mode)',
-      defaultValue: 'golden',
+      description: 'The token layer over the core base (§3.7 skin mode)',
+      defaultValue: 'core',
       toolbar: {
         icon: 'paintbrush',
         items: [
-          { value: 'golden', title: 'Golden (variables.css)' },
+          { value: 'core', title: 'Core (variables.css, no skin)' },
           ...Object.keys(SKIN_LAYERS).map((value) => ({ value, title: value })),
         ],
       },

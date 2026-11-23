@@ -19,8 +19,8 @@
 #   test-other   — @velo/ui (its own package and vitest config).
 #   build        — @velo/ui (vite lib + vue-tsc dts), then the app's
 #                  vue-tsc + vite build with the FE-153 build-log gate.
-#   e2e          — Playwright smoke scenarios on the golden build served by
-#                  `vite preview`, API mocked (frontend/e2e/); Chromium cached.
+#   e2e          — Playwright smoke scenarios on the build with the synthetic
+#                  skin package, served by `vite preview`, API mocked (frontend/e2e/); Chromium cached.
 #                  Every test runs under the crash detector (FE-161).
 #   e2e-stack    — FE-161: the sweep -- every route x role on a REAL backend
 #                  seeded with the `e2e` profile (.github/workflows/e2e-stack.yml,
@@ -508,6 +508,30 @@ jobs:
           node frontend/scripts/bundle-report.mjs --budget \
             --base .bundle-base/sizes.json --save-sizes .bundle-head/sizes.json
 
+      # FE-230: the core is neutral and production always ships a skin
+      # package, so the size that matters is the skinned one (the `skinned`
+      # line of bundle-budget.json: the package's photo and font join the
+      # precache). The golden package comes from the public velo-brand
+      # repository at the tag the `skinned` line was measured with
+      # (bundle-budget.json skinned.repo / skinned.tag). A tag that does not
+      # exist yet is a notice (it is set before the merge); a tag that exists
+      # but does not download fails the step.
+      - name: Bundle size budget (with the velo-brand package)
+        run: |
+          repo=$(node -p "require('./frontend/bundle-budget.json').skinned.repo")
+          tag=$(node -p "require('./frontend/bundle-budget.json').skinned.tag")
+          rc=0
+          git ls-remote --exit-code --tags "$repo" "refs/tags/$tag" > /dev/null || rc=$?
+          if [ "$rc" = 2 ]; then
+            echo "::notice::$repo has no tag $tag yet: the skinned bundle budget is not checked"
+            exit 0
+          fi
+          [ "$rc" = 0 ] || { echo "::error::cannot list the tags of $repo (exit $rc)"; exit 1; }
+          git clone --quiet --depth 1 --branch "$tag" "$repo" "$RUNNER_TEMP/velo-brand"
+          cp -r "$RUNNER_TEMP/velo-brand/skin" frontend/public/skin
+          pnpm -C frontend exec vite build
+          node frontend/scripts/bundle-report.mjs --budget
+
       - name: Keep this build's sizes as the base for the next PRs
         if: github.event_name == 'push' && !cancelled() && hashFiles('.bundle-head/sizes.json') != ''
         uses: actions/cache/save@v6
@@ -515,8 +539,9 @@ jobs:
           path: .bundle-head/sizes.json
           key: bundle-sizes-${{ github.ref_name }}-${{ github.sha }}
 
-  # FE-157 5A.2: smoke e2e on Playwright -- the golden production build under
-  # `vite preview`, the API mocked at the network layer (frontend/e2e/), so
+  # FE-157 5A.2: smoke e2e on Playwright -- the production build under
+  # `vite preview`, with the synthetic skin package of make-test-skin.mjs
+  # (FE-230: the core has no look of its own to test against), the API mocked at the network layer (frontend/e2e/), so
   # no backend is needed. Its own job: a browser binary and a build of its
   # own, kept off the fast gate. The Chromium binary is cached by the
   # Playwright version (a new version = a new revision = a fresh download);
@@ -565,9 +590,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       # FE-204: vite only -- this job needs the dist. vue-tsc runs in the
-      # typecheck job and the skin validation in the build job.
-      - name: Build the app (golden)
-        run: pnpm -C frontend exec vite build
+      # typecheck job and the skin validation in the build job. FE-230: the
+      # synthetic skin goes where the machine puts a package (public/skin);
+      # make-test-skin refuses a package the engine would not load.
+      - name: Build the app (synthetic skin)
+        run: |
+          node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          pnpm -C frontend exec vite build
 
       - name: Smoke scenarios (+ crash-detector self-checks)
         run: pnpm -C frontend e2e:smoke
@@ -594,13 +623,15 @@ jobs:
       projects: sweep
 
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
-  # gate -- golden x every edition of editions.json through PRIMER_EDITION
+  # gate -- the core without a skin (cells named golden/*; neutral since
+  # FE-230) x every edition of editions.json through PRIMER_EDITION
   # (the machine's channel): a module outside the edition must leave NO
   # chunks in dist (core: no ai; payments is an instance option since
-  # FE-151, always built) -- plus ONE skin x full cell
-  # on a synthetic package written to the runner's temp dir (velo carries
-  # no skins since FE-131; scripts/make-test-skin.mjs: golden assets, a
-  # contrasting palette, a font) -- the build's skin path (asset spill,
+  # FE-151, always built) -- plus TWO skin x full cells on synthetic
+  # packages written to the runner's temp dir (velo carries no skins since
+  # FE-131; scripts/make-test-skin.mjs: the core's assets, a contrasting
+  # palette, a font): ci-skin without a logo set (the brand-icon fallback),
+  # ci-skin-logo with one (FE-230) -- the build's skin path (asset spill,
   # dist/skin prune, @font-face, brand grep) runs on every PR. One vite
   # build per cell, one runner per cell; the cell list comes from the
   # script itself (--list), so a new edition joins the gate without
@@ -626,7 +657,8 @@ jobs:
         id: plan
         run: |
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin")" >> "$GITHUB_OUTPUT"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
+          echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo")" >> "$GITHUB_OUTPUT"
 
   matrix:
     name: matrix — ${{ matrix.cell }}
@@ -664,7 +696,8 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/facts"
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
+          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -708,7 +741,8 @@ jobs:
           i=0
           for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin"
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
+          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo"
 
   # FE-159: the image the machine runs. The stand fell three times (05-07.11)
   # on what no other job builds: the node digest, the Dockerfile's pnpm

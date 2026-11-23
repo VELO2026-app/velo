@@ -11,10 +11,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Plain ESM module (types loosely declared in env.d.ts).
-// @ts-expect-error -- *.mjs modules carry no type information
+// Plain ESM module, typed by scripts/validate-skin.d.mts.
 import { skinBuildGate, validateSkin } from '../../scripts/validate-skin.mjs'
 import {
+  FIXTURE_BRAND,
   FIXTURE_TOKENS,
   cleanupSkinFixtures,
   png,
@@ -274,10 +274,133 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     expect(failsOf(dir)).toMatch(/contrast: --velo-text-primary on --velo-bg-card-solid/)
   })
 
+  it('a light primary fails: the white practice-card art would vanish (FE-230)', () => {
+    const withPrimary = (primary: string): string =>
+      writeSkinPackage({
+        tokens: {
+          ...FIXTURE_TOKENS,
+          velo: { ...FIXTURE_TOKENS.velo, primary: { $value: primary } },
+        },
+      })
+    expect(failsOf(withPrimary('#dddddd'))).toMatch(
+      /FAIL contrast: #ffffff on --velo-primary is 1\.36:1 < 3:1/,
+    )
+    expect(failsOf(withPrimary('#2c4a6e'))).not.toContain('--velo-primary')
+  })
+
   it('an apple-touch icon with alpha fails (iOS paints it black)', () => {
     const dir = writeSkinPackage()
     writeFileSync(join(dir, 'assets', 'apple-touch-icon-180.png'), png(180, 180, 6))
     expect(failsOf(dir)).toContain('assets/apple-touch-icon-180.png: has an alpha channel')
+  })
+})
+
+describe('declared contrast exceptions (contract 2.1, FE-230)', () => {
+  const MANIFEST_21 = 'schema: 1\ncontract: "2.1"\n'
+  const EXCEPTION = {
+    text: 'velo.text.secondary',
+    surface: 'velo.bg.card.solid',
+    reason: 'Secondary text keeps the brand tint.',
+  }
+  /** A package with secondary text `secondary` on a white card. */
+  const pkg = (secondary: string, exceptions?: object[], manifest = MANIFEST_21): string =>
+    writeSkinPackage({
+      manifest,
+      brand: exceptions ? { ...FIXTURE_BRAND, contrastExceptions: exceptions } : FIXTURE_BRAND,
+      tokens: {
+        ...FIXTURE_TOKENS,
+        velo: {
+          ...FIXTURE_TOKENS.velo,
+          text: { secondary: { $value: secondary } },
+          bg: { card: { solid: { $value: '#ffffff' } } },
+        },
+      },
+    })
+  const report = (dir: string): Report => validateSkin(dir, FRONTEND) as Report
+
+  it('a declared pair under 4.5:1 warns with its reason; undeclared, it fails', () => {
+    const declared = report(pkg('rgba(76, 101, 137, 0.7)', [EXCEPTION]))
+    expect(declared.fails).toEqual([])
+    expect(declared.warns.join('\n')).toContain(
+      '--velo-text-secondary on --velo-bg-card-solid is 3.12:1 < 4.5:1 -- declared exception: Secondary text keeps the brand tint.',
+    )
+    expect(failsOf(pkg('rgba(76, 101, 137, 0.7)'))).toContain(
+      'FAIL contrast: --velo-text-secondary on --velo-bg-card-solid is 3.12:1 < 4.5:1',
+    )
+  })
+
+  it('a declaration holds down to 3:1, not below', () => {
+    expect(failsOf(pkg('rgba(76, 101, 137, 0.5)', [EXCEPTION]))).toContain(
+      'a declared exception holds down to 3:1, not below',
+    )
+  })
+
+  it('a declaration for a pair that clears the floor warns to drop it', () => {
+    const passing = report(pkg('#333333', [EXCEPTION]))
+    expect(passing.fails).toEqual([])
+    expect(passing.warns.join('\n')).toContain('clears the floor or is not overridden')
+  })
+
+  it.each([
+    ['not a list', 'x', 'must be a non-empty list'],
+    ['an empty list', [], 'must be a non-empty list'],
+    ['an entry that is not an object', ['x'], '[0]: must be an object'],
+    [
+      'an unknown key, quoted',
+      [{ ...EXCEPTION, 'x\n::error::y': 1 }],
+      'unknown field "x\\n::error::y"',
+    ],
+    [
+      'a text that is not a token path',
+      [{ ...EXCEPTION, text: 'x\n::error::y' }],
+      '[0].text: a token path',
+    ],
+    [
+      'a reason over 300 characters',
+      [{ ...EXCEPTION, reason: 'a'.repeat(301) }],
+      'longer than 300',
+    ],
+    ['markup in the reason', [{ ...EXCEPTION, reason: '<b>x</b>' }], 'no < > & "'],
+    [
+      'the same pair twice',
+      [EXCEPTION, EXCEPTION],
+      'velo.text.secondary on velo.bg.card.solid is declared twice',
+    ],
+  ])('a malformed declaration fails: %s', (_, exceptions, message) => {
+    const fails = failsOf(pkg('rgba(76, 101, 137, 0.7)', exceptions as object[]))
+    expect(fails).toContain(message)
+    // A refused path never reaches a later message raw.
+    expect(fails).not.toMatch(/^::error::/m)
+  })
+
+  it.each([
+    [
+      'body text on the card (only secondary text may be declared)',
+      [{ ...EXCEPTION, text: 'velo.text.primary' }],
+      undefined,
+      'velo.text.primary on velo.bg.card.solid may not be declared',
+    ],
+    [
+      'a pair the gate does not measure',
+      [{ ...EXCEPTION, surface: 'velo.primary' }],
+      undefined,
+      'velo.text.secondary on velo.primary may not be declared',
+    ],
+    ['a blank reason', [{ ...EXCEPTION, reason: ' ' }], undefined, 'reason: why the pair stays'],
+    [
+      'a 2.0 manifest',
+      [EXCEPTION],
+      'schema: 1\ncontract: "2.0"\n',
+      'contrastExceptions need contract "2.1" or later, got "2.0"',
+    ],
+    [
+      'a path that is no product token',
+      [{ ...EXCEPTION, text: 'velo.text.nope' }],
+      undefined,
+      'contrastExceptions: velo.text.nope is not a token of the product',
+    ],
+  ])('a declaration fails: %s', (_, exceptions, manifest, message) => {
+    expect(failsOf(pkg('#333333', exceptions, manifest))).toContain(message)
   })
 })
 

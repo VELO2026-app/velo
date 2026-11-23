@@ -14,9 +14,10 @@ import { join } from 'node:path'
 
 // Plain ESM module (types loosely declared in env.d.ts).
 // @ts-expect-error -- *.mjs modules carry no type information
-import { brandGrepReport } from '../../scripts/brand-grep.mjs'
+import { brandGrepReport, goldenAssetHits } from '../../scripts/brand-grep.mjs'
+import { createHash } from 'node:crypto'
 
-type Report = { brand: string[]; features: string[]; switchedOff: string[] }
+type Report = { brand: string[]; features: string[]; switchedOff: string[]; look: string[] }
 
 const scan = (files: Array<[string, string]>): Report =>
   brandGrepReport(files.map(([path, content]) => ({ path, content }))) as Report
@@ -58,7 +59,7 @@ describe('brand-grep: the brand word (tz-i18n §7.2)', () => {
         '{ "brandName": "@:brand", "_comment": "VELO Frontend -- ru" }',
       ],
       ['src/pwa/manifest.ts', "export const pwaManifest = { name: 'VELO', short_name: 'VELO' }"],
-      ['src/platform/skin.ts', "export const GOLDEN_SKIN = { displayName: 'VELO' }"],
+      ['src/platform/skin.ts', "export const CORE_SKIN = { displayName: 'VELO' }"],
       ['src/platform/instance.ts', "brand: import.meta.env.VITE_BRAND ?? 'VELO',"],
     ])
     expect(report.brand).toEqual([])
@@ -155,6 +156,48 @@ describe('brand-grep: the switched-off literal (FE-151, protocol 5.2.3)', () => 
       ],
     ])
     expect(report.switchedOff).toEqual([])
+  })
+})
+
+describe('brand-grep: the golden look (FE-230)', () => {
+  it('a golden color or font in code is a hit; in a comment, or a product color, it is not', () => {
+    const report = scan([
+      ['src/styles/a.css', '.a { color: #627A9C; }\n/* was #627a9c */'],
+      ['src/components/B.vue', "<style>\n.b { font-family: 'Marmelad'; }\n</style>"],
+      ['src/utils/c.ts', "const c = 'rgba(76, 101, 137, 0.7)' // #334d6e"],
+      ['public/onboarding/d.svg', '<svg><!-- #4c6589 --><rect fill="#fe9093"/></svg>'],
+    ])
+    expect(report.look).toEqual([
+      'src/styles/a.css:~1 golden color #627a9c (#627a9c)',
+      'src/components/B.vue golden font marmelad',
+      'src/utils/c.ts:~1 golden color #4c6589 (rgba(76, 101, 137)',
+    ])
+  })
+
+  it.each([
+    ['a hex with alpha', '.a { color: #4c6589cc; }'],
+    ['the space syntax of rgb()', '.a { color: rgb(76 101 137 / 0.7); }'],
+    [
+      'a URL-encoded hex in a data: URI',
+      '.a { background: url("data:image/svg+xml,%3Cpath fill=\'%23627a9c\'/%3E"); }',
+    ],
+    ['rgb() in percents', '.a { color: rgb(38.4% 47.8% 61.2%); }'],
+    ['hsl()', '.a { color: hsl(215deg 23% 50%); }'],
+    ['hsla() with commas and decimals', '.a { color: hsla(215, 22.8%, 49.8%, 1); }'],
+  ])('%s is a hit', (_, css) => {
+    expect(scan([['src/styles/a.css', css]]).look).toHaveLength(1)
+  })
+
+  it('a golden asset is a hit by its bytes, whatever its name', () => {
+    const golden = Buffer.from('<svg>golden</svg>')
+    const hashes = new Set([createHash('sha256').update(golden).digest('hex')])
+    const files = [
+      { path: 'public/icons/renamed.svg', bytes: golden },
+      { path: 'public/icons/favicon.svg', bytes: Buffer.from('<svg>neutral</svg>') },
+    ]
+    expect(goldenAssetHits(files, hashes)).toEqual([
+      'public/icons/renamed.svg: a golden VELO asset (it belongs to the velo-brand skin package)',
+    ])
   })
 })
 

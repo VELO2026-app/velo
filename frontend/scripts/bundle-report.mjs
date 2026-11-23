@@ -29,7 +29,7 @@
 // bundle-budget-guard CI job checks the labels, no build needed.
 //
 // --modules runs its OWN production build into a temporary outDir (dist/ is
-// left untouched on the golden build; with a skin in public/skin/ the
+// left untouched on the core build; with a skin in public/skin/ the
 // config's skinAssetSpill still copies the skin assets into frontend/dist/,
 // its path is fixed there) with vite.config.ts unchanged: the config file is loaded as
 // is, and an inline config (Vite's JS API merges it over the file) adds one
@@ -57,7 +57,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
-import { assertBudgetShape, checkBudget } from './lib/bundle-budget.mjs'
+import { assertBudgetShape, budgetFor, checkBudget } from './lib/bundle-budget.mjs'
 
 const frontendDir = fileURLToPath(new URL('..', import.meta.url))
 
@@ -312,7 +312,10 @@ if (argv.includes('--modules')) {
     const basePath = flagValue(argv, '--base')
     const base =
       basePath && existsSync(basePath) ? JSON.parse(readFileSync(basePath, 'utf8')) : null
-    const { md, failures } = checkBudget(sizes, budget, base)
+    // A build with a skin package writes dist/skin/report.json; a core
+    // build prunes dist/skin/. The skinned line holds the production size (FE-230).
+    const skinned = existsSync(join(distDir, 'skin', 'report.json'))
+    const { md, failures } = checkBudget(sizes, budgetFor(budget, skinned), skinned ? null : base)
     console.log(md)
     if (process.env.GITHUB_STEP_SUMMARY) {
       appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${md}\n`)

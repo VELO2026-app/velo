@@ -8,7 +8,7 @@
 
 | Контур | Что делает | Бэк | Команда |
 | --- | --- | --- | --- |
-| `smoke` | 5 сценариев + самопроверки детектора | моки API | `pnpm -C frontend e2e:smoke` |
+| `smoke` | сценарии + самопроверки детектора; сборка с синтетическим пакетом скина (`make-test-skin.mjs`, FE-230) | моки API | `pnpm -C frontend e2e:smoke` |
 | `sweep` | каждый роут роутера под каждой ролью из таблицы, только открывает | настоящий, сид `e2e` | `pnpm -C frontend e2e:sweep` |
 
 Детектор (`e2e/support/crashes.ts`) делает тест красным, если за время теста было:
@@ -38,9 +38,13 @@ Sweep дополнительно проверяет, что вместо экр�
 ```sh
 sh ~/work/velo-dev/velo-dev-up.sh
 python frontend/e2e/stack/seed_e2e.py && python backend/scripts/set_role.py 607031 A --yes   # один раз; сид -- обёртка: профиль не в seed_profiles/
-pnpm -C frontend build                                     # golden-сборка для vite preview
+node frontend/scripts/make-test-skin.mjs frontend/public/skin   # синтетический пакет скина, как в CI (FE-230)
+pnpm -C frontend build                                     # сборка для vite preview
 pnpm -C frontend e2e:sweep
+node frontend/scripts/apply-skin.mjs --remove                    # убрать пакет: следующие сборки и `pnpm dev` идут без него
 ```
+
+Пакет в `frontend/public/skin` видят все сборки, пока его не убрать; повторный `make-test-skin.mjs` в существующий каталог откажет. Дев-сервер (`vite`) пакет скина не раскладывает: токены скина он применит, а логотипы, онбординг и фон останутся нейтральными файлами ядра (фон пакета — 404). Вид инстанса проверяй сборкой, не дев-сервером.
 
 Чтобы гнать sweep по дев-серверу вместо сборки: `E2E_BASE_URL=http://localhost:5173 pnpm -C frontend e2e:sweep`.
 
@@ -116,7 +120,7 @@ Sweep только читает. Два экрана пишут при откр�
 
 Artifact `visual-out` у job `visual` (в step summary — список изменившихся экранов). `report.html`: для каждого изменившегося экрана base, head и diff, число отличающихся пикселей. Пустой отчёт — визуально ничего не изменилось. Экран, снятый только с одной стороны, или с другим размером, считается изменившимся.
 
-Локально (из `frontend/`): `pnpm build`, затем `sh e2e/visual/run.sh <dist-базы> dist`. Базу собрать из `test` отдельным worktree. `VISUAL_STRICT=1` — выходной код 1 при любом отличии.
+Локально (из `frontend/`): `node scripts/make-test-skin.mjs public/skin && pnpm build` (с FE-230 CI собирает обе стороны с синтетическим пакетом), затем `sh e2e/visual/run.sh <dist-базы> dist`. Базу собрать из `test` отдельным worktree. `VISUAL_STRICT=1` — выходной код 1 при любом отличии.
 
 ### Если job упал не на отчёте
 

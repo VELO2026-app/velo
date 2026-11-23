@@ -1,15 +1,14 @@
 <!--
   VELO Frontend -- VeloLogo Component (DS-6)
 
-  Uses the actual VELΘ mandala logo from Design_prototype.
-  Variants: default (colored/blue) and white.
+  The logo images come from the skin package on fixed /icons/ paths
+  (utils/skinAssets.ts); the core ships neutral ones there (a ring and a dot,
+  FE-230). The layer offsets below were calibrated on the golden VELO
+  lockup (velo-brand): a ring PNG with a wordmark SVG on top.
+  Variants: default (dark) and white.
 
-  - default (colored): layered light composition -- mandala-blue.png ring +
-    velo-word-blue.svg wordmark (#4C6589) on top, the word scaled 1.8x
-    (operator-calibrated) so it matches the old lockup. Replaces the heavy
-    logo.svg vector (191KB -> ~67KB) per operator 2026-06-12; logo.svg itself
-    was deleted 14.10.2026 (no consumer left).
-    Future auth/onboarding screens that use VeloLogo inherit this automatically.
+  - default: layered composition -- mandala-blue.png ring + velo-word-blue.svg
+    wordmark on top, the word scaled 1.8x (operator-calibrated).
   - white: logo-white.svg, or a spinning ring (mandala-white.png + wordmark)
     when `spin` is set.
 
@@ -24,11 +23,27 @@
 -->
 
 <template>
+  <!-- No logo set in the skin package (contract 2.1, FE-230): the brand's app
+       icon stands in, static. The white variant is the splash's oversized
+       bleed box, so the icon takes a third of it and the layout keeps its Y. -->
+  <div
+    v-if="!SKIN_HAS_LOGO"
+    class="velo-logo velo-logo--icon"
+    :style="{ width: size + 'px', height: size + 'px' }"
+  >
+    <img
+      class="velo-logo__icon"
+      :src="SKIN_IMAGE.favicon"
+      :width="iconSize"
+      :height="iconSize"
+      :alt="t('common.brandName')"
+    />
+  </div>
   <!-- Spinning white logo: rotating mandala ring under a static filled wordmark.
        The word sits at the ring centre, so rotating around the box centre keeps
        it perfectly still. -->
   <div
-    v-if="spin && variant === 'white'"
+    v-else-if="spin && variant === 'white'"
     class="velo-logo velo-logo--spin"
     :style="{ width: size + 'px', height: size + 'px' }"
   >
@@ -36,7 +51,7 @@
       <div class="velo-logo__steady">
         <img
           class="velo-logo__layer velo-logo__mandala"
-          src="/icons/mandala-white.png"
+          :src="SKIN_IMAGE.mandalaWhite"
           alt=""
           aria-hidden="true"
         />
@@ -44,7 +59,7 @@
     </div>
     <img
       class="velo-logo__layer velo-logo__word"
-      src="/icons/velo-word-filled.svg"
+      :src="SKIN_IMAGE.wordFilled"
       :alt="t('common.brandName')"
     />
   </div>
@@ -58,20 +73,20 @@
   >
     <img
       class="velo-logo__layer velo-logo__mandala"
-      src="/icons/mandala-blue.png"
+      :src="SKIN_IMAGE.mandalaBlue"
       alt=""
       aria-hidden="true"
     />
     <img
       class="velo-logo__layer velo-logo__word velo-logo__word--blue"
-      src="/icons/velo-word-blue.svg"
+      :src="SKIN_IMAGE.wordBlue"
       :alt="t('common.brandName')"
     />
   </div>
   <!-- White static logo. -->
   <img
     v-else
-    src="/icons/logo-white.svg"
+    :src="SKIN_IMAGE.logoWhite"
     :width="size"
     :height="size"
     :alt="t('common.brandName')"
@@ -80,9 +95,12 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { SKIN_HAS_LOGO } from 'virtual:skin-brand'
 import { t } from '@/locales'
+import { SKIN_IMAGE } from '@/utils/skinAssets'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     size?: number
     variant?: 'default' | 'white'
@@ -91,12 +109,23 @@ withDefaults(
   }>(),
   { size: 64, variant: 'default', spin: false },
 )
+
+/** The stand-in icon's side: the whole box, a third of the splash's bleed box. */
+const iconSize = computed(() =>
+  props.variant === 'white' ? Math.round(props.size / 3) : props.size,
+)
 </script>
 
 <style scoped>
 .velo-logo {
   display: block;
   object-fit: contain;
+}
+
+.velo-logo--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .velo-logo--spin,
