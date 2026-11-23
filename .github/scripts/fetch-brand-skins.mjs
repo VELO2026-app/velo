@@ -15,7 +15,7 @@
 //
 // Usage: node .github/scripts/fetch-brand-skins.mjs <out-dir> [--config <brand-skins.json>]
 //        --config  another pin file (the Visual job reads the base's own pins)
-// Node stdlib only. planBrands(), cloneUrl(), cloneEnv() and cloneFailure() are exported for the test.
+// Node stdlib only. planBrands(), cloneUrl(), cloneEnv(), gitEnv() and cloneFailure() are exported for the test.
 // =============================================================================
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -30,12 +30,55 @@ export function cloneUrl(repo) {
   return `https://github.com/${repo}.git`
 }
 
+/** The variables that pin git to ONE repository (`git rev-parse
+ *  --local-env-vars`). A hook (pre-push, pre-commit) exports some of them;
+ *  git run with them aims at the hook's repository, not at the clone. */
+const LOCAL_ENV_FALLBACK = [
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CONFIG',
+  'GIT_CONFIG_PARAMETERS',
+  'GIT_CONFIG_COUNT',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_IMPLICIT_WORK_TREE',
+  'GIT_GRAFT_FILE',
+  'GIT_INDEX_FILE',
+  'GIT_NO_REPLACE_OBJECTS',
+  'GIT_REPLACE_REF_BASE',
+  'GIT_PREFIX',
+  'GIT_SHALLOW_FILE',
+  'GIT_COMMON_DIR',
+]
+
+/** The local-repository variables, asked of git itself (the list grows with
+ *  git); the fixed list is the fallback. GIT_ASKPASS, GIT_SSH_COMMAND and the
+ *  like are not in it: they are the user's way to reach a remote. */
+export function localEnvVars() {
+  const asked = spawnSync('git', ['rev-parse', '--local-env-vars'], {
+    encoding: 'utf8',
+    env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'GIT_DIR')),
+  })
+  const names = asked.status === 0 ? asked.stdout.split('\n').filter(Boolean) : []
+  return [...new Set([...LOCAL_ENV_FALLBACK, ...names])]
+}
+
+/** The environment for any git call here: the base without the
+ *  local-repository variables (see localEnvVars). */
+export function gitEnv(base = process.env) {
+  const env = { ...base }
+  for (const name of localEnvVars()) delete env[name]
+  return env
+}
+
 /** The git environment of a clone: no prompt for a password (a private
  *  repository without a key must fail, not hang) and, with a token, an
  *  Authorization header for github.com only, passed through the environment
  *  (GIT_CONFIG_*), so .git/config of the clone never holds it. */
 export function cloneEnv(token = '', base = process.env) {
-  const env = { ...base, GIT_TERMINAL_PROMPT: '0' }
+  // The token header is set AFTER the strip: GIT_CONFIG_COUNT is itself one
+  // of the stripped variables.
+  const env = { ...gitEnv(base), GIT_TERMINAL_PROMPT: '0' }
   if (token) {
     const basic = Buffer.from(`x-access-token:${token}`).toString('base64')
     env.GIT_CONFIG_COUNT = '1'
@@ -107,6 +150,7 @@ function main() {
     if (clone.status !== 0) throw new Error(cloneFailure(b, clone.stderr ?? '', token))
     const head = execFileSync('git', ['-C', b.target, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
+      env: gitEnv(),
     }).trim()
     if (head !== b.sha)
       throw new Error(`${b.name} ${b.tag} is ${head}, the pin says ${b.sha} -- the tag moved`)

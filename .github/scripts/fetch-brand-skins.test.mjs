@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // FE-234: the brand pins are well-formed (run by the scope job of ci.yml).
 // Locally: node --test .github/scripts/fetch-brand-skins.test.mjs
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, realpathSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cloneEnv, cloneFailure, cloneUrl, planBrands } from './fetch-brand-skins.mjs'
+import { cloneEnv, cloneFailure, cloneUrl, gitEnv, planBrands } from './fetch-brand-skins.mjs'
 
 const config = JSON.parse(readFileSync(new URL('../brand-skins.json', import.meta.url), 'utf8'))
 
@@ -41,4 +44,44 @@ test('a failed clone tells what to do and never prints the token', () => {
   const withToken = cloneFailure(brand, `fatal: s3cret ${basic}`, 's3cret')
   assert.ok(!withToken.includes('s3cret') && !withToken.includes(basic))
   assert.match(cloneFailure(brand, 'fatal: not found'), /private: set the BRAND_REPO_TOKEN/)
+})
+
+test('a hook-exported GIT_DIR does not aim our git at the hook repository', () => {
+  const quiet = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
+  const git = (cwd, env, ...args) =>
+    execFileSync('git', args, {
+      cwd,
+      env: { ...process.env, ...quiet, ...env },
+      encoding: 'utf8',
+    }).trim()
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'fe234-hookenv-')))
+  const hook = join(root, 'hook-repo')
+  const clone = join(root, 'clone')
+  git(root, {}, 'init', '-q', hook)
+  git(root, {}, 'init', '-q', clone)
+  // The poison: what pre-push leaves in the environment of a test.
+  const poisoned = { ...process.env, ...quiet, GIT_DIR: join(hook, '.git'), GIT_WORK_TREE: hook }
+  const aimed = (env) =>
+    execFileSync('git', ['rev-parse', '--absolute-git-dir'], {
+      cwd: clone,
+      env,
+      encoding: 'utf8',
+    }).trim()
+  assert.equal(
+    aimed(poisoned),
+    join(hook, '.git'),
+    'the fixture must poison, or the test proves nothing',
+  )
+  const cleaned = gitEnv(poisoned)
+  assert.equal(aimed(cleaned), join(clone, '.git'))
+  assert.equal(cloneEnv('', poisoned).GIT_DIR, undefined)
+})
+
+test('the ways to reach a remote survive; the token header survives the strip', () => {
+  const base = { GIT_ASKPASS: '/bin/askpass', GIT_SSH_COMMAND: 'ssh -i k', GIT_DIR: '/x' }
+  const env = cloneEnv('tok', base)
+  assert.equal(env.GIT_ASKPASS, '/bin/askpass')
+  assert.equal(env.GIT_SSH_COMMAND, 'ssh -i k')
+  assert.equal(env.GIT_DIR, undefined)
+  assert.equal(env.GIT_CONFIG_COUNT, '1')
 })
