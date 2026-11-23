@@ -291,7 +291,7 @@ jobs:
         run: find .turbo/cache -type f -mtime +7 -delete 2>/dev/null || true
 
       - name: Typecheck (vue-tsc)
-        run: pnpm turbo run typecheck --filter=velo-frontend
+        run: pnpm turbo run typecheck --filter=velo-frontend --filter=@velo/ui
 
   # FE-204: the frontend suite in three shards cut by recorded duration
   # (frontend/vitest.sequencer.ts over test-durations.json), each with v8
