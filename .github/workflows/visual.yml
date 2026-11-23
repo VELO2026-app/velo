@@ -160,11 +160,21 @@ jobs:
           v=$(pnpm exec playwright --version | awk '{print $2}')
           [ "$v" = "1.64.1" ] || { echo "playwright $v does not match the image tag v1.64.1 -- update container: above"; exit 1; }
 
-      # FE-234: the brand packages at their pinned tags.
-      - name: Fetch the brand skin packages
+      # FE-234: the brand packages at their pinned tags. The base build takes
+      # the pins of the BASE (its own brand-skins.json when it has one): a PR
+      # that raises a pin then shows what the new package changes on screen,
+      # instead of building both sides with the same package.
+      - name: Fetch the brand skin packages (head pins, base pins)
         env:
           BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
-        run: node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands" > /dev/null
+        run: |
+          node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands" > /dev/null
+          base_pins="$RUNNER_TEMP/base/.github/brand-skins.json"
+          if [ -f "$base_pins" ]; then
+            node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands-base" --config "$base_pins" > /dev/null
+          else
+            cp -R "$RUNNER_TEMP/brands" "$RUNNER_TEMP/brands-base"
+          fi
 
       # FE-204: vite only (types are the typecheck job's). FE-230: the core is
       # neutral, so both builds carry the brand package of the matrix cell
@@ -183,13 +193,14 @@ jobs:
         env:
           SKIN: ${{ matrix.skin }}
         run: |
-          node frontend/scripts/apply-skin.mjs "$RUNNER_TEMP/brands/$SKIN/skin"
+          node frontend/scripts/apply-skin.mjs "$RUNNER_TEMP/brands-base/$SKIN/skin"
           pnpm -C frontend exec vite build
 
       - name: Shoot both builds and compare
         working-directory: frontend
         env:
           VISUAL_STRICT: ${{ needs.visual-scope.outputs.strict == 'true' && '1' || '0' }}
+          VISUAL_SKIN: ${{ matrix.skin }}
         run: sh e2e/visual/run.sh "$RUNNER_TEMP/base/frontend/dist" dist
 
       - uses: actions/upload-artifact@v7

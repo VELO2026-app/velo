@@ -188,6 +188,29 @@ export function bundleHas(bundle, text) {
   return bundle.toLowerCase().includes(escaped.toLowerCase())
 }
 
+/** The declarations of a skin cell the dist CSS lacks. A declaration the
+ *  core's variables.css already makes verbatim (a brand that keeps a core
+ *  value) is merged by the CSS minifier: nothing to find. Pure. */
+export function missingTokens(decls, css, goldenDecls) {
+  return decls.filter((d) => !goldenDecls.has(d) && !cssHasDecl(css, d))
+}
+
+/** What of one skin leaked into a core (skinless) build, as labels for
+ *  facts.leaked. A brand named like the core's own default ("VELO", the gold
+ *  skin) cannot be told from the core by its name, so its name is not
+ *  probed; its distinctive token declarations still are. Pure. */
+export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, coreName }) {
+  const leaked = []
+  if (
+    brand.displayName !== coreName &&
+    (bundleHas(js, brand.displayName) || html.includes(brand.displayName))
+  )
+    leaked.push(`${label} displayName`)
+  const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
+  if (foreign.length > 0) leaked.push(`${label} tokens (${foreign.join(', ')})`)
+  return leaked
+}
+
 // -- the gate -----------------------------------------------------------------
 
 /** The gate: dist facts vs every cell's source of record. Pure -- the unit
@@ -441,9 +464,7 @@ function snapshot(cell, skins, goldenDecls, coreName) {
   if (cell.skin) {
     const { brand, decls, files } = skinRecord(cell.skin)
     facts.brandMissing = !bundleHas(js, brand.displayName)
-    // A declaration the core's variables.css already makes verbatim (a brand
-    // that keeps a core value) is merged by the CSS minifier: nothing to find.
-    facts.tokensMissing = decls.filter((d) => !goldenDecls.has(d) && !cssHasDecl(css, d))
+    facts.tokensMissing = missingTokens(decls, css, goldenDecls)
     facts.layout = skinLayout(
       cell.skin.source,
       files,
@@ -456,15 +477,9 @@ function snapshot(cell, skins, goldenDecls, coreName) {
     facts.leaked = existsSync(join(distDir, 'skin')) ? ['dist/skin/ (a package shipped)'] : []
     for (const skin of skins) {
       const { brand, decls } = skinRecord(skin)
-      // A brand named like the core's own default ("VELO", the gold skin)
-      // cannot be told from the core by its name; its tokens still can.
-      if (
-        brand.displayName !== coreName &&
-        (bundleHas(js, brand.displayName) || html.includes(brand.displayName))
+      facts.leaked.push(
+        ...skinLeaks({ label: skin.label, brand, decls, js, html, css, goldenDecls, coreName }),
       )
-        facts.leaked.push(`${skin.label} displayName`)
-      const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
-      if (foreign.length > 0) facts.leaked.push(`${skin.label} tokens (${foreign.join(', ')})`)
     }
   }
   return facts

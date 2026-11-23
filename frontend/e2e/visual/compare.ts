@@ -87,10 +87,13 @@ console.log(
     ? `visual: ${changed.length} of ${all.length} screens changed\n${list}`
     : `visual: no changes in ${all.length} screens`,
 )
+// FE-234: one comparison per brand skin; its artifact is visual-out-<skin>.
+const skin = process.env.VISUAL_SKIN ?? ''
+const artifact = skin ? `visual-out-${skin}` : 'visual-out'
 if (process.env.GITHUB_STEP_SUMMARY) {
   appendFileSync(
     process.env.GITHUB_STEP_SUMMARY,
-    `### Visual diff: ${changed.length} of ${all.length} screens changed\n\n${list || 'no changes'}\n\nReport: artifact \`visual-out\` (report.html).\n`,
+    `### Visual diff${skin ? ` (${skin})` : ''}: ${changed.length} of ${all.length} screens changed\n\n${list || 'no changes'}\n\nReport: artifact \`${artifact}\` (report.html).\n`,
   )
 }
 if (changed.length && process.env.VISUAL_STRICT === '1') process.exit(1)

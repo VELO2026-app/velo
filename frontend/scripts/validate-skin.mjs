@@ -49,7 +49,7 @@ import {
   shipsLogo,
 } from './lib/skin-package.mjs'
 
-/** sha256 -> asset name of the golden VELO skin's identity assets (velo-brand,
+/** sha256 -> asset path of every file of the golden VELO skin (velo-brand,
  *  see the file's `source`). The core carries no VELO look since FE-230, so the
  *  only way to spot a copied VELO logo in another brand is by its hash. */
 const VELO_ASSET_HASHES = new Map(
@@ -172,7 +172,9 @@ function deprecatedTokens(tokensDoc) {
 /** Validates the skin package at `skinDir`. `frontendDir` anchors
  * tokens.json (the token names a skin may set, and the core values the
  * contrast pairs resolve against). Returns the report; `fails.length === 0`
- * means the package may ship. */
+ * means the package may ship. `veloHashes` (sha256 -> path, default: the
+ * golden VELO list) is a test seam.
+ * @internal */
 export function validateSkin(skinDir, frontendDir, veloHashes = VELO_ASSET_HASHES) {
   /** @type {{ fails: string[], warns: string[], manual: string[], passed: string[] }} */
   const out = { fails: [], warns: [], manual: [], passed: [] }
@@ -382,13 +384,11 @@ export function validateSkin(skinDir, frontendDir, veloHashes = VELO_ASSET_HASHE
     if (!/<svg|<\?xml/.test(head)) fail(out, `FAIL assets/${asset}: does not look like an SVG`)
   }
 
-  // A file byte-identical to the golden VELO asset in a brand that is not
+  // A file (any under assets/) byte-identical to the golden VELO file in a brand that is not
   // VELO: a copied logo (FE-234; goodo-brand v0.3.0 carried the VELO mandala
   // and wordmark). A warning: only the owner can tell a deliberate reuse.
   if (brand.displayName !== 'VELO')
-    for (const file of pkg.files.filter(
-      (f) => f.startsWith('assets/') && f.split('/').length === 2,
-    )) {
+    for (const file of pkg.files.filter((f) => f.startsWith('assets/'))) {
       const name = veloHashes.get(
         createHash('sha256')
           .update(readFileSync(join(skinDir, file)))
@@ -397,7 +397,7 @@ export function validateSkin(skinDir, frontendDir, veloHashes = VELO_ASSET_HASHE
       if (name !== undefined)
         warn(
           out,
-          `${file} is byte-identical to the golden VELO asset ${name}: a copied logo in the brand "${brand.displayName}"? Replace it with the brand's own, or confirm the reuse with the owner`,
+          `${file} is byte-identical to the golden VELO file assets/${name}: a copied logo in the brand "${brand.displayName}"? Replace it with the brand's own, or confirm the reuse with the owner`,
         )
     }
 
