@@ -30,6 +30,19 @@ export function rubberBand(distance: number, limit: number): number {
   return (1 - 1 / ((distance * RUBBER_COEFFICIENT) / limit + 1)) * limit
 }
 
+/**
+ * The pull that `rubberBand` shows as `shown` px: its inverse, so a drag can
+ * continue from a panel that is already displayed displaced.
+ *
+ * @param shown - Displayed offset, px (>= 0).
+ * @param limit - The same asymptote as given to `rubberBand`.
+ */
+export function rubberBandInverse(shown: number, limit: number): number {
+  if (shown <= 0) return 0
+  const clamped = Math.min(shown, limit * 0.999)
+  return (limit * (1 / (1 - clamped / limit) - 1)) / RUBBER_COEFFICIENT
+}
+
 /** How far back a velocity sample still counts, ms. */
 const VELOCITY_WINDOW_MS = 100
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createVelocityTracker, rubberBand, springTo } from './sheetGesture'
+import { createVelocityTracker, rubberBand, rubberBandInverse, springTo } from './sheetGesture'
 
 describe('rubberBand', () => {
   it('passes nothing for a pull that has not started', () => {
@@ -15,6 +15,19 @@ describe('rubberBand', () => {
     expect(far).toBeGreaterThan(near)
     expect(far).toBeLessThan(72)
     expect(rubberBand(1e6, 72)).toBeLessThan(72)
+  })
+})
+
+describe('rubberBandInverse', () => {
+  it('undoes rubberBand', () => {
+    for (const pull of [5, 40, 120, 400]) {
+      expect(rubberBandInverse(rubberBand(pull, 72), 72)).toBeCloseTo(pull, 4)
+    }
+  })
+
+  it('stays finite at and past the limit', () => {
+    expect(Number.isFinite(rubberBandInverse(72, 72))).toBe(true)
+    expect(rubberBandInverse(0, 72)).toBe(0)
   })
 })
 

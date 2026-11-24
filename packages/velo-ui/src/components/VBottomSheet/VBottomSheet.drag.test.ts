@@ -292,6 +292,21 @@ describe('VBottomSheet (who owns the gesture)', () => {
   })
 })
 
+describe('VBottomSheet (own-drag controls)', () => {
+  it('an element with touch-action: none keeps its own drag', async () => {
+    mountSheet({}, () => h('div', { class: 'stage', style: 'touch-action: none' }, [h('i', 'x')]))
+    await flush()
+    const inner = panel().querySelector('i')!
+
+    touch('touchstart', inner, 100, 0)
+    touch('touchmove', inner, 110, 16)
+    const move = touch('touchmove', inner, 200, 32)
+
+    expect(move.defaultPrevented).toBe(false)
+    expect(closed).not.toHaveBeenCalled()
+  })
+})
+
 describe('VBottomSheet (position after a gesture)', () => {
   it('a sheet closed by swipe reopens at rest: a 1 px handle move does not close it', async () => {
     mountSheet()
@@ -336,6 +351,26 @@ describe('VBottomSheet (position after a gesture)', () => {
       frames.shift()!(now)
     }
     expect(panel().style.transform).toBe('')
+  })
+
+  it('a drag taken up mid-spring after a pull up continues from the finger, not the banded offset', async () => {
+    mountSheet()
+    await flush()
+    Object.defineProperty(panel(), 'offsetHeight', { value: 600, configurable: true })
+    pointer('pointerdown', handle(), 400, 0)
+    pointer('pointermove', handle(), 300, 400)
+    pointer('pointerup', handle(), 300, 800)
+    frames.shift()!(1000)
+    frames.shift()!(1016)
+    const shown = (): number => Number(/-?[\d.]+(?=px)/.exec(panel().style.transform)?.[0] ?? 0)
+    const before = shown()
+    expect(before).toBeLessThan(0)
+
+    // A new press and a 0 px move must not displace the panel further.
+    pointer('pointerdown', handle(), 500, 1100)
+    pointer('pointermove', handle(), 500, 1116)
+
+    expect(shown()).toBeCloseTo(before, 3)
   })
 
   it('a finger held still before lifting reads as slow: no fling-close', async () => {

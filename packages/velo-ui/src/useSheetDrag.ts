@@ -27,7 +27,7 @@
 
 import { onUnmounted, watch, type Ref } from 'vue'
 import { hasOwnTouchGesture, prefersReducedMotion } from './platform/dom'
-import { createVelocityTracker, rubberBand, springTo } from './sheetGesture'
+import { createVelocityTracker, rubberBand, rubberBandInverse, springTo } from './sheetGesture'
 
 const CLOSE_DISTANCE_MAX_PX = 160
 const CLOSE_VELOCITY_PX_PER_MS = 0.5
@@ -107,8 +107,6 @@ export function useSheetDrag(options: SheetDragOptions): SheetDrag {
   const tracker = createVelocityTracker()
   /** The panel's displayed offset, px (after the rubber band). */
   let shownOffset = 0
-  /** The same offset before the rubber band: where a new drag continues from. */
-  let rawOffset = 0
   let cancelSpring: (() => void) | null = null
 
   let holder: Holder = 'none'
@@ -131,7 +129,6 @@ export function useSheetDrag(options: SheetDragOptions): SheetDrag {
   }
 
   function show(raw: number): void {
-    rawOffset = raw
     shownOffset = raw >= 0 ? raw : -rubberBand(-raw, RUBBER_LIMIT_PX)
     moveTo(shownOffset)
   }
@@ -144,12 +141,13 @@ export function useSheetDrag(options: SheetDragOptions): SheetDrag {
   function resetPosition(): void {
     stopSpring()
     shownOffset = 0
-    rawOffset = 0
   }
 
   function beginDrag(y: number, t: number): void {
     stopSpring()
-    dragFromOffset = rawOffset
+    // Pulled-up displacement is rubber-banded: continue from the finger travel behind it.
+    dragFromOffset =
+      shownOffset >= 0 ? shownOffset : -rubberBandInverse(-shownOffset, RUBBER_LIMIT_PX)
     dragFromY = lastFingerY = y
     moved = false
     tracker.reset()
@@ -165,7 +163,7 @@ export function useSheetDrag(options: SheetDragOptions): SheetDrag {
 
   function springBack(velocityPxPerMs: number): void {
     if (shownOffset === 0 || prefersReducedMotion()) {
-      shownOffset = rawOffset = 0
+      shownOffset = 0
       moveTo(0, '')
       return
     }
@@ -173,7 +171,7 @@ export function useSheetDrag(options: SheetDragOptions): SheetDrag {
       shownOffset,
       velocityPxPerMs * 1000,
       (value) => {
-        shownOffset = rawOffset = value
+        shownOffset = value
         moveTo(value)
       },
       () => {
