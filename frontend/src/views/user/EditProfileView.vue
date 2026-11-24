@@ -64,6 +64,7 @@
         v-model="form.email"
         label="E-mail"
         type="email"
+        kind="email"
         placeholder="you@example.com"
         :aria-invalid="!!emailError || undefined"
         :aria-describedby="emailError ? 'err-email' : undefined"

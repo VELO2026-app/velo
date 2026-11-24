@@ -383,7 +383,7 @@ describe('VBottomSheet (swipe-to-close from the grab zone)', () => {
     expect(liveSheet()).not.toBeNull()
   })
 
-  it('an upward (negative) drag never closes -- dy is clamped at zero', async () => {
+  it('an upward drag never closes (it meets rubber-band resistance instead)', async () => {
     mountSheet({ open: true })
     await flush()
 
