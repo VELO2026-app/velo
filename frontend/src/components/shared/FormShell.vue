@@ -103,7 +103,7 @@
 
         <!-- Question -->
         <div class="form-shell__question">
-          <h3>{{ questionTitle }}</h3>
+          <h2>{{ questionTitle }}</h2>
           <p>{{ questionSubtitle }}</p>
         </div>
 
@@ -259,7 +259,7 @@ const cleanTitle = computed(() => (props.practice ? cleanPracticeTitle(props.pra
   padding: var(--velo-gap-21) var(--space-4) var(--velo-gap-21);
 }
 
-.form-shell__question h3 {
+.form-shell__question h2 {
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   font-weight: 400;

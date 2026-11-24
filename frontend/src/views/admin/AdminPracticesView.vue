@@ -49,6 +49,7 @@
         :when="whenLabel(p)"
         :when-time="whenTime(p)"
         :duration="durationLabel(p)"
+        :heading-level="2"
         @click="openDetail(p)"
       >
         <template #badge>
