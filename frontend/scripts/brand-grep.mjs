@@ -5,16 +5,13 @@
 // brand-places reference tz-i18n §7.2. Modeled on no-cyrillic.mjs (string
 // literals + Vue template text/attrs, comments stripped).
 //
-// GATE 1 -- the brand word. «VELO» in USER STRINGS only inside the reference
-// set; everywhere else it is a hardcoded brand that would ship half-skinned:
-//   src/locales/**            the catalogs -- @:brand links live here
-//   src/pwa/manifest.ts       golden identity defaults (pinned by its tests)
-//   src/platform/skin.ts      CORE_SKIN -- the no-skin build's identity
-//   src/platform/instance.ts  the VITE_BRAND ?? 'VELO' golden default
-//   (the skin brand is a virtual module now, nothing on disk)
-// (index.html placeholders/markers are the other reference
-// carriers by design and are not src/ -- nothing to scan there; skins live
-// in their own package repositories, FE-131.)
+// GATE 1 -- the brand word. «VELO» in a USER STRING anywhere in the code is
+// a hardcoded brand that would ship half-skinned. No file is exempt (FE-231):
+// the brand name lives only in the skin package's brand record (displayName,
+// served by virtual:skin-brand), the catalogs link it as @:brand, and the
+// build without a package carries the core's neutral word (CORE_SKIN).
+// (index.html placeholders/markers are build seams and are not src/;
+// skins live in their own package repositories, FE-131.)
 // Header comments («VELO Frontend --») are NOT user strings: comments are
 // stripped before matching. *.test.ts pin golden copy on purpose (skipped).
 //
@@ -149,19 +146,9 @@ const carriesBrandWord = (s) => {
   for (const re of SEAM_MARKERS) t = t.replace(re, '')
   return BRAND_WORD.test(t)
 }
-// Dir prefixes and exact files where the brand word is contract, not hardcode.
-const BRAND_REFERENCE_DIRS = ['src/locales']
-const BRAND_REFERENCE_FILES = new Set([
-  'src/pwa/manifest.ts',
-  'src/platform/skin.ts',
-  'src/platform/instance.ts',
-])
-
 function brandHits(files) {
   const hits = []
   for (const { path, raw } of files) {
-    if (BRAND_REFERENCE_FILES.has(path)) continue
-    if (BRAND_REFERENCE_DIRS.some((dir) => path.startsWith(dir + '/'))) continue
     const { script, template } = cleanParts(raw)
     // Template text nodes + attribute values (the no-cyrillic.mjs split:
     // tags out, text between them; attrs matched with the word inside).
@@ -443,7 +430,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const look = [...lookText, ...goldenAssetHits(binaries)]
   if (brand.length > 0) {
     console.error(
-      `brand-grep: ${brand.length} brand-word hit(s) outside the reference set -- the brand ships via @:brand/skin/passport, never a literal (tz-i18n §7.2, tz-whitelabel §6):\n`,
+      `brand-grep: ${brand.length} brand-word hit(s) -- the brand name ships only in the skin package (@:brand, virtual:skin-brand), never a literal (tz-i18n §7.2, tz-whitelabel §6):\n`,
     )
     for (const h of brand) console.error('  ' + h)
   }

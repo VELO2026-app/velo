@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { compileMessage } from '@/locales/messageFunction'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 type LocalesModule = typeof import('@/locales')
 type Tree = Record<string, unknown>
@@ -110,9 +111,9 @@ describe('brand (a message function)', () => {
     await mod.setLocale(locale)
     await mod.ensureCatalogs(['master'])
     expect(mod.getLocale()).toBe(locale)
-    expect(mod.t('common.brandName')).toBe('VELO')
-    expect(mod.t('chat.supportTitle')).toContain('VELO')
-    expect(mod.t('masterScreens.masterOnboarding.welcome.text')).toContain('VELO')
+    expect(mod.t('common.brandName')).toBe(SKIN_BRAND)
+    expect(mod.t('chat.supportTitle')).toContain(SKIN_BRAND)
+    expect(mod.t('masterScreens.masterOnboarding.welcome.text')).toContain(SKIN_BRAND)
   })
 
   it.each(['ru', 'en', 'uk'])('renders in %s without a compiler', async (locale) => {
@@ -122,8 +123,8 @@ describe('brand (a message function)', () => {
     // stands in for a precompiled catalog message that links the brand.
     mod.default.global.mergeLocaleMessage(locale, { probe: compileMessage('Support @:brand') })
     withoutCompiler(() => {
-      expect(mod.t('brand')).toBe('VELO')
-      expect(mod.t('probe')).toBe('Support VELO')
+      expect(mod.t('brand')).toBe(SKIN_BRAND)
+      expect(mod.t('probe')).toBe(`Support ${SKIN_BRAND}`)
     })
   })
 
@@ -163,7 +164,7 @@ describe('instance overlays (applyInstanceOverrides)', () => {
       expect(mod.t(key, { count: 5 }, 5)).toBe('5 lots')
     })
     // The rest of the zone catalog is intact around the overlay.
-    expect(mod.t('masterScreens.masterOnboarding.welcome.text')).toContain('VELO')
+    expect(mod.t('masterScreens.masterOnboarding.welcome.text')).toContain(SKIN_BRAND)
   })
 
   it('wait for a locale that is not loaded yet, then win over its catalog', async () => {

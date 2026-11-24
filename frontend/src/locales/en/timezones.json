@@ -1,5 +1,5 @@
 {
-  "_comment": "VELO Frontend -- en seed for the timezone city picker (utils/timezoneCities.ts). English display names for the same curated rows; the live list is the BACKEND catalog (BE-157). city -> EN display name; iana -> IANA zone id exactly as the backend stores it; q -> lowercase search haystack.",
+  "_comment": "en seed for the timezone city picker (utils/timezoneCities.ts). English display names for the same curated rows; the live list is the BACKEND catalog (BE-157). city -> EN display name; iana -> IANA zone id exactly as the backend stores it; q -> lowercase search haystack.",
   "curated": [
     {
       "city": "Moscow",
