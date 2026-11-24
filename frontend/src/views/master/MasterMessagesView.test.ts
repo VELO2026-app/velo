@@ -222,6 +222,27 @@ describe('MasterMessagesView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-chat', params: { id: 'thread-1' } })
   })
 
+  it('a failed list is an error with Retry, not the empty state; Retry shows the rows (FE-259)', async () => {
+    vi.mocked(chatsApi.listChats)
+      .mockRejectedValueOnce(new Error('Failed to fetch'))
+      .mockResolvedValueOnce({ threads: [commsThread()], next_cursor: null })
+    mount()
+    await flush()
+
+    expect(host?.textContent).toContain('Не удалось загрузить сообщения')
+    expect(host?.textContent).toContain('Попробуйте ещё раз')
+    expect(host?.textContent).not.toContain('Здесь появятся переписки с учениками')
+    expect(rows()).toHaveLength(0)
+
+    Array.from(host?.querySelectorAll('button') ?? [])
+      .find((b) => b.textContent?.includes('Повторить'))
+      ?.click()
+    await flush()
+
+    expect(host?.textContent).not.toContain('Не удалось загрузить сообщения')
+    expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Вера Соколова')
+  })
+
   it('empty list shows the honest empty-state', async () => {
     vi.mocked(chatsApi.listChats).mockResolvedValue({ threads: [], next_cursor: null })
     mount()

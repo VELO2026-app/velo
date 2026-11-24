@@ -162,6 +162,12 @@ function text(): string {
   return host?.textContent ?? ''
 }
 
+function showMore(): HTMLButtonElement | undefined {
+  return Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
+    b.textContent?.includes('Показать ещё'),
+  )
+}
+
 beforeEach(() => {
   vi.setSystemTime(NOW)
   pinia = createPinia()
@@ -280,6 +286,60 @@ describe('MyBookingsView', () => {
 
       expect(text()).toContain('Утренняя практика')
       expect(text()).not.toContain('Бронирований нет')
+    })
+
+    it('«Показать ещё»: the next page joins the right section, each booking once, and the control leaves with the last page (FE-259)', async () => {
+      vi.mocked(bookingsApi.getMyBookings)
+        .mockResolvedValueOnce(
+          page(
+            [
+              booking(
+                'b1',
+                {},
+                { title: 'Утренняя практика', scheduled_at: '2026-07-25T10:00:00Z' },
+              ),
+              booking(
+                'b2',
+                { status: 'attended' },
+                { title: 'Дневная практика', scheduled_at: '2026-07-10T10:00:00Z' },
+              ),
+            ],
+            3,
+          ),
+        )
+        .mockResolvedValueOnce({
+          items: [
+            booking(
+              'b3',
+              { status: 'attended' },
+              { title: 'Вечерняя практика', scheduled_at: '2026-07-05T10:00:00Z' },
+            ),
+          ],
+          total: 3,
+          limit: 20,
+          offset: 2,
+        })
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Вечерняя практика')
+      showMore()?.click()
+      await flush()
+
+      // The next page is asked from the number of rows already loaded.
+      expect(vi.mocked(bookingsApi.getMyBookings).mock.calls.at(-1)).toEqual([undefined, 20, 2])
+      expect(host?.querySelectorAll('.bookings__list > *')).toHaveLength(3)
+      for (const title of ['Утренняя практика', 'Дневная практика', 'Вечерняя практика']) {
+        expect(text().split(title)).toHaveLength(2)
+      }
+      // The new page's past booking sits in the past section beside the old one.
+      const [upcomingSection, pastSection] = Array.from(
+        host?.querySelectorAll('.bookings__section') ?? [],
+      )
+      expect(upcomingSection?.textContent).toContain('Утренняя практика')
+      expect(pastSection?.textContent).toContain('Дневная практика')
+      expect(pastSection?.textContent).toContain('Вечерняя практика')
+      expect(showMore()).toBeUndefined()
     })
 
     it('a load-more failure keeps content visible AND tells the user (№442)', async () => {
