@@ -357,6 +357,17 @@
               <VButton variant="ghost" @click="loadMoreReviews">{{ t('common.showMore') }}</VButton>
             </div>
           </template>
+          <!-- A failed read is not "no reviews yet" (FE-242). -->
+          <VEmptyState
+            v-else-if="reviewsFailed"
+            variant="note"
+            :title="t('common.loadError')"
+            data-testid="reviews-error"
+          >
+            <VButton size="sm" variant="outline" @click="loadReviews">{{
+              t('common.retry')
+            }}</VButton>
+          </VEmptyState>
           <VEmptyState
             v-else
             variant="note"
@@ -604,6 +615,7 @@ const REVIEWS_PREVIEW = 10
 const reviews = ref<ReviewItem[]>([])
 const reviewsTotal = ref(0)
 const reviewsLoading = ref(false)
+const reviewsFailed = ref(false)
 const hasMoreReviews = computed((): boolean => reviews.value.length < reviewsTotal.value)
 
 // First 10 + the show-more expander
@@ -621,12 +633,14 @@ function expandReviews(): void {
 
 async function loadReviews(): Promise<void> {
   reviewsLoading.value = true
+  reviewsFailed.value = false
   try {
     const res = await getPracticeReviews(practiceId, REVIEWS_PAGE, 0)
     reviews.value = res.items
     reviewsTotal.value = res.total
   } catch {
-    // Non-fatal: the rest of the detail view stays usable; the section shows empty.
+    // Non-fatal: the rest of the detail view stays usable; the section shows an error with Retry.
+    reviewsFailed.value = true
   } finally {
     reviewsLoading.value = false
   }

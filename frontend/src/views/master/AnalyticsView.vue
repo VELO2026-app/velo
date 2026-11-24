@@ -88,7 +88,16 @@
              BE-77). The section (heading included) is NOT shown when there are
              none. Card tap goes to the student's profile; the message button
              is @click.stop -- it sends a message without navigating. -->
-        <section v-if="attentionItems.length > 0" class="analytics__section">
+        <!-- A failed read must not pass for "nobody needs attention" (FE-242). -->
+        <section v-if="reviewsFailed" class="analytics__section" data-testid="attention-error">
+          <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.attention') }}</h2>
+          <p>{{ t('common.loadError') }}</p>
+          <VButton size="sm" variant="outline" @click="loadReviews">{{
+            t('common.retry')
+          }}</VButton>
+        </section>
+
+        <section v-else-if="attentionItems.length > 0" class="analytics__section">
           <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.attention') }}</h2>
           <div
             v-for="(item, i) in attentionItems"
@@ -331,8 +340,10 @@ const hiddenPracticesCount = computed(() =>
 
 const REVIEWS_PAGE = 20
 const reviews = ref<MasterReviewItem[]>([])
+const reviewsFailed = ref(false)
 
 async function loadReviews(): Promise<void> {
+  reviewsFailed.value = false
   try {
     // E1: fetch the attention reviews server-side (attention=true: ratings
     // 1-4, BE-77) — the needs-attention block is the only consumer, so a
@@ -342,7 +353,7 @@ async function loadReviews(): Promise<void> {
     const res = await getMasterReviews(REVIEWS_PAGE, 0, true)
     reviews.value = res.items
   } catch {
-    /* leave the section empty on error */
+    reviewsFailed.value = true
   }
 }
 

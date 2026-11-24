@@ -344,4 +344,26 @@ describe('AnalyticsView (master)', () => {
     expect(text()).toContain('Требуют внимания')
     expect(text()).toContain('Анна')
   })
+
+  it('a failed attention read shows an error with Retry, not a hidden block; Retry recovers (FE-242)', async () => {
+    vi.mocked(mastersApi.getMasterReviews).mockRejectedValueOnce(new TypeError('boom'))
+    mount()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="attention-error"]')).not.toBeNull()
+
+    vi.mocked(mastersApi.getMasterReviews).mockResolvedValue({
+      items: [attentionReview()],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    } as never)
+    Array.from(host!.querySelectorAll('button'))
+      .find((b) => b.textContent?.includes('Повторить'))!
+      .click()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="attention-error"]')).toBeNull()
+    expect(text()).toContain('Анна')
+  })
 })

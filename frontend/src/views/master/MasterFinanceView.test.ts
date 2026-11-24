@@ -68,12 +68,16 @@ interface Profile {
   frozen_cents: number
   payout: PayoutDetails | null
 }
-const masterState = reactive<{ profile: Profile | null }>({ profile: null })
+const masterState = reactive<{ profile: Profile | null; failed: boolean }>({
+  profile: null,
+  failed: false,
+})
 const reloadProfile = vi.fn()
 vi.mock('@/composables/queries/master', () => ({
   useMasterProfile: () => ({
     profile: computed(() => masterState.profile),
     reload: reloadProfile,
+    failed: computed(() => masterState.failed),
   }),
   setMasterProfile: (_queryCache: unknown, update: (p: Profile) => Profile) => {
     if (masterState.profile) masterState.profile = update(masterState.profile)
@@ -170,6 +174,7 @@ const PAYPAL: PayoutDetails = { method: 'paypal', details: { email: 'master@exam
 beforeEach(() => {
   vi.setSystemTime(NOW)
   masterState.profile = { available_cents: 100000, frozen_cents: 0, payout: PAYPAL }
+  masterState.failed = false
   reloadProfile.mockReset().mockResolvedValue({ status: 'success' })
   vi.mocked(mastersApi.getMyWithdrawals).mockReset().mockResolvedValue(page([]))
   vi.mocked(mastersApi.createWithdrawal).mockReset().mockResolvedValue(withdrawal('w1'))
@@ -191,6 +196,19 @@ afterEach(() => {
 
 describe('MasterFinanceView', () => {
   describe('balance', () => {
+    it('an unread profile shows an error with Retry, not €0,00 and «add a method first» (FE-242)', async () => {
+      masterState.profile = null
+      masterState.failed = true
+      mount()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+      expect(host?.querySelector('.finance-view__balance-value')).toBeNull()
+      expect(button('Запросить вывод')).toBeUndefined()
+      button('Повторить')!.click()
+      expect(reloadProfile).toHaveBeenCalled()
+    })
+
     it('renders the available balance from the profile', async () => {
       masterState.profile = { available_cents: 123456, frozen_cents: 0, payout: PAYPAL }
       mount()
@@ -687,6 +705,22 @@ describe('MasterFinanceView', () => {
       expect(pick('.finance-view__balance-value')).toContain('1 000,00')
       expect(button('Запросить вывод')).toBeDefined()
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить историю выводов')
+      // FE-242: and the list itself says "error + Retry", not "no withdrawals yet".
+      expect(host?.querySelector('[data-testid="history-error"]')).not.toBeNull()
+      expect(host?.textContent).not.toContain('Выводов ещё не было')
+    })
+
+    it('Retry after a history failure reloads the first page (FE-242)', async () => {
+      vi.mocked(mastersApi.getMyWithdrawals)
+        .mockRejectedValueOnce(new TypeError('boom'))
+        .mockResolvedValueOnce(page([withdrawal('w1')]))
+      mount()
+      await flush()
+      button('Повторить')!.click()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="history-error"]')).toBeNull()
+      expect(host?.querySelectorAll('.finance-view__hitem')).toHaveLength(1)
     })
 
     it('offers «Показать ещё» only while the loaded count is short of the total', async () => {

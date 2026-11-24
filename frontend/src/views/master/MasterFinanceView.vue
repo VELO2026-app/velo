@@ -32,8 +32,16 @@
   <div class="finance-view">
     <VHeader :title="t('masterScreens.masterFinance.title')" show-back @back="router.back()" />
 
+    <!-- The profile holds the balance and the payout method: unread, a "€0,00" and
+         "add a method first" would be a lie, and a withdrawal against it a guess
+         (FE-242). -->
+    <div v-if="profileFailed" class="finance-view__section" data-testid="screen-error">
+      <p class="finance-view__empty-text">{{ t('common.loadError') }}</p>
+      <VButton variant="outline" @click="reloadProfile">{{ t('common.retry') }}</VButton>
+    </div>
+
     <!-- ===================== BALANCE ===================== -->
-    <div class="finance-view__balance">
+    <div v-if="!profileFailed" class="finance-view__balance">
       <div class="finance-view__balance-label">
         {{ t('masterScreens.masterFinance.availableToWithdraw') }}
       </div>
@@ -45,7 +53,7 @@
     </div>
 
     <!-- ===================== PAYMENT METHOD (= configured payout, B) ===================== -->
-    <section class="finance-view__section">
+    <section v-if="!profileFailed" class="finance-view__section">
       <h2 class="finance-view__title">{{ t('masterScreens.masterFinance.method.label') }}</h2>
 
       <template v-if="!showPayoutForm">
@@ -159,7 +167,7 @@
     </section>
 
     <!-- ===================== WITHDRAW AMOUNT (always visible) ===================== -->
-    <section class="finance-view__section">
+    <section v-if="!profileFailed" class="finance-view__section">
       <h2 class="finance-view__title">
         {{ t('masterScreens.masterFinance.fields.amount') }}<span class="finance-view__req">*</span>
       </h2>
@@ -219,6 +227,17 @@
 
       <div v-if="historyLoading && withdrawals.length === 0" class="finance-view__loader">
         <VLoader size="md" />
+      </div>
+
+      <div
+        v-else-if="historyFailed && withdrawals.length === 0"
+        class="finance-view__empty-text"
+        data-testid="history-error"
+      >
+        <p>{{ t('common.loadError') }}</p>
+        <VButton size="sm" variant="outline" @click="reloadHistory">{{
+          t('common.retry')
+        }}</VButton>
       </div>
 
       <p v-else-if="!historyLoading && withdrawals.length === 0" class="finance-view__empty-text">
@@ -293,7 +312,7 @@ const router = useRouter()
 const toast = useToast()
 const queryCache = useQueryCache()
 // Balances and payout details. Usually already loaded by masterStatusGuard.
-const { profile: masterProfile, reload: reloadProfile } = useMasterProfile()
+const { profile: masterProfile, reload: reloadProfile, failed: profileFailed } = useMasterProfile()
 const viewerTz = useViewerTimezone()
 
 // ---------------------------------------------------------------------------
@@ -564,11 +583,14 @@ const withdrawals = ref<WithdrawalResponse[]>([])
 const historyTotal = ref(0)
 const historyOffset = ref(0)
 const historyLoading = ref(false)
+/** The first page failed: the list says so with Retry, never "no withdrawals yet" (FE-242). */
+const historyFailed = ref(false)
 
 const hasMore = computed(() => withdrawals.value.length < historyTotal.value)
 
 async function reloadHistory(): Promise<void> {
   historyLoading.value = true
+  historyFailed.value = false
   historyOffset.value = 0
   try {
     const data = await getMyWithdrawals(LIMIT, 0)
@@ -579,6 +601,7 @@ async function reloadHistory(): Promise<void> {
     // Surface the failure instead of rendering an empty history as if
     // "no withdrawals yet" -- a master with pending payouts must not be
     // told they have none. Mirrors loadMoreWithdrawals below.
+    historyFailed.value = true
     toast.error(t('masterScreens.masterFinance.toast.historyLoadFailed'))
   } finally {
     historyLoading.value = false

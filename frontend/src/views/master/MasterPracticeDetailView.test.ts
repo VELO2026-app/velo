@@ -1063,8 +1063,24 @@ describe('MasterPracticeDetailView', () => {
 
       expect(text()).toContain('Прошедшая йога')
       expect(text()).toContain('Присутствовало')
-      expect(text()).toContain('Отзывов пока нет')
+      // FE-242: the section says "error + Retry", not "no reviews yet".
+      expect(text()).not.toContain('Отзывов пока нет')
+      expect(host?.querySelector('[data-testid="reviews-error"]')).not.toBeNull()
       expect(text()).not.toContain('Не удалось загрузить практику')
+
+      vi.mocked(practicesApi.getPracticeReviews).mockResolvedValue({
+        items: [],
+        total: 0,
+        limit: 10,
+        offset: 0,
+      })
+      Array.from(host!.querySelectorAll('button'))
+        .find((b) => b.textContent?.includes('Повторить'))!
+        .click()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="reviews-error"]')).toBeNull()
+      expect(text()).toContain('Отзывов пока нет')
     })
 
     it('caps the preview at 10 and offers «посмотреть еще»', async () => {
