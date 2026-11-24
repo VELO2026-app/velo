@@ -16,10 +16,17 @@
 // way, since detail is never consulted either way.
 // =============================================================================
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { extractApiError } from '@/composables/useApiError'
 import { ApiResponseError } from '@/api/client'
 import { errorMessage } from '@/api/errorMessages'
+
+// A window the real constant (24) does not have, so the number in the phrase
+// can only come from the constant, never from the catalog text.
+vi.mock('@/utils/constants', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/constants')>()),
+  CHECKIN_WINDOW_H: 12,
+}))
 
 describe('extractApiError', () => {
   it('returns the catalog phrase for an ApiResponseError whose code is mapped, ignoring detail', () => {
@@ -58,6 +65,19 @@ describe('extractApiError', () => {
   it('returns the fallback for a non-Error thrown value', () => {
     const result = extractApiError('a raw string throw', 'fallback message')
     expect(result).toBe('fallback message')
+  })
+
+  describe('a phrase with a placeholder (checkin_window_not_open)', () => {
+    const phrase = 'Check-in на практику откроется за 12 ч до старта'
+
+    it('errorMessage() fills the number from the check-in window constant', () => {
+      expect(errorMessage('checkin_window_not_open')).toBe(phrase)
+    })
+
+    it('extractApiError() fills it too', () => {
+      const e = new ApiResponseError(400, 'raw English detail', 'checkin_window_not_open')
+      expect(extractApiError(e, 'fallback')).toBe(phrase)
+    })
   })
 
   describe('trace code suffix', () => {

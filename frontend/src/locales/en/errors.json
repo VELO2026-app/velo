@@ -24,7 +24,7 @@
     "role_not_allowed": "This role is not available for your account",
     "no_active_booking": "You have no confirmed booking for this practice",
     "checkin_window_closed": "Check-in is closed — the practice has already started",
-    "checkin_window_not_open": "Check-in opens 24 hours before the practice starts",
+    "checkin_window_not_open": "Check-in opens {hours} hours before the practice starts",
     "school_name_taken": "You already have a school with this name",
     "school_creation_not_allowed": "Only a master granted this right by the administrator can create schools",
     "curator_cannot_leave": "A curator cannot leave their own school. Transfer it to another master or delete it.",

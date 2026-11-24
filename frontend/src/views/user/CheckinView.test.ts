@@ -116,6 +116,7 @@ import { upsertCheckin, listDiaryFeed } from '@/api/diary'
 import { getMyBookings, skipCheckin } from '@/api/bookings'
 import { getPractice } from '@/api/practices'
 import { useAuthStore } from '@/stores/auth'
+import { CHECKIN_WINDOW_H } from '@/utils/constants'
 import type { BookingWithPracticeResponse, PracticeResponse, UserResponse } from '@/api/types'
 
 // -- seams: the api wrappers the three real stores import (velo-idiom §4).
@@ -930,7 +931,12 @@ describe('CheckinView', () => {
       it.each([
         [404, 'no_active_booking', 'У вас нет подтверждённой брони на эту практику'],
         [400, 'checkin_window_closed', 'Check-in закрыт — практика уже началась'],
-        [400, 'checkin_window_not_open', 'Check-in на практику откроется за сутки до старта'],
+        // The number is the frontend mirror of the backend window, not a literal.
+        [
+          400,
+          'checkin_window_not_open',
+          `Check-in на практику откроется за ${CHECKIN_WINDOW_H} ч до старта`,
+        ],
       ])('%s %s shows its own phrase', async (status, code, phrase) => {
         upsertCheckinMock.mockRejectedValue(new ApiResponseError(status, 'English detail', code))
         mount()

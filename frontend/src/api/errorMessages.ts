@@ -78,6 +78,7 @@
 // =============================================================================
 
 import i18n from '@/locales'
+import { CHECKIN_WINDOW_H } from '@/utils/constants'
 
 /** Machine-readable list of backend error codes the errors catalog must cover (checked by the key audit). */
 export const ERROR_CODES = [
@@ -143,12 +144,42 @@ export const ERROR_CODES = [
   'validation_error',
 ] as const
 
+/**
+ * Named values a code's catalog phrase takes (placeholders such as `{hours}`).
+ *
+ * @remarks
+ * Every path that shows a catalog phrase reads it through
+ * knownErrorMessage(), so a placeholder is filled here once and never
+ * reaches the screen raw. `checkin_window_not_open` carries the check-in
+ * window in hours (i18n:errors.checkin_window_not_open). The backend sets the
+ * window per instance (settings.checkin_window_hours) and sends no number in
+ * the error, so the value is the frontend mirror CHECKIN_WINDOW_H; the two
+ * must agree.
+ */
+const ERROR_PARAMS: Readonly<Record<string, Readonly<Record<string, number>>>> = {
+  checkin_window_not_open: { hours: CHECKIN_WINDOW_H },
+}
+
 /** Whether the catalog carries a phrase for this backend code. */
 export function hasErrorMessage(code: string): boolean {
   const key = `errors.${code}`
   // The seed catalog (ru) is the complete one: check it first, then the
   // active locale (an instance overlay may cover a code the seed does not).
   return i18n.global.te(key, 'ru') || i18n.global.te(key)
+}
+
+/**
+ * The catalog phrase for a backend code with its placeholders filled, or
+ * null when the catalog has no phrase for the code.
+ *
+ * @remarks
+ * The one place a phrase is read from the `errors` catalog by code:
+ * errorMessage() and extractApiError() both use it, so a placeholder
+ * phrase (see ERROR_PARAMS) is filled on every path.
+ */
+export function knownErrorMessage(code: string): string | null {
+  if (!hasErrorMessage(code)) return null
+  return i18n.global.t(`errors.${code}`, ERROR_PARAMS[code] ?? {})
 }
 
 /**
@@ -164,6 +195,5 @@ export function hasErrorMessage(code: string): boolean {
  * without an assertion at any call site.
  */
 export function errorMessage(code: string): string {
-  const key = `errors.${code}`
-  return hasErrorMessage(code) ? i18n.global.t(key) : i18n.global.t('errors.generic')
+  return knownErrorMessage(code) ?? i18n.global.t('errors.generic')
 }
