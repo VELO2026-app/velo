@@ -42,7 +42,12 @@
     <TargetUserCard :name="studentName" :avatar-url="avatarUrl" class="add-to-group__card" />
 
     <p class="add-to-group__label">{{ t('shared.groups.choose') }}</p>
-    <div v-if="customGroups.length" class="add-to-group__chips">
+    <!-- The list of groups could not be read: "no groups" would be a lie (FE-257). -->
+    <LoadErrorState v-if="groupsFailed" @retry="emit('retryGroups')" />
+    <div v-else-if="groupsLoading" class="add-to-group__loading">
+      <VLoader size="sm" />
+    </div>
+    <div v-else-if="customGroups.length" class="add-to-group__chips">
       <VChip
         v-for="g in customGroups"
         :key="g.id"
@@ -69,8 +74,9 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { ref, computed } from 'vue'
-import { VBottomSheet, VChip, VCheckbox } from '@/components/ui'
+import { VBottomSheet, VChip, VCheckbox, VLoader } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
+import LoadErrorState from './LoadErrorState.vue'
 import { addGroupMember, removeGroupMember } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
 
@@ -86,6 +92,12 @@ const props = withDefaults(
     avatarUrl?: string | null
     /** The master's custom groups only -- never the two virtuals. */
     customGroups: GroupListItem[]
+    /** The read of `customGroups` failed: the sheet offers Retry (`retryGroups`)
+     *  instead of an empty list that would read as "no groups" (FE-257). */
+    groupsFailed?: boolean
+    /** The read of `customGroups` is running: a loader stands in for the list, so
+     *  a Retry in flight never shows "no groups" (FE-257). */
+    groupsLoading?: boolean
     /** Group ids the student is ALREADY a member of, among `customGroups`
      *  (T24-35) -- drives VChip's darker "existing" state. Best-effort:
      *  an empty array (the default) just means no chip gets the darker
@@ -99,10 +111,12 @@ const props = withDefaults(
   }>(),
   {
     existingGroupIds: () => [],
+    groupsFailed: false,
+    groupsLoading: false,
   },
 )
 
-const emit = defineEmits<{ close: []; saved: [] }>()
+const emit = defineEmits<{ close: []; saved: []; retryGroups: [] }>()
 
 const toast = useToast()
 const selected = ref<Set<string>>(new Set())
@@ -169,6 +183,12 @@ async function onSave(): Promise<void> {
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-4);
+}
+
+.add-to-group__loading {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 var(--space-4);
 }
 
 .add-to-group__empty {

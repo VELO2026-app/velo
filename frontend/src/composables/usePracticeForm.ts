@@ -241,6 +241,13 @@ export interface PracticeFormRules {
   checkFuture: boolean
   /** Reference instant in epoch ms. @defaultValue Date.now() */
   now?: number
+  /**
+   * The master's groups are not read (running or failed) and the audience is the
+   * saved "specific groups" one: the selection could not be resolved, so an empty
+   * selection is not a choice to refuse. Edit sets it so a change of the title
+   * saves while the list is unknown (FE-256); the PATCH carries no audience then.
+   */
+  groupsUnread?: boolean
 }
 
 function noErrors(): PracticeFormErrors {
@@ -298,7 +305,7 @@ export function validatePracticeForm(
   }
   // The backend's own checks: group_ids non-empty for 'groups', school_id
   // set for 'schools'.
-  if (v.audience_kind === 'groups' && v.audience_group_ids.length === 0) {
+  if (v.audience_kind === 'groups' && v.audience_group_ids.length === 0 && !rules.groupsUnread) {
     e.audience_group_ids = t('masterScreens.createPractice.validation.chooseGroup')
   }
   if (v.audience_kind === 'schools' && v.audience_school_id === null) {
@@ -511,23 +518,40 @@ export function isMeaningfulPracticeDraft(d: Record<string, unknown>): boolean {
  *
  * @remarks The deleted bucket is a system slug and the default students
  * group cannot be targeted either; getGroups() returns both next to the
- * custom ones, so they are filtered here. A failure toasts instead of an
- * empty list that would read as "no groups yet".
+ * custom ones, so they are filtered here. A failure toasts and sets `failed`
+ * (the audience picker then offers Retry) instead of an empty list that would
+ * read as "no groups yet" (FE-256).
  * @param onLoaded - Runs after the list landed (the edit screen re-resolves
  *   its saved group names to ids).
+ * @returns The groups, whether a read is running (`loading`) or the last one
+ *   failed (`failed`), and `reload` to ask again.
  */
-export function usePracticeCustomGroups(onLoaded?: () => void): Ref<GroupListItem[]> {
+export function usePracticeCustomGroups(onLoaded?: () => void): {
+  groups: Ref<GroupListItem[]>
+  loading: Ref<boolean>
+  failed: Ref<boolean>
+  reload: () => Promise<void>
+} {
   const groups = ref<GroupListItem[]>([])
+  const loading = ref(false)
+  const failed = ref(false)
   const toast = useToast()
+  async function reload(): Promise<void> {
+    loading.value = true
+    failed.value = false
+    try {
+      const res = await getGroups()
+      groups.value = res.items.filter((g) => g.kind === 'custom')
+      onLoaded?.()
+    } catch {
+      failed.value = true
+      toast.error(t('masterScreens.createPractice.error.loadGroups'))
+    } finally {
+      loading.value = false
+    }
+  }
   onMounted(() => {
-    void getGroups()
-      .then((res) => {
-        groups.value = res.items.filter((g) => g.kind === 'custom')
-        onLoaded?.()
-      })
-      .catch(() => {
-        toast.error(t('masterScreens.createPractice.error.loadGroups'))
-      })
+    void reload()
   })
-  return groups
+  return { groups, loading, failed, reload }
 }

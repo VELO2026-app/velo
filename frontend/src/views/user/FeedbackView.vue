@@ -15,7 +15,10 @@
                                -- and a way back;
     no_show / only cancelled -> feedback is not available here, and why;
     not in the loaded list  -> the form, as before F4 (the list is one page;
-                               the server stays the judge).
+                               the server stays the judge);
+    the list failed         -> the load error with Retry (i18n:common.loadError):
+                               the verdicts above and the one-feedback guard
+                               all read the list, so no answer is not "open".
 
   Route: /user/feedback/:practiceId
   Param: practiceId (practice UUID)
@@ -28,6 +31,7 @@
     <div v-if="feedbackGate === 'loading'" class="feedback-gate__loader">
       <VLoader />
     </div>
+    <LoadErrorState v-else-if="feedbackGate === 'error'" variant="primary" @retry="retryBookings" />
     <VEmptyState
       v-else-if="feedbackGate === 'waiting'"
       icon="calendar"
@@ -128,6 +132,7 @@ import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import { VHeader } from '@/components/layout'
+import LoadErrorState from '@/components/shared/LoadErrorState.vue'
 import { IconHeart, IconCalendar } from '@/components/icons'
 import FormShell from '@/components/shared/FormShell.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'
@@ -136,7 +141,13 @@ import { MOOD_SCALE_DEFAULT_SCORE } from '@/utils/moodScale'
 const route = useRoute()
 const router = useRouter()
 const practicesStore = usePracticesStore()
-const { bookings, settled: bookingsSettled } = useMyBookings()
+const {
+  bookings,
+  settled: bookingsSettled,
+  loading: bookingsLoading,
+  failed: bookingsFailed,
+  refetch: refetchBookings,
+} = useMyBookings()
 const diaryStore = useDiaryStore()
 const toast = useToast()
 
@@ -176,13 +187,17 @@ const alreadyGaveFeedback = computed<boolean>(() =>
  * Keys on this practice's booking in the loaded list: a live one (not
  * cancelled) decides; only a cancelled one means none is left. Absent from
  * `the list -> 'open'`: the list is a single page, and the server, not a
- * guess, then says whether the feedback lands.
+ * guess, then says whether the feedback lands. A list that FAILED is none of
+ * those: with no list there is no verdict and no one-feedback guard, so the
+ * gate is 'error' (a retry in flight is 'loading' again).
  */
-type FeedbackGate = 'loading' | 'open' | 'waiting' | 'not_attended' | 'cancelled'
+type FeedbackGate = 'loading' | 'error' | 'open' | 'waiting' | 'not_attended' | 'cancelled'
 const feedbackGate = computed<FeedbackGate>(() => {
   // Until the booking list answered, the gate cannot know: neither a form nor
-  // a verdict. A failed list falls back to the form and the server judges.
-  if (!bookingsSettled.value) return 'loading'
+  // a verdict. `bookingsLoading` also covers a retry after a failed first load
+  // (the query stays in its error status while the retry runs).
+  if (bookingsLoading.value || !bookingsSettled.value) return 'loading'
+  if (bookingsFailed.value) return 'error'
   const ofPractice = bookings.value.filter((b) => b.practice_id === practiceId)
   const live = ofPractice.find((b) => b.status !== 'cancelled')
   if (live) {
@@ -233,6 +248,11 @@ function goToDiary(): void {
 
 function goToDashboard(): void {
   void router.push({ name: 'user-dashboard' })
+}
+
+// Retry of the failed booking list (the load-error state of the gate).
+function retryBookings(): void {
+  void refetchBookings()
 }
 
 // Named so the error rung's retry button (i18n:common.retry) can re-run exactly what onMounted ran.
