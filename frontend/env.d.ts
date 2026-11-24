@@ -129,4 +129,6 @@ declare module 'virtual:skin-tokens.css'
 declare module 'virtual:skin-brand' {
   export const SKIN_BRAND: string
   export const SKIN_HAS_LOGO: boolean
+  /** The brand's support address; null = no address line (FE-251). */
+  export const SKIN_SUPPORT_EMAIL: string | null
 }

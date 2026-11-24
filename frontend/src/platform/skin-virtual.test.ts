@@ -52,15 +52,21 @@ describe('skinVirtualModules', () => {
     expect(serve(plugin, SKIN_BRAND_ID)).toContain(
       `SKIN_BRAND = ${JSON.stringify(CORE_SKIN.displayName)}`,
     )
+    expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_SUPPORT_EMAIL = null')
   })
 
-  it('skin build: the skin tokens and its display name', () => {
+  it('skin build: the skin tokens, its display name and support address', () => {
     const dir = publicWithTokens({ primary: { $value: '#123456' } })
     const skin = readSkin(dir)
     expect(skin).not.toBeNull()
-    const plugin = skinVirtualModules(dir, { ...skin!, displayName: 'Yoga | {Life}' })
+    const plugin = skinVirtualModules(dir, {
+      ...skin!,
+      displayName: 'Yoga | {Life}',
+      supportEmail: 'help@yoga.example',
+    })
     expect(serve(plugin, SKIN_TOKENS_ID)).toContain('--velo-primary: #123456;')
     expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_BRAND = "Yoga | {Life}"')
+    expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_SUPPORT_EMAIL = "help@yoga.example"')
   })
 
   it('leaves foreign ids alone', () => {
