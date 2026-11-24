@@ -60,7 +60,7 @@ const items = computed(() => pagerItems(props.page, Math.ceil(props.total / prop
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4) var(--space-2);
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .people-pager__pages {
@@ -102,6 +102,6 @@ const items = computed(() => pagerItems(props.page, Math.ceil(props.total / prop
 .people-pager__gap {
   min-width: 24px;
   text-align: center;
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 </style>

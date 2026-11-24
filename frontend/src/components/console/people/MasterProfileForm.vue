@@ -173,7 +173,12 @@
         <template #edit>
           <MethodTaxonomyPicker v-model="methodsDraft" />
         </template>
-        <MethodTaxonomyPicker v-if="hasParsedMethods" :model-value="methods" readonly />
+        <MethodTaxonomyPicker
+          v-if="hasParsedMethods"
+          class="profile-form__picker"
+          :model-value="methods"
+          readonly
+        />
         <div v-else-if="methods.length" class="profile-form__chips">
           <VChip v-for="m in methods" :key="m" size="md">{{ m }}</VChip>
         </div>
@@ -444,6 +449,14 @@ async function saveField(): Promise<void> {
 }
 
 .profile-form__muted {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
+}
+
+/* The read-only summary sits in the value column like the other rows: the
+   picker's own card backdrop and padding would push it off the column. */
+.profile-form__picker :deep(.mtp__chip-card) {
+  padding: 0;
+  background: none;
+  box-shadow: none;
 }
 </style>

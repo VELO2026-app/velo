@@ -203,7 +203,7 @@ async function onRevoke(): Promise<void> {
 
 .rights-card__hint {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .rights-card__hint--wide {

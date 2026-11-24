@@ -231,19 +231,6 @@ function toQueue(): void {
   min-width: 0;
 }
 
-/* The menu folds to icons at the same breakpoint: the summary goes on top of
-   the cards instead of squeezing them into half a tablet. */
-@media (max-width: 1199px) {
-  .master-detail {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .master-detail__side {
-    flex: 0 0 auto;
-  }
-}
-
 .master-summary {
   display: flex;
   align-items: center;
@@ -266,7 +253,7 @@ function toQueue(): void {
 .master-summary__email,
 .master-summary__muted {
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
   overflow-wrap: anywhere;
 }
 
@@ -305,5 +292,31 @@ function toQueue(): void {
   margin: 0;
   font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
+}
+
+/* The menu folds to icons at the same breakpoint: the summary goes on top of
+   the cards instead of squeezing them into half a tablet. */
+@media (max-width: 1199px) {
+  .master-detail {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .master-detail__side {
+    flex: 0 0 auto;
+  }
+
+  /* The counters in one row instead of four. */
+  .master-summary__stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .master-summary__stat {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
 }
 </style>

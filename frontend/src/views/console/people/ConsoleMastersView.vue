@@ -62,22 +62,10 @@
             />
           </template>
           <template #cell-methods="{ row }">
-            <div class="masters-chips">
-              <template v-if="row.chips.length">
-                <VChip
-                  v-for="(chip, i) in row.chips.slice(0, MAX_CHIPS)"
-                  :key="`${chip.label}-${i}`"
-                  size="sm"
-                  :active="!chip.muted"
-                >
-                  {{ chip.label }}
-                </VChip>
-                <span v-if="row.chips.length > MAX_CHIPS" class="masters-muted">
-                  +{{ row.chips.length - MAX_CHIPS }}
-                </span>
-              </template>
-              <span v-else class="masters-muted">{{ DASH }}</span>
-            </div>
+            <span v-if="row.directions" class="masters-methods" :title="row.methods">{{
+              row.directions
+            }}</span>
+            <span v-else class="masters-muted">{{ DASH }}</span>
           </template>
           <template #cell-schools="{ row }">
             <VBadge v-if="(row.master.schools_count ?? 0) > 0" variant="blue">
@@ -114,7 +102,7 @@ import { t, getLocale } from '@/locales'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
-import { VBadge, VButton, VChip, VEmptyState, VLoader, VSegment } from '@/components/ui'
+import { VBadge, VButton, VEmptyState, VLoader, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
@@ -139,8 +127,6 @@ import { masterDisplayName, masterStatusVariant } from '@/utils/adminHelpers'
 import { formatMoney } from '@/utils/format'
 
 const DASH = '—'
-/** Method chips shown in a row; the rest is a "+N". */
-const MAX_CHIPS = 3
 
 const router = useRouter()
 const toast = useToast()
@@ -158,7 +144,19 @@ onFailedRequest(query, (e) =>
 
 // One row per master: ConsoleTable wants a plain record, the cells read the master.
 const rows = computed(() =>
-  (query.data.value?.items ?? []).map((m) => ({ id: m.id, master: m, chips: methodChips(m) })),
+  (query.data.value?.items ?? []).map((m) => {
+    const chips = methodChips(m)
+    return {
+      id: m.id,
+      master: m,
+      // The row names the directions; the tooltip carries the styles too.
+      directions: chips
+        .filter((c) => !c.muted)
+        .map((c) => c.label)
+        .join(', '),
+      methods: chips.map((c) => c.label).join(', '),
+    }
+  }),
 )
 const total = computed(() => query.data.value?.total ?? 0)
 
@@ -235,15 +233,17 @@ function open(master: AdminMasterListItem): void {
   padding: var(--space-10) 0;
 }
 
-.masters-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1);
+.masters-methods {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .masters-muted {
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 </style>
