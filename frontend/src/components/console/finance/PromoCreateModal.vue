@@ -92,7 +92,10 @@ const zone = useViewerTimezone()
  * any other value is refused. The API does not publish the list.
  */
 const DISCOUNTS = [5, 25, 50, 75, 100] as const
-const DISCOUNT_OPTIONS = DISCOUNTS.map((n) => ({ value: String(n), label: `${n}%` }))
+const DISCOUNT_OPTIONS = DISCOUNTS.map((n) => ({
+  value: String(n),
+  label: t('console.finance.promos.percent', { n }),
+}))
 
 const CODE_MIN = 3
 const CODE_MAX = 50
@@ -163,10 +166,30 @@ function onClose(): void {
   emit('close')
 }
 
+/**
+ * The words for a failed creation. The server answers 400 (code "bad_request")
+ * for a code that exists, a discount it does not allow and an end date that
+ * is not after the start; the shared "bad request" phrase says none of them.
+ * Only the date has a name in the server's message (`valid_until`), so it is
+ * the one 400 told apart, next to the field.
+ */
+function refusalText(error: unknown): string {
+  if (!(error instanceof ApiResponseError) || error.status !== 400) {
+    return extractApiError(error, t('console.finance.promos.createModal.failed'))
+  }
+  if (error.detail.includes('valid_until')) {
+    untilError.value = t('console.finance.promos.createModal.refusedDate')
+    return untilError.value
+  }
+  return t('console.finance.promos.createModal.refused')
+}
+
 async function onSubmit(): Promise<void> {
   // The guard comes before the input check: a second press while the first
   // request is in flight must neither validate nor send.
   if (creating.value) return
+  // The form may have stood open past midnight: read "today" now, not at the opening.
+  today.value = todayIn(zone.value)
   codeError.value = validCode(code.value) ? '' : t('console.finance.promos.createModal.errors.code')
   maxUsesError.value = validMaxUses(maxUses.value)
     ? ''
@@ -190,13 +213,7 @@ async function onSubmit(): Promise<void> {
     toast.success(t('console.finance.promos.createModal.created'))
     emit('created')
   } catch (e) {
-    // The server answers 400 for a code that exists and for a discount it does
-    // not allow; the shared "bad request" phrase would not say which.
-    toast.error(
-      e instanceof ApiResponseError && e.status === 400
-        ? t('console.finance.promos.createModal.refused')
-        : extractApiError(e, t('console.finance.promos.createModal.failed')),
-    )
+    toast.error(refusalText(e))
   } finally {
     creating.value = false
   }
@@ -208,7 +225,6 @@ async function onSubmit(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  min-width: min(420px, 100%);
 }
 
 .promo-form__title {

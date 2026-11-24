@@ -150,7 +150,7 @@
 
       <!-- Master card (shared component) -->
       <section class="detail__section">
-        <h3 class="detail__section-title">{{ t('user.screens.practiceDetail.fields.master') }}</h3>
+        <h2 class="detail__section-title">{{ t('user.screens.practiceDetail.fields.master') }}</h2>
         <MasterCard
           :master-name="practice.master_name"
           :methods="practice.master_methods"
@@ -165,7 +165,7 @@
              (confirmed), not by a 10-minute timer; it lives on the dashboard
              card and the live screen. -->
       <section v-if="showZoom" class="detail__section">
-        <h3 class="detail__section-title">ZOOM</h3>
+        <h2 class="detail__section-title">ZOOM</h2>
         <VCard class="detail__zoom-card">
           {{
             isOptionEnabled('zoom')

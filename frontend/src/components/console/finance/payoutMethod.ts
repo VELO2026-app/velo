@@ -9,12 +9,7 @@
 // =============================================================================
 
 import { t } from '@/locales'
-
-/** A payout method as the withdrawal carries it (`payout_details`). */
-export interface PayoutMethod {
-  method: string
-  details?: Record<string, unknown> | undefined
-}
+import type { PayoutDetails } from '@/api/types'
 
 const MASK = '••••'
 
@@ -31,10 +26,9 @@ function compact(value: unknown): string {
  * One line that names where the money goes, without exposing the account:
  * "IBAN DE89 •••• 3000", "Bank •••• 0412", an e-mail or a handle.
  *
- * @param payout - the withdrawal's payout details
  * @returns the line; the method key itself for a method the console does not know
  */
-export function payoutMethodLabel(payout: PayoutMethod): string {
+export function payoutMethodLabel(payout: PayoutDetails): string {
   const details = payout.details ?? {}
   if (payout.method === 'bank_transfer') {
     const iban = compact(details.iban)
@@ -59,6 +53,6 @@ export function payoutMethodLabel(payout: PayoutMethod): string {
  *
  * @returns the account holder, or an empty string
  */
-export function payoutHolder(payout: PayoutMethod): string {
+export function payoutHolder(payout: PayoutDetails): string {
   return text(payout.details?.account_holder)
 }

@@ -4,15 +4,18 @@
 //
 // The desktop web version of the instance admin. It lives next to the mobile
 // /admin zone until it is tested; then /admin moves here and the mobile
-// screens go. One route per module (utils/console/modules.ts); a module
-// that has not moved yet shows ConsolePlaceholderView with a way to its
-// mobile screen. The records of an instance option carry meta.option, as in
-// routes/user.ts.
+// screens go. One route per module (utils/console/modules.ts) plus the
+// screens inside a module. The records of an instance option carry
+// meta.option, as in routes/user.ts.
+//
+// A record's component comes from views/console/consoleScreens.ts through
+// one lazy import, so the start-up chunk does not grow with each screen
+// (the bundle budget); the router still waits for the screen itself.
 // =============================================================================
 
 import type { Component } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
-import { CONSOLE_MODULES, consoleRouteName, type ConsoleModuleKey } from '@/utils/console/modules'
+import { CONSOLE_MODULES, consoleRouteName, type ConsoleRouteName } from '@/utils/console/modules'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -21,13 +24,9 @@ declare module 'vue-router' {
   }
 }
 
-const placeholder = () => import('@/views/console/ConsolePlaceholderView.vue')
-
-/** The module screens that have replaced the placeholder (by module key). Lazy: a screen is its own chunk. */
-const SCREENS: Partial<Record<ConsoleModuleKey, () => Promise<Component>>> = {
-  practices: () => import('@/views/console/ConsolePracticesView.vue'),
-  catalog: () => import('@/views/console/ConsoleCatalogView.vue'),
-  finance: () => import('@/views/console/ConsoleFinanceView.vue'),
+/** The route component of a console record: its screen, loaded lazily. */
+function screen(name: ConsoleRouteName): () => Promise<{ default: Component }> {
+  return () => import('@/views/console/consoleScreens').then((m) => m.loadConsoleScreen(name))
 }
 
 /** The /console zone: ConsoleShell and one screen per module. */
@@ -42,14 +41,14 @@ export function consoleRoutes(): RouteRecordRaw[] {
           path: module.key,
           name: consoleRouteName(module.key),
           meta: module.option === undefined ? {} : { option: module.option },
-          component: SCREENS[module.key] ?? placeholder,
+          component: screen(consoleRouteName(module.key)),
         })),
         // A screen inside a module is named console-<module>-<what>, so the
         // menu keeps the module lit (consoleModuleOf).
         {
           path: 'practices/:id',
           name: 'console-practices-detail',
-          component: () => import('@/views/console/ConsolePracticeDetailView.vue'),
+          component: screen('console-practices-detail'),
         },
         {
           path: '',

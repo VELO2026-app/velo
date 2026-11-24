@@ -749,7 +749,7 @@
         },
         "tableLabel": "Payout requests",
         "columns": {
-          "master": "Master",
+          "recipient": "Recipient",
           "amount": "Amount",
           "net": "To pay out",
           "details": "Payout details",
@@ -776,7 +776,8 @@
           "approved": "The payout has been approved",
           "approveFailed": "Failed to approve the payout",
           "rejected": "The payout has been rejected",
-          "rejectFailed": "Failed to reject the payout"
+          "rejectFailed": "Failed to reject the payout",
+          "alreadyDecided": "This payout has already been decided"
         },
         "rejectModal": {
           "title": "Reject the payout",
@@ -808,6 +809,7 @@
         },
         "ownerCompany": "{brand} company",
         "ownerFallback": "User",
+        "percent": "{n}%",
         "usedOf": "{used} / {max}",
         "untilLine": "until {date}",
         "status": {
@@ -843,6 +845,7 @@
           "created": "The promo code has been created",
           "failed": "Failed to create the promo code",
           "refused": "The promo code was not created: the code already exists or the discount is not allowed",
+          "refusedDate": "The promo code was not created: the end date has already passed",
           "errors": {
             "code": "The code takes 3 to 50 characters",
             "maxUses": "Enter a whole number from 1, or leave it empty",

@@ -27,6 +27,9 @@
     duration?    -- pre-formatted duration string (e.g. a formatted minutes
                     value); omitted = no duration cell.
     clickable    -- whole card is a button emitting @click (default true).
+    headingLevel -- level of the title heading: 3 (default) under a section
+                    heading (h2), 2 when the card list sits right under the
+                    page title (h1), so heading levels never skip.
 
   Slot:
     #badge -- status badge on the right of the meta line (e.g. <VBadge>).
@@ -45,7 +48,9 @@
         <component :is="icon" :size="46" />
       </span>
       <div class="practice-list-card__content">
-        <h4 class="practice-list-card__title">{{ titleText }}</h4>
+        <component :is="`h${headingLevel}`" class="practice-list-card__title">{{
+          titleText
+        }}</component>
         <!-- Subtitle: master row by default; override for other contexts
              (e.g. master's own practice -> participants · price). -->
         <slot name="subtitle">
@@ -109,10 +114,17 @@ const props = withDefaults(
     whenTime?: string
     /** When true (default), the whole card is a button and emits `@click`. */
     clickable?: boolean
+    /**
+     * Level of the title heading. Default 3: the card sits under a section
+     * heading (h2). Pass 2 when the cards follow the page title (h1) directly,
+     * so heading levels never skip (WCAG 1.3.1, axe heading-order).
+     */
+    headingLevel?: 2 | 3
   }>(),
   {
     when: '',
     clickable: true,
+    headingLevel: 3,
   },
 )
 

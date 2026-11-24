@@ -42,10 +42,10 @@ import type { SegmentOption } from '@/components/ui'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import PromosPanel from '@/components/console/finance/PromosPanel.vue'
 import WithdrawalsPanel from '@/components/console/finance/WithdrawalsPanel.vue'
-import { useUrlChoice } from '@/components/console/finance/useFinanceUrl'
+import { countedLabel } from '@/components/console/finance/financeFormat'
+import { useUrlChoice } from '@/components/console/finance/useUrlChoice'
 import { adminPendingWithdrawalsQuery } from '@/composables/queries/admin'
 import { isOptionEnabled } from '@/platform/instance'
-import { formatCount } from '@/utils/format'
 
 type FinanceTab = 'withdrawals' | 'promos'
 
@@ -65,10 +65,9 @@ const pendingQuery = useQuery(() => adminPendingWithdrawalsQuery(paymentsOn))
 const tabOptions = computed<SegmentOption[]>(() =>
   tabs.map((value) => {
     const label = t(`console.finance.tabs.${value}`)
-    const pending = pendingQuery.data.value ?? 0
     return {
       value,
-      label: value === 'withdrawals' && pending > 0 ? `${label} · ${formatCount(pending)}` : label,
+      label: value === 'withdrawals' ? countedLabel(label, pendingQuery.data.value ?? 0) : label,
     }
   }),
 )

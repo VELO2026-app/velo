@@ -199,7 +199,7 @@
 
       <!-- Selected-day practices -->
       <div v-else class="calendar__list">
-        <h3 class="calendar__date-header">{{ dayLabel }}</h3>
+        <h2 class="calendar__date-header">{{ dayLabel }}</h2>
         <CalendarPracticeCard
           v-for="p in dayPractices"
           :key="p.id"

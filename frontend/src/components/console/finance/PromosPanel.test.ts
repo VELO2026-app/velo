@@ -667,6 +667,41 @@ describe('PromosPanel', () => {
       expect(adminApi.createCompanyPromo).toHaveBeenCalledTimes(1)
     })
 
+    it('the form open past midnight checks "today" at the submit, not at the opening', async () => {
+      // 09:50 UTC on 25.11 is 23:50 on 25.11 in UTC+14.
+      vi.setSystemTime(new Date('2026-11-25T09:50:00Z'))
+      await mount()
+      await openForm()
+      fill('Код', 'WELCOME')
+      fill('Действует до', '2026-11-25')
+
+      // Twenty minutes on it is 26.11 for the admin: the chosen day has gone.
+      vi.setSystemTime(new Date('2026-11-25T10:10:00Z'))
+      submit()
+      await flush()
+
+      expect(shownErrors()).toEqual(['Дата не может быть в прошлом'])
+      expect(adminApi.createCompanyPromo).not.toHaveBeenCalled()
+    })
+
+    it('a 400 that names the end date is told as a date problem, next to the field', async () => {
+      vi.mocked(adminApi.createCompanyPromo).mockRejectedValueOnce(
+        new ApiResponseError(400, 'valid_until must be after valid_from', 'bad_request'),
+      )
+      await mount()
+      await openForm()
+
+      fill('Код', 'WELCOME')
+      fill('Действует до', '2026-12-01')
+      submit()
+      await flush()
+
+      const words = 'Промокод не создан: дата окончания уже прошла'
+      expect(toastError).toHaveBeenCalledWith(words)
+      expect(shownErrors()).toEqual([words])
+      expect(isDialogOpen()).toBe(true)
+    })
+
     it('fixing a field takes its error away at once', async () => {
       await mount()
       await openForm()

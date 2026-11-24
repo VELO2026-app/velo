@@ -18,6 +18,7 @@
         :label="t('console.finance.withdrawals.rejectModal.reason')"
         :placeholder="t('console.finance.withdrawals.rejectModal.placeholder')"
         :rows="3"
+        :maxlength="NOTE_MAX_LENGTH"
         :error="error"
         @update:model-value="emit('update:reason', $event)"
       />
@@ -36,6 +37,9 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { VButton, VModal, VTextarea } from '@/components/ui'
+
+/** The longest note the server takes (`admin_action_note_max_length`); a longer one is refused with 422. */
+const NOTE_MAX_LENGTH = 1000
 
 defineProps<{
   open: boolean
@@ -61,7 +65,6 @@ const emit = defineEmits<{
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  min-width: min(420px, 100%);
 }
 
 .reject__title {

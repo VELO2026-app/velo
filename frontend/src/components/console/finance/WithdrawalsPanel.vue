@@ -118,6 +118,7 @@
       :net="target ? net(target) : ''"
       :bank="target ? methodLabel(target) : ''"
       :master="target ? holder(target) || '—' : ''"
+      :master-label="t('console.finance.withdrawals.columns.recipient')"
       :loading="approving"
       @confirm="onApprove"
       @close="closeDecision"
@@ -138,7 +139,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
-import { useQuery } from '@pinia/colada'
+import { useQuery, useQueryCache } from '@pinia/colada'
 import { VButton, VEmptyState, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
@@ -148,24 +149,28 @@ import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
 import ConsolePager from '@/components/console/content/ConsolePager.vue'
 import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
 import WithdrawalRejectModal from '@/components/console/finance/WithdrawalRejectModal.vue'
-import { formatStamp } from '@/components/console/finance/financeFormat'
+import { countedLabel, formatStamp } from '@/components/console/finance/financeFormat'
 import { payoutHolder, payoutMethodLabel } from '@/components/console/finance/payoutMethod'
-import { useUrlChoice, useUrlPage } from '@/components/console/finance/useFinanceUrl'
+import { useUrlChoice } from '@/components/console/finance/useUrlChoice'
+import { useUrlPage } from '@/components/console/finance/useUrlPage'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
+import { ApiResponseError } from '@/api/client'
 import type { AdminWithdrawalResponse, WithdrawalStatus } from '@/api/admin'
 import {
+  ADMIN_INVALIDATES,
   ADMIN_WITHDRAWALS_PAGE_SIZE,
   adminPendingWithdrawalsQuery,
   adminWithdrawalsPageQuery,
   onFailedRequest,
   useAdminMutation,
 } from '@/composables/queries/admin'
+import { invalidateKeys } from '@/composables/queries/invalidation'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { useConsoleWidth } from '@/composables/useConsoleWidth'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
-import { formatCount, formatMoney } from '@/utils/format'
+import { formatMoney } from '@/utils/format'
 
 const toast = useToast()
 const zone = useViewerTimezone()
@@ -235,10 +240,9 @@ const pendingQuery = useQuery(() => adminPendingWithdrawalsQuery(true))
 const statusOptions = computed<SegmentOption[]>(() =>
   STATUSES.map((value) => {
     const label = t(`console.finance.withdrawals.status.${value}`)
-    const pending = pendingQuery.data.value ?? 0
     return {
       value,
-      label: value === 'pending' && pending > 0 ? `${label} · ${formatCount(pending)}` : label,
+      label: value === 'pending' ? countedLabel(label, pendingQuery.data.value ?? 0) : label,
     }
   }),
 )
@@ -247,7 +251,7 @@ const statusOptions = computed<SegmentOption[]>(() =>
 //    amount under the amount; below 1200 px the date moves under the name. --
 const { narrow, medium } = useConsoleWidth()
 const columns = computed<ConsoleTableColumn[]>(() => [
-  { key: 'master', label: t('console.finance.withdrawals.columns.master') },
+  { key: 'master', label: t('console.finance.withdrawals.columns.recipient') },
   {
     key: 'amount',
     label: t('console.finance.withdrawals.columns.amount'),
@@ -327,6 +331,24 @@ function askReject(row: WithdrawalRow): void {
   mode.value = 'reject'
 }
 
+const queryCache = useQueryCache()
+
+/**
+ * Tell why a verdict failed. A 409 means another admin decided this request
+ * first: say so, drop the window and read the queue again, so the row leaves
+ * "pending" instead of waiting for the next return to the app with live
+ * buttons that can only answer 409 again.
+ */
+async function tellVerdictFailure(error: unknown, fallback: string): Promise<void> {
+  if (error instanceof ApiResponseError && error.status === 409) {
+    toast.error(t('console.finance.withdrawals.toast.alreadyDecided'))
+    mode.value = null
+    await invalidateKeys(queryCache, ADMIN_INVALIDATES.decideWithdrawal)
+    return
+  }
+  toast.error(extractApiError(error, fallback))
+}
+
 function closeDecision(): void {
   // A verdict in flight keeps its window: closing it would hide the outcome.
   if (busy.value) return
@@ -341,7 +363,7 @@ async function onApprove(): Promise<void> {
     toast.success(t('console.finance.withdrawals.toast.approved'))
     mode.value = null
   } catch (e) {
-    toast.error(extractApiError(e, t('console.finance.withdrawals.toast.approveFailed')))
+    await tellVerdictFailure(e, t('console.finance.withdrawals.toast.approveFailed'))
   } finally {
     approving.value = false
   }
@@ -363,7 +385,7 @@ async function onReject(): Promise<void> {
     toast.success(t('console.finance.withdrawals.toast.rejected'))
     mode.value = null
   } catch (e) {
-    toast.error(extractApiError(e, t('console.finance.withdrawals.toast.rejectFailed')))
+    await tellVerdictFailure(e, t('console.finance.withdrawals.toast.rejectFailed'))
   } finally {
     rejecting.value = false
   }

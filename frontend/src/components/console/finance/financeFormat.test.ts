@@ -4,6 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  countedLabel,
   endOfDayIso,
   formatDay,
   formatStamp,
@@ -42,5 +43,12 @@ describe('todayIn', () => {
     expect(todayIn('UTC')).toBe('2026-11-25')
     // Half past eleven at night in London is half past one in the morning in Moscow.
     expect(todayIn('Europe/Moscow')).toBe('2026-11-26')
+  })
+})
+
+describe('countedLabel', () => {
+  it('puts the count after the label, and shows a bare label for zero', () => {
+    expect(countedLabel('Ожидают', 4)).toBe('Ожидают · 4')
+    expect(countedLabel('Ожидают', 0)).toBe('Ожидают')
   })
 })

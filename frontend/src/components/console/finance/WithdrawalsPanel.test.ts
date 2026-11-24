@@ -306,7 +306,7 @@ describe('WithdrawalsPanel', () => {
       expect(rows[1]?.slice(0, 4)).toEqual(['—', '500,00 €', '498,00 €', 'oleg.kim@example.com'])
       expect(
         Array.from(host?.querySelectorAll('[role="columnheader"]') ?? []).map((el) => words(el)),
-      ).toEqual(['Мастер', 'Сумма', 'К выплате', 'Реквизиты', 'Запрошено', 'Действия'])
+      ).toEqual(['Получатель', 'Сумма', 'К выплате', 'Реквизиты', 'Запрошено', 'Действия'])
     })
 
     it('the pending tab carries the number of requests awaiting a verdict', async () => {
@@ -372,7 +372,7 @@ describe('WithdrawalsPanel', () => {
 
       expect(
         Array.from(host?.querySelectorAll('[role="columnheader"]') ?? []).map((el) => words(el)),
-      ).toEqual(['Мастер', 'Сумма', 'Запрошено', 'Действия'])
+      ).toEqual(['Получатель', 'Сумма', 'Запрошено', 'Действия'])
       const rows = tableRows()
       expect(rows[0]?.[0]).toContain('IBAN DE89 •••• 3000')
       expect(rows[0]?.[1]).toBe('20,00 €К выплате 18,50 €')
@@ -385,7 +385,7 @@ describe('WithdrawalsPanel', () => {
 
       expect(
         Array.from(host?.querySelectorAll('[role="columnheader"]') ?? []).map((el) => words(el)),
-      ).toEqual(['Мастер', 'Сумма', 'Действия'])
+      ).toEqual(['Получатель', 'Сумма', 'Действия'])
       expect(tableRows()[0]?.[0]).toContain('24.11, 23:12')
     })
   })
@@ -471,7 +471,7 @@ describe('WithdrawalsPanel', () => {
         ['Комиссия провайдера', '1,50 €'],
         ['К получению', '680,50 €'],
         ['Банк', 'IBAN DE89 •••• 3000'],
-        ['Мастер', 'Игорь Петров'],
+        ['Получатель', 'Игорь Петров'],
       ])
       expect(adminApi.approveWithdrawal).not.toHaveBeenCalled()
 
@@ -490,7 +490,7 @@ describe('WithdrawalsPanel', () => {
     it('a refused approval is told, the recap stays and the request stays; a retry goes through', async () => {
       server.pending = [request('w_a')]
       vi.mocked(adminApi.approveWithdrawal).mockRejectedValueOnce(
-        new ApiResponseError(409, 'Conflict', 'server_error'),
+        new ApiResponseError(500, 'Boom', 'server_error'),
       )
       await mount()
 
@@ -511,6 +511,29 @@ describe('WithdrawalsPanel', () => {
       expect(toastSuccess).toHaveBeenCalledWith('Выплата одобрена')
       expect(isDialogOpen()).toBe(false)
       expect(holders()).toEqual([])
+    })
+
+    it('a 409 means another admin decided it first: told so, the window closes, the queue is read again', async () => {
+      server.pending = [request('w_a'), request('w_b', { payout_details: holder('Олег Ким') })]
+      // Another admin approves w_a while this one has the recap open.
+      vi.mocked(adminApi.approveWithdrawal).mockImplementation(async () => {
+        decide('w_a', 'approved', null)
+        throw new ApiResponseError(409, 'Withdrawal is not pending', 'conflict')
+      })
+      await mount()
+      expect(holders()).toEqual(['Игорь Петров', 'Олег Ким'])
+
+      button('Одобрить выплату 682,00 €').click()
+      await flush()
+      button('Одобрить выплату', dialog()).click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Эту выплату уже обработали')
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(isDialogOpen()).toBe(false)
+      // The decided request left the queue and the counter followed.
+      expect(holders()).toEqual(['Олег Ким'])
+      expect(tabLabels()[0]).toBe('Ожидают · 1')
     })
 
     it('a second press while the request is in flight sends nothing more; the window keeps open', async () => {
@@ -617,6 +640,35 @@ describe('WithdrawalsPanel', () => {
       expect(isDialogOpen()).toBe(true)
       expect(reasonField().value).toBe('Не тот IBAN')
       expect(holders()).toEqual(['Игорь Петров'])
+    })
+
+    it('a 409 on a rejection is the same: told so, the window closes, the queue is read again', async () => {
+      server.pending = [request('w_a'), request('w_b', { payout_details: holder('Олег Ким') })]
+      vi.mocked(adminApi.rejectWithdrawal).mockImplementation(async () => {
+        decide('w_a', 'approved', null)
+        throw new ApiResponseError(409, 'Withdrawal is not pending', 'conflict')
+      })
+      await mount()
+
+      button('Отклонить выплату 682,00 €').click()
+      await flush()
+      type(reasonField(), 'Не тот IBAN')
+      await flush()
+      button('Отклонить выплату', dialog()).click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Эту выплату уже обработали')
+      expect(isDialogOpen()).toBe(false)
+      expect(holders()).toEqual(['Олег Ким'])
+    })
+
+    it('the reason field takes no more than the server accepts', async () => {
+      await mount()
+
+      button(/^Отклонить/).click()
+      await flush()
+
+      expect(reasonField().getAttribute('maxlength')).toBe('1000')
     })
 
     it('a second confirm while the first is in flight neither sends nor checks the field', async () => {

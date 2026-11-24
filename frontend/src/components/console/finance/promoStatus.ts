@@ -7,22 +7,21 @@
 // applies, in this order: deactivated by hand, used up, past its end date.
 // =============================================================================
 
+import type { AdminPromoResponse } from '@/api/admin'
+
 /** What the table says about a promo. */
 export type PromoStatus = 'active' | 'exhausted' | 'expired' | 'inactive'
 
 /** The fields of a promo the status reads. */
-export interface PromoFacts {
-  is_active: boolean
-  max_uses: number | null
-  used_count: number
-  valid_until: string | null
-}
+export type PromoFacts = Pick<
+  AdminPromoResponse,
+  'is_active' | 'max_uses' | 'used_count' | 'valid_until'
+>
 
 /**
  * The status of a promo at a moment.
  *
- * @param promo - the promo's own facts
- * @param now - the moment, ms since the epoch
+ * @param now - the moment, in milliseconds since the epoch
  */
 export function promoStatus(promo: PromoFacts, now: number): PromoStatus {
   if (!promo.is_active) return 'inactive'

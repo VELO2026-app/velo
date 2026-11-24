@@ -159,7 +159,7 @@ function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined 
 .console-table__empty {
   padding: var(--space-5) var(--space-4);
   font-size: var(--velo-fs-14);
-  /* Small text on a white card: the skin's declared pair; the muted colour is under 4.5:1 on gold. */
+  /* Small text on a white card: the skin's declared pair; the muted color is under 4.5:1 on gold. */
   color: var(--velo-text-secondary);
 }
 </style>

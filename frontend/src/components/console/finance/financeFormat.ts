@@ -10,11 +10,11 @@
 
 import { DateTime } from 'luxon'
 import { getLocale } from '@/locales'
+import { formatCount } from '@/utils/format'
 
 /**
  * A moment as day, month and time ("24.11, 09:12").
  *
- * @param isoString - an ISO date-time
  * @param timeZone - an IANA zone (the viewer's); the runtime's own when omitted
  */
 export function formatStamp(isoString: string, timeZone?: string): string {
@@ -30,7 +30,6 @@ export function formatStamp(isoString: string, timeZone?: string): string {
 /**
  * A moment as a full date ("31.12.2026").
  *
- * @param isoString - an ISO date-time
  * @param timeZone - an IANA zone (the viewer's); the runtime's own when omitted
  */
 export function formatDay(isoString: string, timeZone?: string): string {
@@ -63,4 +62,12 @@ export function endOfDayIso(day: string, timeZone?: string): string {
  */
 export function todayIn(timeZone?: string): string {
   return DateTime.now().setZone(timeZone).toFormat('yyyy-MM-dd')
+}
+
+/**
+ * A tab label with a count after it ("Awaiting · 4"); the bare label while the
+ * count is zero, so a quiet queue shows no number.
+ */
+export function countedLabel(label: string, count: number): string {
+  return count > 0 ? `${label} · ${formatCount(count)}` : label
 }

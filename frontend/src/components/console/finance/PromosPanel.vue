@@ -48,7 +48,9 @@
             </span>
           </template>
           <template #cell-owner="{ row }">{{ owner(row) }}</template>
-          <template #cell-discount="{ row }">{{ row.discount_percent }}%</template>
+          <template #cell-discount="{ row }">
+            {{ t('console.finance.promos.percent', { n: row.discount_percent }) }}
+          </template>
           <template #cell-used="{ row }">
             <span class="promos__stack promos__stack--end">
               <span>{{ used(row) }}</span>
@@ -124,7 +126,8 @@ import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.
 import PromoCreateModal from '@/components/console/finance/PromoCreateModal.vue'
 import { formatDay } from '@/components/console/finance/financeFormat'
 import { promoStatus, type PromoStatus } from '@/components/console/finance/promoStatus'
-import { useUrlChoice, useUrlPage } from '@/components/console/finance/useFinanceUrl'
+import { useUrlChoice } from '@/components/console/finance/useUrlChoice'
+import { useUrlPage } from '@/components/console/finance/useUrlPage'
 import { deactivateAdminPromo } from '@/api/admin'
 import type { AdminPromoResponse } from '@/api/admin'
 import {
