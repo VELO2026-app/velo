@@ -27,9 +27,10 @@
 //      CORE_THEME_COLOR) for golden cells. "golden" names the cells WITHOUT a skin
 //      package; since FE-230 that build is the neutral core, not VELO;
 //   b. brand grep: a skin cell's bundle carries the skin's displayName, its
-//      supportEmail when the package has one (FE-251), and every one of its
-//      token declarations; a golden cell carries NO matrix skin's
-//      displayName or supportEmail, none of its distinctive declarations
+//      supportEmail when the package has one (FE-251), the path data of every
+//      mood icon when it ships the set (FE-273), and every one of its token
+//      declarations; a golden cell carries NO matrix skin's
+//      displayName, supportEmail or mood icon, none of its distinctive declarations
 //      (the ones variables.css does not already declare verbatim), and no
 //      dist/skin/ copy of a package at all;
 //   c. DCE: a module the cell's edition turns on has its chunks in dist, a
@@ -224,12 +225,82 @@ export function bundleHasEmail(bundle, email) {
   return unescapeBundle(bundle).toLowerCase().includes(email.toLowerCase())
 }
 
+/** @typedef {import('./lib/skin-package.mjs').MoodSvgNode} MoodSvgNode */
+/** The mood icons of a package by key (the engine's trees).
+ *  @typedef {Record<string, MoodSvgNode>} MoodSet */
+
+/** Every path data string of an icon tree, in drawing order.
+ *  @param {MoodSvgNode} node
+ *  @returns {string[]} */
+function pathData(node) {
+  return [...(node.attrs?.d ? [node.attrs.d] : []), ...(node.children ?? []).flatMap(pathData)]
+}
+
+/**
+ * The literals that tell the icons of a set apart in a bundle: per icon, its
+ * longest path data that no OTHER icon of the set carries. Two icons can share
+ * a path (the glow of one size), so "the first path" would not tell them
+ * apart; an icon with no path of its own is told by all of its paths. Pure.
+ *
+ * @param {MoodSet} set
+ * @returns {Record<string, string[]>}
+ */
+export function moodProbes(set) {
+  /** @type {Array<[string, string[]]>} */
+  const own = Object.entries(set).map(([key, tree]) => [key, pathData(tree)])
+  return Object.fromEntries(
+    own.map(([key, paths]) => {
+      const others = new Set(own.filter(([other]) => other !== key).flatMap(([, d]) => d))
+      const [longest] = paths.filter((d) => !others.has(d)).sort((a, b) => b.length - a.length)
+      return [key, longest === undefined ? paths : [longest]]
+    }),
+  )
+}
+
+/** Which icons of the set the bundle carries, in key order.
+ *  @param {string} bundle
+ *  @param {MoodSet} set
+ *  @returns {boolean[]} */
+function carriedMoodIcons(bundle, set) {
+  const text = unescapeBundle(bundle)
+  return Object.values(moodProbes(set)).map(
+    (probes) => probes.length > 0 && probes.every((d) => text.includes(d)),
+  )
+}
+
+/** Does the bundle carry EVERY icon of the mood set? Pure.
+ *  @param {string} bundle
+ *  @param {MoodSet} set
+ *  @returns {boolean} */
+export function bundleHasAllMoodIcons(bundle, set) {
+  return carriedMoodIcons(bundle, set).every(Boolean)
+}
+
+/** Does the bundle carry at least ONE icon of the mood set? Pure.
+ *  @param {string} bundle
+ *  @param {MoodSet} set
+ *  @returns {boolean} */
+export function bundleHasAnyMoodIcon(bundle, set) {
+  return carriedMoodIcons(bundle, set).some(Boolean)
+}
+
 /** What of one skin leaked into a core (skinless) build, as labels for
  *  facts.leaked: its name as a bundle literal or the tab title, its support
- *  address (FE-251), and its distinctive token declarations. A brand named like the core's own word
+ *  address (FE-251), its mood icons (FE-273), and its distinctive token
+ *  declarations. A brand named like the core's own word
  *  (CORE_DISPLAY_NAME) cannot be told from the core by its name, so its name
  *  is not probed. Pure. */
-export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, coreName }) {
+export function skinLeaks({
+  label,
+  brand,
+  decls,
+  js,
+  html,
+  css,
+  goldenDecls,
+  coreName,
+  moodIcons = /** @type {MoodSet | null} */ (null),
+}) {
   const leaked = []
   const title = html.match(/<title>([^<]*)<\/title>/)?.[1]
   if (
@@ -239,6 +310,7 @@ export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, cor
     leaked.push(`${label} displayName`)
   if (brand.supportEmail && bundleHasEmail(js, brand.supportEmail))
     leaked.push(`${label} supportEmail`)
+  if (moodIcons !== null && bundleHasAnyMoodIcon(js, moodIcons)) leaked.push(`${label} moodIcons`)
   const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
   if (foreign.length > 0) leaked.push(`${label} tokens (${foreign.join(', ')})`)
   return leaked
@@ -253,6 +325,7 @@ export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, cor
  *  facts[cell]    { title, theme, assets, chunks: { <module>: [files] },
  *                   brandMissing: bool,       (skin cells)
  *                   supportEmailMissing: bool, (skin cells, FE-251)
+ *                   moodIconsMissing: bool,   (skin cells, FE-273)
  *                   tokensMissing: [decl],    (skin cells)
  *                   layout: [problem],        (skin cells: asset spill,
  *                                              dist/skin prune, fonts)
@@ -280,6 +353,8 @@ export function evaluateMatrix({ cells, facts, expected }) {
         fails.push(`${cell.name}: the skin's displayName "${e.title}" is not in the JS bundle`)
       if (f.supportEmailMissing)
         fails.push(`${cell.name}: the skin's supportEmail is not in the JS bundle`)
+      if (f.moodIconsMissing)
+        fails.push(`${cell.name}: the skin's mood icons are not in the JS bundle`)
       if ((f.tokensMissing ?? []).length > 0)
         fails.push(
           `${cell.name}: skin token declarations missing from dist CSS: ${f.tokensMissing.join(', ')}`,
@@ -431,7 +506,7 @@ function skinRecord(skin) {
   // The matrix packages are known-good fixtures: a null brand means the
   // package did not load, which loadSkinPackage reports in pkg.problems.
   if (pkg.brand === null) throw new Error(`${skin.label}: ${pkg.problems.join('; ')}`)
-  return { brand: pkg.brand, decls, files: pkg.files }
+  return { brand: pkg.brand, decls, files: pkg.files, moodIcons: pkg.moodIcons }
 }
 
 /** Where the build must have put the package (FE-131): the fixed assets on
@@ -498,10 +573,11 @@ function snapshot(cell, skins, goldenDecls, coreName) {
     ),
   }
   if (cell.skin) {
-    const { brand, decls, files } = skinRecord(cell.skin)
+    const { brand, decls, files, moodIcons } = skinRecord(cell.skin)
     facts.brandMissing = !bundleHas(js, brand.displayName)
     facts.supportEmailMissing =
       brand.supportEmail !== null && !bundleHasEmail(js, brand.supportEmail)
+    facts.moodIconsMissing = moodIcons !== null && !bundleHasAllMoodIcons(js, moodIcons)
     facts.tokensMissing = missingTokens(decls, css, goldenDecls)
     facts.layout = skinLayout(
       cell.skin.source,
@@ -514,9 +590,19 @@ function snapshot(cell, skins, goldenDecls, coreName) {
   } else {
     facts.leaked = existsSync(join(distDir, 'skin')) ? ['dist/skin/ (a package shipped)'] : []
     for (const skin of skins) {
-      const { brand, decls } = skinRecord(skin)
+      const { brand, decls, moodIcons } = skinRecord(skin)
       facts.leaked.push(
-        ...skinLeaks({ label: skin.label, brand, decls, js, html, css, goldenDecls, coreName }),
+        ...skinLeaks({
+          label: skin.label,
+          brand,
+          decls,
+          js,
+          html,
+          css,
+          goldenDecls,
+          coreName,
+          moodIcons,
+        }),
       )
     }
   }

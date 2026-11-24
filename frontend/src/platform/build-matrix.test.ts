@@ -33,6 +33,12 @@ interface FactsEntry {
   edition: string
   assets: number
 }
+/** A node of a parsed mood icon (the engine's tree). */
+interface MoodNode {
+  tag: string
+  attrs?: Record<string, string>
+  children?: MoodNode[]
+}
 interface Facts {
   title: string
   theme: string
@@ -40,6 +46,7 @@ interface Facts {
   chunks: Record<string, string[]>
   brandMissing?: boolean
   supportEmailMissing?: boolean
+  moodIconsMissing?: boolean
   tokensMissing?: string[]
   leaked?: string[]
   layout?: string[]
@@ -48,6 +55,9 @@ interface Facts {
 const {
   assetCountFails,
   bundleHas,
+  bundleHasAllMoodIcons,
+  bundleHasAnyMoodIcon,
+  moodProbes,
   cssHasDecl,
   evaluateMatrix,
   fanInFails,
@@ -61,6 +71,9 @@ const {
   assetCountFails(entries: FactsEntry[]): string[]
   fanInFails(cellNames: string[], entries: FactsEntry[]): string[]
   bundleHas(bundle: string, text: string): boolean
+  bundleHasAllMoodIcons(bundle: string, set: Record<string, MoodNode>): boolean
+  bundleHasAnyMoodIcon(bundle: string, set: Record<string, MoodNode>): boolean
+  moodProbes(set: Record<string, MoodNode>): Record<string, string[]>
   missingTokens(decls: string[], css: string, goldenDecls: Set<string>): string[]
   skinLeaks(input: {
     label: string
@@ -71,6 +84,7 @@ const {
     css: string
     goldenDecls: Set<string>
     coreName: string
+    moodIcons?: Record<string, MoodNode> | null
   }): string[]
   cssHasDecl(css: string, decl: string): boolean
   evaluateMatrix(input: {
@@ -135,7 +149,7 @@ const EXPECTED = Object.fromEntries(
 const withFact = (name: string, patch: Partial<Facts>) =>
   evaluateMatrix({
     cells: CELLS,
-    facts: { ...GREEN, [name]: { ...GREEN[name]!, ...patch } },
+    facts: { ...GREEN, [name]: { ...factsOf(name), ...patch } },
     expected: EXPECTED,
   })
 
@@ -227,6 +241,11 @@ describe('evaluateMatrix (tz-whitelabel §6 gate)', () => {
   it("a skin cell whose bundle lacks the skin's supportEmail fails (b, FE-251)", () => {
     const fails = withFact('acme/full', { supportEmailMissing: true })
     expect(fails).toEqual(["acme/full: the skin's supportEmail is not in the JS bundle"])
+  })
+
+  it("a skin cell whose bundle lacks the skin's mood icons fails (b, FE-273)", () => {
+    const fails = withFact('acme/full', { moodIconsMissing: true })
+    expect(fails).toEqual(["acme/full: the skin's mood icons are not in the JS bundle"])
   })
 
   it('a skin cell missing token declarations in dist CSS fails, named (b)', () => {
@@ -434,7 +453,7 @@ describe('real-brand cells (FE-234)', () => {
     expect(leaked).toEqual(['velo-brand tokens (--velo-primary:#334d6e)'])
     const fails = evaluateMatrix({
       cells: CELLS,
-      facts: { ...GREEN, 'golden/full': { ...GREEN['golden/full']!, leaked } },
+      facts: { ...GREEN, 'golden/full': { ...factsOf('golden/full'), leaked } },
       expected: EXPECTED,
     })
     expect(fails.join('\n')).toContain('golden/full')
@@ -474,8 +493,68 @@ describe('real-brand cells (FE-234)', () => {
     expect(withEmail('const e=null')).toEqual([])
   })
 
+  describe('mood icons (FE-273)', () => {
+    // Two icons of one size share the glow path; only the faces differ (the
+    // real Goodo set: bad and fire, low and good).
+    const GLOW = 'M0 0C9 0 9 9 0 9Z'
+    const icon = (...paths: string[]): MoodNode => ({
+      tag: 'svg',
+      children: [{ tag: 'g', children: paths.map((d) => ({ tag: 'path', attrs: { d } })) }],
+    })
+    const set = { bad: icon(GLOW, 'M1 1h2z'), low: icon(GLOW, 'M2 2h2z') }
+
+    it('an icon is told by the path data it alone carries, not by the glow it shares', () => {
+      expect(moodProbes(set)).toEqual({ bad: ['M1 1h2z'], low: ['M2 2h2z'] })
+    })
+
+    it('an icon with no path of its own is told by all of its paths', () => {
+      expect(moodProbes({ bad: icon(GLOW), low: icon(GLOW, 'M2 2h2z') })).toEqual({
+        bad: [GLOW],
+        low: ['M2 2h2z'],
+      })
+    })
+
+    it('a skin bundle carries the set only when EVERY icon is in it, shared glow or not', () => {
+      expect(bundleHasAllMoodIcons(`${GLOW}|M1 1h2z|M2 2h2z`, set)).toBe(true)
+      // The glow and one face: the other icon is not there, whatever it shares.
+      expect(bundleHasAllMoodIcons(`${GLOW}|M1 1h2z`, set)).toBe(false)
+      expect(bundleHasAllMoodIcons(GLOW, set)).toBe(false)
+    })
+
+    it('a core bundle has an icon of the set only when that icon is proven there', () => {
+      expect(bundleHasAnyMoodIcon('x="M2 2h2z"', set)).toBe(true)
+      // The shared glow alone proves no icon of the set.
+      expect(bundleHasAnyMoodIcon(GLOW, set)).toBe(false)
+      expect(bundleHasAnyMoodIcon('x="M9 9h2z"', set)).toBe(false)
+    })
+
+    const leakOf = (js: string) =>
+      skinLeaks({
+        label: 'goodo-brand',
+        brand: { displayName: 'Goodo' },
+        decls: [],
+        js,
+        html: '',
+        css: '',
+        goldenDecls: core,
+        coreName: 'App',
+        moodIcons: set,
+      })
+
+    it('one icon of a skin in a core build is a leak; a core bundle without them is clean', () => {
+      expect(leakOf('x="M2 2h2z"')).toEqual(['goodo-brand moodIcons'])
+      expect(leakOf('x="M9 9h2z"')).toEqual([])
+    })
+  })
+
   it('a value the core keeps is not a missing declaration; a changed one is', () => {
     expect(missingTokens(decls, ':root{--velo-primary:#334d6e}', core)).toEqual([])
     expect(missingTokens(decls, ':root{}', core)).toEqual(['--velo-primary:#334d6e'])
   })
 })
+/** The green facts of one cell (a typo in the name is a failure, not undefined). */
+function factsOf(name: string): Facts {
+  const facts = GREEN[name]
+  if (!facts) throw new Error(`no green facts for ${name}`)
+  return facts
+}

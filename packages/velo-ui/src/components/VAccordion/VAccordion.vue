@@ -8,6 +8,11 @@
       <p>Hidden content here</p>
     </VAccordion>
 
+  The header button takes its accessible name from its content: the visible
+  title, then the action word (ui.expand / ui.collapse) as visually hidden
+  text. The name therefore contains the visible title (WCAG 2.5.3) without the
+  kit joining strings, and the open state itself is carried by aria-expanded.
+
   Optional slots (additive, backward-compatible — default render unchanged):
     #icon    — leading icon before the title (e.g. <IconClock />).
     #chevron — override the default «›» chevron; receives { open } so the
@@ -21,19 +26,15 @@
     :class="{ 'v-accordion--open': open }"
     :data-velo-open="open || undefined"
   >
-    <button
-      class="v-accordion__header"
-      :aria-label="open ? t('ui.collapse') : t('ui.expand')"
-      :aria-expanded="open"
-      @click="open = !open"
-    >
+    <button class="v-accordion__header" :aria-expanded="open" @click="open = !open">
       <span class="v-accordion__lead">
         <span v-if="$slots.icon" class="v-accordion__icon">
           <slot name="icon" :open="open" />
         </span>
         <span class="v-accordion__title">{{ title }}</span>
+        <span class="velo-sr-only">{{ open ? t('ui.collapse') : t('ui.expand') }}</span>
       </span>
-      <span class="v-accordion__arrow">
+      <span class="v-accordion__arrow" aria-hidden="true">
         <slot name="chevron" :open="open">
           <span class="v-accordion__arrow-default">›</span>
         </slot>
