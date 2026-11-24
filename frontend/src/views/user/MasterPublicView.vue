@@ -560,7 +560,7 @@ function goToCalendar(): void {
   void router.push({
     name: 'user-calendar-master',
     params: { masterId: masterId.value },
-    query: schoolContext.value ? { schoolId: schoolId.value } : undefined,
+    ...(schoolContext.value ? { query: { schoolId: schoolId.value } } : {}),
   })
 }
 

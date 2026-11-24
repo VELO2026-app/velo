@@ -264,7 +264,11 @@ async function doApprove(
   if (busyId.value) return
   busyId.value = item.user_id
   try {
-    await approve.mutateAsync({ userId: item.user_id, promote, masterOnly })
+    await approve.mutateAsync({
+      userId: item.user_id,
+      ...(promote !== undefined ? { promote } : {}),
+      ...(masterOnly !== undefined ? { masterOnly } : {}),
+    })
     toast.success(t('adminScreens.adminMethodRequests.methodsUpdated'))
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminMethodRequests.approveError')))

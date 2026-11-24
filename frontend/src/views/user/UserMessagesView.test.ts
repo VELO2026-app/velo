@@ -58,13 +58,14 @@ function thread(overrides: Partial<ChatThread> = {}): ChatThread {
 function supportThread(overrides: Partial<ChatThread> = {}): ChatThread {
   // BE-163: a support row has peer: null -- the VELO logo + the support
   // title (i18n:chat.supportTitle) stand in for both.
-  return thread({
+  const result = thread({
     id: 'support-1',
     channel: 'support',
-    operator_value: undefined,
     peer: null,
     ...overrides,
   })
+  if (overrides.operator_value === undefined) delete result.operator_value
+  return result
 }
 
 // -----------------------------------------------------------------------------
