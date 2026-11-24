@@ -22,7 +22,7 @@
     msg_participants / msg_support  -> their own categories
     schedule                        -> comms quiet hours (the proxy converts
         the delivery-window semantics both ways)
-  Every row maps to a comms category. The former stub rows (new_checkin /
+  The former stub rows (new_checkin /
   new_feedback / ai_summary / monthly_report: no comms types, a disabled
   switch and a "soon" badge) were removed by owner decision (FE-261); when
   comms gets their types, add them back as ordinary category rows.
@@ -204,7 +204,7 @@ const GROUPS: Group[] = [
   },
 ]
 
-// toggle key -> comms category (T1). Every row has one.
+// toggle key -> comms category (T1).
 const CATEGORY_BY_KEY: Record<ToggleKey, string> = {
   new_booking: 'bookings',
   booking_cancelled: 'bookings',
