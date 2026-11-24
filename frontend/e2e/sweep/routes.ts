@@ -322,7 +322,7 @@ export const SWEEP: Record<string, SweepRow> = {
     params: { id: 'supportTicketId' },
   },
   // FE-262: the web console. The sweep's phone viewport shows its device
-  // stub (views/console/consoleAccess.ts) -- that is the screen checked.
+  // stub (utils/console/access.ts) -- that is the screen checked.
   'console-dashboard': { path: '/console/dashboard', roles: A },
   'console-masters': { path: '/console/masters', roles: A },
   'console-users': { path: '/console/users', roles: A },

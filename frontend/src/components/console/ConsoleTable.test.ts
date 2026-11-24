@@ -60,9 +60,9 @@ describe('ConsoleTable', () => {
     expect(rowEls()[0]?.querySelector('b')?.textContent).toBe('ALPHA')
   })
 
-  it('makes rows clickable and focusable only when the screen listens to row-click', () => {
+  it('makes clickable rows focusable controls that emit row-click', () => {
     const onRowClick = vi.fn()
-    mount({ columns, rows, onRowClick })
+    mount({ columns, rows, clickable: true, onRowClick })
 
     rowEls()[1]?.click()
     rowEls()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
@@ -71,19 +71,28 @@ describe('ConsoleTable', () => {
     expect(rowEls()[0]?.getAttribute('tabindex')).toBe('0')
   })
 
-  it('leaves rows inert without a row-click listener', () => {
-    mount({ columns, rows })
+  it('leaves rows inert unless clickable', () => {
+    const onRowClick = vi.fn()
+    mount({ columns, rows, onRowClick })
+
+    rowEls()[0]?.click()
 
     expect(rowEls()[0]?.getAttribute('tabindex')).toBeNull()
+    expect(onRowClick).not.toHaveBeenCalled()
   })
 
-  it('marks the selected row and shows the empty slot when there are no rows', () => {
+  it('marks the selected row', () => {
     mount({ columns, rows, selected: 'b' })
-    expect(rowEls()[1]?.classList.contains('console-table__row--selected')).toBe(true)
-    app?.unmount()
-    root?.remove()
 
+    expect(rowEls().map((r) => r.classList.contains('console-table__row--selected'))).toEqual([
+      false,
+      true,
+    ])
+  })
+
+  it('shows the empty slot when there are no rows', () => {
     const el = mount({ columns, rows: [] }, { empty: () => 'Nothing yet' })
+
     expect(el.querySelector('.console-table__empty')?.textContent?.trim()).toBe('Nothing yet')
   })
 })
