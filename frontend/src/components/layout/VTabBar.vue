@@ -233,7 +233,7 @@ onBeforeUnmount(() => {
   /* Lift the PILL itself (not inner padding) away from the screen edge:
      33px + safe-area of clear space below the glass, buttons tucked 8px
      inside it. Keeps the home-indicator clearance of Figma 2212:292. */
-  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-8) + var(--velo-safe-bottom));
   display: flex;
   align-items: center;
   /* Spread the fixed 48px targets across the stretched pill -- the tab-dock

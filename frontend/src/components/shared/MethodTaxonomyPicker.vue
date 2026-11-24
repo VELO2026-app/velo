@@ -333,6 +333,14 @@ const customText = computed<string>({
   gap: var(--space-2);
 }
 
+/* FE-240: a long chip (a legacy method kept verbatim) wraps inside itself
+   instead of running past the screen's edge (the kit's VChip is
+   white-space: nowrap). */
+.mtp__chips > .v-chip {
+  max-width: 100%;
+  white-space: normal;
+}
+
 /* Level-2 (styles) card: a small direction heading above its style chips. */
 .mtp__styles {
   display: flex;

@@ -156,14 +156,33 @@ export async function emulateSafeArea(page: Page, insets: TelegramInsets): Promi
   })
 }
 
-/** Telegram on an iPhone in fullscreen (FE-240: the layout sweep's host). */
-export const IPHONE_HOST: TelegramHost = { platform: 'ios', insets: IPHONE_FULLSCREEN }
-
 /** The client a stubbed launch pretends to be (FE-240). */
 export interface TelegramHost {
   platform: 'android' | 'ios'
   /** Fullscreen with these insets; absent -- launched from a chat, no insets. */
   insets?: TelegramInsets
+}
+
+/** Telegram on an iPhone in fullscreen (FE-240: the layout sweep's host). */
+export const IPHONE_HOST: TelegramHost = { platform: 'ios', insets: IPHONE_FULLSCREEN }
+
+/**
+ * An initData string the stub carries: unsigned (`hash=e2e-stub`). The mocks
+ * accept it at login; on the stack it only names the owner of a restored
+ * session (e2e/sweep/layout-host.ts).
+ */
+export function stubInitData(
+  user: { id: number; first_name: string },
+  startParam?: string,
+): string {
+  return new URLSearchParams({
+    user: JSON.stringify(user),
+    auth_date: '1700000000',
+    hash: 'e2e-stub',
+    // @tma.js parses initData and requires the field (Bot API 8.0).
+    signature: 'e2e-stub',
+    ...(startParam ? { start_param: startParam } : {}),
+  }).toString()
 }
 
 /**
@@ -265,16 +284,7 @@ export async function stubTelegram(
   host: TelegramHost = { platform: 'android' },
 ): Promise<string> {
   const user = launch?.user ?? { id: TELEGRAM_USER_ID, first_name: 'Ada' }
-  const initData =
-    launch?.initData ??
-    new URLSearchParams({
-      user: JSON.stringify(user),
-      auth_date: '1700000000',
-      hash: 'e2e-stub',
-      // @tma.js parses initData and requires the field (Bot API 8.0).
-      signature: 'e2e-stub',
-      ...(startParam ? { start_param: startParam } : {}),
-    }).toString()
+  const initData = launch?.initData ?? stubInitData(user, startParam)
 
   await routeTelegramScript(
     page,

@@ -623,8 +623,11 @@ jobs:
     uses: ./.github/workflows/e2e-stack.yml
     with:
       # FE-240: sweep-layout -- the same screens as Telegram fullscreen on an
-      # iPhone, judged by the layout detector at three screen sizes.
+      # iPhone, judged by the layout detector at three screen sizes on both
+      # brand skins (the plan job of e2e-stack.yml spreads it).
       projects: sweep sweep-layout
+    # The brand skin packages may be private (BRAND_REPO_TOKEN, as visual.yml).
+    secrets: inherit
 
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
   # gate -- the core without a skin (cells named golden/*; neutral since

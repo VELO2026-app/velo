@@ -853,8 +853,8 @@ onBeforeUnmount(() => {
 
 .chat-thread__composer {
   flex: 0 0 auto;
-  /* FE-240: clear the home indicator, as the diary's composer does. */
+  /* FE-240: clear the home indicator (--velo-safe-bottom, global.css). */
   padding: var(--space-2) var(--velo-rail-pad-x, var(--space-4))
-    calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    calc(var(--space-3) + var(--velo-safe-bottom));
 }
 </style>

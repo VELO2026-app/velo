@@ -1481,7 +1481,7 @@ onBeforeUnmount(() => {
   position: absolute;
   left: var(--velo-rail-pad-x);
   right: var(--velo-rail-pad-x);
-  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(110px + var(--velo-safe-bottom));
   z-index: var(--z-sticky);
   display: flex;
   align-items: center;
@@ -1546,7 +1546,7 @@ onBeforeUnmount(() => {
   right: var(--diary-overlay-rail);
   /* Owner pass: 12px sat TOO tight against the screen edge -- restored the
      pre-spec clearance (16 + 20 + safe-area), where the pill rode before. */
-  bottom: calc(var(--space-4) + 20px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-4) + 20px + var(--velo-safe-bottom));
   z-index: 20;
 }
 
@@ -1556,7 +1556,7 @@ onBeforeUnmount(() => {
    NO transition on bottom (the static-glass rule: nothing animates while
    content scrolls; the state flips once with the keyboard). */
 .diary-feed--composing .diary-feed__composer {
-  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-4) + var(--velo-safe-bottom));
 }
 
 /* While writing (keyboard up) drop the composer's extra bottom offset so the

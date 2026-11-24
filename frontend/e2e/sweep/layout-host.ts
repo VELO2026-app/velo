@@ -1,7 +1,7 @@
 /**
- * The host of the `sweep-layout` project (FE-240): the screen opened the way
- * Telegram on an iPhone opens it in fullscreen (IPHONE_HOST), then judged by
- * the layout detector (e2e/support/layout.ts) at each size of LAYOUT_SIZES.
+ * The host of the `sweep-layout-<width>` projects (FE-240): the screen opened
+ * the way Telegram on an iPhone opens it in fullscreen (IPHONE_HOST), at the
+ * project's size, then judged by the layout detector (e2e/support/layout.ts).
  *
  * The launch: the session token where the Telegram platform keeps it
  * (sessionStorage), the marks a reload inside Telegram leaves (the app's
@@ -18,29 +18,31 @@ import {
   SESSION_TOKEN_KEY,
   emulateSafeArea,
   launchParams,
+  stubInitData,
   routeTelegramScript,
   telegramScript,
 } from '../support/fixtures'
 import type { SweepRole } from './routes'
 
-/** The Playwright project that runs the sweep under this host. */
+/** The prefix of the Playwright projects that run the sweep under this host, one per size. */
 export const LAYOUT_PROJECT = 'sweep-layout'
+
+/** Whether a project is one of the layout sweep's (`sweep-layout-390`, ...). */
+export function isLayoutProject(name: string): boolean {
+  return name.startsWith(`${LAYOUT_PROJECT}-`)
+}
 
 /** Make the next navigation a Telegram launch of `role`. Call before goto. */
 export async function launchInTelegram(page: Page, role: SweepRole): Promise<void> {
   const user = PEOPLE[role]
   // Unsigned: the session is restored, initData only names its owner.
-  const initData = new URLSearchParams({
-    user: JSON.stringify(user),
-    auth_date: '1700000000',
-    hash: 'e2e-stub',
-    // @tma.js parses initData and requires the field (Bot API 8.0).
-    signature: 'e2e-stub',
-  }).toString()
+  const initData = stubInitData(user)
   await routeTelegramScript(page, telegramScript(initData, { user }, IPHONE_HOST))
   await page.addInitScript(
     ([key, token, params]) => {
       sessionStorage.setItem(key!, token!)
+      // TELEGRAM_LAUNCH_KEY of src/platform/launch.ts (that module pulls the
+      // app's host layer in) and @tma.js's own key of the launch parameters.
       sessionStorage.setItem('velo:telegram-launch', '1')
       sessionStorage.setItem('tapps/launchParams', JSON.stringify(params))
     },

@@ -290,8 +290,9 @@ const mainStyle = computed(() => {
   // Bottom clearance: clear the floating tab bar (160) when present; without it,
   // a fog list pads exactly to its bottom fade zone so the last item rests crisp
   // and only dissolves on scroll; a plain (no-fog) detail keeps a small 24 base.
-  // Plus the system's bottom inset (the home indicator), as the tab bar adds it
-  // to its own offset (FE-240: the last CTA rested on the indicator).
+  // Plus the home indicator's inset (--velo-safe-bottom, global.css), which
+  // the tab bar adds to its own offset too (FE-240: the last CTA rested on
+  // the indicator).
   const bottom = props.hideTabBar ? (props.fog ? botFade + botHard : 24) : 160
   // [FE-3] The fog's hard zone must never reach PAST the clearance: on the
   // headerless dashboard (top = 34) the default topHard (40) overlapped the
@@ -302,7 +303,7 @@ const mainStyle = computed(() => {
   const topHardEff = Math.min(topHard, top)
   return {
     paddingTop: `${top}px`,
-    paddingBottom: `calc(${bottom}px + env(safe-area-inset-bottom, 0px))`,
+    paddingBottom: `calc(${bottom}px + var(--velo-safe-bottom))`,
     '--fog-top-hard': `${topHardEff}px`,
     '--fog-top-fade': `${Math.max(0, top - topHardEff)}px`,
     '--fog-bot-fade': `${botFade}px`,

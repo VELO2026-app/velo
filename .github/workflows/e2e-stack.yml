@@ -49,31 +49,45 @@ permissions:
   contents: read
 
 jobs:
-  # FE-240: one job per Playwright project, in parallel, each with its own
-  # stack. Together in one job sweep + sweep-layout took more than twice the
-  # sweep alone; apart, the wall time stays that of the longest project.
+  # FE-240: one job per Playwright project and skin, in parallel, each with
+  # its own stack -- the wall time stays that of the longest one. `sweep` and
+  # `sweep-webkit` run on the synthetic skin package; `sweep-layout` stands
+  # for the layout sweep: one project per screen size (LAYOUT_SIZES of
+  # frontend/e2e/support/layout-sizes.ts -- a width missing there fails its
+  # job with "project not found") on each brand skin of
+  # .github/brand-skins.json, as it is the brand's look that must fit.
   plan:
     name: e2e-stack — plan
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      projects: ${{ steps.split.outputs.projects }}
+      cells: ${{ steps.split.outputs.cells }}
     steps:
       - id: split
         env:
           # The schedule has no inputs: both engines and the layout sweep.
           PROJECTS: ${{ inputs.projects || 'sweep sweep-layout sweep-webkit' }}
-        run: echo "projects=$(jq -cn --arg p "$PROJECTS" '$p | split(" ") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
+          LAYOUT_WIDTHS: '390 320 430'
+          BRAND_SKINS: 'velo-brand goodo-brand'
+        run: |
+          cells=$(jq -cn --arg p "$PROJECTS" --arg w "$LAYOUT_WIDTHS" --arg s "$BRAND_SKINS" '
+            def words: split(" ") | map(select(length > 0));
+            [ $p | words[] as $project
+              | if $project == "sweep-layout"
+                then ($w | words[]) as $width | ($s | words[]) as $skin
+                  | { project: "sweep-layout-\($width)", skin: $skin }
+                else { project: $project, skin: "synthetic" } end ]')
+          echo "cells=$cells" >> "$GITHUB_OUTPUT"
 
   sweep:
-    name: e2e-stack — ${{ matrix.project }} on a real backend
+    name: e2e-stack — ${{ matrix.project }} (${{ matrix.skin }}) on a real backend
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        project: ${{ fromJSON(needs.plan.outputs.projects) }}
+        include: ${{ fromJSON(needs.plan.outputs.cells) }}
     services:
       postgres:
         image: postgres:16.15-trixie@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
@@ -177,12 +191,26 @@ jobs:
         working-directory: frontend
         run: pnpm exec playwright install-deps webkit
 
+      # FE-240: the brand packages at their pinned tags (as visual.yml).
+      - name: Fetch the brand skin packages
+        if: matrix.skin != 'synthetic'
+        env:
+          BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
+        run: node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands" > /dev/null
+
       # FE-204: vite only -- this job needs the dist. vue-tsc runs in the
-      # typecheck job and the skin validation in the build job. FE-230: with
-      # the synthetic skin package, as the smoke job in ci.yml.
-      - name: Build the app (synthetic skin)
+      # typecheck job and the skin validation in the build job. FE-230: the
+      # synthetic skin package, as the smoke job in ci.yml; FE-240: or the
+      # brand package of the cell.
+      - name: Build the app (${{ matrix.skin }} skin)
+        env:
+          SKIN: ${{ matrix.skin }}
         run: |
-          node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          if [ "$SKIN" = synthetic ]; then
+            node frontend/scripts/make-test-skin.mjs frontend/public/skin
+          else
+            node frontend/scripts/apply-skin.mjs "$RUNNER_TEMP/brands/$SKIN/skin"
+          fi
           pnpm -C frontend exec vite build
 
       - name: Sweep
@@ -192,7 +220,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: e2e-${{ matrix.project }}-${{ github.run_attempt }}
+          name: e2e-${{ matrix.project }}-${{ matrix.skin }}-${{ github.run_attempt }}
           path: |
             frontend/test-results
             stack-logs
