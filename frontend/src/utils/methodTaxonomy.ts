@@ -228,21 +228,32 @@ export async function ensureTaxonomyCatalog(): Promise<TaxonomyListResponse | nu
 /** `Direction label -> value`: the server catalog FIRST (its labels are the
  *  stored canon -- a non-ru UI parses stored ru strings through it), then the
  *  live hardcoded labels (so a same-locale round-trip works with a cold
- *  cache). A catalog-only value is not a member of the closed
+ *  cache), then the ru seed -- the storage canon itself. The live labels are
+ *  the ACTIVE locale's, an instance overlay may re-word them (a texts package
+ *  that says "sessions" for "practices"), and a stored string is never
+ *  re-written to match: with a cold catalog only the seed still knows it.
+ *  A catalog-only value is not a member of the closed
  *  PracticeDirection union -- the cast mirrors the SAME tolerance
  *  MethodTaxonomyPicker.vue's catalog-first options list already applies. */
 function resolveDirectionValue(label: string): PracticeDirection | undefined {
   const viaCatalog = catalogDirectionValueByLabel.value?.[label] as PracticeDirection | undefined
   if (viaCatalog) return viaCatalog
-  return DIRECTION_OPTIONS.find((o) => o.label === label)?.value
+  const viaLive = DIRECTION_OPTIONS.find((o) => o.label === label)?.value
+  if (viaLive) return viaLive
+  const viaSeed = Object.entries(ruSeed.display.direction).find(([, seed]) => seed === label)
+  return viaSeed?.[0] as PracticeDirection | undefined
 }
 
 /** `Style label -> value` under a resolved direction: catalog first, then the
- *  live hardcoded labels (same order rationale as resolveDirectionValue). */
+ *  live hardcoded labels, then the ru seed (same order rationale as
+ *  resolveDirectionValue). */
 function resolveStyleValue(dirValue: PracticeDirection, label: string): string | undefined {
   const viaCatalog = catalogStyleValueByLabel.value?.[dirValue]?.[label]
   if (viaCatalog) return viaCatalog
-  return stylesForDirection(dirValue).find((o) => o.label === label)?.value
+  const options = stylesForDirection(dirValue)
+  const viaLive = options.find((o) => o.label === label)
+  if (viaLive) return viaLive.value
+  return options.find((o) => ruSeed.practice.styles[o.value] === label)?.value
 }
 
 /** `Style value -> label` under a direction, for DISPLAY: the hardcoded key

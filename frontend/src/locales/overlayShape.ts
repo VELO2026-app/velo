@@ -17,9 +17,21 @@ const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 type Kind = 'group' | 'array' | 'message'
 
+/**
+ * Whether a catalog node is a message the build's plugin already compiled
+ * into a syntax tree (`{ t: 0, b: ... }`, the JIT form of the bundle): an
+ * object, yet a message. Same test as vue-i18n's own `isMessageAST`.
+ */
+function isCompiledMessage(value: object): boolean {
+  const node = value as { t?: unknown; type?: unknown }
+  return (node.t === 0 || node.type === 0) && ('b' in value || 'body' in value)
+}
+
 function kindOf(value: unknown): Kind {
   if (Array.isArray(value)) return 'array'
-  if (value !== null && typeof value === 'object') return 'group'
+  if (value !== null && typeof value === 'object') {
+    return isCompiledMessage(value) ? 'message' : 'group'
+  }
   return 'message'
 }
 
