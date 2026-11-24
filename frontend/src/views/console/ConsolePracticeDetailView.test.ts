@@ -212,6 +212,9 @@ describe('ConsolePracticeDetailView', () => {
       'Завершена',
     )
     expect(statValues()).toEqual({ Записано: '5', Был: '1', 'Не пришёл': '1' })
+    expect(
+      Array.from(host?.querySelectorAll('[role="tab"]') ?? []).map((el) => el.textContent?.trim()),
+    ).toEqual(['Участники · 5', 'Посещаемость Zoom'])
     expect(tableRows('Участники практики')).toEqual([
       ['Ксения Морозова', 'Был'],
       ['Никита Белов', 'Не пришёл'],

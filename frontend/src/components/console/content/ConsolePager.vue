@@ -60,7 +60,7 @@ const items = computed(() => pagerItems(props.page, props.pageCount))
 
 .console-pager__summary {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .console-pager__pages {
@@ -102,6 +102,6 @@ const items = computed(() => pagerItems(props.page, props.pageCount))
 
 .console-pager__gap {
   padding: 0 var(--space-1);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 </style>

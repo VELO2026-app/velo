@@ -34,3 +34,8 @@ export function formatWhen(isoString: string, timezone: string): string {
   }).format(date)
   return `${day}, ${time}`
 }
+
+/** A count with the locale's digit grouping, as in `1 208` (ru) for 1208. */
+export function formatCount(count: number): string {
+  return new Intl.NumberFormat(getLocale()).format(count)
+}

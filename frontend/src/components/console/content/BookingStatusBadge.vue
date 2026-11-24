@@ -6,21 +6,24 @@
 -->
 
 <template>
-  <VBadge :variant="known ? TONES[status as BookingStatus] : 'muted'" data-testid="booking-status">
+  <ConsoleStatusBadge
+    :tone="known ? TONES[status as BookingStatus] : 'neutral'"
+    data-testid="booking-status"
+  >
     {{ known ? t(`console.practices.detail.booking.${status}`) : status }}
-  </VBadge>
+  </ConsoleStatusBadge>
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { VBadge } from '@/components/ui'
+import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
 
 /** A booking status the API sends for a live (not cancelled) booking. */
 type BookingStatus = 'confirmed' | 'attended' | 'no_show' | 'pending'
 
-const TONES: Record<BookingStatus, 'success' | 'warning' | 'error' | 'blue'> = {
-  confirmed: 'blue',
+const TONES: Record<BookingStatus, 'success' | 'warning' | 'error' | 'info'> = {
+  confirmed: 'info',
   attended: 'success',
   no_show: 'error',
   pending: 'warning',

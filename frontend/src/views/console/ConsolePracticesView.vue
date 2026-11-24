@@ -42,6 +42,7 @@
       </VEmptyState>
       <template v-else>
         <ConsoleTable
+          clickable
           :columns="columns"
           :rows="rows"
           :label="t('console.practices.tableLabel')"
@@ -62,7 +63,7 @@
             </span>
           </template>
           <template #cell-master_name="{ row }">
-            <VAvatar :name="row.master_name" size="sm" />
+            <VAvatar class="console-practices__avatar" :name="row.master_name" size="sm" />
             <span class="console-practices__master">{{ row.master_name }}</span>
           </template>
           <template #cell-booked="{ row }">
@@ -94,7 +95,7 @@ import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import CapacityBar from '@/components/console/content/CapacityBar.vue'
 import ConsolePager from '@/components/console/content/ConsolePager.vue'
-import { formatWhen } from '@/components/console/content/consoleDate'
+import { formatCount, formatWhen } from '@/components/console/content/consoleDate'
 import { useConsoleWidth } from '@/components/console/content/useConsoleWidth'
 import type { AdminPracticeScope } from '@/api/admin'
 import {
@@ -187,14 +188,14 @@ function subline(row: { direction: string | null; master_name: string }): string
     .join(' · ')
 }
 
-// The count of the tab on screen is the answer's total; the others are not
-// known without a request of their own.
+// The count of the tab on screen is the answer's total ("Upcoming · 64"); the
+// others are not known without a request of their own.
 const scopeOptions = computed<SegmentOption[]>(() =>
-  SCOPES.map((value) => ({
-    value,
-    label: t(`console.practices.scope.${value}`),
-    badge: value === scope.value && listQuery.data.value !== undefined ? total.value : undefined,
-  })),
+  SCOPES.map((value) => {
+    const label = t(`console.practices.scope.${value}`)
+    const counted = value === scope.value && listQuery.data.value !== undefined
+    return { value, label: counted ? `${label} · ${formatCount(total.value)}` : label }
+  }),
 )
 
 function openPractice(row: { id: string }): void {
@@ -222,10 +223,15 @@ function openPractice(row: { id: string }): void {
 
 .console-practices__sub {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .console-practices__master {
   overflow-wrap: anywhere;
+}
+
+/* The kit paints the initials in the primary colour on a tint (4.09:1 on gold). */
+.console-practices__avatar :deep(.v-avatar__initials) {
+  color: var(--velo-text-primary);
 }
 </style>

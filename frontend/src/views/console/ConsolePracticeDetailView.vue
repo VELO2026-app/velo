@@ -21,11 +21,11 @@
     testid="console-practice-detail"
   >
     <template v-if="practice" #title-extra>
-      <VBadge :variant="isPast ? 'muted' : 'blue'" data-testid="practice-state">{{
+      <ConsoleStatusBadge :tone="isPast ? 'neutral' : 'info'" data-testid="practice-state">{{
         isPast
           ? t('console.practices.detail.state.past')
           : t('console.practices.detail.state.upcoming')
-      }}</VBadge>
+      }}</ConsoleStatusBadge>
     </template>
     <template #actions>
       <VButton variant="outline" size="sm" data-testid="practice-back" @click="backToList">{{
@@ -91,7 +91,12 @@
             :label="t('console.practices.detail.participants.label')"
           >
             <template #cell-name="{ row }">
-              <VAvatar :name="row.name" :url="row.avatar_url ?? undefined" size="sm" />
+              <VAvatar
+                class="practice-detail__avatar"
+                :name="row.name"
+                :url="row.avatar_url ?? undefined"
+                size="sm"
+              />
               <span class="practice-detail__name">{{ row.name }}</span>
             </template>
             <template #cell-status="{ row }">
@@ -102,7 +107,12 @@
         </ConsoleCard>
 
         <template v-else>
-          <div v-if="zoomLoading" class="practice-detail__state" data-testid="zoom-loading">
+          <!-- No answer and no failure yet: the loader, also in the tick before the request starts. -->
+          <div
+            v-if="!zoom && !zoomFailed"
+            class="practice-detail__state"
+            data-testid="zoom-loading"
+          >
             <VLoader size="lg" />
           </div>
           <ConsoleCard v-else-if="zoomFailed" :title="t('console.practices.detail.zoom.title')">
@@ -118,28 +128,30 @@
                 <div class="practice-detail__fact">
                   <dt>{{ t('console.practices.detail.zoom.meetingStatus') }}</dt>
                   <dd>
-                    <VBadge :variant="meetingStatus.variant" data-testid="zoom-meeting-status">{{
-                      meetingStatus.label
-                    }}</VBadge>
+                    <ConsoleStatusBadge
+                      :tone="meetingStatus.tone"
+                      data-testid="zoom-meeting-status"
+                      >{{ meetingStatus.label }}</ConsoleStatusBadge
+                    >
                   </dd>
                 </div>
                 <div class="practice-detail__fact">
                   <dt>{{ t('console.practices.detail.zoom.report') }}</dt>
                   <dd>
-                    <VBadge :variant="zoom.report_ingested ? 'success' : 'muted'">{{
+                    <ConsoleStatusBadge :tone="zoom.report_ingested ? 'success' : 'neutral'">{{
                       zoom.report_ingested
                         ? t('console.practices.detail.zoom.reportReady')
                         : t('console.practices.detail.zoom.reportWaiting')
-                    }}</VBadge>
+                    }}</ConsoleStatusBadge>
                   </dd>
                 </div>
                 <div class="practice-detail__fact">
                   <dt>{{ t('console.practices.detail.zoom.unmatched') }}</dt>
                   <dd>
-                    <VBadge
-                      :variant="zoom.unmatched_count > 0 ? 'warning' : 'muted'"
+                    <ConsoleStatusBadge
+                      :tone="zoom.unmatched_count > 0 ? 'warning' : 'neutral'"
                       data-testid="zoom-unmatched-count"
-                      >{{ zoom.unmatched_count }}</VBadge
+                      >{{ zoom.unmatched_count }}</ConsoleStatusBadge
                     >
                   </dd>
                 </div>
@@ -246,14 +258,15 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
 import { routeParam } from '@/router/routeParam'
-import { VAvatar, VBadge, VButton, VEmptyState, VLoader, VSegment } from '@/components/ui'
+import { VAvatar, VButton, VEmptyState, VLoader, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import BookingStatusBadge from '@/components/console/content/BookingStatusBadge.vue'
+import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
 import ConsoleStat from '@/components/console/content/ConsoleStat.vue'
-import { formatWhen } from '@/components/console/content/consoleDate'
+import { formatCount, formatWhen } from '@/components/console/content/consoleDate'
 import { useConsoleWidth } from '@/components/console/content/useConsoleWidth'
 import {
   adminPracticeAttendanceQuery,
@@ -284,7 +297,7 @@ const attendanceQuery = useQuery(() => ({
   enabled: tab.value === 'zoom',
 }))
 const zoom = computed(() => attendanceQuery.data.value ?? null)
-const { loading: zoomLoading, failed: zoomFailed } = screenQueryState(attendanceQuery)
+const { failed: zoomFailed } = screenQueryState(attendanceQuery)
 
 onFailedRequest(practiceQuery, (e) => {
   if (practiceQuery.data.value !== undefined)
@@ -311,8 +324,7 @@ const freeSeats = computed<string | number>(() => {
 const tabOptions = computed<SegmentOption[]>(() => [
   {
     value: 'participants',
-    label: t('console.practices.detail.tabs.participants'),
-    badge: roster.value.length,
+    label: `${t('console.practices.detail.tabs.participants')} · ${formatCount(roster.value.length)}`,
   },
   { value: 'zoom', label: t('console.practices.detail.tabs.zoom') },
 ])
@@ -324,21 +336,21 @@ const rosterColumns = computed<ConsoleTableColumn[]>(() => [
 
 const ZOOM_STATUS_TONES = {
   active: 'success',
-  pending_creation: 'muted',
+  pending_creation: 'neutral',
   create_failed: 'error',
-  deleted: 'muted',
+  deleted: 'neutral',
 } as const
 type ZoomStatus = keyof typeof ZOOM_STATUS_TONES
 
 // null: no ZoomMeeting row was ever made for the practice (backend router docstring).
-const meetingStatus = computed<{ label: string; variant: 'success' | 'error' | 'muted' }>(() => {
+const meetingStatus = computed<{ label: string; tone: 'success' | 'error' | 'neutral' }>(() => {
   const status = zoom.value?.zoom_meeting_status
   if (status == null)
-    return { label: t('console.practices.detail.zoom.status.none'), variant: 'muted' }
-  if (!Object.hasOwn(ZOOM_STATUS_TONES, status)) return { label: status, variant: 'muted' }
+    return { label: t('console.practices.detail.zoom.status.none'), tone: 'neutral' }
+  if (!Object.hasOwn(ZOOM_STATUS_TONES, status)) return { label: status, tone: 'neutral' }
   return {
     label: t(`console.practices.detail.zoom.status.${status}`),
-    variant: ZOOM_STATUS_TONES[status as ZoomStatus],
+    tone: ZOOM_STATUS_TONES[status as ZoomStatus],
   }
 })
 
@@ -452,6 +464,10 @@ function backToList(): void {
   display: flex;
   justify-content: center;
   padding: var(--space-8) 0;
+}
+
+.practice-detail__avatar :deep(.v-avatar__initials) {
+  color: var(--velo-text-primary);
 }
 
 .practice-detail__name {

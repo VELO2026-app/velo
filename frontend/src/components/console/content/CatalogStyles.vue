@@ -286,8 +286,15 @@ async function setVisible(row: StyleRow, active: boolean): Promise<void> {
   margin-bottom: 0;
 }
 
+/* The kit's field is a white plate with no border (made for the photo
+   background): on a white card it gets a light border. */
+.catalog-styles :deep(.v-input__field:not(:focus)) {
+  border-color: var(--velo-border-light);
+  font-size: var(--velo-fs-16);
+}
+
 .catalog-styles__off {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .catalog-styles__icon {

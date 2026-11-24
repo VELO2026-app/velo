@@ -11,7 +11,7 @@
 -->
 
 <template>
-  <ConsoleCard :title="direction.label">
+  <ConsoleCard class="catalog-direction" :title="direction.label">
     <template #header-right>
       <label class="catalog-direction__visible">
         <span>{{ t('console.catalog.detail.visible') }}</span>
@@ -131,6 +131,11 @@ async function setVisible(active: boolean): Promise<void> {
 </script>
 
 <style scoped>
+/* In a scrolling column (ConsoleSplit) the card keeps its height, the column scrolls. */
+.catalog-direction {
+  flex: 0 0 auto;
+}
+
 .catalog-direction__visible {
   display: inline-flex;
   align-items: center;
@@ -142,6 +147,18 @@ async function setVisible(active: boolean): Promise<void> {
 .catalog-direction__fields {
   display: flex;
   gap: var(--space-4);
+}
+
+/* The kit's field is a white plate with no border (made for the photo
+   background): on a white card it gets a light border and a small label. */
+.catalog-direction__fields :deep(.v-input__label) {
+  font-size: var(--velo-fs-12);
+  color: var(--velo-text-secondary);
+}
+
+.catalog-direction__fields :deep(.v-input__field:not(:focus)) {
+  border-color: var(--velo-border-light);
+  font-size: var(--velo-fs-16);
 }
 
 /* VInput keeps its attrs on the inner <input>: the flex rules go on its root. */
@@ -160,6 +177,6 @@ async function setVisible(active: boolean): Promise<void> {
   border-radius: var(--velo-radius-10);
   background: var(--velo-bg-subtle);
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-secondary);
+  color: var(--velo-text-primary);
 }
 </style>

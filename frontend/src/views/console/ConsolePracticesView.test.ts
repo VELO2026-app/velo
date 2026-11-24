@@ -180,8 +180,10 @@ describe('ConsolePracticesView', () => {
       ],
       [['20 декабря, 10:00', '45 мин'], ['Открытый круг'], ['ОК', 'Олег Ким'], ['3 / ∞']],
     ])
-    // The active tab carries the answer's total.
-    expect(tab('Предстоящие').textContent).toContain('2')
+    // The active tab carries the answer's total; the others do not know theirs.
+    expect(
+      Array.from(host?.querySelectorAll('[role="tab"]') ?? []).map((el) => el.textContent?.trim()),
+    ).toEqual(['Предстоящие · 2', 'Прошедшие', 'Все'])
   })
 
   it('on a narrow screen the master column goes and the master moves under the title', async () => {

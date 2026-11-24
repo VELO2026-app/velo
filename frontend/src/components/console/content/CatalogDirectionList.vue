@@ -13,7 +13,11 @@
 -->
 
 <template>
-  <ConsoleCard :title="t('console.catalog.directions')" :note="String(directions.length)">
+  <ConsoleCard
+    class="catalog-list"
+    :title="t('console.catalog.directions')"
+    :note="String(directions.length)"
+  >
     <template #header-right>
       <VButton
         v-if="!adding"
@@ -146,6 +150,11 @@ async function addDirection(): Promise<void> {
 </script>
 
 <style scoped>
+/* In a scrolling column (ConsoleSplit) the card keeps its height, the column scrolls. */
+.catalog-list {
+  flex: 0 0 auto;
+}
+
 .catalog-list__add {
   display: flex;
   align-items: center;
@@ -157,6 +166,13 @@ async function addDirection(): Promise<void> {
   flex: 1;
   min-width: 0;
   margin-bottom: 0;
+}
+
+/* The kit's field is a white plate with no border (made for the photo
+   background): on a white card it gets a light border. */
+.catalog-list__add :deep(.v-input__field:not(:focus)) {
+  border-color: var(--velo-border-light);
+  font-size: var(--velo-fs-16);
 }
 
 .catalog-list__list {
@@ -193,8 +209,9 @@ async function addDirection(): Promise<void> {
 
 .catalog-list__list--compact .catalog-list__item {
   width: auto;
+  border: 1px solid var(--velo-border-light);
   border-radius: var(--radius-full);
-  background: var(--velo-bg-subtle);
+  background: var(--velo-bg-card-solid);
 }
 
 .catalog-list__item:hover {
@@ -209,6 +226,7 @@ async function addDirection(): Promise<void> {
 .catalog-list__item--active,
 .catalog-list__item--active:hover,
 .catalog-list__list--compact .catalog-list__item--active {
+  border-color: var(--velo-primary);
   background: var(--velo-primary);
   color: var(--velo-on-accent);
 }
@@ -219,19 +237,26 @@ async function addDirection(): Promise<void> {
   overflow-wrap: anywhere;
 }
 
-.catalog-list__item--off .catalog-list__name {
-  opacity: 0.6;
-}
-
 .catalog-list__meta {
   flex: 0 0 auto;
   font-size: var(--velo-fs-12);
-  opacity: 0.7;
+  color: var(--velo-text-secondary);
+}
+
+/* A hidden direction: its name is the quieter colour; opacity would mix the
+   text with the card and take its contrast. */
+.catalog-list__item--off .catalog-list__name {
+  color: var(--velo-text-secondary);
+}
+
+.catalog-list__item--active .catalog-list__meta,
+.catalog-list__item--active .catalog-list__name {
+  color: var(--velo-on-accent);
 }
 
 .catalog-list__empty {
   margin: 0;
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 </style>

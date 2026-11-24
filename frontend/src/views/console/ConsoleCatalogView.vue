@@ -21,6 +21,7 @@
   <ConsolePage
     :title="t('console.catalog.title')"
     :crumbs="t('console.groups.content')"
+    :fill="!narrow"
     testid="console-catalog"
   >
     <div v-if="loading" class="console-catalog__state" data-testid="catalog-loading">
