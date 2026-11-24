@@ -23,11 +23,12 @@ let app: App | null = null
 let host: HTMLElement | null = null
 const closed = vi.fn()
 const attempted = vi.fn()
+let open = ref(true)
 
 function mountSheet(props: Record<string, unknown> = {}, body = () => h('p', 'body')): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  const open = ref(true)
+  open = ref(true)
   app = createApp({
     render: () =>
       h(
@@ -36,7 +37,10 @@ function mountSheet(props: Record<string, unknown> = {}, body = () => h('p', 'bo
           open: open.value,
           title: 'Title',
           ...props,
-          onClose: () => closed(),
+          onClose: () => {
+            closed()
+            open.value = false
+          },
           onDismissAttempt: () => attempted(),
         },
         { default: body },
@@ -45,20 +49,24 @@ function mountSheet(props: Record<string, unknown> = {}, body = () => h('p', 'bo
   app.mount(host)
 }
 
-const panel = (): HTMLElement => document.body.querySelector('.v-sheet__panel')!
-const handle = (): HTMLElement => document.body.querySelector('.v-sheet__handle')!
-const overlay = (): HTMLElement => document.body.querySelector('.v-sheet__overlay')!
+// A sheet closed in happy-dom parks mid-leave: queries skip that corpse.
+const LIVE = '.v-sheet__overlay:not(.v-sheet-leave-active)'
+const panel = (): HTMLElement => document.body.querySelector(`${LIVE} .v-sheet__panel`)!
+const handle = (): HTMLElement => document.body.querySelector(`${LIVE} .v-sheet__handle`)!
+const title = (): HTMLElement => document.body.querySelector(`${LIVE} .v-sheet__title`)!
+const overlay = (): HTMLElement => document.body.querySelector(LIVE)!
 
 async function flush(): Promise<void> {
   for (let i = 0; i < 3; i++) await nextTick()
 }
 
 /** A touch event at (x, y) with a fixed timestamp; returns it for `defaultPrevented`. */
-function touch(type: string, el: Element, y: number, t: number, x = 0): Event {
+function touch(type: string, el: Element, y: number, t: number, x = 0, fingers = 1): Event {
   const ev = new Event(type, { bubbles: true, cancelable: true })
   const point = { clientX: x, clientY: y }
   Object.defineProperty(ev, 'timeStamp', { value: t })
-  Object.assign(ev, { touches: type === 'touchend' ? [] : [point] })
+  const down = type === 'touchend' || type === 'touchcancel' ? [] : Array(fingers).fill(point)
+  Object.assign(ev, { touches: down })
   el.dispatchEvent(ev)
   return ev
 }
@@ -66,7 +74,7 @@ function touch(type: string, el: Element, y: number, t: number, x = 0): Event {
 function pointer(type: string, el: Element, y: number, t: number): void {
   const ev = new Event(type, { bubbles: true })
   Object.defineProperty(ev, 'timeStamp', { value: t })
-  Object.assign(ev, { clientY: y, pointerId: 1 })
+  Object.assign(ev, { clientY: y, pointerId: 1, pointerType: 'touch', button: 0 })
   el.dispatchEvent(ev)
 }
 
@@ -197,33 +205,204 @@ describe('VBottomSheet (spring return)', () => {
   })
 })
 
+describe('VBottomSheet (who owns the gesture)', () => {
+  it('is decided at touchstart: content that scrolls to its top mid-gesture does not hand it over', async () => {
+    mountSheet()
+    await flush()
+    const body = panel().querySelector('p')!
+    panel().scrollTop = 50
+
+    touch('touchstart', body, 100, 0)
+    panel().scrollTop = 0
+    touch('touchmove', body, 110, 16)
+    const move = touch('touchmove', body, 180, 32)
+
+    expect(move.defaultPrevented).toBe(false)
+    expect(panel().style.transform).toBe('')
+  })
+
+  it('a finger that first goes up leaves the gesture to the content for good', async () => {
+    mountSheet()
+    await flush()
+    const body = panel().querySelector('p')!
+
+    touch('touchstart', body, 200, 0)
+    touch('touchmove', body, 180, 16)
+    const down = touch('touchmove', body, 260, 32)
+    touch('touchend', body, 260, 48)
+
+    expect(down.defaultPrevented).toBe(false)
+    expect(closed).not.toHaveBeenCalled()
+  })
+
+  it('pulled back up past the start, a scrollable panel gives the swipe to its content', async () => {
+    mountSheet()
+    await flush()
+    const body = panel().querySelector('p')!
+    Object.defineProperty(panel(), 'scrollHeight', { value: 900, configurable: true })
+    Object.defineProperty(panel(), 'clientHeight', { value: 500, configurable: true })
+
+    touch('touchstart', body, 100, 0)
+    touch('touchmove', body, 110, 16)
+    touch('touchmove', body, 150, 32)
+    const back = touch('touchmove', body, 90, 48)
+    const again = touch('touchmove', body, 160, 64)
+
+    expect(back.defaultPrevented).toBe(false)
+    expect(panel().style.transform).toBe('')
+    expect(again.defaultPrevented).toBe(false)
+  })
+
+  it('a second finger never starts a sheet drag', async () => {
+    mountSheet()
+    await flush()
+    const body = panel().querySelector('p')!
+
+    touch('touchstart', body, 100, 0, 0, 2)
+    const move = touch('touchmove', body, 200, 16)
+
+    expect(move.defaultPrevented).toBe(false)
+    expect(panel().style.transform).toBe('')
+  })
+
+  it('a touch on the grab zone is left to its own pointer path', async () => {
+    mountSheet()
+    await flush()
+
+    touch('touchstart', title(), 100, 0)
+    touch('touchmove', title(), 110, 16)
+    const move = touch('touchmove', title(), 200, 32)
+
+    expect(move.defaultPrevented).toBe(false)
+  })
+
+  it('touchcancel springs the panel back without closing', async () => {
+    mountSheet()
+    await flush()
+    const body = panel().querySelector('p')!
+    Object.defineProperty(panel(), 'offsetHeight', { value: 600, configurable: true })
+
+    touch('touchstart', body, 100, 0)
+    touch('touchmove', body, 110, 16)
+    touch('touchmove', body, 150, 32)
+    touch('touchcancel', body, 150, 48)
+
+    expect(closed).not.toHaveBeenCalled()
+    expect(frames.length).toBeGreaterThan(0)
+  })
+})
+
+describe('VBottomSheet (position after a gesture)', () => {
+  it('a sheet closed by swipe reopens at rest: a 1 px handle move does not close it', async () => {
+    mountSheet()
+    await flush()
+    const body = panel().querySelector('p')!
+    touch('touchstart', body, 100, 0)
+    touch('touchmove', body, 110, 16)
+    touch('touchmove', body, 300, 32)
+    touch('touchend', body, 300, 48)
+    expect(closed).toHaveBeenCalledTimes(1)
+    await flush()
+
+    open.value = true
+    await flush()
+    expect(panel().style.transform).toBe('')
+    Object.defineProperty(panel(), 'offsetHeight', { value: 600, configurable: true })
+    pointer('pointerdown', handle(), 500, 1000)
+    pointer('pointermove', handle(), 501, 1016)
+    pointer('pointerup', handle(), 501, 1032)
+
+    expect(closed).toHaveBeenCalledTimes(1)
+  })
+
+  it('a tap on the body during the spring does not stop it', async () => {
+    mountSheet()
+    await flush()
+    const body = panel().querySelector('p')!
+    Object.defineProperty(panel(), 'offsetHeight', { value: 2000, configurable: true })
+    touch('touchstart', body, 100, 0)
+    touch('touchmove', body, 110, 16)
+    touch('touchmove', body, 140, 200)
+    touch('touchend', body, 140, 400)
+    frames.shift()!(1000)
+
+    touch('touchstart', body, 300, 1100)
+    touch('touchend', body, 300, 1150)
+    expect(frames.length).toBe(1)
+
+    let now = 1200
+    while (frames.length > 0 && now < 6000) {
+      now += 16
+      frames.shift()!(now)
+    }
+    expect(panel().style.transform).toBe('')
+  })
+
+  it('a finger held still before lifting reads as slow: no fling-close', async () => {
+    mountSheet()
+    await flush()
+    Object.defineProperty(panel(), 'offsetHeight', { value: 600, configurable: true })
+
+    pointer('pointerdown', handle(), 100, 0)
+    pointer('pointermove', handle(), 140, 20)
+    pointer('pointerup', handle(), 140, 1020)
+
+    expect(closed).not.toHaveBeenCalled()
+  })
+
+  it('reduced motion returns the panel at once, with no spring', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }))
+    mountSheet()
+    await flush()
+    Object.defineProperty(panel(), 'offsetHeight', { value: 600, configurable: true })
+
+    pointer('pointerdown', handle(), 100, 0)
+    pointer('pointermove', handle(), 150, 400)
+    pointer('pointerup', handle(), 150, 800)
+
+    expect(panel().style.transform).toBe('')
+    expect(frames.length).toBe(0)
+  })
+
+  it('unmounting during the spring cancels it', async () => {
+    mountSheet()
+    await flush()
+    Object.defineProperty(panel(), 'offsetHeight', { value: 600, configurable: true })
+    pointer('pointerdown', handle(), 100, 0)
+    pointer('pointermove', handle(), 150, 400)
+    pointer('pointerup', handle(), 150, 800)
+    expect(frames.length).toBeGreaterThan(0)
+
+    app?.unmount()
+    app = null
+
+    expect(frames.length).toBe(0)
+  })
+})
+
 describe('VBottomSheet (dismissible=false)', () => {
-  it('a scrim tap asks instead of closing', async () => {
-    mountSheet({ dismissible: false })
-    await flush()
-    const scrim = overlay()
-    scrim.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    scrim.dispatchEvent(new Event('pointerup', { bubbles: true }))
-    scrim.dispatchEvent(new Event('click', { bubbles: true }))
-    await flush()
+  const triggers: Array<[string, () => void]> = [
+    [
+      'a scrim tap',
+      () => {
+        const scrim = overlay()
+        scrim.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+        scrim.dispatchEvent(new Event('pointerup', { bubbles: true }))
+        scrim.dispatchEvent(new Event('click', { bubbles: true }))
+      },
+    ],
+    ['Escape', () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))],
+    [
+      'the cancel button',
+      () => document.body.querySelector<HTMLElement>('.v-sheet__cancel')!.click(),
+    ],
+  ]
 
-    expect(attempted).toHaveBeenCalledTimes(1)
-    expect(closed).not.toHaveBeenCalled()
-  })
-
-  it('Escape asks instead of closing', async () => {
-    mountSheet({ dismissible: false })
-    await flush()
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-
-    expect(attempted).toHaveBeenCalledTimes(1)
-    expect(closed).not.toHaveBeenCalled()
-  })
-
-  it('the cancel button asks instead of closing', async () => {
+  it.each(triggers)('%s asks instead of closing', async (_name, trigger) => {
     mountSheet({ dismissible: false, cancelLabel: 'Cancel', saveLabel: 'Save' })
     await flush()
-    document.body.querySelector<HTMLElement>('.v-sheet__cancel')!.click()
+    trigger()
+    await flush()
 
     expect(attempted).toHaveBeenCalledTimes(1)
     expect(closed).not.toHaveBeenCalled()

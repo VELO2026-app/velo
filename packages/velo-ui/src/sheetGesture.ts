@@ -37,7 +37,10 @@ const VELOCITY_WINDOW_MS = 100
 export interface VelocityTracker {
   /** Record the finger's Y at time `t` (ms). */
   push: (y: number, t: number) => void
-  /** Speed in px/ms (positive = downward); 0 with fewer than two samples. */
+  /**
+   * Speed in px/ms (positive = downward). Samples older than the window,
+   * counted back from the newest one, are ignored; 0 with fewer than two.
+   */
   velocity: () => number
   /** Forget all samples. */
   reset: () => void

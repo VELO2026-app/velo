@@ -6,24 +6,27 @@
 //
 //  - the grab zone (handle + title): pointer events, mouse and touch alike;
 //    the zone is touch-action:none, so the page never scrolls under it.
-//  - the rest of the panel: touch events. The sheet takes the gesture only
-//    when the finger moves DOWN and nothing under it can scroll up any more
-//    (the panel and any scroller between it and the finger sit at the top).
-//    A list scrolled to its top therefore hands the same swipe to the sheet;
-//    pulling back up hands it to the list again.
+//  - the rest of the panel: touch events. WHO owns the gesture is decided
+//    once, at touchstart: the sheet may claim it only if nothing under the
+//    finger is scrolled away from its top. (iOS cannot cancel a touchmove
+//    once native scrolling has begun, so the owner can never change mid-way
+//    to the sheet.) A claimable gesture is claimed by the first downward move
+//    and handed to the content for good by a move up past the start.
 //
 // While the finger drags, the panel follows 1:1 downward and with rubber-band
 // resistance upward. On release: past a quarter of the panel (capped) or
-// flicked down -> `onRelease(true)` should close; otherwise the panel springs
-// back from where it was, with the finger's own velocity.
+// flicked down -> `onRelease` is asked to close; otherwise (or when it
+// refuses) the panel springs back from where it was, with the finger's own
+// velocity. A touch that does not claim the gesture never interrupts a
+// running spring.
 //
 // Touch handling follows the idea of the drawer in Vercel's UI SDK
 // (https://github.com/vercel-labs/ui, Apache-2.0): an independent
 // re-implementation for Vue 3, not a copy.
 // =============================================================================
 
-import { onUnmounted, type Ref } from 'vue'
-import { prefersReducedMotion } from './platform/dom'
+import { onUnmounted, watch, type Ref } from 'vue'
+import { hasOwnTouchGesture, prefersReducedMotion } from './platform/dom'
 import { createVelocityTracker, rubberBand, springTo } from './sheetGesture'
 
 const CLOSE_DISTANCE_MAX_PX = 160
@@ -32,9 +35,9 @@ const CLOSE_VELOCITY_PX_PER_MS = 0.5
 const RUBBER_LIMIT_PX = 72
 /** Vertical travel before a touch gesture is classified, px. */
 const TOUCH_SLOP_PX = 4
-/** Controls that keep their own drag; a swipe starting on one is never the sheet's. */
-const OWN_GESTURE = 'input[type="range"], [role="slider"], [data-sheet-no-drag]'
 const GRAB_ZONE = '.v-sheet__handle, .v-sheet__title'
+/** A native range input runs its own drag. */
+const RANGE_INPUT = 'input[type="range"]'
 
 /** Options of `useSheetDrag`. */
 export interface SheetDragOptions {
@@ -49,8 +52,6 @@ export interface SheetDragOptions {
   onRelease: () => boolean
 }
 
-type Source = 'grab' | 'touch'
-
 /** Handlers for the template and nothing else; all state stays inside. */
 export interface SheetDrag {
   onGrabDown: (e: PointerEvent) => void
@@ -63,6 +64,19 @@ export interface SheetDrag {
   onTouchCancel: (e: TouchEvent) => void
 }
 
+/** Who holds the current gesture. */
+type Holder =
+  /** No finger down. */
+  | 'none'
+  /** The grab zone's pointer: the sheet holds it from the first contact. */
+  | 'grab-pointer'
+  /** A touch on the body that the sheet may still claim. */
+  | 'touch-claimable'
+  /** A touch on the body that the sheet has claimed: the panel follows it. */
+  | 'touch-sheet'
+  /** A touch on the body that belongs to the content until it lifts. */
+  | 'touch-content'
+
 /** True when no element from `from` up to `panel` is scrolled away from its top. */
 function atScrollTop(from: EventTarget | null, panel: HTMLElement): boolean {
   let el = from instanceof Element ? from : null
@@ -74,6 +88,15 @@ function atScrollTop(from: EventTarget | null, panel: HTMLElement): boolean {
   return panel.scrollTop <= 0
 }
 
+/** True when `from` or an ancestor below `panel` runs its own drag. */
+function runsOwnDrag(from: Element, panel: HTMLElement): boolean {
+  if (from.closest(RANGE_INPUT)) return true
+  for (let el: Element | null = from; el && el !== panel; el = el.parentElement) {
+    if (hasOwnTouchGesture(el)) return true
+  }
+  return false
+}
+
 /**
  * Wire the swipe of a bottom sheet panel.
  *
@@ -82,32 +105,35 @@ function atScrollTop(from: EventTarget | null, panel: HTMLElement): boolean {
  */
 export function useSheetDrag(options: SheetDragOptions): SheetDrag {
   const tracker = createVelocityTracker()
-  let offset = 0
+  /** The panel's displayed offset, px (after the rubber band). */
+  let shownOffset = 0
+  /** The same offset before the rubber band: where a new drag continues from. */
+  let rawOffset = 0
   let cancelSpring: (() => void) | null = null
-  // Gesture state: `source` is null between gestures.
-  let source: Source | null = null
-  let pointerId: number | null = null
-  let startOffset = 0
-  let baseY = 0
-  let lastY = 0
-  let startX = 0
-  let startY = 0
-  // Touch only: `owner` once the sheet (not the content) holds the gesture,
-  // `dead` once the gesture is known to be somebody else's.
-  let owner = false
-  let dead = false
-  let target: EventTarget | null = null
 
-  function setMotion(transform: string, transition: string): void {
+  let holder: Holder = 'none'
+  let grabPointerId: number | null = null
+  let touchStartX = 0
+  let touchStartY = 0
+  let touchTarget: EventTarget | null = null
+  /** Finger Y where the current drag began; the panel follows the travel from here. */
+  let dragFromY = 0
+  let dragFromOffset = 0
+  let lastFingerY = 0
+  /** The finger has moved since the drag began (a bare tap never closes). */
+  let moved = false
+
+  function moveTo(px: number, transition = 'none'): void {
     const el = options.panel.value
     if (!el) return
     el.style.transition = transition
-    el.style.transform = transform
+    el.style.transform = px === 0 ? '' : `translate3d(0, ${px}px, 0)`
   }
 
   function show(raw: number): void {
-    offset = raw >= 0 ? raw : -rubberBand(-raw, RUBBER_LIMIT_PX)
-    setMotion(offset === 0 ? '' : `translate3d(0, ${offset}px, 0)`, 'none')
+    rawOffset = raw
+    shownOffset = raw >= 0 ? raw : -rubberBand(-raw, RUBBER_LIMIT_PX)
+    moveTo(shownOffset)
   }
 
   function stopSpring(): void {
@@ -115,162 +141,164 @@ export function useSheetDrag(options: SheetDragOptions): SheetDrag {
     cancelSpring = null
   }
 
-  function begin(y: number, t: number): void {
+  function resetPosition(): void {
     stopSpring()
-    startOffset = offset
-    baseY = lastY = y
+    shownOffset = 0
+    rawOffset = 0
+  }
+
+  function beginDrag(y: number, t: number): void {
+    stopSpring()
+    dragFromOffset = rawOffset
+    dragFromY = lastFingerY = y
+    moved = false
     tracker.reset()
     tracker.push(y, t)
   }
 
-  function move(y: number, t: number): void {
-    lastY = y
+  function dragTo(y: number, t: number): void {
+    lastFingerY = y
+    moved = true
     tracker.push(y, t)
-    // Undo the rubber band so the raw finger travel stays linear.
-    show(startOffset + (y - baseY))
+    show(dragFromOffset + (y - dragFromY))
   }
 
-  function settle(velocityPxPerMs: number): void {
-    if (offset === 0) {
-      setMotion('', '')
-      return
-    }
-    if (prefersReducedMotion()) {
-      offset = 0
-      setMotion('', '')
+  function springBack(velocityPxPerMs: number): void {
+    if (shownOffset === 0 || prefersReducedMotion()) {
+      shownOffset = rawOffset = 0
+      moveTo(0, '')
       return
     }
     cancelSpring = springTo(
-      offset,
+      shownOffset,
       velocityPxPerMs * 1000,
       (value) => {
-        offset = value
-        setMotion(value === 0 ? '' : `translate3d(0, ${value}px, 0)`, 'none')
+        shownOffset = rawOffset = value
+        moveTo(value)
       },
       () => {
         cancelSpring = null
-        setMotion('', '')
+        moveTo(0, '')
       },
     )
   }
 
-  function release(): void {
+  function slideOut(): void {
+    const el = options.panel.value
+    if (!el) return
+    el.style.transition = 'transform var(--velo-dur-sheet-exit) var(--velo-ease-in)'
+    el.style.transform = 'translate3d(0, 100%, 0)'
+  }
+
+  /** The finger lifted at time `t`: close the sheet or spring back. */
+  function release(t: number): void {
+    // The lift is a sample too: a finger held still before lifting reads as slow.
+    tracker.push(lastFingerY, t)
     const velocity = tracker.velocity()
     const height = options.panel.value?.offsetHeight ?? 0
     const closeAt = Math.min(CLOSE_DISTANCE_MAX_PX, height * 0.25)
-    if (offset > 0 && (offset > closeAt || velocity > CLOSE_VELOCITY_PX_PER_MS)) {
-      if (options.onRelease()) {
-        setMotion(
-          'translate3d(0, 100%, 0)',
-          'transform var(--velo-dur-sheet-exit) var(--velo-ease-in)',
-        )
-        return
-      }
+    const pastThreshold = shownOffset > closeAt || velocity > CLOSE_VELOCITY_PX_PER_MS
+    if (moved && shownOffset > 0 && pastThreshold && options.onRelease()) {
+      slideOut()
+      resetPosition()
+      return
     }
-    settle(velocity)
+    springBack(velocity)
   }
 
-  function finish(): void {
-    source = null
-    pointerId = null
-    owner = false
-    dead = false
-    target = null
+  function endGesture(): void {
+    holder = 'none'
+    grabPointerId = null
+    touchTarget = null
   }
 
   // -- grab zone (pointer) ---------------------------------------------------
 
   function onGrabDown(e: PointerEvent): void {
-    if (source !== null || (e.pointerType === 'mouse' && e.button !== 0)) return
-    source = 'grab'
-    pointerId = e.pointerId
-    begin(e.clientY, e.timeStamp)
+    if (holder !== 'none' || (e.pointerType === 'mouse' && e.button !== 0)) return
+    holder = 'grab-pointer'
+    grabPointerId = e.pointerId
+    beginDrag(e.clientY, e.timeStamp)
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
   }
 
   function onGrabMove(e: PointerEvent): void {
-    if (source !== 'grab' || e.pointerId !== pointerId) return
-    move(e.clientY, e.timeStamp)
+    if (holder !== 'grab-pointer' || e.pointerId !== grabPointerId) return
+    dragTo(e.clientY, e.timeStamp)
   }
 
   function onGrabEnd(e: PointerEvent): void {
-    if (source !== 'grab' || e.pointerId !== pointerId) return
-    finish()
-    release()
+    if (holder !== 'grab-pointer' || e.pointerId !== grabPointerId) return
+    endGesture()
+    release(e.timeStamp)
   }
 
   function onGrabCancel(e: PointerEvent): void {
-    if (source !== 'grab' || e.pointerId !== pointerId) return
-    finish()
-    settle(0)
+    if (holder !== 'grab-pointer' || e.pointerId !== grabPointerId) return
+    endGesture()
+    springBack(0)
   }
 
   // -- panel body (touch) ----------------------------------------------------
 
   function onTouchStart(e: TouchEvent): void {
     const touch = e.touches[0]
+    const panel = options.panel.value
     const el = e.target instanceof Element ? e.target : null
-    if (source !== null || e.touches.length !== 1 || !touch) return
-    // The grab zone has its own pointer path; controls with their own drag keep it.
-    if (el?.closest(GRAB_ZONE) || el?.closest(OWN_GESTURE)) return
-    source = 'touch'
-    target = e.target
-    startX = touch.clientX
-    startY = touch.clientY
-    begin(touch.clientY, e.timeStamp)
+    if (holder !== 'none' || e.touches.length !== 1 || !touch || !panel || !el) return
+    // The grab zone has its own pointer path; a control with its own drag keeps it.
+    if (el.closest(GRAB_ZONE) || runsOwnDrag(el, panel)) return
+    touchTarget = e.target
+    touchStartX = touch.clientX
+    touchStartY = lastFingerY = touch.clientY
+    // Decided here, once: content scrolled away from its top keeps the gesture.
+    holder = atScrollTop(touchTarget, panel) ? 'touch-claimable' : 'touch-content'
   }
 
   function onTouchMove(e: TouchEvent): void {
     const touch = e.touches[0]
     const panel = options.panel.value
-    if (source !== 'touch' || dead || !touch || !panel) return
-    if (!owner) {
-      const dy = touch.clientY - startY
-      const dx = touch.clientX - startX
+    if (!touch || !panel) return
+    if (holder === 'touch-claimable') {
+      const dx = touch.clientX - touchStartX
+      const dy = touch.clientY - touchStartY
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > TOUCH_SLOP_PX) {
-        dead = true
-        return
+        holder = 'touch-content'
+      } else if (dy < -TOUCH_SLOP_PX) {
+        holder = 'touch-content'
+      } else if (dy > TOUCH_SLOP_PX) {
+        holder = 'touch-sheet'
+        beginDrag(touch.clientY, e.timeStamp)
       }
-      // Finger still going up or not yet moved: the content's gesture.
-      if (touch.clientY - lastY <= 0 || dy <= TOUCH_SLOP_PX) {
-        lastY = touch.clientY
-        return
-      }
-      if (!atScrollTop(target, panel)) {
-        lastY = touch.clientY
-        return
-      }
-      owner = true
-      // The sheet starts here, not at the touch-down point: no jump.
-      begin(touch.clientY, e.timeStamp)
     }
-    const raw = startOffset + (touch.clientY - baseY)
+    if (holder !== 'touch-sheet') return
+    const raw = dragFromOffset + (touch.clientY - dragFromY)
     if (raw < 0 && panel.scrollHeight > panel.clientHeight) {
-      // Pulled back up past the start with a scrollable panel: give the swipe back.
-      owner = false
-      offset = 0
-      setMotion('', 'none')
-      lastY = touch.clientY
+      // Pulled back up past the start with a scrollable panel: the content takes it.
+      holder = 'touch-content'
+      show(0)
       return
     }
     if (e.cancelable) e.preventDefault()
-    move(touch.clientY, e.timeStamp)
+    dragTo(touch.clientY, e.timeStamp)
   }
 
-  function onTouchEnd(): void {
-    if (source !== 'touch') return
-    const wasOwner = owner
-    finish()
-    if (wasOwner) release()
+  function onTouchEnd(e: TouchEvent): void {
+    const heldBySheet = holder === 'touch-sheet'
+    if (holder === 'none' || holder === 'grab-pointer') return
+    endGesture()
+    if (heldBySheet) release(e.timeStamp)
   }
 
   function onTouchCancel(): void {
-    if (source !== 'touch') return
-    const wasOwner = owner
-    finish()
-    if (wasOwner) settle(0)
+    const heldBySheet = holder === 'touch-sheet'
+    if (holder === 'none' || holder === 'grab-pointer') return
+    endGesture()
+    if (heldBySheet) springBack(0)
   }
 
+  // A new panel element (the sheet reopened) starts at rest.
+  watch(options.panel, resetPosition)
   onUnmounted(stopSpring)
 
   return {

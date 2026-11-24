@@ -12,8 +12,9 @@
 //   <VConfirmDialog :open="guard.confirming.value" ...
 //                   @confirm="guard.discard" @cancel="guard.keepEditing" />
 //
-// A form backed by `useFormDraft` passes its `discard`, so leaving also drops
-// the stored draft and a half-filled form does not come back on the next open.
+// A form backed by `useFormDraft` drops its stored draft in `onDiscard`
+// (`draft.discard(); emit('close')`), so a half-filled form does not come back.
+// No sheet has a draft today: the guard stays free of that dependency.
 // =============================================================================
 
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
@@ -22,10 +23,8 @@ import { computed, ref, type ComputedRef, type Ref } from 'vue'
 export interface DiscardGuardOptions {
   /** True while the form holds edits worth keeping. */
   dirty: () => boolean
-  /** Close the sheet (and reset the form): runs after the person confirms. */
+  /** Reset the form and close the sheet: runs after the person confirms. */
   onDiscard: () => void
-  /** Drop the stored draft of the form (`useFormDraft().discard`). */
-  discardDraft?: () => void
 }
 
 /** What `useDiscardGuard` returns. */
@@ -36,7 +35,7 @@ export interface DiscardGuard {
   confirming: Ref<boolean>
   /** The sheet's `dismissAttempt`: open the question (nothing when clean). */
   ask: () => void
-  /** The dialog's confirm: drop the edits and the draft, then close the sheet. */
+  /** The dialog's confirm: drop the edits and close the sheet. */
   discard: () => void
   /** The dialog's cancel: back to the form. */
   keepEditing: () => void
@@ -57,7 +56,6 @@ export function useDiscardGuard(options: DiscardGuardOptions): DiscardGuard {
 
   function discard(): void {
     confirming.value = false
-    options.discardDraft?.()
     options.onDiscard()
   }
 

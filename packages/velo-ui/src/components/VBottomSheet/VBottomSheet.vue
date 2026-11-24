@@ -198,9 +198,11 @@ const props = withDefaults(
     /** Hairline-stroke title weight (T24-25/32, PROMPT №634) -- see the
      *  file header. Default false = byte-identical to before. */
     titleStrong?: boolean
-    /** False: every way to leave (scrim, Escape, swipe, cancel button) emits
-     *  `dismissAttempt` instead of `close` -- for a form with unsaved edits
-     *  (FE-233). Default true = byte-identical to before. */
+    /** False: every way a PERSON leaves (scrim, Escape, swipe, cancel button)
+     *  emits `dismissAttempt` instead of `close` -- for a form with unsaved
+     *  edits (FE-233). Does NOT guard the parent's own `open=false`, nor a
+     *  route change or a tab switch (`onDeactivated`): those close the sheet
+     *  without asking. Default true = byte-identical to before. */
     dismissible?: boolean
   }>(),
   {
