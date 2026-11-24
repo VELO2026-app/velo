@@ -176,7 +176,6 @@
      snaps to --space-N / --velo-gap-* / --velo-inset-*. */
   --space-hairline: 1px;
   /* Fixed-geometry clearances (bare, named by meaning, not snapped). */
-  --size-required-seal-gutter: 30px; /* IconRequired 22px + --space-2 row gap */
   --size-select-chevron-clearance: 40px; /* VSelect trailing chevron seat */
   --size-field-disc-clearance: 46px; /* nested 36px disc + breathing room */
 

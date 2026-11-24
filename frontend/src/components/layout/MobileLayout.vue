@@ -384,9 +384,12 @@ html.velo-scroll-locked .mobile-layout__main {
    [LOOK-TEST, owner pass 2026-09-06] The BOTTOM fade is REMOVED for the
    liquid-glass dock pill experiment: content runs crisp to the bottom edge
    and scrolls under the hanging pill, which frosts it. The --fog-bot-* vars
-   mainStyle still publishes are temporarily unused. Detail screens, forms
-   and the profile do NOT get this class -- their footers and actions stay
-   fully opaque. */
+   mainStyle still publishes are temporarily unused. Which screens get this
+   class is each shell's FOG_ROUTES list (UserShell, MasterShell): the feeds,
+   practice detail and the forms (check-in, feedback, reflection, support,
+   edit-profile, timezone) do; the user profile hub does not. A form stays
+   usable because the mask is top-only -- its in-flow footer and actions sit
+   below the fade and stay fully opaque. */
 .mobile-layout__main--fog {
   -webkit-mask-image: linear-gradient(
     to bottom,
@@ -400,6 +403,20 @@ html.velo-scroll-locked .mobile-layout__main {
     transparent var(--fog-top-hard),
     var(--velo-fog-color) calc(var(--fog-top-hard) + var(--fog-top-fade))
   );
+}
+
+/* A full-screen result takeover (ResultScreen: the check-in / feedback /
+   reflection success screens, the practice sold-out screen) is position:fixed,
+   but it is still a DOM descendant of this scroller, and a mask clips every
+   descendant -- fixed ones too. Under the fog mask its top ~76px painted as the
+   page background instead of white (FE-261). The mask is dropped while such a
+   screen is inside. Specificity (0,3,0) beats the keyboard-open fog rule in
+   global.css (0,2,1), so an open keyboard cannot bring the mask back. Engines
+   without :has() (before iOS 15.4 / Chrome 105) discard the whole rule and keep
+   the strip, as before. Keyed on ResultScreen's root class -- keep it in sync. */
+.mobile-layout__main--fog:has(.result-screen) {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 /* Floating header island layer: pinned to the top of the (padded) frame,

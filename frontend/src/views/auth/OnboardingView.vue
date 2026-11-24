@@ -446,13 +446,14 @@ async function finish(): Promise<void> {
    anywhere: halve the gaps, slim the frame paddings. The button and dots stay
    put -- only their breathing room shrinks. Inert at rest:
    html.is-keyboard-open exists only while the keyboard is open
-   (useViewportGeometry). */
-:global(html.is-keyboard-open) .onboarding {
+   (useViewportGeometry). No `:global()` here: scoped-global.test.ts forbids
+   it with a descendant in a scoped style. */
+html.is-keyboard-open .onboarding {
   padding-top: var(--space-3);
   padding-bottom: var(--space-3);
 }
 
-:global(html.is-keyboard-open) .onboarding__footer {
+html.is-keyboard-open .onboarding__footer {
   gap: var(--space-2);
   padding-top: var(--space-2);
 }
