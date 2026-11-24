@@ -50,39 +50,50 @@
     <VHeader :title="t('user.screens.notifications.title')" show-back @back="router.back()" />
 
     <div class="notifications__content">
-      <!-- The settings could not be read: the rows below are defaults, switched off
-           and inert; say so and offer Retry (FE-242). -->
-      <VEmptyState v-if="loadFailed" icon="warning" :title="t('common.loadError')">
+      <!-- Nothing below is drawn until the settings are read (FE-242, FE-258): a
+           switch shown before the answer, or after a failed one, would be a default
+           passing for the user's own setting, and a flip of it would overwrite the
+           real one. -->
+      <div v-if="loadStatus === 'loading'" class="notifications__loader">
+        <VLoader size="md" />
+      </div>
+      <VEmptyState
+        v-else-if="loadStatus === 'failed'"
+        icon="warning"
+        :title="t('common.loadError')"
+      >
         <VButton size="sm" @click="loadPrefs">{{ t('common.retry') }}</VButton>
       </VEmptyState>
-      <div class="notifications__row">
-        <div class="notifications__text">
-          <span class="notifications__label">{{ MASTER_LABEL }}</span>
-          <span class="notifications__sub">{{ MASTER_SUB }}</span>
-        </div>
-        <VSwitch
-          :model-value="anyEnabled"
-          :disabled="!interactive || savingKey !== ''"
-          :aria-label="MASTER_LABEL"
-          @update:model-value="onMasterToggle"
-        />
-      </div>
-
-      <div class="notifications__section">
-        <h2 class="notifications__section-title">{{ SECTION_TITLE }}</h2>
-        <div v-for="row in ROWS" :key="row.key" class="notifications__row">
+      <template v-else>
+        <div class="notifications__row">
           <div class="notifications__text">
-            <span class="notifications__label">{{ row.label }}</span>
-            <span class="notifications__sub">{{ row.sub }}</span>
+            <span class="notifications__label">{{ MASTER_LABEL }}</span>
+            <span class="notifications__sub">{{ MASTER_SUB }}</span>
           </div>
           <VSwitch
-            :model-value="categories[row.key] ?? true"
-            :disabled="!isControllable(row.key) || savingKey !== ''"
-            :aria-label="row.label"
-            @update:model-value="(value) => onRowToggle(row.key, value)"
+            :model-value="anyEnabled"
+            :disabled="!interactive || savingKey !== ''"
+            :aria-label="MASTER_LABEL"
+            @update:model-value="onMasterToggle"
           />
         </div>
-      </div>
+
+        <div class="notifications__section">
+          <h2 class="notifications__section-title">{{ SECTION_TITLE }}</h2>
+          <div v-for="row in ROWS" :key="row.key" class="notifications__row">
+            <div class="notifications__text">
+              <span class="notifications__label">{{ row.label }}</span>
+              <span class="notifications__sub">{{ row.sub }}</span>
+            </div>
+            <VSwitch
+              :model-value="categories[row.key] ?? true"
+              :disabled="!isControllable(row.key) || savingKey !== ''"
+              :aria-label="row.label"
+              @update:model-value="(value) => onRowToggle(row.key, value)"
+            />
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -92,7 +103,7 @@ import { t } from '@/locales'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VSwitch, VEmptyState, VButton } from '@/components/ui'
+import { VSwitch, VEmptyState, VButton, VLoader } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { getNotificationPrefs, updateNotificationPrefs } from '@/api/notifications'
 
@@ -140,12 +151,16 @@ const SECTION_TITLE = t('user.screens.notifications.whatToSend')
 // does not report is one we cannot honestly control, so its row is disabled
 // rather than shown as a working switch.
 const categories = reactive<Record<string, boolean>>({})
-const loadFailed = ref(false)
+/**
+ * Where the first read stands: no rows are drawn until it answers (see the
+ * template), and a failed one is retried through `loadPrefs`.
+ */
+const loadStatus = ref<'loading' | 'ready' | 'failed'>('loading')
 const savingKey = ref<string>('')
 
 // A row is controllable only when comms actually reported its category.
 function isControllable(key: string): boolean {
-  return !loadFailed.value && key in categories
+  return key in categories
 }
 
 // The rows we may write: shown AND reported. Writing a category comms does not
@@ -160,6 +175,7 @@ const anyEnabled = computed(() => writable.value.some((row) => categories[row.ke
 const interactive = computed(() => writable.value.length > 0)
 
 async function loadPrefs(): Promise<void> {
+  loadStatus.value = 'loading'
   try {
     const prefs = await getNotificationPrefs()
     for (const row of ROWS) {
@@ -168,14 +184,12 @@ async function loadPrefs(): Promise<void> {
         categories[row.key] = enabled
       }
     }
-    loadFailed.value = false
+    loadStatus.value = 'ready'
   } catch (error) {
-    // comms down (502/504) or this recipient not synced yet (404). We show the
-    // defaults but DISABLE every switch and say so: there is nowhere to save,
-    // and a switch that accepts a flip it cannot persist is the exact lie this
-    // screen was rebuilt to remove. (The master screen leaves its switches
-    // live here; that difference is deliberate and was approved.)
-    loadFailed.value = true
+    // comms down (502/504) or this recipient not synced yet (404). No row is
+    // drawn: the defaults were never the user's settings, and a flip of them
+    // would overwrite the real ones. The error state offers Retry.
+    loadStatus.value = 'failed'
     toast.error(t('user.screens.notifications.toast.loadFailed'))
     console.warn('notification prefs load failed', error)
   }
@@ -238,6 +252,12 @@ function onMasterToggle(value: boolean): void {
   flex-direction: column;
   gap: var(--space-5);
   padding: 0 var(--space-4) var(--space-8);
+}
+
+.notifications__loader {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-5) 0;
 }
 
 .notifications__section {
