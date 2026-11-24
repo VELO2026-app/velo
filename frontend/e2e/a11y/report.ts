@@ -45,9 +45,9 @@ export default class A11yReporter implements Reporter {
     if (attached?.body) this.reports.push(JSON.parse(attached.body.toString()) as RouteReport)
   }
 
-  async onEnd(): Promise<{ status: FullResult['status'] } | undefined> {
+  onEnd(): Promise<{ status: FullResult['status'] } | undefined> {
     const skin: SkinName | undefined = this.reports[0]?.skin
-    if (!skin) return undefined
+    if (!skin) return Promise.resolve(undefined)
 
     const open = this.reports.flatMap((r) =>
       r.open.map((f) => ({ ...f, at: `[${r.role}] ${r.route}` })),
@@ -98,7 +98,7 @@ export default class A11yReporter implements Reporter {
     const summary = process.env.GITHUB_STEP_SUMMARY
     if (summary) appendFileSync(summary, `${lines.join('\n')}\n`)
 
-    return strict && unused.length > 0 ? { status: 'failed' } : undefined
+    return Promise.resolve(strict && unused.length > 0 ? { status: 'failed' } : undefined)
   }
 
   printsToStdio(): boolean {

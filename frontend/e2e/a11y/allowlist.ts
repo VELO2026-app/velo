@@ -23,7 +23,7 @@ const REASON = {
     'Markup: a nested control, a list item with a button role, or a scroll area without focus.',
 } as const
 
-const LIST: A11yAllowance[] = [
+export const A11Y_ALLOWLIST: A11yAllowance[] = [
   {
     rule: 'color-contrast',
     routes: ['admin-support-detail'],
@@ -85,8 +85,23 @@ const LIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-masters', 'admin-profile', 'admin-schools', 'admin-users', 'user-bookings'],
+    routes: [
+      'admin-masters',
+      'admin-profile',
+      'admin-schools',
+      'admin-users',
+      'practice-detail',
+      'user-bookings',
+    ],
     detail: '#2f9ea8 on #d6f5f8',
+    skins: ['gold'],
+    reason: REASON.STATUS_COLORS,
+    task: 'FE-245',
+  },
+  {
+    rule: 'color-contrast',
+    routes: ['admin-dashboard', 'root'],
+    detail: '#2f9ea8 on #ffffff',
     skins: ['gold'],
     reason: REASON.STATUS_COLORS,
     task: 'FE-245',
@@ -109,7 +124,7 @@ const LIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-reports', 'admin-users'],
+    routes: ['admin-reports', 'admin-users', 'user-bookings'],
     detail: '#a16124 on #fde6cf',
     skins: ['gold'],
     reason: REASON.STATUS_COLORS,
@@ -132,7 +147,16 @@ const LIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['practice-detail', 'user-master-public'],
+    routes: [
+      'group-join',
+      'master-dashboard',
+      'master-practice-live',
+      'practice-detail',
+      'practice-live',
+      'root',
+      'user-dashboard',
+      'user-master-public',
+    ],
     detail: '#f795a2 on #fde2e2',
     skins: ['gold'],
     reason: REASON.STATUS_COLORS,
@@ -156,7 +180,13 @@ const LIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-master-review', 'master-student-profile'],
+    routes: [
+      'admin-master-review',
+      'master-dashboard',
+      'master-student-profile',
+      'practice-detail',
+      'root',
+    ],
     detail: '#ffffff on #f795a2',
     skins: ['gold'],
     reason: REASON.STATUS_COLORS,
@@ -184,6 +214,7 @@ const LIST: A11yAllowance[] = [
       'master-invite',
       'practice-detail',
       'user-bookings',
+      'user-calendar-school',
       'user-checkin',
       'user-feedback',
       'user-master-public',
@@ -195,14 +226,14 @@ const LIST: A11yAllowance[] = [
   },
   {
     rule: 'heading-order',
-    routes: ['user-diary-detail'],
+    routes: ['master-school', 'user-diary-detail', 'user-school'],
     target: 'h4',
     reason: REASON.HEADING_ORDER,
     task: 'FE-246',
   },
   {
     rule: 'heading-order',
-    routes: ['group-join', 'root', 'user-dashboard'],
+    routes: ['group-join', 'practice-detail', 'root', 'user-bookings', 'user-dashboard'],
     target: 'section > h3',
     reason: REASON.HEADING_ORDER,
     task: 'FE-246',
@@ -292,8 +323,26 @@ const LIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-masters', 'master-student-profile', 'practice-detail', 'user-master-public'],
+    routes: [
+      'admin-masters',
+      'group-join',
+      'master-student-profile',
+      'practice-detail',
+      'root',
+      'user-calendar-school',
+      'user-dashboard',
+      'user-master-public',
+      'user-school',
+    ],
     detail: '#627a9c on #e2f0fd',
+    skins: ['gold'],
+    reason: REASON.GOLD_PRIMARY,
+    task: 'FE-252',
+  },
+  {
+    rule: 'color-contrast',
+    routes: ['admin-masters', 'admin-users', 'master-school-members'],
+    detail: '#627a9c on #f6f7f9',
     skins: ['gold'],
     reason: REASON.GOLD_PRIMARY,
     task: 'FE-252',
@@ -336,6 +385,7 @@ const LIST: A11yAllowance[] = [
       'admin-revenue',
       'admin-support-detail',
       'auth-error',
+      'group-join',
       'master-analytics',
       'master-apply',
       'master-attendance',
@@ -355,6 +405,7 @@ const LIST: A11yAllowance[] = [
       'master-student-profile',
       'master-timezone',
       'not-found',
+      'practice-detail',
       'root',
       'school-join',
       'school-master-offer',
@@ -363,6 +414,8 @@ const LIST: A11yAllowance[] = [
       'user-calendar',
       'user-calendar-master',
       'user-calendar-school',
+      'user-checkin',
+      'user-dashboard',
       'user-edit-profile',
       'user-feedback',
       'user-reflection',
@@ -377,6 +430,3 @@ const LIST: A11yAllowance[] = [
     task: 'FE-252',
   },
 ]
-
-/** `A11Y_ALLOWLIST=off` lists every violation: to rebuild this list from a run. */
-export const A11Y_ALLOWLIST: A11yAllowance[] = process.env.A11Y_ALLOWLIST === 'off' ? [] : LIST

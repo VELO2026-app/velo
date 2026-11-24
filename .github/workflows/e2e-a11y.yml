@@ -151,8 +151,7 @@ jobs:
         env:
           A11Y_SKIN: ${{ matrix.skin }}
           A11Y_SKIN_DIR: ${{ runner.temp }}/brands/${{ matrix.brand }}/skin
-          A11Y_STRICT: '0'
-          A11Y_ALLOWLIST: 'off' # TEMP: collecting CI data
+          A11Y_STRICT: '1'
         run: pnpm exec playwright test --project=a11y --reporter=github,./e2e/a11y/report.ts,./e2e/support/crash-reporter.ts
 
       - uses: actions/upload-artifact@v7
