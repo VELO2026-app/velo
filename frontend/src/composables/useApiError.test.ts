@@ -16,16 +16,21 @@
 // way, since detail is never consulted either way.
 // =============================================================================
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { extractApiError } from '@/composables/useApiError'
 import { ApiResponseError } from '@/api/client'
 import { errorMessage } from '@/api/errorMessages'
+import { setLocale } from '@/locales'
 
 // A window the real constant (24) does not have, so the number in the phrase
-// can only come from the constant, never from the catalog text.
+// can only come from the constant, never from the catalog text. A test sets
+// `hours` to try another window.
+const checkinWindow = vi.hoisted(() => ({ hours: 12 }))
 vi.mock('@/utils/constants', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/utils/constants')>()),
-  CHECKIN_WINDOW_H: 12,
+  get CHECKIN_WINDOW_H() {
+    return checkinWindow.hours
+  },
 }))
 
 describe('extractApiError', () => {
@@ -70,6 +75,12 @@ describe('extractApiError', () => {
   describe('a phrase with a placeholder (checkin_window_not_open)', () => {
     const phrase = 'Check-in на практику откроется за 12 ч до старта'
 
+    // The tests below change the module-wide locale and window; put both back.
+    afterEach(async () => {
+      checkinWindow.hours = 12
+      await setLocale('ru')
+    })
+
     it('errorMessage() fills the number from the check-in window constant', () => {
       expect(errorMessage('checkin_window_not_open')).toBe(phrase)
     })
@@ -77,6 +88,17 @@ describe('extractApiError', () => {
     it('extractApiError() fills it too', () => {
       const e = new ApiResponseError(400, 'raw English detail', 'checkin_window_not_open')
       expect(extractApiError(e, 'fallback')).toBe(phrase)
+    })
+
+    // en has a singular and a plural case; the window picks one.
+    it.each([
+      ['en', 1, 'Check-in opens 1 hour before the practice starts'],
+      ['en', 24, 'Check-in opens 24 hours before the practice starts'],
+      ['uk', 12, 'Check-in на практику відкриється за 12 год до початку'],
+    ])('%s with a window of %i h shows its own phrase', async (locale, hours, expected) => {
+      checkinWindow.hours = hours
+      await setLocale(locale)
+      expect(errorMessage('checkin_window_not_open')).toBe(expected)
     })
   })
 

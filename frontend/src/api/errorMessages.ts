@@ -144,20 +144,37 @@ export const ERROR_CODES = [
   'validation_error',
 ] as const
 
+/** A backend error code the errors catalog covers. */
+type ErrorCode = (typeof ERROR_CODES)[number]
+
+/** What a catalog phrase needs filled in: its named placeholders and its plural case. */
+interface PhraseValues {
+  /** Values of the `{name}` placeholders in the phrase. */
+  readonly named: Readonly<Record<string, number>>
+  /** The number that picks the plural case of a `a | b` phrase (a phrase without cases ignores it). */
+  readonly plural: number
+}
+
 /**
- * Named values a code's catalog phrase takes (placeholders such as `{hours}`).
+ * Values a code's catalog phrase takes (placeholders such as `{hours}`),
+ * read when the phrase is shown.
  *
  * @remarks
  * Every path that shows a catalog phrase reads it through
  * knownErrorMessage(), so a placeholder is filled here once and never
- * reaches the screen raw. `checkin_window_not_open` carries the check-in
- * window in hours (i18n:errors.checkin_window_not_open). The backend sets the
- * window per instance (settings.checkin_window_hours) and sends no number in
- * the error, so the value is the frontend mirror CHECKIN_WINDOW_H; the two
- * must agree.
+ * reaches the screen raw. Keyed by ErrorCode: a misspelled code is a type
+ * error, not a table row that never matches. `checkin_window_not_open`
+ * carries the check-in window in hours (i18n:errors.checkin_window_not_open);
+ * its en phrase has a singular and a plural case, so the same number also
+ * picks the case. The backend sets the window per instance
+ * (settings.checkin_window_hours) and sends no number in the error, so the
+ * value is the frontend mirror CHECKIN_WINDOW_H; the two must agree.
  */
-const ERROR_PARAMS: Readonly<Record<string, Readonly<Record<string, number>>>> = {
-  checkin_window_not_open: { hours: CHECKIN_WINDOW_H },
+const ERROR_PARAMS: Readonly<Partial<Record<ErrorCode, () => PhraseValues>>> = {
+  checkin_window_not_open: () => ({
+    named: { hours: CHECKIN_WINDOW_H },
+    plural: CHECKIN_WINDOW_H,
+  }),
 }
 
 /** Whether the catalog carries a phrase for this backend code. */
@@ -179,7 +196,11 @@ export function hasErrorMessage(code: string): boolean {
  */
 export function knownErrorMessage(code: string): string | null {
   if (!hasErrorMessage(code)) return null
-  return i18n.global.t(`errors.${code}`, ERROR_PARAMS[code] ?? {})
+  // `code` is any string the backend sent, the table is keyed by ErrorCode.
+  const byCode: Readonly<Partial<Record<string, () => PhraseValues>>> = ERROR_PARAMS
+  const values = byCode[code]?.()
+  if (!values) return i18n.global.t(`errors.${code}`)
+  return i18n.global.t(`errors.${code}`, values.named, values.plural)
 }
 
 /**
