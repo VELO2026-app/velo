@@ -68,8 +68,12 @@ export const CONSOLE_MODULES: readonly ConsoleModule[] = [
   { key: 'settings', group: 'system' },
 ]
 
+/** A console route name: a module's screen or a screen inside a module. */
+export type ConsoleRouteName =
+  `console-${ConsoleModuleKey}` | 'console-masters-detail' | 'console-practices-detail'
+
 /** The route name of a module's main screen. */
-export function consoleRouteName(key: ConsoleModuleKey): string {
+export function consoleRouteName<K extends ConsoleModuleKey>(key: K): `console-${K}` {
   return `console-${key}`
 }
 

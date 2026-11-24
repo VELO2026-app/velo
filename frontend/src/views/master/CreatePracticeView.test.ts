@@ -81,7 +81,7 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
 import CreatePracticeView from '@/views/master/CreatePracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
@@ -142,25 +142,34 @@ vi.mock('@/composables/useToast', () => ({
 
 // Both stores are DEPENDENCIES. Getters over a mutable object so tests mutate
 // state instead of re-mocking (velo-idiom §5).
-const masterState: {
+const masterState = reactive<{
   practices: PracticeResponse[]
   profile: MasterProfileResponse | null
   profileLoaded: boolean
-} = {
+  profileFailed: boolean
+  /** Per list: the read failed with nothing to show / is in flight with nothing to show. */
+  listFailed: { upcoming: boolean; past: boolean }
+  listLoading: { upcoming: boolean; past: boolean }
+}>({
   practices: [],
   profile: null,
+  profileFailed: false,
+  listFailed: { upcoming: false, past: false },
+  listLoading: { upcoming: false, past: false },
   // PROMPT №556: defaults true -- masterStatusGuard (router/guards.ts, meta.requires verified-master) already
   // loads the profile before this screen mounts in the real app, so
   // "not yet loaded" is the abnormal case, not the default one. The two
   // tests that specifically exercise "profile hasn't loaded" override this.
   profileLoaded: true,
-}
+})
 // The master's queries (composables/queries/master.ts), getters over the
 // same object: the profile (its confirmed methods; whether it has answered --
 // usePracticeTaxonomyOptions), the practice lists the use-template block
 // offers (upcoming = masterState.practices, past empty), and the
 // post-create refresh.
 const myPracticesChanged = vi.fn()
+const reloadProfile = vi.fn()
+const refetchList = vi.fn()
 vi.mock('@/composables/queries/master', () => ({
   useMasterProfile: () => ({
     profile: {
@@ -173,13 +182,30 @@ vi.mock('@/composables/queries/master', () => ({
         return masterState.profileLoaded
       },
     },
+    failed: {
+      get value() {
+        return masterState.profileFailed
+      },
+    },
+    reload: () => reloadProfile(),
   }),
-  useMyPractices: (bucket: string) => ({
+  useMyPractices: (bucket: 'upcoming' | 'past') => ({
     practices: {
       get value() {
         return bucket === 'upcoming' ? masterState.practices : []
       },
     },
+    failed: {
+      get value() {
+        return masterState.listFailed[bucket]
+      },
+    },
+    loading: {
+      get value() {
+        return masterState.listLoading[bucket]
+      },
+    },
+    refetch: () => refetchList(bucket),
   }),
   myPracticesChanged: (...args: unknown[]) => myPracticesChanged(...args),
 }))
@@ -394,11 +420,16 @@ function submitForm(): void {
   btn.click()
 }
 
+/** The body of the `index`-th POST the screen sent. */
+function sentBodyAt(index: number): CreatePracticeRequest {
+  const call = vi.mocked(practicesApi.createPractice).mock.calls[index]
+  if (!call) throw new Error(`createPractice was not called ${index + 1} times`)
+  return call[0]
+}
+
 /** The body the screen actually POSTed. */
 function sentBody(): CreatePracticeRequest {
-  const call = vi.mocked(practicesApi.createPractice).mock.calls[0]
-  if (!call) throw new Error('createPractice was never called')
-  return call[0]
+  return sentBodyAt(0)
 }
 
 beforeEach(() => {
@@ -414,6 +445,11 @@ beforeEach(() => {
     methods: ['Йога', 'Йога — Хатха-йога', 'Дыхательные практики', 'Круги', 'Круги — Женский круг'],
   } as MasterProfileResponse
   masterState.profileLoaded = true
+  masterState.profileFailed = false
+  masterState.listFailed = { upcoming: false, past: false }
+  masterState.listLoading = { upcoming: false, past: false }
+  reloadProfile.mockReset()
+  refetchList.mockReset()
   authState.user = { id: 'u1', timezone: 'Europe/Moscow' } as Partial<UserResponse>
   vi.mocked(ensureTaxonomyCatalog).mockReset().mockResolvedValue(null)
   // PROMPT №559: status:'draft' -- matches the REAL backend (create_practice
@@ -575,6 +611,89 @@ describe('CreatePracticeView', () => {
       await flush()
 
       expect(selectByPlaceholder('Вид практики')?.value).toBe('')
+    })
+  })
+
+  describe('the master profile read (FE-256)', () => {
+    it('a failed profile read is an error with «Повторить» in place of the direction picker, never a silent empty one; Retry asks the profile again', async () => {
+      masterState.profile = null
+      masterState.profileLoaded = false
+      masterState.profileFailed = true
+      mount()
+      await flush()
+
+      expect(selectByPlaceholder('Направление практики')).toBeUndefined()
+      expect(text()).toContain('Ошибка загрузки')
+
+      // The submit stays refused, and the reason is visible where the picker was.
+      typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
+      submitForm()
+      await flush()
+      expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
+      expect(text()).toContain('Выберите направление')
+
+      // The retry brings the profile: the picker is back with the master's methods.
+      reloadProfile.mockImplementation(() => {
+        masterState.profile = { methods: ['Йога'] } as MasterProfileResponse
+        masterState.profileLoaded = true
+        masterState.profileFailed = false
+      })
+      button('Повторить')?.click()
+      await flush()
+
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(
+        Array.from(selectByPlaceholder('Направление практики')?.options ?? []).map((o) =>
+          o.textContent?.trim(),
+        ),
+      ).toEqual(['Направление практики', 'Йога'])
+    })
+
+    it("a foreign master's methods read fine but the caller's own profile failed: the picker is an error with «Повторить», not an empty one (FE-256)", async () => {
+      routeQuery.masterId = 'm_pub'
+      routeQuery.schoolId = 'g1'
+      vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+        display_name: 'Пётр Романов',
+        methods: ['Йога', 'Йога — Хатха-йога'],
+      } as MasterPublicResponse)
+      masterState.profile = null
+      masterState.profileLoaded = false
+      masterState.profileFailed = true
+      mount()
+      await flush()
+
+      expect(text()).toContain('Пётр Романов')
+      expect(selectByPlaceholder('Направление практики')).toBeUndefined()
+      expect(text()).toContain('Ошибка загрузки')
+
+      reloadProfile.mockImplementation(() => {
+        masterState.profile = { methods: ['Дыхательные практики'] } as MasterProfileResponse
+        masterState.profileLoaded = true
+        masterState.profileFailed = false
+      })
+      button('Повторить')?.click()
+      await flush()
+
+      // The options are the TARGET master's, not the caller's.
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(
+        Array.from(selectByPlaceholder('Направление практики')?.options ?? []).map((o) =>
+          o.textContent?.trim(),
+        ),
+      ).toEqual(['Направление практики', 'Йога'])
+    })
+
+    it('a profile with NO confirmed methods is an empty picker, not an error', async () => {
+      masterState.profile = { methods: [] } as unknown as MasterProfileResponse
+      mount()
+      await flush()
+
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(
+        Array.from(selectByPlaceholder('Направление практики')?.options ?? []).map((o) =>
+          o.textContent?.trim(),
+        ),
+      ).toEqual(['Направление практики'])
     })
   })
 
@@ -1472,6 +1591,48 @@ describe('CreatePracticeView', () => {
       await flush()
 
       expect(text()).toContain('Данных пока нет')
+      expect(text()).not.toContain('Ошибка загрузки')
+    })
+
+    it.each(['upcoming', 'past'] as const)(
+      'a failed «%s» read is an error with «Повторить» in the open block, not «no practices»; Retry asks only that list (FE-256)',
+      async (bucket) => {
+        masterState.listFailed[bucket] = true
+        mount()
+        await flush()
+
+        host?.querySelector<HTMLElement>('.use-template__head')?.click()
+        await flush()
+
+        expect(text()).toContain('Ошибка загрузки')
+        expect(text()).not.toContain('Данных пока нет')
+
+        // Only the failed list is asked again, and the retry brings the templates.
+        refetchList.mockImplementation((asked: 'upcoming' | 'past') => {
+          masterState.listFailed[asked] = false
+          masterState.practices = [practice({ id: 'p9', title: 'Дыхание на рассвете' })]
+        })
+        button('Повторить')?.click()
+        await flush()
+
+        expect(refetchList).toHaveBeenCalledTimes(1)
+        expect(refetchList).toHaveBeenCalledWith(bucket)
+        expect(text()).not.toContain('Ошибка загрузки')
+        expect(text()).toContain('Дыхание на рассвете')
+      },
+    )
+
+    it('while a practices read is in flight the block shows a loader, not the empty hint (FE-256)', async () => {
+      masterState.listLoading.upcoming = true
+      mount()
+      await flush()
+
+      host?.querySelector<HTMLElement>('.use-template__head')?.click()
+      await flush()
+
+      expect(host?.querySelector('.use-template__loading')).not.toBeNull()
+      expect(text()).not.toContain('Данных пока нет')
+      expect(text()).not.toContain('Ошибка загрузки')
     })
 
     it('picking a template prefills the form but NEVER the date or time', async () => {
@@ -1695,8 +1856,8 @@ describe('CreatePracticeView', () => {
       expect(sentBody().group_ids).toEqual([])
     })
 
-    it('a getGroups failure surfaces a toast instead of silently showing «no groups»', async () => {
-      vi.mocked(groupsApi.getGroups).mockRejectedValue(new TypeError('boom'))
+    it('a getGroups failure is an error with «Повторить» in the groups area, not «no groups»; Retry brings the groups (FE-256)', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValueOnce(new TypeError('boom'))
       mount()
       await flush()
 
@@ -1705,7 +1866,37 @@ describe('CreatePracticeView', () => {
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить группы')
       button('Конкретные группы')?.click()
       await flush()
+      expect(text()).toContain('Ошибка загрузки')
+      expect(text()).not.toContain('Пока нет ни одной группы')
+
+      // The retry is slow: a loader stands in the groups area, never «no groups».
+      let answer: (page: Awaited<ReturnType<typeof groupsApi.getGroups>>) => void = () => {}
+      vi.mocked(groupsApi.getGroups).mockReturnValueOnce(new Promise((r) => (answer = r)))
+      button('Повторить')?.click()
+      await flush()
+
+      expect(host?.querySelector('.pap__loading')).not.toBeNull()
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(text()).not.toContain('Пока нет ни одной группы')
+
+      answer({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null }],
+      })
+      await flush()
+
+      expect(host?.querySelector('.pap__loading')).toBeNull()
+      expect(text()).toContain('VIP')
+    })
+
+    it('an EMPTY groups answer is «no groups», not an error (FE-256)', async () => {
+      mount()
+      await flush()
+
+      button('Конкретные группы')?.click()
+      await flush()
+
       expect(text()).toContain('Пока нет ни одной группы')
+      expect(text()).not.toContain('Ошибка загрузки')
     })
 
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
@@ -1813,6 +2004,33 @@ describe('CreatePracticeView -- «Школы» audience (FE-24 / GT P5)', () => 
     await flush()
 
     expect(button('Школы')).toBeUndefined()
+    expect(text()).not.toContain('Ошибка загрузки')
+  })
+
+  it('a failed schools read is an error with «Повторить» under the audience radio, not a radio that just lacks the option; Retry brings the option (FE-256)', async () => {
+    vi.mocked(cgApi.getMySchools).mockRejectedValueOnce(new Error('offline'))
+    mount()
+    await flush()
+
+    expect(button('Школы')).toBeUndefined()
+    expect(text()).toContain('Ошибка загрузки')
+
+    // The retry is slow: a loader stands under the radio, neither the error nor the option.
+    let answer: (page: Awaited<ReturnType<typeof cgApi.getMySchools>>) => void = () => {}
+    vi.mocked(cgApi.getMySchools).mockReturnValueOnce(new Promise((r) => (answer = r)))
+    button('Повторить')?.click()
+    await flush()
+
+    expect(host?.querySelector('.pap__loading')).not.toBeNull()
+    expect(text()).not.toContain('Ошибка загрузки')
+    expect(button('Школы')).toBeUndefined()
+
+    answer({ items: [school('g1', 'Школа Лотоса', 'curator')] })
+    await flush()
+
+    expect(host?.querySelector('.pap__loading')).toBeNull()
+    expect(text()).not.toContain('Ошибка загрузки')
+    expect(button('Школы')).toBeDefined()
   })
 
   it('with eligible schools: option appears, student-relation schools are filtered out, and the picked chip ships school_id', async () => {
@@ -1924,7 +2142,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     submitForm()
     await flush()
 
-    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    const body = sentBodyAt(0)
     expect(body.master_id).toBe('m_pub')
     expect(body.school_id).toBe('g1')
     expect(body.audience_kind).toBe('public')
@@ -1947,7 +2165,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     await fillMinimalForm()
     submitForm()
     await flush()
-    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    const body = sentBodyAt(0)
     expect(body.master_id).toBeUndefined()
     expect(body.school_id).toBeNull()
   })
@@ -2001,10 +2219,10 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(toastError).toHaveBeenCalledWith(msg)
     expect(replace).not.toHaveBeenCalled()
     // The input survived: a second submit sends the same form again.
-    const first = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    const first = sentBodyAt(0)
     submitForm()
     await flush()
-    const second = vi.mocked(practicesApi.createPractice).mock.calls[1]![0]
+    const second = sentBodyAt(1)
     expect(second).toEqual(first)
   })
 
@@ -2139,7 +2357,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     await fillMinimalForm()
     submitForm()
     await flush()
-    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    const body = sentBodyAt(0)
     expect(body.master_id).toBe('m2')
     expect(body.school_id).toBe('g1')
     expect(['public', 'schools']).toContain(body.audience_kind)
@@ -2182,8 +2400,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     await flush()
     expect(templateSection()).toBe(true)
     Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
-      .find((b) => b.textContent?.includes('Пётр Романов'))!
-      .click()
+      .find((b) => b.textContent?.includes('Пётр Романов'))
+      ?.click()
     await flush()
     expect(templateSection()).toBe(false)
   })
@@ -2230,7 +2448,7 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     submitForm()
     await flush()
 
-    const body = vi.mocked(practicesApi.createPractice).mock.calls[0]![0]
+    const body = sentBodyAt(0)
     expect(body.direction).toBe('meditation')
     expect(body.master_id).toBe('m_pub')
   })
@@ -2268,8 +2486,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(mastersApi.getPublicMaster).not.toHaveBeenCalled()
 
     Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
-      .find((b) => b.textContent?.includes('Пётр Романов'))!
-      .click()
+      .find((b) => b.textContent?.includes('Пётр Романов'))
+      ?.click()
     await flush()
     expect(mastersApi.getPublicMaster).toHaveBeenCalledWith('m2')
     opts = directionOptions()
@@ -2277,8 +2495,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(opts).not.toContain('Йога')
 
     Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
-      .find((b) => b.textContent?.includes('Я'))!
-      .click()
+      .find((b) => b.textContent?.includes('Я'))
+      ?.click()
     await flush()
     opts = directionOptions()
     expect(opts).toContain('Йога')
@@ -2313,8 +2531,8 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     await flush()
 
     Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
-      .find((b) => b.textContent?.includes('Пётр Романов'))!
-      .click()
+      .find((b) => b.textContent?.includes('Пётр Романов'))
+      ?.click()
     await flush()
 
     // The stale pick is gone: the select is back on its placeholder -- the
@@ -2322,25 +2540,132 @@ describe('§1.6 delegation: the master context (FE-92)', () => {
     expect(selectByPlaceholder('Направление практики')?.value).toBe('')
   })
 
-  it("masterId + schoolId: the master's methods failing to load keeps the pickers empty and says why", async () => {
+  it("masterId + schoolId: the master's methods failing to load says why in place of the picker, and Retry brings them (FE-256)", async () => {
     routeQuery.masterId = 'm_pub'
     routeQuery.schoolId = 'g1'
-    vi.mocked(mastersApi.getPublicMaster).mockRejectedValue(new Error('offline'))
+    vi.mocked(mastersApi.getPublicMaster).mockRejectedValueOnce(new Error('offline'))
     mount()
     await flush()
 
-    // Fail-CLOSED: only the placeholder option, never the full catalogue.
-    expect(directionOptions()).toEqual(['Направление практики'])
+    // Fail-CLOSED and loud: no direction picker at all, an error with Retry instead.
+    expect(selectByPlaceholder('Направление практики')).toBeUndefined()
+    expect(text()).toContain('Ошибка загрузки')
     expect(toastError).toHaveBeenCalledWith('Не удалось загрузить методы мастера')
 
     // And no direction can ride along to the API: the title is filled, so
     // the choose-direction error (i18n:masterScreens.createPractice.validation.chooseDirection)
-    // is what blocks the submit.
+    // is what blocks the submit -- and it is visible where the picker was.
     typeInto(inputByPlaceholder('Название'), 'Утренняя практика')
     submitForm()
     await flush()
     expect(vi.mocked(practicesApi.createPractice)).not.toHaveBeenCalled()
     expect(text()).toContain('Выберите направление')
+
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Пётр Романов',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
+    button('Повторить')?.click()
+    await flush()
+
+    expect(text()).not.toContain('Ошибка загрузки')
+    expect(directionOptions()).toEqual(['Направление практики', 'Йога'])
+    expect(text()).toContain('Пётр Романов')
+  })
+
+  it('schoolId query: a failed masters read is an error with «Повторить» in the Master section, not a section that vanished; Retry brings the masters (FE-256)', async () => {
+    routeQuery.schoolId = 'g1'
+    vi.mocked(cgApi.getSchoolMembers).mockRejectedValueOnce(new Error('offline'))
+    mount()
+    await flush()
+
+    expect(text()).toContain('Мастер')
+    expect(text()).toContain('Ошибка загрузки')
+    const radioLabels = (): string[] =>
+      Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? []).map(
+        (b) => b.textContent?.trim() ?? '',
+      )
+    expect(radioLabels()).not.toContain('Я')
+    // Whose practice this is stays unknown until the list is read: no submit meanwhile.
+    expect(button('Создать практику')?.disabled).toBe(true)
+
+    // The retry is slow: a loader stands in the section, and the submit still waits.
+    let answer: (page: Awaited<ReturnType<typeof cgApi.getSchoolMembers>>) => void = () => {}
+    vi.mocked(cgApi.getSchoolMembers).mockReturnValueOnce(new Promise((r) => (answer = r)))
+    button('Повторить')?.click()
+    await flush()
+
+    expect(host?.querySelector('.create-practice__masters-loading')).not.toBeNull()
+    expect(text()).not.toContain('Ошибка загрузки')
+    expect(button('Создать практику')?.disabled).toBe(true)
+
+    answer({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    await flush()
+
+    expect(host?.querySelector('.create-practice__masters-loading')).toBeNull()
+    expect(radioLabels()).toEqual(expect.arrayContaining(['Я', 'Пётр Романов']))
+    expect(button('Создать практику')?.disabled).toBe(false)
+  })
+
+  it('schoolId query: picking a school master whose methods fail to load shows the error in place of the picker; Retry loads HIS methods (FE-256)', async () => {
+    routeQuery.schoolId = 'g1'
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue({
+      items: [
+        {
+          user_id: 'm2',
+          name: 'Пётр Романов',
+          kind: 'master',
+          avatar_url: null,
+          joined_at: '2026-09-01T00:00:00Z',
+          is_visible: true,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    vi.mocked(mastersApi.getPublicMaster).mockRejectedValueOnce(new Error('offline'))
+    mount()
+    await flush()
+
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.includes('Пётр Романов'))
+      ?.click()
+    await flush()
+
+    expect(selectByPlaceholder('Направление практики')).toBeUndefined()
+    expect(text()).toContain('Ошибка загрузки')
+
+    vi.mocked(mastersApi.getPublicMaster).mockResolvedValue({
+      display_name: 'Пётр Романов',
+      methods: ['Йога', 'Йога — Хатха-йога'],
+    } as MasterPublicResponse)
+    button('Повторить')?.click()
+    await flush()
+
+    expect(text()).not.toContain('Ошибка загрузки')
+    expect(directionOptions()).toEqual(['Направление практики', 'Йога'])
+
+    // The self option again: the caller's own methods, and no leftover error.
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button[role="radio"]') ?? [])
+      .find((b) => b.textContent?.trim() === 'Я')
+      ?.click()
+    await flush()
+    expect(text()).not.toContain('Ошибка загрузки')
   })
 
   it('no context: no master section at all', async () => {
