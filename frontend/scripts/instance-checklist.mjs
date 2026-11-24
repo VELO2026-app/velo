@@ -42,6 +42,19 @@ import {
 // the unit suite imports this module for evaluateChecklist() only.
 const frontendDir = () => resolve(fileURLToPath(new URL('..', import.meta.url)))
 
+/** The verb of the bot's "Open <brand>" button in `locale`, as the app's own
+ *  hint names it (auth.stub.hint, the word before the linked brand): the
+ *  menu button must carry the text the hint sends the user to. The ru
+ *  catalog stands in for a locale without the file. */
+export function openButtonLabel(locale) {
+  const read = (l) => {
+    const file = join(frontendDir(), 'src', 'locales', l, 'auth.json')
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).auth?.stub?.hint : undefined
+  }
+  const hint = read(locale) ?? read('ru') ?? ''
+  return hint.match(/[«"]([^«"]*?)\s*@:brand/)?.[1] ?? ''
+}
+
 /** The sources the build itself uses: the skin brand record for the brand
  *  (name and colours -- no env value names the brand, FE-231), the passport
  *  env (process.env > .env files) for the rest, then the core defaults.
@@ -76,6 +89,8 @@ export function expectedFromSources() {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
+    hasSkin: skin !== null,
+    openLabel: openButtonLabel(pick(undefined, 'VITE_DEFAULT_LOCALE', 'ru').value),
     botUrl: env.VITE_TELEGRAM_BOT_URL || 'https://telegram.me/veloappbot',
     botUrlSource: env.VITE_TELEGRAM_BOT_URL ? 'passport env' : 'golden default',
   }
@@ -224,9 +239,12 @@ export function evaluateChecklist({ facts, expected }) {
   // frontend host of the instance (passport `domains`).
   const botfather = [
     ['bot name', `/setname: ${expected.brand}`],
-    ['bot avatar', '/setuserpic: skin assets/icon-512.png'],
+    [
+      'bot avatar',
+      `/setuserpic: ${expected.hasSkin ? 'skin assets/icon-512.png' : 'public/icons/icon-512.png'}`,
+    ],
     ['bot description', '/setdescription, /setabouttext: brand text'],
-    ['bot menu button', '/setmenubutton: the Mini App URL (frontend)'],
+    ['bot menu button', `/setmenubutton «${expected.openLabel} ${expected.brand}» -> Mini App`],
     ['bot sign-in domain', '/setdomain: frontend host (browser sign-in)'],
   ]
   for (const [item, fact] of botfather)

@@ -317,8 +317,25 @@ describe('brand/token grep helpers', () => {
     expect(bundleHas('{s:"in Velo Pro: start"}', 'Velo Pro')).toBe(true)
   })
 
+  it('bundleHas finds the name next to an escape and next to punctuation', () => {
+    expect(bundleHas(String.raw`{s:"Привет!\nGoodo"}`, 'Goodo')).toBe(true)
+    expect(bundleHas(String.raw`{s:"Goodo.\nНачните"}`, 'Goodo')).toBe(true)
+    expect(bundleHas(String.raw`{s:"\tGoodo"}`, 'Goodo')).toBe(true)
+    expect(bundleHas(String.raw`{s:"\x47oodo"}`, 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"««Goodo.»»"}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"(…Goodo.)"}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"<b>Goodo.</b>"}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"...Goodo"}', 'Goodo')).toBe(true)
+  })
+
+  it('bundleHas does not take a part of a word for the name, in any script', () => {
+    expect(bundleHas('{s:"сНОВА"}', 'НОВА')).toBe(false)
+    expect(bundleHas('{s:"НОВАя"}', 'НОВА')).toBe(false)
+    expect(bundleHas('{s:"Goodos"}', 'Goodo')).toBe(false)
+  })
+
   it('bundleHas does not take the core identifiers for the name', () => {
-    // --velo-* names, velo:* storage keys, an e-mail host: all identifiers.
+    // --velo-* names, velo:* storage keys and log tags, an e-mail host.
     expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'VELO')).toBe(false)
     expect(bundleHas('const k="velo:diary:recent-searches"', 'VELO')).toBe(false)
     expect(bundleHas('console.error(`[velo:${t.source}] ${t.name}`)', 'VELO')).toBe(false)

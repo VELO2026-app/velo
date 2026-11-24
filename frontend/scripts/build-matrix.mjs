@@ -177,25 +177,36 @@ export function cssHasDecl(css, decl) {
   return false
 }
 
-/** Does the bundle text carry `text` as a word, in any case -- verbatim
- *  (UTF-8) or as the \uXXXX escape esbuild may emit for non-ASCII? A word,
- *  so the name is found inside a message ("Support Goodo") and a name like
- *  "Velo Pro" is told from the core's own identifiers: a letter, digit, `_`
- *  or `-` next to it means an identifier (--velo-primary), and so does
- *  `@`/`.`/`:`/`/` glued to anything but a space or a quote (the velo:*
- *  storage keys and log tags, an e-mail or URL host). A sentence end
- *  ("Goodo." / "Goodo: ...") stays a word. */
+/** The bundle text with the JS string escapes a minifier emits decoded
+ *  (\uXXXX, \u{X}, \xXX, \n, \t, \r), so a name next to a line break or
+ *  written as escapes reads as plain text. Pure. */
+export function unescapeBundle(bundle) {
+  return bundle.replace(
+    /\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([ntr]))/g,
+    (_, cp, u4, x2, ch) =>
+      ch !== undefined
+        ? { n: '\n', t: '\t', r: '\r' }[ch]
+        : String.fromCodePoint(parseInt(cp ?? u4 ?? x2, 16)),
+  )
+}
+
+/** A letter or digit of any script, `_` or `-`: an identifier character. */
+const WORD = String.raw`[\p{L}\p{N}_\-]`
+/** The same plus `$` (a template-literal hole: `velo:${source}`). */
+const IDENT = String.raw`[\p{L}\p{N}_$\-]`
+
+/** Does the bundle text carry `text` as a word, in any case (the escapes
+ *  decoded first)? A word, so the name is found inside a message ("Support
+ *  Goodo", "Hi!\nGoodo", "«Goodo.»", "...Goodo") and a name like "Velo Pro"
+ *  is told from the core's own identifiers: an identifier character next to
+ *  it, or `.`/`:`/`/`/`@` joining it to one, makes it part of an identifier
+ *  (--velo-primary, the velo:* storage keys and log tags, support@velo.app).
+ *  Pure. */
 export function bundleHas(bundle, text) {
-  const escaped = [...text]
-    .map((ch) =>
-      ch.charCodeAt(0) > 0x7e ? `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}` : ch,
-    )
-    .join('')
-  const forms = escaped === text ? [text] : [text, escaped]
-  return forms.some((form) => {
-    const name = form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    return new RegExp(`(?<![\\w\\-@./:])${name}(?![\\w-]|[.:/@][^\\s"'\`])`, 'i').test(bundle)
-  })
+  const name = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?<!${WORD}|${WORD}[.:/@])${name}(?!${WORD}|[.:/@]${IDENT})`, 'iu').test(
+    unescapeBundle(bundle),
+  )
 }
 
 /** The declarations of a skin cell the dist CSS lacks. A declaration the
