@@ -67,6 +67,7 @@
 import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { VHeader } from '@/components/layout'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import { IconMessages } from '@/components/icons'
@@ -77,7 +78,7 @@ import { chatRowFor, listChats, type ChatPeer } from '@/api/chats'
 const route = useRoute()
 const router = useRouter()
 
-const threadId = String(route.params.id ?? '')
+const threadId = routeParam(route, 'id')
 const resolving = ref(true)
 const notFound = ref(false)
 const peer = ref<ChatPeer | null>(null)

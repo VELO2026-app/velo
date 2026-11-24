@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
 import { formatShortDate, formatTime, formatDuration } from '@/utils/format'
 import { IconCheck, IconClock, IconClose } from '@/components/icons'
 import { VBadge } from '@/components/ui'
@@ -59,47 +59,35 @@ defineEmits<{
   click: []
 }>()
 
-const badgeIcon = computed(() => {
-  if (!props.badge) return null
-  switch (props.badge.variant) {
-    case 'today':
-      return IconClock
-    case 'tomorrow':
-      return IconClock
-    case 'done':
-      return IconCheck
-    case 'cancelled':
-      return IconClose
-    case 'no_show': // i18n:user.screens.myBookings.status.noShow
-    case 'live':
-    case 'calculating':
-      return null // no icon
-  }
-  return null // a variant this build does not know: no icon
-})
+// One table per mapping: the Record type makes a new badge variant fail here.
+const BADGE_ICON: Record<BookingBadge['variant'], Component | null> = {
+  today: IconClock,
+  tomorrow: IconClock,
+  done: IconCheck,
+  cancelled: IconClose,
+  no_show: null, // i18n:user.screens.myBookings.status.noShow
+  live: null,
+  calculating: null,
+}
+const badgeIcon = computed(() => (props.badge ? BADGE_ICON[props.badge.variant] : null))
 
 // Map the booking status to a DS VBadge variant (no hand-rolled badge styling).
 // live / today / done -> success (teal), tomorrow -> warning (peach),
 // cancelled / no_show / calculating -> error/muted. teal aligns to the DS
 // canon (teal-600).
-const vbadgeVariant = computed<'success' | 'warning' | 'error' | 'muted'>(() => {
-  switch (props.badge?.variant) {
-    case 'tomorrow':
-      return 'warning'
-    case 'cancelled':
-      return 'error'
-    case 'no_show':
-      return 'muted' // i18n:user.screens.myBookings.status.noShow — low-key blue-grey, no drama
-    case 'calculating':
-      return 'muted' // AT-2: i18n:user.screens.myBookings.status.counting — same low-key tone, not a verdict yet
-    case undefined:
-    case 'live':
-    case 'today':
-    case 'done':
-      return 'success'
-  }
-  return 'success'
-})
+type BadgeTone = 'success' | 'warning' | 'error' | 'muted'
+const BADGE_TONE: Record<BookingBadge['variant'], BadgeTone> = {
+  live: 'success',
+  today: 'success',
+  done: 'success',
+  tomorrow: 'warning',
+  cancelled: 'error',
+  no_show: 'muted', // i18n:user.screens.myBookings.status.noShow — low-key blue-grey, no drama
+  calculating: 'muted', // AT-2: i18n:user.screens.myBookings.status.counting — same low-key tone, not a verdict yet
+}
+const vbadgeVariant = computed<BadgeTone>(() =>
+  props.badge ? BADGE_TONE[props.badge.variant] : 'success',
+)
 
 // F5: render the date in the viewer's own profile timezone (the profile decides).
 const viewerTz = useViewerTimezone()

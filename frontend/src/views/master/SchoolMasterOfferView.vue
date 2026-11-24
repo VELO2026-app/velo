@@ -156,6 +156,7 @@ lines — counts only, by the same ruling.
 import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { acceptSchoolMasterOffer, declineSchoolMasterOffer, getSchoolPage } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolPageResponse } from '@/api/types'
@@ -198,7 +199,7 @@ async function load(): Promise<void> {
   transientError.value = false
   gone.value = false
   try {
-    page.value = await getSchoolPage(String(route.params.id ?? ''))
+    page.value = await getSchoolPage(routeParam(route, 'id'))
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
       gone.value = true

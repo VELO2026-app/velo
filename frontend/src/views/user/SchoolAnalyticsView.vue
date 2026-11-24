@@ -169,6 +169,7 @@ import { useQuery } from '@pinia/colada'
 import { schoolAnalyticsQuery } from '@/composables/queries/schools'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolAnalyticsPeriod } from '@/api/schools'
 import type { SchoolAnalyticsResponse } from '@/api/types'
@@ -181,7 +182,7 @@ import VHeader from '@/components/layout/VHeader.vue'
 const route = useRoute()
 const router = useRouter()
 
-const schoolId = computed(() => String(route.params.id ?? ''))
+const schoolId = computed(() => optionalRouteParam(route, 'id') ?? '')
 // Same zone pick as the school page and the roster screen: the route name's
 // prefix. It decides the back target only.
 const inMasterZone = computed(() => String(route.name ?? '').startsWith('master'))

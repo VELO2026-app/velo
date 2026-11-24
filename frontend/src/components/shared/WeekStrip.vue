@@ -123,18 +123,19 @@ const emit = defineEmits<{
   'shift-days': [delta: number]
 }>()
 
-// Short weekday labels, Monday-first (Date.getDay: 0=Sun..6=Sat).
-const WEEKDAY_LABELS = [7, 1, 2, 3, 4, 5, 6].map(weekdayAbbrUpper)
+// Short weekday label of a Date.getDay() value (0=Sun..6=Sat); the labels are
+// keyed by ISO weekday (1=Mon..7=Sun).
+const weekdayLabel = (day: number): string => weekdayAbbrUpper(day || 7)
 
 // [owner pass] Short month abbreviations -- the STATIONARY 6th chip
 // shows the month(s) of the five visible days ("Aug" / "Aug-Sep").
-const MONTH_ABBR = Array.from({ length: 12 }, (_, m) => {
-  if (getLocale() === 'ru') return t(`shared.monthsShort.${m + 1}`)
-  const name = new Intl.DateTimeFormat(getLocale(), { month: 'short' }).format(
-    new Date(Date.UTC(2026, m, 1)),
-  )
+const monthFormat = new Intl.DateTimeFormat(getLocale(), { month: 'short' })
+/** The short name of a month, `month` as Date.getMonth() gives it (0..11). */
+function monthAbbr(month: number): string {
+  if (getLocale() === 'ru') return t(`shared.monthsShort.${month + 1}`)
+  const name = monthFormat.format(new Date(Date.UTC(2026, month, 1)))
   return name.charAt(0).toUpperCase() + name.replace('.', '').slice(1)
-})
+}
 
 interface Cell {
   key: string
@@ -153,7 +154,7 @@ const cells = computed<Cell[]>(() => {
     const key = props.localDateKey(d)
     out.push({
       key,
-      weekday: WEEKDAY_LABELS[d.getDay()] ?? '',
+      weekday: weekdayLabel(d.getDay()),
       num: d.getDate(),
       hasPractices: props.daysWithPractices.has(key),
     })
@@ -202,8 +203,8 @@ const monthList = computed<string[]>(() => {
   a.setDate(a.getDate() + left)
   const b = new Date(a)
   b.setDate(a.getDate() + 4)
-  const ma = MONTH_ABBR[a.getMonth()] ?? ''
-  const mb = MONTH_ABBR[b.getMonth()] ?? ''
+  const ma = monthAbbr(a.getMonth())
+  const mb = monthAbbr(b.getMonth())
   return ma === mb ? [ma] : [ma, mb]
 })
 

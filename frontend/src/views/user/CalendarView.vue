@@ -223,6 +223,7 @@
 import { t } from '@/locales'
 import { ref, computed, onUnmounted, onActivated } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam, routeParam } from '@/router/routeParam'
 import { useCalendarStore } from '@/stores/calendar'
 import { useCalendarWeek } from '@/composables/queries/calendar'
 import { extractApiError } from '@/composables/useApiError'
@@ -269,14 +270,14 @@ const viewerTz = useViewerTimezone()
 // Owner 2026-10-03: the master route may carry ?schoolId (the curator's school
 // context off the profile) -- the feed then keeps only the master's practices
 // in THAT school (the store's client-side filter, see setMasterScope).
-const masterMode = computed(() => String(route.params.masterId ?? '') !== '')
-const schoolMode = computed(() => String(route.params.schoolId ?? '') !== '')
+const masterMode = computed(() => optionalRouteParam(route, 'masterId') !== null)
+const schoolMode = computed(() => optionalRouteParam(route, 'schoolId') !== null)
 
 // The scope THIS screen set, remembered: on unmount the route is already the
 // next one (masterMode / schoolMode read it), so they cannot tell which
 // scope to clear.
-const ownMasterScope = masterMode.value ? String(route.params.masterId) : null
-const ownSchoolScope = schoolMode.value ? String(route.params.schoolId) : null
+const ownMasterScope = optionalRouteParam(route, 'masterId')
+const ownSchoolScope = optionalRouteParam(route, 'schoolId')
 if (ownMasterScope !== null) {
   store.setMasterScope(ownMasterScope, String(route.query.schoolId ?? '') || null)
 } else if (ownSchoolScope !== null) {
@@ -323,12 +324,12 @@ function goBack(): void {
   } else if (masterMode.value) {
     void router.push({
       name: 'user-master-public',
-      params: { id: String(route.params.masterId) },
+      params: { id: routeParam(route, 'masterId') },
     })
   } else {
     void router.push({
       name: 'user-school',
-      params: { id: String(route.params.schoolId) },
+      params: { id: routeParam(route, 'schoolId') },
     })
   }
 }

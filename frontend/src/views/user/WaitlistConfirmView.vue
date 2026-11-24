@@ -80,10 +80,11 @@
 import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { getMyWaitlist } from '@/api/waitlist'
 import { useConfirmWaitlist } from '@/composables/queries/bookings'
 import { ApiResponseError } from '@/api/client'
-import type { WaitlistWithPracticeResponse } from '@/api/types'
+import type { WaitlistStatus, WaitlistWithPracticeResponse } from '@/api/types'
 import { VButton, VCard, VEmptyState, VLoader } from '@/components/ui'
 import { VHeader } from '@/components/layout'
 import { extractApiError } from '@/composables/useApiError'
@@ -103,37 +104,38 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const confirmSpot = useConfirmWaitlist()
-const waitlistId = computed(() => String(route.params.id))
+const waitlistId = computed(() => routeParam(route, 'id'))
 
 const entry = ref<WaitlistWithPracticeResponse | null>(null)
 const loading = ref(true)
 const confirming = ref(false)
 
+// The states of the statuses that need no clock; `notified` depends on expiry.
+const STATE_BY_STATUS: Record<Exclude<WaitlistStatus, 'notified'>, State> = {
+  expired: 'expired',
+  converted: 'converted',
+  waiting: 'waiting',
+  left: 'gone',
+  declined: 'gone',
+  removed: 'gone',
+}
+
 const state = computed((): State => {
   const e = entry.value
   if (!e) return 'gone'
-  switch (e.status) {
-    case 'notified':
-      return e.expires_at && new Date(e.expires_at).getTime() > Date.now() ? 'open' : 'expired'
-    case 'expired':
-      return 'expired'
-    case 'converted':
-      return 'converted'
-    case 'waiting':
-      return 'waiting'
-    case 'left':
-    case 'declined':
-    case 'removed':
-      return 'gone'
+  if (e.status === 'notified') {
+    return e.expires_at && new Date(e.expires_at).getTime() > Date.now() ? 'open' : 'expired'
   }
-  return 'gone'
+  return STATE_BY_STATUS[e.status]
 })
 
 async function load(): Promise<void> {
   loading.value = true
   try {
+    // Read before the await: the screen may be gone when the answer arrives.
+    const id = waitlistId.value
     const page = await getMyWaitlist({ limit: 100 })
-    entry.value = page.items.find((item) => item.id === waitlistId.value) ?? null
+    entry.value = page.items.find((item) => item.id === id) ?? null
   } catch (e) {
     entry.value = null
     toast.error(extractApiError(e, t('user.screens.waitlistConfirm.toast.loadFailed')))

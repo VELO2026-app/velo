@@ -8,8 +8,7 @@ afterEach(() => {
 describe('LANGUAGES', () => {
   it('lists the two practice languages from the seed as endonyms', async () => {
     const { LANGUAGES } = await import('./languages')
-    expect(LANGUAGES).toHaveLength(2)
-    expect(LANGUAGES.every((name) => name.length > 0)).toBe(true)
+    expect(LANGUAGES).toEqual(['Русский', 'English'])
   })
 
   it('fails loudly when the seed lists fewer than two languages', async () => {

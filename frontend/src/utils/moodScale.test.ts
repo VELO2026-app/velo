@@ -119,19 +119,18 @@ describe('moodValueText -- the range input reads «5 из 10 — Нормаль�
 })
 
 describe('zonePercents', () => {
-  it('reads every zone as 0 when the counts are absent or all zero', () => {
+  it('reads every zone as 0 when there are no feedbacks', () => {
     const zeros = { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }
-    expect(zonePercents(undefined)).toEqual(zeros)
-    expect(zonePercents(null)).toEqual(zeros)
     expect(zonePercents(zeros)).toEqual(zeros)
   })
 
-  it('rounds each zone to its share of the total', () => {
-    expect(zonePercents({ bad: 1, low: 1, neutral: 0, good: 2, fire: 0 })).toEqual({
-      bad: 25,
-      low: 25,
-      neutral: 0,
-      good: 50,
+  it('rounds each zone to a whole percent of the total', () => {
+    // 1/3 is 33.33...: an unrounded value would fail the whole-number match.
+    expect(zonePercents({ bad: 1, low: 1, neutral: 1, good: 0, fire: 0 })).toEqual({
+      bad: 33,
+      low: 33,
+      neutral: 33,
+      good: 0,
       fire: 0,
     })
   })

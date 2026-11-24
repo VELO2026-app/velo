@@ -138,6 +138,7 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
 import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { getSchoolInvitePreview, joinSchool } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolInvitePreviewResponse } from '@/api/types'
@@ -256,7 +257,7 @@ async function loadPreview(): Promise<void> {
   transientError.value = false
   notFound.value = false
   try {
-    preview.value = await getSchoolInvitePreview(String(route.params.token ?? ''))
+    preview.value = await getSchoolInvitePreview(routeParam(route, 'token'))
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
       notFound.value = true
@@ -272,7 +273,7 @@ async function join(): Promise<void> {
   if (!preview.value) return
   joining.value = true
   try {
-    const res = await joinSchool(String(route.params.token ?? ''))
+    const res = await joinSchool(routeParam(route, 'token'))
     toast.success(t('masterScreens.schoolJoin.joinedToast', { name: preview.value.school.name }))
     // The hub may have answered BEFORE this join (the account's first
     // school): without a fresh read the dock tab stays hidden until a full

@@ -8,7 +8,8 @@
 // ("File ignored because outside of base path", verified on eslint 9.39),
 // so the package carries its own eslint.config.js -- a mirror of this
 // app's law -- and this script runs it from the package directory under
-// the SAME budget.
+// the same zero-warning policy (FE-243: the kit's own warning budget,
+// maxWarningsUi, counts its test-only `!` debt).
 import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'

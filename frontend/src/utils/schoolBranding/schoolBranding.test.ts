@@ -23,6 +23,8 @@ import {
   PALETTES,
 } from '@/utils/schoolBranding'
 import { petal } from './geometry'
+import { codePointOf } from './hash'
+import { helpers } from './params'
 import { mixHex } from './noise'
 
 describe('schoolBranding -- hash', () => {
@@ -30,6 +32,22 @@ describe('schoolBranding -- hash', () => {
     expect(fnv1a('')).toBe(0x811c9dc5)
     expect(fnv1a('a')).toBe(0xe40c292c)
     expect(fnv1a('foobar')).toBe(0xbf9cf968)
+  })
+
+  it('fnv1a hashes a character outside the BMP as one code point', () => {
+    // 0x1F600 (an emoji) -- two UTF-16 units, but one step of the hash.
+    expect(fnv1a('\u{1F600}')).toBe(0x650a71f)
+  })
+
+  it('codePointOf reads a character and rejects the empty string', () => {
+    expect(codePointOf('a')).toBe(97)
+    expect(() => codePointOf('')).toThrow('the string is empty')
+  })
+
+  it('pick takes an item of the list and rejects an empty list', () => {
+    const R = helpers(() => 0.5)
+    expect(R.pick(['a', 'b', 'c'])).toBe('b')
+    expect(() => R.pick([])).toThrow('the list is empty')
   })
 
   it('mulberry32 is deterministic per seed', () => {

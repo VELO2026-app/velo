@@ -183,6 +183,7 @@ import {
 } from '@/composables/queries/schools'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import { unblockSchoolMember, type SchoolMemberKind } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolBlockedItem, SchoolRosterItem, SchoolViewer } from '@/api/types'
@@ -221,7 +222,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const schoolId = computed(() => String(route.params.id ?? ''))
+const schoolId = computed(() => optionalRouteParam(route, 'id') ?? '')
 
 /** The zone decides only navigation targets -- the data and the row set come
  *  from the server, exactly like on SchoolPageView. */

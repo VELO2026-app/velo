@@ -19,22 +19,27 @@ function bandPts(
   S: SchoolBrandingParams['bg']['swirl'],
   sp: SchoolBrandingParams['bg']['swirl']['bands'][number],
   noise: (x: number, y: number) => number,
-): PathPoint[] {
+): { pts: PathPoint[]; first: PathPoint; last: PathPoint } {
   const steps = Math.max(28, Math.round(sp.arc / 0.05))
-  const pts: PathPoint[] = []
-  for (let i = 0; i <= steps; i++) {
+  const pointAt = (i: number): PathPoint => {
     const t = i / steps
     const th = sp.alpha + S.dir * sp.arc * t
     let r = sp.r0 + (t - 0.5) * sp.drift - Math.pow(t, 3) * sp.tuck
     r += (noise(Math.cos(th) * 1.6 + sp.ox + S.nSeed, Math.sin(th) * 1.6 + sp.oy) - 0.5) * S.wobble
     const w = sp.W * rampW(t) * (0.92 + noise(th * 1.9 + sp.ox, sp.oy) * 0.16)
-    pts.push({
+    return {
       x: S.cx + sp.ox + Math.cos(th) * r,
       y: S.cy + sp.oy + Math.sin(th) * r,
       w: Math.max(w, 1.5),
-    })
+    }
   }
-  return pts
+  // The ends are named, so the gradient reads them without an index lookup.
+  const first = pointAt(0)
+  const pts: PathPoint[] = [first]
+  for (let i = 1; i < steps; i++) pts.push(pointAt(i))
+  const last = pointAt(steps)
+  pts.push(last)
+  return { pts, first, last }
 }
 
 /** A thin stream flying out of the roll past the edge (like the strands at
@@ -130,11 +135,7 @@ export function bannerSvg(
 
   // ring ribbons: inner to outer, each with its own gradient along the arc
   S.bands.forEach((sp, i) => {
-    const pts = bandPts(S, sp, noise)
-    const first = pts[0]
-    const last = pts[pts.length - 1]
-    // bandPts always returns a full ribbon; an empty one has nothing to paint.
-    if (!first || !last) return
+    const { pts, first, last } = bandPts(S, sp, noise)
     const g = `${uid}-b${i}`
     defs +=
       `<linearGradient id="${g}" gradientUnits="userSpaceOnUse" x1="${first.x.toFixed(1)}" y1="${first.y.toFixed(1)}" x2="${last.x.toFixed(1)}" y2="${last.y.toFixed(1)}">` +

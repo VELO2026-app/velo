@@ -319,10 +319,10 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch, type Component } from 'vue'
 import { useNow } from '@/composables/useNow'
 import { useRoute, useRouter } from 'vue-router'
-import { routeParam } from '@/router/routeParam'
+import { optionalRouteParam, routeParam } from '@/router/routeParam'
 import { usePracticesStore } from '@/stores/practices'
 import { useMyBookings } from '@/composables/queries/bookings'
 import {
@@ -570,20 +570,17 @@ const statusVariant = computed(() => {
   if (attendancePending.value) return 'muted'
   return myAnyBooking.value ? STATUS_VARIANT[myAnyBooking.value.status] : 'info'
 })
+const STATUS_ICON: Record<BookingStatus, Component | null> = {
+  confirmed: IconCheck,
+  attended: IconCheck,
+  cancelled: IconClose,
+  no_show: IconClose,
+  pending: null,
+}
 const statusIcon = computed(() => {
   if (!myAnyBooking.value) return null
   if (attendancePending.value) return null
-  switch (myAnyBooking.value.status) {
-    case 'confirmed':
-    case 'attended':
-      return IconCheck
-    case 'cancelled':
-    case 'no_show':
-      return IconClose
-    case 'pending':
-      return null
-  }
-  return null
+  return STATUS_ICON[myAnyBooking.value.status]
 })
 
 /** ZOOM card shows only for an UPCOMING active booking (confirmed / pending,
@@ -870,7 +867,7 @@ onMounted(() => {
 // practices (e.g. from search results). onMounted won't fire again, so watch
 // the route param and re-fetch when it changes.
 watch(
-  () => String(route.params.id ?? ''),
+  () => optionalRouteParam(route, 'id'),
   (newId, oldId) => {
     if (newId && newId !== oldId) {
       store.clearSelected()

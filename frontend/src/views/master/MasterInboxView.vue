@@ -247,7 +247,8 @@ async function markAll(): Promise<void> {
 function routeFor(
   item: NotificationItem,
 ): { name: string; params?: Record<string, string>; query?: Record<string, string> } | null {
-  const action = item.action_data?.action
+  // No verb is the empty verb: it falls to the default arm like any unknown one.
+  const action = item.action_data?.action ?? ''
   const params = item.action_data?.params ?? {}
   const practiceId = typeof params.practice_id === 'string' ? params.practice_id : null
 
@@ -303,11 +304,10 @@ function routeFor(
         ? { name: 'master-chat', params: { id: threadId }, query: { rate: '1' } }
         : null
     }
-    case undefined:
-      break
+    default:
+      // msg.* without a thread reference: the messages list, one hop away.
+      return item.type.startsWith('msg.') ? { name: 'master-messages' } : null
   }
-  // msg.* without a thread reference: the messages list, one hop away.
-  return item.type.startsWith('msg.') ? { name: 'master-messages' } : null
 }
 
 /** Tap = navigate + mark read. Navigation always happens (a read row is a

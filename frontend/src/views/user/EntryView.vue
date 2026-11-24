@@ -178,6 +178,7 @@
 import { t } from '@/locales'
 import { ref, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import { useQuery } from '@pinia/colada'
 import {
   VLoader,
@@ -219,7 +220,7 @@ const toast = useToast()
 
 const tz = computed(() => authStore.user?.timezone ?? 'UTC')
 
-const entryId = computed(() => String(route.params.id))
+const entryId = computed(() => optionalRouteParam(route, 'id') ?? '')
 
 // -- load --------------------------------------------------------------------
 
