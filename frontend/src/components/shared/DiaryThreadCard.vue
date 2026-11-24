@@ -221,7 +221,10 @@ const FORM_BY_KIND: Record<DiaryEventKind, ThreadForm> = {
   external_activity: 'activity',
   thread_started: 'fallback',
 }
-const form = computed<ThreadForm>(() => FORM_BY_KIND[kind.value])
+// The feed's kind is an open string at runtime (the union is a rendering-layer
+// narrowing), so the lookup is typed open: an unknown kind gives `undefined`.
+const formByKind: Readonly<Partial<Record<string, ThreadForm>>> = FORM_BY_KIND
+const form = computed<ThreadForm>(() => formByKind[kind.value] ?? 'fallback')
 
 // -- banner copy ---------------------------------------------------------------
 // The confirmed-booking reference copy: the title line

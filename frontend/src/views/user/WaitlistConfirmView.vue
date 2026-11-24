@@ -126,7 +126,8 @@ const state = computed((): State => {
   if (e.status === 'notified') {
     return e.expires_at && new Date(e.expires_at).getTime() > Date.now() ? 'open' : 'expired'
   }
-  return STATE_BY_STATUS[e.status]
+  // A status this build does not know reads as unavailable, with its text.
+  return STATE_BY_STATUS[e.status] ?? 'gone'
 })
 
 async function load(): Promise<void> {

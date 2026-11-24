@@ -353,6 +353,16 @@ describe('MasterStudentProfileView', () => {
       // ...and the fetched record is what paints -- the id is not merely passed.
       expect(host?.querySelector('.profile__hero-name')?.textContent).toBe('Борис Ли')
     })
+
+    it('a route without the id sends no request and shows the load error', async () => {
+      routeState.params = {}
+      mount()
+      await flush()
+
+      expect(mastersApi.getStudent).not.toHaveBeenCalled()
+      expect(groupsApi.getStudentGroups).not.toHaveBeenCalled()
+      expect(text()).toContain('Не удалось загрузить профиль')
+    })
   })
 
   describe('name (.vue:121-124) — the three-way fallback', () => {

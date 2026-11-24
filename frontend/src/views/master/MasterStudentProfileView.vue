@@ -322,7 +322,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { optionalRouteParam } from '@/router/routeParam'
+import { optionalRouteParam, routeParam } from '@/router/routeParam'
 import { VHeader } from '@/components/layout'
 import {
   VAvatar,
@@ -359,6 +359,8 @@ import type { StudentGroupItem, GroupListItem } from '@/api/groups'
 
 const route = useRoute()
 const router = useRouter()
+// The template reads it reactively (a leaving screen sees the next route);
+// the requests read the required param when they run.
 const studentId = computed(() => optionalRouteParam(route, 'id') ?? '')
 
 // Identity comes from StudentDetailResponse (name/avatar_url, E5). The list
@@ -385,7 +387,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    detail.value = await getStudent(studentId.value)
+    detail.value = await getStudent(routeParam(route, 'id'))
   } catch {
     error.value = t('common.tryAgain')
   } finally {
@@ -399,7 +401,7 @@ onMounted(load)
 const groupChips = ref<StudentGroupItem[]>([])
 async function loadGroups(): Promise<void> {
   try {
-    const res = await getStudentGroups(studentId.value)
+    const res = await getStudentGroups(routeParam(route, 'id'))
     groupChips.value = res.groups
   } catch {
     groupChips.value = []
@@ -493,7 +495,7 @@ const blocking = ref(false)
 async function onBlockConfirm(): Promise<void> {
   blocking.value = true
   try {
-    await blockStudent(studentId.value)
+    await blockStudent(routeParam(route, 'id'))
     toast.success(t('masterScreens.masterStudentProfile.toast.blocked'))
     blockConfirmOpen.value = false
     // T24-20: refresh detail.blocked so the "..." menu hides and the bottom
@@ -543,7 +545,7 @@ const unblocking = ref(false)
 async function onUnblockConfirm(): Promise<void> {
   unblocking.value = true
   try {
-    await unblockStudent(studentId.value)
+    await unblockStudent(routeParam(route, 'id'))
     toast.success(t('masterScreens.masterStudentProfile.toast.unblocked'))
     unblockConfirmOpen.value = false
     // Restores detail.blocked=false -- the "..." menu reappears and the
