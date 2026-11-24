@@ -26,6 +26,7 @@ import { SUPPORTED_LOCALES } from '@/platform/instance'
 import { MANIFEST_LOCALES } from '@/pwa/manifest'
 import { pwaManifest, pwaManifestFor, manifestForLocale } from '@/pwa/manifest'
 import { CORE_SKIN } from '@/platform/skin'
+import { fakeSkin } from '@/platform/skin.test.fixture'
 
 /** Files under public/icons, keyed as their served path (/icons/x.png). */
 const iconFiles = new Set(
@@ -60,15 +61,13 @@ describe('pwaManifest -- the single manifest', () => {
   })
 
   it('a skin package names and paints the manifest (F2, §1)', () => {
-    const skin = {
+    const skin = fakeSkin({
       displayName: 'ШКОЛА ГАРМОНИИ',
       shortName: 'Гармония',
       themeColor: '#1B2A41',
       backgroundColor: '#F5F1EA',
       fonts: [],
-      hasLogo: true,
-      supportEmail: null,
-    }
+    })
     expect(pwaManifestFor(skin)).toMatchObject({
       name: 'ШКОЛА ГАРМОНИИ',
       short_name: 'Гармония',

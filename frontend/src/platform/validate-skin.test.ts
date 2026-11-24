@@ -436,7 +436,7 @@ describe('declared contrast exceptions (contract 2.1, FE-230)', () => {
       'a 2.0 manifest',
       [EXCEPTION],
       'schema: 1\ncontract: "2.0"\n',
-      'contrastExceptions need contract "2.1" or later, got "2.0"',
+      'contrastExceptions needs contract "2.1" or later, got "2.0"',
     ],
     [
       'a path that is no product token',

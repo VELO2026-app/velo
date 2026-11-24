@@ -379,7 +379,9 @@ function contactHits(files) {
   for (const { path, raw } of files) {
     const text = lookText(path, raw).toLowerCase()
     for (const domain of GOLDEN_DOMAINS) {
-      const re = new RegExp(`(?<![\\w.-])${domain.replaceAll('.', '\\.')}(?![\\w-])`)
+      // A subdomain counts (api.velo.app, mail.velo.app); a longer name
+      // that only contains the domain (myvelo.app, velo.application) does not.
+      const re = new RegExp(`(?<![\\w-])${domain.replaceAll('.', '\\.')}(?![\\w-])`)
       const m = re.exec(text)
       if (m) hits.push(`${path}:~${lineOf(text, m[0])} golden domain ${domain}`)
     }
@@ -392,11 +394,11 @@ function contactHits(files) {
 /** The gates over `files` (Array of { path, content }); paths are
  *  frontend-root-relative ('src/...', 'env.d.ts', 'vite.config.ts').
  *  Gates 1-3 read the .ts/.vue files; gate 4 (`look`) reads every file it
- *  is given, `lookFiles` when passed (the CLI hands it a wider set); gate 5
- *  (`contact`) likewise reads `contactFiles` (the CLI adds the catalogs).
- *  Returns { brand, features, switchedOff, look, contact } hit lists --
- *  empty lists mean the gate passes. */
-export function brandGrepReport(files, lookFiles = files, contactFiles = files) {
+ *  is given, `options.lookFiles` when passed (the CLI hands it a wider set);
+ *  gate 5 (`contact`) likewise reads `options.contactFiles` (the CLI adds the
+ *  catalogs). Returns { brand, features, switchedOff, look, contact } hit
+ *  lists -- empty lists mean the gate passes. */
+export function brandGrepReport(files, { lookFiles = files, contactFiles = files } = {}) {
   const prepared = files.map(({ path, content }) => ({ path, raw: content }))
   const code = prepared.filter(({ path }) => /\.(ts|vue)$/.test(path))
   return {
@@ -465,7 +467,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     switchedOff,
     look: lookText,
     contact,
-  } = brandGrepReport(files, lookFiles, contactFiles)
+  } = brandGrepReport(files, { lookFiles, contactFiles })
   const look = [...lookText, ...goldenAssetHits(binaries)]
   if (brand.length > 0) {
     console.error(

@@ -214,10 +214,14 @@ describe('brand-grep: the golden contact (FE-251)', () => {
       ['src/locales/en/common.json', '{ "hint": "Write to support{\'@\'}velo.app" }'],
       ['src/utils/c.ts', "// was support@velo.app\nconst bot = 'https://telegram.me/veloappbot'"],
       ['src/utils/d.ts', "const site = 'https://myvelo.application.example'"],
+      ['src/utils/e.ts', "const api = 'https://api.velo.app/v1'"],
+      ['src/utils/f.ts', "const mail = 'help@mail.velo.app'"],
     ])
     expect(report.contact).toEqual([
       'src/views/user/A.vue:~2 golden domain velo.app',
       'src/locales/en/common.json:~1 golden domain velo.app',
+      'src/utils/e.ts:~1 golden domain velo.app',
+      'src/utils/f.ts:~1 golden domain velo.app',
     ])
   })
 })

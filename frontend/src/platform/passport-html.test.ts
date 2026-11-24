@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { passportHtmlDefaults } from '@/platform/passport-html'
 import { CORE_SKIN } from '@/platform/skin'
+import { fakeSkin } from '@/platform/skin.test.fixture'
 
 // The plugin under Vite's own types is an ObjectHook maze; the test only
 // needs its structural shape.
@@ -92,17 +93,17 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
 
   it('a skin: themeColor and the font preload materialize from the brand record (§1 single source)', () => {
     resolveWithRoot()
-    const plugin = passportHtmlDefaults({
-      displayName: 'ШКОЛА',
-      shortName: 'Школа',
-      themeColor: '#1B2A41',
-      backgroundColor: '#F5F1EA',
-      fonts: [
-        { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
-      ],
-      hasLogo: true,
-      supportEmail: null,
-    })
+    const plugin = passportHtmlDefaults(
+      fakeSkin({
+        displayName: 'ШКОЛА',
+        shortName: 'Школа',
+        themeColor: '#1B2A41',
+        backgroundColor: '#F5F1EA',
+        fonts: [
+          { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
+        ],
+      }),
+    )
     const transformSkin = (html: string): string => {
       const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
       return hook.handler(html)
@@ -121,15 +122,15 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
 
   it('the display name is escaped and never expands as a replace pattern', () => {
     resolveWithRoot()
-    const plugin = passportHtmlDefaults({
-      displayName: 'A & B $& <i>',
-      shortName: 'AB',
-      themeColor: '#1B2A41',
-      backgroundColor: '#F5F1EA',
-      fonts: [],
-      hasLogo: true,
-      supportEmail: null,
-    })
+    const plugin = passportHtmlDefaults(
+      fakeSkin({
+        displayName: 'A & B $& <i>',
+        shortName: 'AB',
+        themeColor: '#1B2A41',
+        backgroundColor: '#F5F1EA',
+        fonts: [],
+      }),
+    )
     const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
     expect(hook.handler('<title>%VELO_BRAND%</title>')).toBe(
       '<title>A &amp; B $&amp; &lt;i&gt;</title>',
@@ -150,17 +151,17 @@ describe('real index.html font block -- no webfont in the core, the skin brings 
   })
 
   it('skin fonts still replace the block: their preloads in, ours out (FE-131)', () => {
-    const out = run({
-      displayName: 'ШКОЛА',
-      shortName: 'Школа',
-      themeColor: '#1B2A41',
-      backgroundColor: '#F5F1EA',
-      fonts: [
-        { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
-      ],
-      hasLogo: true,
-      supportEmail: null,
-    })
+    const out = run(
+      fakeSkin({
+        displayName: 'ШКОЛА',
+        shortName: 'Школа',
+        themeColor: '#1B2A41',
+        backgroundColor: '#F5F1EA',
+        fonts: [
+          { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
+        ],
+      }),
+    )
     expect(out).toContain(
       '<link rel="preload" href="/skin/assets/fonts/rubik-400.woff2" as="font" type="font/woff2" crossorigin />',
     )

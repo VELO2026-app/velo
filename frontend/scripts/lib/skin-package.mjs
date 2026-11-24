@@ -77,10 +77,13 @@ export const SKIN_CONTRACT_MAJOR = 2
  *  2.1 (FE-230): the brand record may carry contrastExceptions.
  *  2.2 (FE-251): the brand record may carry supportEmail. */
 export const SKIN_CONTRACT = '2.2'
-/** The first minor of contract 2 that knows contrastExceptions. */
-const CONTRAST_EXCEPTIONS_MINOR = 1
-/** The first minor of contract 2 that knows supportEmail. */
-const SUPPORT_EMAIL_MINOR = 2
+/** Optional brand-record fields and the first minor of contract 2 that
+ *  knows each: a reader of an older minor refuses the field as unknown, so
+ *  a package that carries it must declare that minor or later. */
+const BRAND_FIELD_MINORS = [
+  { field: 'contrastExceptions', minor: 1 }, // FE-230
+  { field: 'supportEmail', minor: 2 }, // FE-251
+]
 /** A support address: a plain local part, a domain with a dot. A closed
  *  alphabet: it lands in a mailto: href, so no `?` or `%` (a query or an
  *  escape), no spaces, quotes or markup. 254 is the SMTP path limit. */
@@ -749,24 +752,19 @@ export function loadSkinPackage(dir, tokensDoc) {
       )
   }
 
-  // contrastExceptions (contract 2.1): a 2.0 reader refuses the field as
-  // unknown, so a package that carries it must say 2.1 or later.
+  // A brand field newer than the declared minor (BRAND_FIELD_MINORS).
+  if (brand !== null && contract !== null) {
+    const declared = Number(contract.split('.')[1])
+    for (const { field, minor } of BRAND_FIELD_MINORS) {
+      const value = brand[field]
+      const carried = Array.isArray(value) ? value.length > 0 : value !== null
+      if (carried && declared < minor)
+        problems.push(
+          `${MANIFEST}: ${field} needs contract "2.${minor}" or later, got "${contract}"`,
+        )
+    }
+  }
   const exceptions = brand?.contrastExceptions ?? []
-  if (exceptions.length > 0 && contract !== null) {
-    const minor = Number(contract.split('.')[1])
-    if (minor < CONTRAST_EXCEPTIONS_MINOR)
-      problems.push(
-        `${MANIFEST}: contrastExceptions need contract "2.${CONTRAST_EXCEPTIONS_MINOR}" or later, got "${contract}"`,
-      )
-  }
-  // supportEmail (contract 2.2): the same rule -- a 2.1 reader refuses it.
-  if (brand?.supportEmail && contract !== null) {
-    const minor = Number(contract.split('.')[1])
-    if (minor < SUPPORT_EMAIL_MINOR)
-      problems.push(
-        `${MANIFEST}: supportEmail needs contract "2.${SUPPORT_EMAIL_MINOR}" or later, got "${contract}"`,
-      )
-  }
   for (const { text, surface } of exceptions)
     for (const path of [text, surface])
       if (!golden.has(path))
