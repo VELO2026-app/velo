@@ -282,7 +282,9 @@ src/icons/
   `onDocumentEvent`/`offDocumentEvent` (Escape-keydown оверлеев — с FE-215
   его слушает общий стек `src/escapeStack.ts`: VModal/VBottomSheet встают в
   него через `useEscapeLayer`, Escape закрывает только верхнее окно) и пара
-  `setBodyOverflow`/`toggleRootClass` (записи скролл-лока). Пакет-внутренний:
+  `setBodyOverflow`/`toggleRootClass` (записи скролл-лока) и чтения
+  `focusedElement`/`bodyChildren`/`elementAtPoint` (FE-233: фокус, `inert` и
+  подложка оверлеев, `src/overlayA11y.ts`). Пакет-внутренний:
   из баррела не экспортируется, приложение продолжает ходить через свой
   `@/platform/dom`.
 - **`useBodyScrollLock` переехал** (`src/useBodyScrollLock.ts`, тесты вместе

@@ -174,7 +174,8 @@ packages:
     contract: ">=2,<3"
     apply: build
     # A passport with no skin builds the frontend as this repository has it,
-    # the golden VELO (contract 3 rule 71, machine v0.1.0); without it such a
+    # the neutral core with no brand (FE-230, FE-231: the name "App", grey
+    # colours) (contract 3 rule 71, machine v0.1.0); without it such a
     # passport is package-missing.
     optional: true
     build:

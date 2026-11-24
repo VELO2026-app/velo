@@ -8,6 +8,7 @@
 // available locale (en) and rewrote the hint to match.
 import { describe, expect, it, afterEach } from 'vitest'
 import i18n from '@/locales'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 import {
   setLocale,
   loadLocale,
@@ -69,8 +70,8 @@ describe('brand link (the @:brand key every locale must carry)', () => {
     // fall back across locales, so a locale without the merged brand key
     // renders an empty word ("The same account as the  app").
     const rendered = i18n.global.t('auth.sameAccount')
-    expect(rendered).toContain('VELO')
+    expect(rendered).toContain(SKIN_BRAND)
     await setLocale('ru')
-    expect(i18n.global.t('auth.sameAccount')).toContain('VELO')
+    expect(i18n.global.t('auth.sameAccount')).toContain(SKIN_BRAND)
   })
 })

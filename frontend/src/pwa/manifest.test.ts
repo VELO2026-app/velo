@@ -24,7 +24,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SUPPORTED_LOCALES } from '@/platform/instance'
 import { MANIFEST_LOCALES } from '@/pwa/manifest'
-import { pwaManifest, pwaManifestWithPassport, manifestForLocale } from '@/pwa/manifest'
+import { pwaManifest, pwaManifestFor, manifestForLocale } from '@/pwa/manifest'
 import { CORE_SKIN } from '@/platform/skin'
 
 /** Files under public/icons, keyed as their served path (/icons/x.png). */
@@ -45,8 +45,8 @@ describe('pwaManifest -- the single manifest', () => {
   it('carries every identity field, none empty', () => {
     expect(pwaManifest).toMatchObject({
       id: '/',
-      name: 'VELO',
-      short_name: 'VELO',
+      name: CORE_SKIN.displayName,
+      short_name: CORE_SKIN.shortName,
       start_url: '/',
       scope: '/',
       display: 'standalone',
@@ -55,23 +55,11 @@ describe('pwaManifest -- the single manifest', () => {
     expect(pwaManifest.background_color).toMatch(/^#[0-9a-f]{6}$/i)
   })
 
-  it('identity follows the instance passport (tz-whitelabel §2), not literals', () => {
-    // vite.config.ts resolves the VITE_* map (loadEnv: .env files +
-    // process.env) and hands it to the factory -- two .env files produce two
-    // builds (§2.4) without touching this file. Absent keys keep the golden
-    // values; an empty map IS the golden object.
-    expect(pwaManifestWithPassport({ VITE_BRAND: 'ШКОЛА' })).toMatchObject({
-      name: 'ШКОЛА',
-      short_name: 'ШКОЛА',
-      lang: 'ru',
-    })
-    // FE-155: lang/description are the INSTANCE part (container start), the
-    // build never takes them from the env.
-    expect(pwaManifestWithPassport({ VITE_DEFAULT_LOCALE: 'en' })).toBe(pwaManifest)
-    expect(pwaManifestWithPassport({})).toBe(pwaManifest)
+  it('a build without a skin package is the core manifest', () => {
+    expect(pwaManifestFor(null)).toBe(pwaManifest)
   })
 
-  it('a skin package wins over the env passport and paints the colours (F2, §1)', () => {
+  it('a skin package names and paints the manifest (F2, §1)', () => {
     const skin = {
       displayName: 'ШКОЛА ГАРМОНИИ',
       shortName: 'Гармония',
@@ -80,16 +68,11 @@ describe('pwaManifest -- the single manifest', () => {
       fonts: [],
       hasLogo: true,
     }
-    expect(pwaManifestWithPassport({ VITE_BRAND: 'ENV-БРЕНД' }, skin)).toMatchObject({
+    expect(pwaManifestFor(skin)).toMatchObject({
       name: 'ШКОЛА ГАРМОНИИ',
       short_name: 'Гармония',
       theme_color: '#1B2A41',
       background_color: '#F5F1EA',
-    })
-    // The core's skin record resolves to the core manifest.
-    expect(pwaManifestWithPassport({}, CORE_SKIN)).toMatchObject({
-      name: 'VELO',
-      theme_color: '#4c4c4c',
     })
   })
 
@@ -192,7 +175,7 @@ describe('instance part of the manifest (FE-155)', () => {
       lang: 'en',
       description: 'A platform',
       theme_color: '#4c4c4c',
-      name: 'VELO',
+      name: CORE_SKIN.displayName,
     })
     expect(m.icons).toBe(pwaManifest.icons)
   })

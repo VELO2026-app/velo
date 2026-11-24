@@ -20,7 +20,7 @@ import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { fileURLToPath, URL } from 'node:url'
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
-import { pwaManifestWithPassport } from './src/pwa/manifest'
+import { pwaManifestFor } from './src/pwa/manifest'
 import { shellOnlyTransform } from './src/pwa/precache-shell'
 import { keepManifestOutOfPrecache, perLocaleManifest } from './src/pwa/manifest-locales'
 // tz-whitelabel F1 (§2.2): resolves the %VELO_*% passport placeholders in
@@ -177,11 +177,10 @@ function preloadAppChunk(): Plugin {
   }
 }
 
-// tz-whitelabel F1 (§2.3): the manifest identity follows the instance
-// passport -- the resolved VITE_* map (.env files + process.env) is handed
-// to pwaManifestWithPassport(), so two .env files produce two builds (§2.4).
 // tz-whitelabel F2 (§3): the skin package (when the deploy ships one in
-// public/skin/) rides on top and materializes its derivatives.
+// public/skin/) materializes its derivatives -- the manifest identity
+// (pwaManifestFor), the brand name and colours; no package = the neutral
+// core (FE-230, FE-231).
 // FE-157 s2: the precache cut to the app shell (see workbox.globPatterns).
 // It reads the built files from the RESOLVED outDir (set by the plugin
 // below): a build into another outDir (bundle-report --modules) must not
@@ -257,7 +256,7 @@ export default defineConfig(({ mode }) => {
         strategies: 'generateSW',
         // The single manifest (BE-149). The plugin writes manifest.webmanifest
         // and injects the only <link rel="manifest">; index.html carries none.
-        manifest: pwaManifestWithPassport(instanceEnv, skin),
+        manifest: pwaManifestFor(skin),
         // 'autoUpdate': the generated worker gets skipWaiting()/clientsClaim(),
         // so a deployed build takes over on the next launch -- and mid-session
         // once the new worker installs. Owner decision 2026-10-26 (per-instance

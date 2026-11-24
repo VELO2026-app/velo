@@ -10,7 +10,15 @@
 
 <template>
   <Teleport to="body">
-    <TransitionGroup name="v-toast" tag="div" class="v-toast-container">
+    <!-- A live region: announced by screen readers, and left reachable (not
+         inert) under an open overlay (FE-233, src/overlayA11y.ts). -->
+    <TransitionGroup
+      name="v-toast"
+      tag="div"
+      class="v-toast-container"
+      role="status"
+      aria-live="polite"
+    >
       <div
         v-for="toast in toasts"
         :key="toast.id"

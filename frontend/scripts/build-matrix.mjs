@@ -23,8 +23,8 @@
 // (any FAIL = exit 1), all of it read from dist/:
 //
 //   a. identity: title + theme-color equal the cell's source of record --
-//      the skin's brand record, or the core defaults (VITE_BRAND ?? 'VELO',
-//      #4c4c4c) for golden cells. "golden" names the cells WITHOUT a skin
+//      the skin's brand record, or the core defaults (CORE_DISPLAY_NAME,
+//      CORE_THEME_COLOR) for golden cells. "golden" names the cells WITHOUT a skin
 //      package; since FE-230 that build is the neutral core, not VELO;
 //   b. brand grep: a skin cell's bundle carries the skin's displayName and
 //      every one of its token declarations; a golden cell carries NO
@@ -72,7 +72,13 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
-import { SKIN_ASSETS, loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
+import {
+  CORE_DISPLAY_NAME,
+  CORE_THEME_COLOR,
+  SKIN_ASSETS,
+  loadSkinPackage,
+  readGoldenTokens,
+} from './lib/skin-package.mjs'
 
 // Resolved lazily: under vitest import.meta.url is not file:// (the same
 // reason passport-html tests anchor to process.cwd()), and the unit suite
@@ -85,11 +91,6 @@ const frontendDir = () => resolve(fileURLToPath(new URL('..', import.meta.url)))
 export const MODULE_CHUNKS = {
   ai: [/AiSummary/, /AiConnections/],
 }
-
-/** CORE_SKIN.themeColor (platform/skin.ts) -- the skinless build's header
- *  color, pinned here the same mirror-and-pin way passport-html.test.ts and
- *  the manifest comments pin it. No env seam exists for colors (§1). */
-const CORE_THEME = '#4c4c4c'
 
 /** The edition every skin cell is built at: `full` while editions.json has
  *  it, and the one edition there is once the file holds a single one
@@ -176,16 +177,36 @@ export function cssHasDecl(css, decl) {
   return false
 }
 
-/** Does the bundle text carry `text` -- verbatim (UTF-8) or as the \uXXXX
- *  escape esbuild may emit for non-ASCII? */
+/** The bundle text with the JS string escapes a minifier emits decoded
+ *  (\uXXXX, \u{X}, \xXX, \n, \t, \r), so a name next to a line break or
+ *  written as escapes reads as plain text. Pure. */
+export function unescapeBundle(bundle) {
+  return bundle.replace(
+    /\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([ntr]))/g,
+    (_, cp, u4, x2, ch) =>
+      ch !== undefined
+        ? { n: '\n', t: '\t', r: '\r' }[ch]
+        : String.fromCodePoint(parseInt(cp ?? u4 ?? x2, 16)),
+  )
+}
+
+/** A letter or digit of any script, `_` or `-`: an identifier character. */
+const WORD = String.raw`[\p{L}\p{N}_\-]`
+/** The same plus `$` (a template-literal hole: `velo:${source}`). */
+const IDENT = String.raw`[\p{L}\p{N}_$\-]`
+
+/** Does the bundle text carry `text` as a word, in any case (the escapes
+ *  decoded first)? A word, so the name is found inside a message ("Support
+ *  Goodo", "Hi!\nGoodo", "«Goodo.»", "...Goodo") and a name like "Velo Pro"
+ *  is told from the core's own identifiers: an identifier character next to
+ *  it, or `.`/`:`/`/`/`@` joining it to one, makes it part of an identifier
+ *  (--velo-primary, the velo:* storage keys and log tags, support@velo.app).
+ *  Pure. */
 export function bundleHas(bundle, text) {
-  if (bundle.includes(text)) return true
-  const escaped = [...text]
-    .map((ch) =>
-      ch.charCodeAt(0) > 0x7e ? `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}` : ch,
-    )
-    .join('')
-  return bundle.toLowerCase().includes(escaped.toLowerCase())
+  const name = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?<!${WORD}|${WORD}[.:/@])${name}(?!${WORD}|[.:/@]${IDENT})`, 'iu').test(
+    unescapeBundle(bundle),
+  )
 }
 
 /** The declarations of a skin cell the dist CSS lacks. A declaration the
@@ -196,14 +217,16 @@ export function missingTokens(decls, css, goldenDecls) {
 }
 
 /** What of one skin leaked into a core (skinless) build, as labels for
- *  facts.leaked. A brand named like the core's own default ("VELO", the gold
- *  skin) cannot be told from the core by its name, so its name is not
- *  probed; its distinctive token declarations still are. Pure. */
+ *  facts.leaked: its name as a bundle literal or the tab title, and its
+ *  distinctive token declarations. A brand named like the core's own word
+ *  (CORE_DISPLAY_NAME) cannot be told from the core by its name, so its name
+ *  is not probed. Pure. */
 export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, coreName }) {
   const leaked = []
+  const title = html.match(/<title>([^<]*)<\/title>/)?.[1]
   if (
     brand.displayName !== coreName &&
-    (bundleHas(js, brand.displayName) || html.includes(brand.displayName))
+    (bundleHas(js, brand.displayName) || title === brand.displayName)
   )
     leaked.push(`${label} displayName`)
   const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
@@ -485,17 +508,8 @@ function snapshot(cell, skins, goldenDecls, coreName) {
   return facts
 }
 
-/** The skinless build's identity, resolved EXACTLY as passport-html resolves
- *  %VELO_BRAND% at build time: process.env -> .env files -> 'VELO'. */
-async function coreBrand() {
-  // Lazy: `--list` must run without node_modules.
-  const { loadEnv } = await import('vite')
-  const fromFiles = loadEnv('production', frontendDir(), 'VITE_').VITE_BRAND
-  return process.env.VITE_BRAND ?? fromFiles ?? 'VELO'
-}
-
-async function expectationOf(cell) {
-  if (!cell.skin) return { title: await coreBrand(), theme: CORE_THEME }
+function expectationOf(cell) {
+  if (!cell.skin) return { title: CORE_DISPLAY_NAME, theme: CORE_THEME_COLOR }
   const { brand } = skinRecord(cell.skin)
   return { title: brand.displayName, theme: brand.themeColor }
 }
@@ -641,8 +655,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       console.log(`\n== build-matrix: ${cell.name} (PRIMER_EDITION=${cell.edition}) ==`)
       await stageSkin(cell.skin)
       build(cell.edition)
-      facts[cell.name] = snapshot(cell, skins, goldenDecls, await coreBrand())
-      expected[cell.name] = await expectationOf(cell)
+      facts[cell.name] = snapshot(cell, skins, goldenDecls, CORE_DISPLAY_NAME)
+      expected[cell.name] = expectationOf(cell)
       if (args.factsOut)
         writeFileSync(
           args.factsOut,

@@ -23,10 +23,10 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string
   readonly VITE_TELEGRAM_BOT_URL?: string
   // Instance passport seams (tz-whitelabel §1). All optional: defaults =
-  // the golden build (ru, VELO, full feature set).
+  // ru and the full feature set. The brand name is not an env value: it
+  // comes from the skin package (virtual:skin-brand, FE-231).
   readonly VITE_DEFAULT_LOCALE?: string
   readonly VITE_LOCALES?: string
-  readonly VITE_BRAND?: string
   readonly VITE_FEATURES?: string
 }
 
@@ -123,9 +123,10 @@ interface Window {
 // FE-157 s5/B: build-time virtual modules served by src/platform/skin-virtual.ts.
 /** The skin token cascade (a stylesheet, imported by app.ts after global.css). */
 declare module 'virtual:skin-tokens.css'
-/** The skin brand facts: the text (`null` without a package) and whether the
- *  build has a logo set (false: the package left it out, FE-230). */
+/** The skin brand facts: the text (the package's displayName, or the neutral
+ *  core word without a package, FE-231) and whether the build has a logo
+ *  set (false: the package left it out, FE-230). */
 declare module 'virtual:skin-brand' {
-  export const SKIN_BRAND: string | null
+  export const SKIN_BRAND: string
   export const SKIN_HAS_LOGO: boolean
 }
