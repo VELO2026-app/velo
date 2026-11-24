@@ -133,3 +133,28 @@ Artifact `visual-out-<скин>` у job `visual — base vs head (<скин>)` (
 На поднятом стеке с сидом `e2e` (см. «Как запустить локально»): `pnpm -C frontend visual:record`. Скрипт открывает экраны из `e2e/visual/screens.ts` под их ролями и пишет `e2e/visual/har/<роль>.har` и `meta.json` (время записи и пути экранов). Токены и `Authorization` из HAR вычищаются, проверь `git diff` на посторонние данные. Закоммитить все три файла вместе: часы браузера при съёмке стоят на времени записи.
 
 Добавить экран: строка в `e2e/visual/screens.ts` (имя из таблицы sweep) и перезапись HAR.
+
+## Доступность: axe-core на обоих скинах (FE-241)
+
+Проект `a11y` (`frontend/e2e/a11y/`) гоняет axe-core по тем же роутам и ролям, что и sweep, на **одном скине за прогон**: `A11Y_SKIN=gold` (пакет `velo-brand`) или `goodo` (`goodo-brand`). В CI это job `e2e-a11y` (`.github/workflows/e2e-a11y.yml`): отдельный workflow, по ячейке на скин, у каждой свой стек; идёт параллельно с `e2e-stack` и не удлиняет его. Пакеты берутся по закреплённым тегам из `.github/brand-skins.json` (`.github/scripts/fetch-brand-skins.mjs`, общий клон `frontend/scripts/lib/brand-git.mjs`); `BRAND_REPO_TOKEN` передаётся явно.
+
+Правила: WCAG 2.1 A и AA (теги `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`) плюс `heading-order` и `label-content-name-mismatch`.
+
+Что не считается нарушением:
+
+- **Пара, объявленная пакетом в `contrastExceptions`** (контракт 2.1): вторичный текст на белой карточке, не ниже 3:1. Пара читается из бренд-записи пакета, не копируется в тест. Любая другая пара и ниже 3:1 остаются нарушением.
+- **Строка в `frontend/e2e/a11y/allowlist.ts`**: причина (`reason`) и задача (`task`) обязательны. Контраст держится на паре цветов (`detail`), любое другое правило — на селекторе элемента (`target`, без `nth-child` и хэша `data-v-`); запись без них тест `src/router/a11y-allowlist.test.ts` не пропускает. Правило на роуте целиком не глушится. Исправил — убери строку в том же PR.
+- **Запись, которая ничего не покрыла за весь прогон, валит прогон** (`A11Y_STRICT=1` в CI): нарушение ушло, запись должна уйти вместе с ним. Локальный прогон одного теста (`-g`) эту проверку не включает.
+
+Отчёт (`e2e/a11y/report.ts`): в консоль, в `test-results/a11y-report.json` и в summary шага. В нём число проверенных экранов, открытые нарушения, сколько покрыл allowlist (по задачам), сколько снял `contrastExceptions` пакета, неиспользованные записи.
+
+Запуск локально (нужен стек, как для sweep; пакеты — `node .github/scripts/fetch-brand-skins.mjs <каталог>`):
+
+```sh
+cd frontend
+node scripts/apply-skin.mjs <каталог>/velo-brand/skin && pnpm exec vite build --outDir dist-gold
+A11Y_SKIN=gold A11Y_SKIN_DIR=<каталог>/velo-brand/skin VISUAL_DIST=dist-gold \
+  pnpm exec playwright test --project=a11y --reporter=list,./e2e/a11y/report.ts
+```
+
+Спека сверяет **каждый** цветовой токен пакета (hex и rgba) с тем, что рисует страница: сборка не того скина (или устаревшая) падает с `the build is not the <skin> package`, а не проходит за чужой скин. Без `A11Y_SKIN` проект падает одним тестом, а не пропускается.

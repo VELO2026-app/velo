@@ -9,11 +9,14 @@
 /** A Playwright engine, as `browserType().name()` names it. */
 export type BrowserName = 'chromium' | 'firefox' | 'webkit'
 
-/** An API answer a test expects (method, path pattern, status). */
+/**
+ * An API answer a test expects (method, path pattern, status). `'network'`
+ * stands for a request that never got an answer (a dropped connection).
+ */
 export interface AllowedApi {
   method: string
   path: RegExp
-  status: number
+  status: number | 'network'
 }
 
 /**

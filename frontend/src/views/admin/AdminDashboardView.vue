@@ -50,6 +50,21 @@
     </div>
 
     <template v-else>
+      <!-- Counters unread: the missing banners would read as "nothing pending" (FE-242). -->
+      <Banner
+        v-if="countersFailed"
+        variant="alert"
+        :title="t('common.loadError')"
+        data-testid="counters-error"
+      >
+        <template #icon><IconWarning :size="28" /></template>
+        <template #body>
+          <VButton size="sm" variant="outline" @click="adminStats.reload()">{{
+            t('common.retry')
+          }}</VButton>
+        </template>
+      </Banner>
+
       <!-- Alert banners -->
       <Banner
         v-if="pendingVerifications > 0"
@@ -246,6 +261,7 @@ import {
   VBadge,
   VMoreLink,
   VSegment,
+  VButton,
 } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import Banner from '@/components/shared/Banner.vue'
@@ -299,8 +315,10 @@ const canStepNext = computed((): boolean => periodOffset.value < 0)
 
 // The counters (queries/admin.ts, shared with the shell's badges): the
 // loader stands only until their first answer; a failure is the shell's
-// toast, not this screen's.
+// toast AND this screen's banner with Retry (an absent banner would read as
+// "nothing pending", FE-242).
 const loading = adminStats.loading
+const countersFailed = adminStats.failed
 
 const pendingVerifications = adminStats.pendingVerifications
 const pendingModeration = adminStats.pendingModeration

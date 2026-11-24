@@ -25,7 +25,7 @@
           class="v-select__field"
           :value="modelValue"
           :disabled="disabled"
-          :aria-label="label ? undefined : placeholder || undefined"
+          :aria-label="label ? undefined : ariaLabel || placeholder || undefined"
           :aria-invalid="!!error || undefined"
           :aria-describedby="error ? errorId : undefined"
           @change="$emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
@@ -76,6 +76,8 @@ withDefaults(
     modelValue?: string
     label?: string
     placeholder?: string
+    /** Accessible name for a select whose name is on screen elsewhere (a section heading). */
+    ariaLabel?: string
     options: SelectOption[]
     error?: string
     disabled?: boolean
@@ -86,6 +88,7 @@ withDefaults(
     modelValue: '',
     label: '',
     placeholder: '',
+    ariaLabel: '',
     error: '',
     disabled: false,
     required: false,
