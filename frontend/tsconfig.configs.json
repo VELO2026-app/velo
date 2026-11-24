@@ -12,6 +12,7 @@
     "allowImportingTsExtensions": true,
     "allowJs": true,
     "strict": true,
+    "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noUncheckedSideEffectImports": true,

@@ -15,6 +15,7 @@
     "allowJs": true,
     "checkJs": true,
     "strict": true,
+    "exactOptionalPropertyTypes": true,
     /* checkJs on untyped scripts: params stay implicit any; the rest of strict applies */
     "noImplicitAny": false,
     "noImplicitOverride": true,
