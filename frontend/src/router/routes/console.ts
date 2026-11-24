@@ -8,14 +8,14 @@
 // screens inside a module. The records of an instance option carry
 // meta.option, as in routes/user.ts.
 //
-// Every record renders ConsoleScreen, which picks the screen by route name:
-// this table is in the start-up chunk, and a lazy import per screen here
-// would put a preload list per screen there (the bundle budget). A new
-// screen adds its record here and its loader in ConsoleScreen.vue.
+// A record's component comes from views/console/consoleScreens.ts through
+// one lazy import, so the start-up chunk does not grow with each screen
+// (the bundle budget); the router still waits for the screen itself.
 // =============================================================================
 
+import type { Component } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
-import { CONSOLE_MODULES, consoleRouteName } from '@/utils/console/modules'
+import { CONSOLE_MODULES, consoleRouteName, type ConsoleRouteName } from '@/utils/console/modules'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -24,7 +24,10 @@ declare module 'vue-router' {
   }
 }
 
-const screen = () => import('@/views/console/ConsoleScreen.vue')
+/** The route component of a console record: its screen, loaded lazily. */
+function screen(name: ConsoleRouteName): () => Promise<{ default: Component }> {
+  return () => import('@/views/console/consoleScreens').then((m) => m.loadConsoleScreen(name))
+}
 
 /** The /console zone: ConsoleShell and one screen per module. */
 export function consoleRoutes(): RouteRecordRaw[] {
@@ -38,14 +41,14 @@ export function consoleRoutes(): RouteRecordRaw[] {
           path: module.key,
           name: consoleRouteName(module.key),
           meta: module.option === undefined ? {} : { option: module.option },
-          component: screen,
+          component: screen(consoleRouteName(module.key)),
         })),
         // A screen inside a module is named console-<module>-<what>, so the
         // menu keeps the module lit (consoleModuleOf).
         {
           path: 'practices/:id',
           name: 'console-practices-detail',
-          component: screen,
+          component: screen('console-practices-detail'),
         },
         {
           path: '',
