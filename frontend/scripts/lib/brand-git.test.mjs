@@ -1,67 +1,26 @@
-// FE-239: the ONE brand clone -- the environment, the token, the failure
-// text. The CI fetcher (.github/scripts/fetch-brand-skins.mjs) and the Figma
-// sync (scripts/lib/brand-packages.mjs) both run on this module, so a
-// regression here breaks the CI matrix.
+// The brand clone shared by the CI fetcher (.github/scripts/fetch-brand-skins.mjs)
+// and the Figma sync (scripts/lib/brand-packages.mjs): a regression here
+// breaks the CI matrix.
 //
 // The pinned regression: a git hook (pre-push runs these tests) exports
 // GIT_DIR and friends, and a clone or a rev-parse with them aims at the
 // HOOK's repository, not at ours -- a test run corrupted a working repository
-// that way (24.11). The tests below poison the environment on purpose; the
-// module must strip it (gitEnv) whatever the caller inherited.
+// that way. The tests below poison the environment on purpose; the module
+// must strip it (gitEnv) whatever the caller inherited.
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cloneAtTag, cloneEnv, cloneFailure, cloneUrl, gitEnv, revParseHead } from './brand-git.mjs'
+import { cloneAtTag, cloneEnv, cloneFailure, cloneUrl, gitEnv } from './brand-git.mjs'
+import { fixtureEnv, makeRepo, run, useQuietGitConfig } from './test-git-fixtures.mjs'
 
-// Any git the fixtures run: the hook's repository-local variables go
-// (gitEnv), no global or system config, and the author comes from the
-// variables below -- never from the machine running the tests.
-const fixtureEnv = {
-  ...gitEnv(process.env),
-  GIT_CONFIG_GLOBAL: '/dev/null',
-  GIT_CONFIG_SYSTEM: '/dev/null',
-  GIT_AUTHOR_NAME: 'fixture',
-  GIT_AUTHOR_EMAIL: 'fixture@test.invalid',
-  GIT_COMMITTER_NAME: 'fixture',
-  GIT_COMMITTER_EMAIL: 'fixture@test.invalid',
-}
-const run = (dir, ...a) =>
-  execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8', env: fixtureEnv }).trim()
-
-// The clones INSIDE the module build their environment from process.env: pin
-// the global and system config to nothing for the duration too, so no test
-// ever reads the machine's git config (gitEnv keeps those variables on
-// purpose -- they are the user's, only a test must not depend on them).
-let savedGlobal
-let savedSystem
-beforeEach(() => {
-  savedGlobal = process.env.GIT_CONFIG_GLOBAL
-  savedSystem = process.env.GIT_CONFIG_SYSTEM
-  process.env.GIT_CONFIG_GLOBAL = '/dev/null'
-  process.env.GIT_CONFIG_SYSTEM = '/dev/null'
-})
-afterEach(() => {
-  if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
-  else process.env.GIT_CONFIG_GLOBAL = savedGlobal
-  if (savedSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM
-  else process.env.GIT_CONFIG_SYSTEM = savedSystem
-})
+useQuietGitConfig()
 
 let tmp
 let origin
 let sha
-/** A repository with one commit tagged v1.0.0. */
-function makeRepo(dir, text = 'one') {
-  execFileSync('git', ['init', '--quiet', dir], { env: fixtureEnv })
-  writeFileSync(join(dir, 'a.txt'), text)
-  run(dir, 'add', '.')
-  run(dir, 'commit', '--quiet', '--no-gpg-sign', '-m', 'one')
-  run(dir, 'tag', 'v1.0.0')
-  return run(dir, 'rev-parse', 'HEAD')
-}
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'brand-git-'))
   origin = join(tmp, 'origin')
@@ -69,11 +28,26 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
-const pin = () => ({ name: 'velo-brand', repo: 'org/velo-brand', tag: 'v1.0.0', sha })
+const pin = () => ({ name: 'velo-brand', repo: 'org/velo-brand', tag: 'v1.0.0' })
+const clone = (target, opts = {}) =>
+  cloneAtTag(pin(), target, {
+    url: `file://${origin}`,
+    anonymousHint: 'ANON-HINT',
+    expectSha: sha,
+    movedMessage: (head) => `MOVED ${head}`,
+    ...opts,
+  })
+const failure = (fn) => {
+  try {
+    fn()
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e)
+  }
+  throw new Error('no error')
+}
 
 describe('the token', () => {
-  it('never goes in the URL; it is a header in the environment', () => {
-    expect(cloneUrl('a/b')).toBe('https://github.com/a/b.git')
+  it('is a header in the environment, with no prompt', () => {
     const env = cloneEnv('tok', {})
     expect(env.GIT_TERMINAL_PROMPT).toBe('0')
     expect(env.GIT_CONFIG_COUNT).toBe('1')
@@ -81,54 +55,58 @@ describe('the token', () => {
     expect(env.GIT_CONFIG_VALUE_0).toMatch(/^AUTHORIZATION: basic /)
     expect(cloneEnv('', {}).GIT_CONFIG_COUNT).toBeUndefined()
   })
+  it('is never in the URL', () => {
+    expect(cloneUrl('a/b')).toBe('https://github.com/a/b.git')
+    expect(cloneUrl('a/b')).not.toMatch(/@|token/)
+  })
+  it('is never in the clone config', () => {
+    const target = join(tmp, 'pkg')
+    clone(target, { token: 'ghp_secret123' })
+    expect(readFileSync(join(target, '.git', 'config'), 'utf8')).not.toContain('ghp_secret123')
+  })
 })
 
 describe('cloneFailure', () => {
-  const brand = { name: 'x', repo: 'a/b', tag: 'v1.0.0' }
-  it('tells what to do and never prints the token, plain or base64', () => {
+  it('with a key tells what to do and never prints the token, plain or base64', () => {
     const basic = Buffer.from('x-access-token:s3cret').toString('base64')
-    const withToken = cloneFailure(brand, `fatal: s3cret ${basic}`, { token: 's3cret' })
-    expect(withToken).not.toContain('s3cret')
-    expect(withToken).not.toContain(basic)
-    expect(withToken).toMatch(/the tag may be missing, or BRAND_REPO_TOKEN cannot read/)
+    const text = cloneFailure(pin(), `fatal: s3cret ${basic}`, {
+      token: 's3cret',
+      anonymousHint: 'ANON-HINT',
+    })
+    expect(text).not.toContain('s3cret')
+    expect(text).not.toContain(basic)
+    expect(text).toMatch(/the tag may be missing, or BRAND_REPO_TOKEN cannot read/)
+    expect(text).not.toContain('ANON-HINT')
   })
-  it("without a key the hint is the caller's, not the token hint", () => {
-    const text = cloneFailure(brand, 'fatal: not found', { anonymousHint: 'ANON-HINT' })
-    expect(text).toMatch(/x: cannot clone a\/b at v1\.0\.0 -- ANON-HINT\nfatal: not found/)
+  it("without a key the hint is the caller's", () => {
+    const text = cloneFailure(pin(), 'fatal: not found', { anonymousHint: 'ANON-HINT' })
+    expect(text).toBe(
+      'velo-brand: cannot clone org/velo-brand at v1.0.0 -- ANON-HINT\nfatal: not found',
+    )
   })
 })
 
 describe('a git hook environment', () => {
   // The poison a pre-push hook leaves behind; the fixture must prove it
   // diverts git, or the regression test proves nothing.
-  const hookRepo = () => {
+  it('GIT_DIR / GIT_WORK_TREE do not aim our git at the hook repository', () => {
     const hook = join(tmp, 'hook-repo')
-    const clone = join(tmp, 'clone')
+    const other = join(tmp, 'other')
     execFileSync('git', ['init', '--quiet', hook], { env: fixtureEnv })
-    execFileSync('git', ['init', '--quiet', clone], { env: fixtureEnv })
-    const poisoned = {
-      ...fixtureEnv,
-      GIT_DIR: join(hook, '.git'),
-      GIT_WORK_TREE: hook,
-    }
+    execFileSync('git', ['init', '--quiet', other], { env: fixtureEnv })
+    const poisoned = { ...fixtureEnv, GIT_DIR: join(hook, '.git'), GIT_WORK_TREE: hook }
     const aimed = (env) =>
       execFileSync('git', ['rev-parse', '--absolute-git-dir'], {
-        cwd: clone,
+        cwd: other,
         env,
         encoding: 'utf8',
       }).trim()
-    return { hook, clone, poisoned, aimed }
-  }
-
-  it('GIT_DIR / GIT_WORK_TREE do not aim our git at the hook repository', () => {
-    const { hook, clone, poisoned, aimed } = hookRepo()
-    // realpath: on macOS TMPDIR is a symlink (/var -> /private/var) and git
-    // answers with the resolved path.
+    // realpath: on macOS TMPDIR is a symlink and git answers with the resolved path.
     expect(aimed(poisoned)).toBe(realpathSync(join(hook, '.git')))
-    expect(aimed(gitEnv(poisoned))).toBe(realpathSync(join(clone, '.git')))
+    expect(aimed(gitEnv(poisoned))).toBe(realpathSync(join(other, '.git')))
     expect(cloneEnv('', poisoned).GIT_DIR).toBeUndefined()
   })
-  it('keeps the ways to reach a remote; the token header survives the strip', () => {
+  it('the ways to reach a remote stay; the token header survives the strip', () => {
     const base = { GIT_ASKPASS: '/bin/askpass', GIT_SSH_COMMAND: 'ssh -i k', GIT_DIR: '/x' }
     const env = cloneEnv('tok', base)
     expect(env.GIT_ASKPASS).toBe('/bin/askpass')
@@ -139,62 +117,50 @@ describe('a git hook environment', () => {
   it('a live clone and commit check under the poison leave the hook repository alone', () => {
     const decoy = join(tmp, 'decoy')
     makeRepo(decoy, 'decoy') // another commit: a leaked GIT_DIR shows up as a wrong HEAD
-    const before = [
+    const snapshot = () => [
       run(decoy, 'rev-parse', 'HEAD'),
       readFileSync(join(decoy, '.git', 'config'), 'utf8'),
     ]
-    const saved = {
-      GIT_DIR: process.env.GIT_DIR,
-      GIT_WORK_TREE: process.env.GIT_WORK_TREE,
-      GIT_INDEX_FILE: process.env.GIT_INDEX_FILE,
-    }
+    const before = snapshot()
+    const names = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']
+    const saved = Object.fromEntries(names.map((k) => [k, process.env[k]]))
     process.env.GIT_DIR = join(decoy, '.git')
     process.env.GIT_WORK_TREE = decoy
     process.env.GIT_INDEX_FILE = join(decoy, '.git', 'index')
     try {
       writeFileSync(join(decoy, 'a.txt'), 'edited') // dirty decoy: a leaked GIT_DIR would report it
       const target = join(tmp, 'pkg')
-      cloneAtTag(pin(), target, { url: `file://${origin}` })
-      expect(revParseHead(target)).toBe(sha) // not the decoy's commit
-      expect(revParseHead(origin)).toBe(sha) // the check answers for the clone, not the decoy
+      clone(target) // the commit check passes only if rev-parse answers for the clone
+      expect(run(target, 'rev-parse', 'HEAD')).toBe(sha)
     } finally {
       for (const [k, v] of Object.entries(saved)) {
         if (v === undefined) delete process.env[k]
         else process.env[k] = v
       }
     }
-    expect([
-      run(decoy, 'rev-parse', 'HEAD'),
-      readFileSync(join(decoy, '.git', 'config'), 'utf8'),
-    ]).toEqual(before)
+    expect(snapshot()).toEqual(before)
   })
 })
 
 describe('cloneAtTag', () => {
-  it('clones the tag', () => {
+  it('clones the tag and accepts the pinned commit', () => {
     const target = join(tmp, 'pkg')
-    cloneAtTag(pin(), target, { url: `file://${origin}` })
-    expect(revParseHead(target)).toBe(sha)
+    clone(target)
+    expect(run(target, 'rev-parse', 'HEAD')).toBe(sha)
   })
-  it("a failed clone names the caller's hint and masks the token", () => {
+  it("refuses a moved tag with the caller's message", () => {
+    expect(failure(() => clone(join(tmp, 'pkg'), { expectSha: 'b'.repeat(40) }))).toBe(
+      `MOVED ${sha}`,
+    )
+  })
+  it("a failed clone names the caller's hint", () => {
+    const text = failure(() => clone(join(tmp, 'pkg'), { url: `file://${tmp}/missing` }))
+    expect(text).toMatch(/velo-brand: cannot clone org\/velo-brand at v1\.0\.0 -- ANON-HINT/)
+  })
+  it('a failed clone with a key masks it', () => {
     const token = 'ghp_secret123'
-    try {
-      cloneAtTag({ ...pin(), tag: 'v9.9.9' }, join(tmp, 'pkg'), {
-        url: `file://${origin}`,
-        token,
-        anonymousHint: 'ANON-HINT',
-      })
-      throw new Error('no error')
-    } catch (e) {
-      expect(e instanceof Error ? e.message : String(e)).toMatch(
-        /velo-brand: cannot clone org\/velo-brand at v9\.9\.9 -- the tag may be missing/,
-      )
-      expect(e instanceof Error ? e.message : String(e)).not.toContain(token)
-    }
-  })
-  it('the token travels as a header: never in the URL or the clone config', () => {
-    const target = join(tmp, 'pkg')
-    cloneAtTag(pin(), target, { url: `file://${origin}`, token: 'ghp_secret123' })
-    expect(readFileSync(join(target, '.git', 'config'), 'utf8')).not.toContain('ghp_secret123')
+    const text = failure(() => clone(join(tmp, 'pkg'), { url: `file://${tmp}/${token}`, token }))
+    expect(text).toMatch(/the tag may be missing/)
+    expect(text).not.toContain(token)
   })
 })

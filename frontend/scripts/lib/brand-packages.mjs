@@ -5,15 +5,14 @@
 // The pins live in .github/brand-skins.json (one pin per brand: tag AND
 // commit; CI builds and shoots the same packages). The clone machinery --
 // the environment, the token, the failure text -- is FE-239's shared
-// scripts/lib/brand-git.mjs (this file kept its own copy until both PRs
-// landed). What stays here is this tool's own contract:
+// scripts/lib/brand-git.mjs. What stays here is this tool's own contract:
 //   - fetchPackage: a clone at the tag, the commit checked, this tool's hint
 //     and wording (the hint names --pkg, the CI's names the fork secret).
 //   - checkoutProblem: a local checkout (--pkg) must be the pinned commit
 //     with a clean tree -- an uncommitted edit is not the pinned package.
 // =============================================================================
 import { execFileSync } from 'node:child_process'
-import { cloneAtTag, gitEnv, revParseHead } from './brand-git.mjs'
+import { cloneAtTag, gitEnv } from './brand-git.mjs'
 
 /** What a failed clone without a key says here: this is a local tool -- the
  *  escape hatch is --pkg <mode>=<checkout>, not a CI secret. */
@@ -55,8 +54,11 @@ export function checkoutProblem(dir, sha) {
  * @param {{token?: string, url?: string}} [opts] url: the clone source (default the GitHub repo; a test passes a local path)
  */
 export function fetchPackage(pin, target, opts = {}) {
-  cloneAtTag(pin, target, { ...opts, anonymousHint: ANON_HINT })
-  const head = revParseHead(target)
-  if (head !== pin.sha)
-    throw new Error(`${pin.name} ${pin.tag} is ${head}, the pin is ${pin.sha}: the tag moved`)
+  cloneAtTag(pin, target, {
+    ...opts,
+    anonymousHint: ANON_HINT,
+    expectSha: pin.sha,
+    movedMessage: (head) =>
+      `${pin.name} ${pin.tag} is ${head}, the pin is ${pin.sha}: the tag moved`,
+  })
 }

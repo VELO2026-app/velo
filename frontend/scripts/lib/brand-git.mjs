@@ -6,19 +6,19 @@
 // (.github/brand-skins.json): the CI fetcher
 // (.github/scripts/fetch-brand-skins.mjs, the build matrix and Visual) and the
 // Figma variables sync (scripts/sync-figma-variables.mjs through
-// scripts/lib/brand-packages.mjs). Until FE-239 both carried a private copy;
-// the machinery lives here now:
+// scripts/lib/brand-packages.mjs) clone through this one module:
 //   - the clone URL: the token never goes in it (a URL with a token lands in
 //     .git/config and in git's messages);
 //   - an environment a git hook cannot divert: the repository-local variables
 //     of `git rev-parse --local-env-vars` go (a pre-push test run once aimed
-//     git at the hook's repository and corrupted it, 24.11), the ways to reach
+//     git at the hook's repository and corrupted it), the ways to reach
 //     a remote (GIT_ASKPASS, GIT_SSH_COMMAND) stay;
 //   - a private repository's key (BRAND_REPO_TOKEN) as an HTTP header through
 //     GIT_CONFIG_* -- never in a URL or a file -- and no password prompt;
 //   - the failure text: the caller's hint, never the token.
+//   - the check that the tag still points at the pinned commit.
 // The wording that differs by caller (the hint without a key, the moved-tag
-// message) stays with the callers; everything here is behavior both share.
+// message) stays with the callers.
 //
 // Node stdlib only: .github/scripts imports this before pnpm install.
 // The test is brand-git.test.mjs (vitest, the `scripts` project).
@@ -100,14 +100,14 @@ export function cloneEnv(token = '', base = process.env) {
 }
 
 /** The token (plain and its base64 header form) cut out of any text. */
-export function maskSecret(text, token = '') {
+function maskSecret(text, token = '') {
   if (!token) return String(text)
   const basic = Buffer.from(`x-access-token:${token}`).toString('base64')
   return String(text).split(token).join('***').split(basic).join('***')
 }
 
 /** What a failed clone with a key says: both callers use the same sentence. */
-export const TOKEN_HINT = 'the tag may be missing, or BRAND_REPO_TOKEN cannot read the repository'
+const TOKEN_HINT = 'the tag may be missing, or BRAND_REPO_TOKEN cannot read the repository'
 
 /**
  * The error text of a failed clone: what to do, never the token (nor its
@@ -116,27 +116,34 @@ export const TOKEN_HINT = 'the tag may be missing, or BRAND_REPO_TOKEN cannot re
  *
  * @param {{name: string, repo: string, tag: string}} pin
  * @param {string} stderr what git printed
- * @param {{token?: string, anonymousHint?: string}} [opts]
+ * @param {{token?: string, anonymousHint: string}} opts
  */
-export function cloneFailure(pin, stderr, opts = {}) {
+export function cloneFailure(pin, stderr, opts) {
   const token = opts.token ?? ''
-  const hint = token
-    ? TOKEN_HINT
-    : (opts.anonymousHint ?? 'the repository may be private, or the tag is missing')
+  const hint = token ? TOKEN_HINT : opts.anonymousHint
   return `${pin.name}: cannot clone ${pin.repo} at ${pin.tag} -- ${hint}\n${maskSecret(stderr.trim(), token)}`
 }
 
+/** The head commit of a checkout, through the cleaned environment: a git
+ *  hook's GIT_DIR would answer for its own repository. */
+function revParseHead(dir) {
+  return execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+    env: gitEnv(),
+  }).trim()
+}
+
 /**
- * Clone a brand repository at its pinned tag into `target`. Throws the
- * cloneFailure text when the clone fails; the tag -> commit check is the
- * caller's (its wording differs).
+ * Clone a brand repository at its pinned tag into `target` and check that the
+ * tag still points at the pinned commit. Throws the cloneFailure text when the
+ * clone fails, `movedMessage(head)` when the commit differs.
  *
  * @param {{name: string, repo: string, tag: string}} pin
  * @param {string} target an empty directory path
- * @param {{token?: string, url?: string, anonymousHint?: string}} [opts]
+ * @param {{token?: string, url?: string, anonymousHint: string, expectSha: string, movedMessage: (head: string) => string}} opts
  *   url: the clone source (default the GitHub repo; a test passes a local path)
  */
-export function cloneAtTag(pin, target, opts = {}) {
+export function cloneAtTag(pin, target, opts) {
   const token = opts.token ?? ''
   const clone = spawnSync(
     'git',
@@ -158,13 +165,6 @@ export function cloneAtTag(pin, target, opts = {}) {
     throw new Error(
       cloneFailure(pin, clone.stderr ?? '', { token, anonymousHint: opts.anonymousHint }),
     )
-}
-
-/** The head commit of a checkout, through the cleaned environment: a git
- *  hook's GIT_DIR would answer for its own repository. */
-export function revParseHead(dir) {
-  return execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], {
-    encoding: 'utf8',
-    env: gitEnv(),
-  }).trim()
+  const head = revParseHead(target)
+  if (head !== opts.expectSha) throw new Error(opts.movedMessage(head))
 }
