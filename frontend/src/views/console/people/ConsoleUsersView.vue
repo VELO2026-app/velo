@@ -155,8 +155,8 @@ const tabOptions = computed<SegmentOption[]>(() =>
 const columns = computed<ConsoleTableColumn[]>(() => [
   { key: 'user', label: t('console.users.columns.user') },
   { key: 'role', label: t('console.users.columns.role'), width: 160 },
-  { key: 'registered', label: t('console.users.columns.registered'), width: 150 },
-  { key: 'lastSeen', label: t('console.users.columns.lastSeen'), width: 170 },
+  { key: 'registered', label: t('console.users.columns.registered'), width: 150, secondary: true },
+  { key: 'lastSeen', label: t('console.users.columns.lastSeen'), width: 170, secondary: true },
   { key: 'action', label: '', width: 180, align: 'end' },
 ])
 

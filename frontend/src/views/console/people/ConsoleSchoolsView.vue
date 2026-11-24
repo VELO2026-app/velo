@@ -39,6 +39,7 @@
           :columns="columns"
           :rows="rows"
           :label="t('console.modules.schools')"
+          clickable
           @row-click="(row) => open(row.school)"
         >
           <template #cell-name="{ row }">{{ row.school.name }}</template>
@@ -112,9 +113,21 @@ const total = computed(() => query.data.value?.total ?? 0)
 const columns = computed<ConsoleTableColumn[]>(() => [
   { key: 'name', label: t('console.schools.columns.name') },
   { key: 'curator', label: t('console.schools.columns.curator') },
-  { key: 'masters', label: t('console.schools.columns.masters'), width: 100, align: 'end' },
-  { key: 'students', label: t('console.schools.columns.students'), width: 110, align: 'end' },
-  { key: 'created', label: t('console.schools.columns.created'), width: 150 },
+  {
+    key: 'masters',
+    label: t('console.schools.columns.masters'),
+    width: 100,
+    align: 'end',
+    secondary: true,
+  },
+  {
+    key: 'students',
+    label: t('console.schools.columns.students'),
+    width: 110,
+    align: 'end',
+    secondary: true,
+  },
+  { key: 'created', label: t('console.schools.columns.created'), width: 150, secondary: true },
   { key: 'status', label: t('console.schools.columns.status'), width: 150 },
 ])
 

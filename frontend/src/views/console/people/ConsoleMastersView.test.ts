@@ -203,6 +203,7 @@ describe('ConsoleMastersView', () => {
   it('mints a one-time invite link and shows it', async () => {
     vi.mocked(adminApi.inviteMaster).mockResolvedValue({
       invite_link: 'https://t.me/bot?start=abc',
+      issued_at: '2026-11-24T10:00:00Z',
     })
     await mount()
 

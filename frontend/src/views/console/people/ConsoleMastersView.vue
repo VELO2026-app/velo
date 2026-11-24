@@ -51,6 +51,7 @@
           :columns="columns"
           :rows="rows"
           :label="t('console.modules.masters')"
+          clickable
           @row-click="(row) => open(row.master)"
         >
           <template #cell-master="{ row }">
@@ -178,16 +179,29 @@ const tabOptions = computed<SegmentOption[]>(() =>
 const columns = computed<ConsoleTableColumn[]>(() => [
   { key: 'master', label: t('console.masters.columns.master') },
   { key: 'methods', label: t('console.masters.columns.methods') },
-  { key: 'schools', label: t('console.masters.columns.schools'), width: 120 },
+  { key: 'schools', label: t('console.masters.columns.schools'), width: 120, secondary: true },
   { key: 'status', label: t('console.masters.columns.status'), width: 190 },
   {
     key: 'practices',
     label: t('adminScreens.adminMasters.practicesStat'),
     width: 90,
     align: 'end',
+    secondary: true,
   },
-  { key: 'students', label: t('adminScreens.adminMasters.studentsStat'), width: 90, align: 'end' },
-  { key: 'payout', label: t('adminScreens.adminMasters.toWithdrawStat'), width: 120, align: 'end' },
+  {
+    key: 'students',
+    label: t('adminScreens.adminMasters.studentsStat'),
+    width: 90,
+    align: 'end',
+    secondary: true,
+  },
+  {
+    key: 'payout',
+    label: t('adminScreens.adminMasters.toWithdrawStat'),
+    width: 120,
+    align: 'end',
+    secondary: true,
+  },
 ])
 
 const emptyText = computed(() => t(`console.masters.empty.${tab.value}`))

@@ -304,9 +304,9 @@ describe('ConsoleMasterDetailView: a verified master', () => {
   })
 
   it('grants the school right with the switch', async () => {
-    vi.mocked(adminApi.setMasterSchoolRight).mockImplementation(async (_id, grant) => {
+    vi.mocked(adminApi.setMasterSchoolRight).mockImplementation(async (id, grant) => {
       change({ can_create_schools: grant })
-      return { can_create_schools: grant }
+      return { user_id: id, can_create_schools: grant }
     })
     await mount()
 

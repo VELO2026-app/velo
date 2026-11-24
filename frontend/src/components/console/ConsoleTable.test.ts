@@ -81,6 +81,26 @@ describe('ConsoleTable', () => {
     expect(onRowClick).not.toHaveBeenCalled()
   })
 
+  it('marks a secondary column in the header and in every row, for the narrow-window rule', () => {
+    const el = mount({
+      columns: [
+        { key: 'name', label: 'Name' },
+        { ...columns[1], secondary: true },
+      ],
+      rows,
+    })
+
+    const secondary = (node: Element | null | undefined) =>
+      Array.from(node?.querySelectorAll('.console-table__cell') ?? []).map((c) =>
+        c.classList.contains('console-table__cell--secondary'),
+      )
+    expect(secondary(el.querySelector('[role="row"]'))).toEqual([false, true])
+    expect(rowEls().map((r) => secondary(r))).toEqual([
+      [false, true],
+      [false, true],
+    ])
+  })
+
   it('marks the selected row', () => {
     mount({ columns, rows, selected: 'b' })
 

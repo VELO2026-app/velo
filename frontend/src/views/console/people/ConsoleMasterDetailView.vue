@@ -231,6 +231,19 @@ function toQueue(): void {
   min-width: 0;
 }
 
+/* The menu folds to icons at the same breakpoint: the summary goes on top of
+   the cards instead of squeezing them into half a tablet. */
+@media (max-width: 1199px) {
+  .master-detail {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .master-detail__side {
+    flex: 0 0 auto;
+  }
+}
+
 .master-summary {
   display: flex;
   align-items: center;
