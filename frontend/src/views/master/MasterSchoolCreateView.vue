@@ -165,6 +165,8 @@ async function showFieldError(message: string): Promise<void> {
 }
 
 async function onCreate(): Promise<void> {
+  // One request at a time: a repeat tap must not create the school twice (FE-242).
+  if (creating.value) return
   const trimmed = name.value.trim()
   fieldError.value = ''
 

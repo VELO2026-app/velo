@@ -164,6 +164,7 @@
       "experienceYears": "{n} years",
       "revokeMessage": "The master {name} becomes a regular user again. All data (profile, practices, history) is kept — access can be restored with the \"Make a master\" button.",
       "revokeWarning": "{base} Note: {warns} — the revocation is not blocked, the data will be kept.",
+      "revokePreviewFailed": "{base} The check for active practices, balance and pending payouts failed — the revocation is not blocked.",
       "grantNote": "Revoking verification freezes all of this curator's schools — participants will stop seeing them; the data is kept and revives on re-verification.",
       "warnSchedule": "{n} practice(s) in the schedule",
       "warnWithdrawals": "{n} payout(s) pending",
