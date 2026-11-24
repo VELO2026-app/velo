@@ -174,12 +174,13 @@ const showPairsPager = computed(
         </p>
         <ul v-else class="practice-analytics__pair-list">
           <li v-for="pair in visiblePairs" :key="pair.user_id" class="practice-analytics__pair">
-            <!-- The row is a real button inside its list item (the <li> keeps its
-                 list role) when the reader may open the person, plain otherwise. -->
+            <!-- The <li> stays the list item: a button role on it would drop it
+                 from the list. The tap target is a button inside it, and only
+                 when the reader may open the person. -->
             <component
               :is="opens(pair) ? 'button' : 'div'"
               :type="opens(pair) ? 'button' : undefined"
-              class="practice-analytics__pair-row"
+              class="practice-analytics__pair-row velo-btn-reset"
               @click="onPerson(pair)"
             >
               <span class="practice-analytics__faces" aria-hidden="true">
@@ -351,14 +352,9 @@ const showPairsPager = computed(
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
-  /* The row's own padding is the tap area when it is a button (44 px minimum). */
+  /* The row's own padding is its tap area when it is a button (44 px minimum). */
   padding: var(--space-4) 0;
   width: 100%;
-  /* The row is a button when the reader may open the person: undo the
-     button's own font, spacing and centred text. */
-  font: inherit;
-  letter-spacing: inherit;
-  text-align: left;
 }
 .practice-analytics__faces {
   display: flex;

@@ -273,6 +273,17 @@ button {
   color: inherit;
 }
 
+/* === Button as a plain row (DS canon) ===
+   The reset above leaves a button its own line height, letter spacing and
+   centred text. A button that holds a whole row (avatar + text, a list cell)
+   takes all three from its parent instead, so the row sets like the plain
+   element around it. Apply as class="velo-btn-reset". */
+.velo-btn-reset {
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: start;
+}
+
 /* === Inputs reset === */
 input,
 select,

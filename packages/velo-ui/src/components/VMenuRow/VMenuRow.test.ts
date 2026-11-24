@@ -3,9 +3,8 @@
 // =============================================================================
 //
 // Dependency-free SFC mount (createApp + happy-dom container), like the other
-// kit tests. The row is a real button: it takes keyboard focus and Enter/Space
-// activate it (it was a click-only div, so a screen made only of menu rows had
-// nothing focusable on it -- axe scrollable-region-focusable, FE-248).
+// kit tests. The row is a real button so it takes keyboard focus and activates
+// on Enter/Space; a screen made only of menu rows has nothing else to focus.
 // =============================================================================
 
 import { describe, it, expect, afterEach, vi } from 'vitest'

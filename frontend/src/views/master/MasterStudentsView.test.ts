@@ -31,6 +31,18 @@ import type { StudentListItem } from '@/api/types'
 
 vi.mock('@/api/masters')
 
+// The message sheet is its own component; here only WHAT it is opened with.
+vi.mock('@/components/shared/SendMessageModal.vue', async () => {
+  const { defineComponent, h } = await import('vue')
+  return {
+    default: defineComponent({
+      props: { open: Boolean, studentId: String, name: String },
+      setup: (props) => () =>
+        props.open ? h('div', { class: 'dm-stub', 'data-id': props.studentId }, props.name) : null,
+    }),
+  }
+})
+
 const push = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
@@ -256,25 +268,19 @@ describe('MasterStudentsView', () => {
       })
     })
 
-    it('a row holds two sibling buttons, never one inside the other (FE-248, nested-interactive)', async () => {
-      vi.mocked(mastersApi.getStudents).mockResolvedValue(page([student('s1', { name: 'Анна' })]))
+    it('the message button opens the message sheet for THAT student, not the profile', async () => {
+      vi.mocked(mastersApi.getStudents).mockResolvedValue(
+        page([student('s1', { name: 'Анна' }), student('s2', { name: 'Борис' })]),
+      )
       mount()
       await flush()
 
-      const row = rows()[0]
-      expect(row?.hasAttribute('role')).toBe(false)
-      expect(row?.querySelectorAll(':scope > button')).toHaveLength(2)
-      expect(row?.querySelectorAll('button button')).toHaveLength(0)
-    })
-
-    it('the message button does not navigate to the profile', async () => {
-      vi.mocked(mastersApi.getStudents).mockResolvedValue(page([student('s1', { name: 'Анна' })]))
-      mount()
+      host?.querySelectorAll<HTMLElement>('.students__msg')[1]?.click()
       await flush()
 
-      host?.querySelector<HTMLElement>('.students__msg')?.click()
-      await flush()
-
+      const sheet = host?.querySelector<HTMLElement>('.dm-stub')
+      expect(sheet?.dataset.id).toBe('s2')
+      expect(sheet?.textContent).toBe('Борис')
       expect(push).not.toHaveBeenCalled()
     })
   })

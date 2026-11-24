@@ -3,8 +3,10 @@
 
   Settings/profile list row: white plate, optional leading icon, label, optional
   trailing arrow. Variants: default | primary (accent text) | danger.
-  The root is a <button type="button">: the row is keyboard-focusable and
-  activates on Enter and Space (it was a click-only <div>).
+  The root is a <button type="button">: the row takes keyboard focus and
+  activates on Enter and Space. A screen built only from these rows has nothing
+  else to focus, so a non-focusable row would leave its scroll area without a
+  keyboard stop (WCAG 2.1.1).
 
   Usage:
     <VMenuRow label="Edit profile" @click="onEdit">
@@ -67,9 +69,8 @@ defineEmits<{
 
 <style scoped>
 .v-menu-row {
-  /* A real button, so the row takes keyboard focus and Enter/Space. The first
-     block undoes what a button paints by default, to keep the look of the
-     plain row it replaced. */
+  /* A button gets its own line height, letter spacing and centred text; the row
+     takes them from its parent instead, like the plain plate it is drawn as. */
   width: 100%;
   font: inherit;
   letter-spacing: inherit;

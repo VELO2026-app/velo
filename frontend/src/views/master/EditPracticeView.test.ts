@@ -720,6 +720,27 @@ describe('EditPracticeView', () => {
       expect(button('Удалить черновик')).toBeUndefined()
     })
 
+    it('a locked practice is one keyboard stop, named by the banner (its fields take no focus)', async () => {
+      // Every field of a completed practice is disabled, so without a stop of its
+      // own the scrolling screen has nothing a keyboard can reach (WCAG 2.1.1).
+      mountCached(practice({ status: 'completed' }))
+      await flush()
+
+      const screen = host?.querySelector<HTMLElement>('.edit-practice')
+      expect(screen?.getAttribute('tabindex')).toBe('0')
+      const nameId = screen?.getAttribute('aria-labelledby') ?? ''
+      expect(host?.querySelector(`[id="${nameId}"]`)?.textContent?.trim()).toBe(
+        'Редактирование недоступно',
+      )
+    })
+
+    it('an editable practice adds no keyboard stop: its own fields take the focus', async () => {
+      mountCached(practice({ status: 'scheduled' }))
+      await flush()
+
+      expect(host?.querySelector('.edit-practice')?.hasAttribute('tabindex')).toBe(false)
+    })
+
     it('a CANCELLED practice is readonly and cannot be cancelled AGAIN', async () => {
       // A second cancel would be a second refund run against the same bookings.
       mountCached(practice({ status: 'cancelled' }))
@@ -1621,8 +1642,9 @@ describe('EditPracticeView', () => {
       await flush()
 
       const titleInput = host?.querySelector<HTMLInputElement>('input')
-      titleInput!.value = 'Новое название'
-      titleInput!.dispatchEvent(new Event('input'))
+      if (!titleInput) throw new Error('no title input')
+      titleInput.value = 'Новое название'
+      titleInput.dispatchEvent(new Event('input'))
       button('Сохранить')?.click()
       await flush()
 

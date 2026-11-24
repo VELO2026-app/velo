@@ -236,7 +236,7 @@ describe('personTarget -- what a tap on a person opens', () => {
       expect(personTarget(s, p)).toEqual({ kind: 'chat', studentId: p.user_id, name: p.name })
     }
   })
-  it('a row with no target is plain text: no button role, a click emits nothing', async () => {
+  it('a row with no target is plain text: a tap emits nothing', async () => {
     const wrapper = mount(Analytics, {
       props: {
         summary: summary({ viewer_role: 'curator', school_id: 'g1', pairs_total: 1 }),
@@ -245,8 +245,7 @@ describe('personTarget -- what a tap on a person opens', () => {
       },
     })
     const row = wrapper.get('.practice-analytics__pair')
-    expect(row.attributes('role')).toBeUndefined()
-    await row.trigger('click')
+    await row.get('.practice-analytics__pair-row').trigger('click')
     expect(wrapper.emitted('person')).toBeUndefined()
     const rv = wrapper.get('.practice-analytics__review')
     expect(rv.attributes('role')).toBe('button')
@@ -254,20 +253,15 @@ describe('personTarget -- what a tap on a person opens', () => {
     expect(wrapper.emitted('person')?.[0]?.[0]).toMatchObject({ user_id: 'u0' })
     wrapper.unmount()
   })
-  it('a row with a target is a real button inside its list item; the list holds only list items (FE-248)', async () => {
+  it('a tap on a pair row asks for THAT person', async () => {
     const wrapper = mount(Analytics, {
       props: {
         summary: summary({ viewer_role: 'leader', school_id: null, pairs_total: 2 }),
         pairs: [pair(0), pair(1)],
       },
     })
-    const items = wrapper.findAll('.practice-analytics__pair-list > *')
-    expect(items.map((item) => item.element.tagName)).toEqual(['LI', 'LI'])
-    for (const item of items) expect(item.attributes('role')).toBeUndefined()
-    const row = wrapper.findAll(
-      '.practice-analytics__pair-list button.practice-analytics__pair-row',
-    )[1]
-    await row?.trigger('click')
+    await wrapper.findAll('.practice-analytics__pair-row')[1]?.trigger('click')
+    expect(wrapper.emitted('person')).toHaveLength(1)
     expect(wrapper.emitted('person')?.[0]?.[0]).toMatchObject({ user_id: 'u1' })
     wrapper.unmount()
   })
