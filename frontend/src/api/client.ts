@@ -218,7 +218,9 @@ async function send<T>(method: HttpMethod, path: string, options: RequestOptions
     response = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      // null, not undefined: exactOptionalPropertyTypes forbids an explicit
+      // undefined, and a null body sends no body (same as an absent one).
+      body: body !== undefined ? JSON.stringify(body) : null,
       signal: controller.signal,
     })
   } catch {
