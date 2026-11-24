@@ -33,28 +33,15 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { VSegment } from '@/components/ui'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import MethodRequestsPanel from '@/components/console/requests/MethodRequestsPanel.vue'
 import ReportsPanel from '@/components/console/requests/ReportsPanel.vue'
+import { useUrlTab } from '@/components/console/requests/useUrlTab'
 import { useAdminStats } from '@/composables/queries/admin'
 
-type ModerationTab = 'complaints' | 'methods' | 'decided'
-
-const route = useRoute()
-const router = useRouter()
 const { pendingModeration, pendingMethodChanges } = useAdminStats()
-
-const tab = computed<ModerationTab>(() => {
-  const asked = route.query.tab
-  return asked === 'methods' || asked === 'decided' ? asked : 'complaints'
-})
-// A tab change drops the open item: it belongs to the tab it was opened in.
-const tabModel = computed<string>({
-  get: () => tab.value,
-  set: (next) => void router.replace({ query: { tab: next } }),
-})
+const { tab, tabModel } = useUrlTab(['complaints', 'methods', 'decided'])
 
 const tabOptions = computed(() => [
   {

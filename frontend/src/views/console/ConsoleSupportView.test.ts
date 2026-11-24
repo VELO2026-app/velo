@@ -18,9 +18,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick, ref, type App } from 'vue'
 import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { DateTime } from 'luxon'
 import { coladaOptions } from '@/composables/queries/setup'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsoleSupportView from '@/views/console/ConsoleSupportView.vue'
 import { TICKET_POLL_MS } from '@/components/console/requests/useTicketSession'
 import * as supportApi from '@/api/support'
@@ -458,12 +459,13 @@ describe('ConsoleSupportView: moving a ticket on', () => {
   it('tells that the ticket changed meanwhile and reads it again', async () => {
     vi.mocked(supportApi.setTicketStatus).mockRejectedValueOnce(new ApiResponseError(409, 'moved'))
     await mount()
+    const reads = vi.mocked(supportApi.getAdminTicket).mock.calls.length
 
     await click(button('Закрыть'))
     await click(document.body.querySelector('[data-testid="close-spam"]') as HTMLElement)
 
     expect(toastError).toHaveBeenCalledWith('Обращение изменилось — проверьте статус')
-    expect(supportApi.getAdminTicket).toHaveBeenCalled()
+    expect(vi.mocked(supportApi.getAdminTicket).mock.calls.length).toBeGreaterThan(reads)
   })
 
   it('hands a ticket over to another admin, the caller not offered', async () => {
@@ -613,15 +615,13 @@ describe('ConsoleSupportView: statistics', () => {
   }
   const monthStart = () => DateTime.now().setZone('Europe/Berlin').startOf('month')
 
-  it('shows the month, its change against the month before, the rating and the admins', async () => {
-    vi.mocked(supportApi.getSupportStats).mockImplementation(async (from) =>
-      DateTime.fromISO(from).toMillis() === monthStart().toMillis() ? stats(80) : stats(68),
-    )
+  it('shows the running month, its rating and its admins, without a comparison', async () => {
+    vi.mocked(supportApi.getSupportStats).mockResolvedValue(stats(80))
     await mount('/console/support?tab=stats')
 
     const tile = (id: string) => byId(id)?.textContent?.replace(/\s+/g, ' ') ?? ''
     expect(tile('stats-tile-total')).toContain('80')
-    expect(tile('stats-tile-total')).toContain('+12 к прошлому месяцу')
+    expect(tile('stats-tile-total')).not.toContain('к прошлому месяцу')
     expect(tile('stats-tile-spam')).toContain('6')
     expect(tile('stats-tile-rating')).toContain('4.5')
     expect(tile('stats-tile-rating')).toContain('4 с оценкой')
@@ -629,6 +629,35 @@ describe('ConsoleSupportView: statistics', () => {
     expect(host?.querySelectorAll('[data-testid="stats-category-row"]')).toHaveLength(3)
     expect(host?.textContent).toContain('50%')
     expect(host?.textContent).toContain('Olga')
+    // The running month is not read against the month before at all.
+    const asked = vi
+      .mocked(supportApi.getSupportStats)
+      .mock.calls.map(([from]) => DateTime.fromISO(from).toMillis())
+    expect(asked).toEqual([monthStart().toMillis()])
+  })
+
+  it('compares a finished month with the month before it', async () => {
+    const october = monthStart().minus({ months: 1 }).toMillis()
+    vi.mocked(supportApi.getSupportStats).mockImplementation(async (from) =>
+      DateTime.fromISO(from).toMillis() === october ? stats(80) : stats(68),
+    )
+    await mount('/console/support?tab=stats')
+
+    await click(byId('stats-prev') as HTMLElement)
+
+    expect(byId('stats-tile-total')?.textContent).toContain('80')
+    expect(byId('stats-tile-total')?.textContent).toContain('+12 к прошлому месяцу')
+  })
+
+  it('gives the running month no comparison again after a step back and forward', async () => {
+    vi.mocked(supportApi.getSupportStats).mockResolvedValue(stats(80))
+    await mount('/console/support?tab=stats')
+    await click(byId('stats-prev') as HTMLElement)
+    expect(byId('stats-tile-total')?.textContent).toContain('к прошлому месяцу')
+
+    await click(byId('stats-next') as HTMLElement)
+
+    expect(byId('stats-tile-total')?.textContent).not.toContain('к прошлому месяцу')
   })
 
   it('steps back one month at a time and never past the current one', async () => {
@@ -806,5 +835,235 @@ describe('ConsoleSupportView: statistics failure', () => {
     await click(button('Повторить'))
 
     expect(byId('stats-tile-total')?.textContent).toContain('5')
+  })
+})
+
+// -----------------------------------------------------------------------------
+// The list filters, the URL and the background refetch
+// -----------------------------------------------------------------------------
+
+function pill(key: 'category' | 'rating' | 'period'): HTMLElement {
+  return must(byId(`filter-${key}`), `the ${key} pill`)
+}
+function choiceByText(label: string): HTMLElement {
+  const found = Array.from(
+    host?.querySelectorAll<HTMLElement>('[data-testid="filter-choices"] button') ?? [],
+  ).find((b) => b.textContent?.trim() === label)
+  return must(found, `the choice ${label}`)
+}
+function lastListQuery(): supportApi.AdminTicketQuery | undefined {
+  return vi.mocked(supportApi.listAdminTickets).mock.lastCall?.[0]
+}
+function urlQuery(): Record<string, unknown> {
+  return { ...router.currentRoute.value.query }
+}
+
+describe('ConsoleSupportView: filters', () => {
+  it('filters by the complaints category, which asks for both complaint categories', async () => {
+    await mount()
+
+    await click(pill('category'))
+    await click(choiceByText('Жалобы'))
+
+    expect(lastListQuery()).toMatchObject({
+      status: 'open',
+      categories: ['complaint_master', 'complaint_user'],
+    })
+    expect(urlQuery().cat).toBe('complaints')
+    expect(pill('category').textContent).toContain('Жалобы')
+    expect(byId('filter-choices')).toBeNull()
+  })
+
+  it('filters by any of the chosen ratings and drops one when it is chosen again', async () => {
+    await mount()
+
+    await click(pill('rating'))
+    await click(choiceByText('5 ★'))
+    await click(choiceByText('4 ★'))
+    await click(choiceByText('Без оценки'))
+    expect(lastListQuery()?.ratings).toEqual(['4', '5', 'none'])
+    expect(urlQuery().rating).toBe('4,5,none')
+    expect(byId('filter-choices')).not.toBeNull()
+
+    await click(choiceByText('5 ★'))
+    expect(lastListQuery()?.ratings).toEqual(['4', 'none'])
+  })
+
+  it('filters by a period of whole days in the admin timezone', async () => {
+    await mount()
+
+    await click(pill('period'))
+    await click(choiceByText('7 дней'))
+
+    const { createdFrom, createdTo } = lastListQuery() ?? {}
+    const days = DateTime.fromISO(createdTo ?? '').diff(DateTime.fromISO(createdFrom ?? ''), 'days')
+    expect(Math.round(days.days)).toBe(7)
+    expect(createdFrom).toMatch(/T00:00:00\.000[+-]\d\d:\d\d$/)
+    expect(urlQuery().period).toBe('week')
+  })
+
+  it('resets a filter with "all"', async () => {
+    await mount('/console/support?cat=payments')
+    expect(lastListQuery()).toMatchObject({ categories: ['payments'] })
+
+    await click(pill('category'))
+    await click(choiceByText('Все'))
+
+    expect(lastListQuery()).toEqual({ status: 'open', limit: 20 })
+    expect(urlQuery().cat).toBeUndefined()
+  })
+
+  it('reads the filters from the URL on load and ignores values it does not know', async () => {
+    await mount('/console/support?cat=payments&rating=5&period=today')
+    expect(lastListQuery()).toMatchObject({
+      status: 'open',
+      categories: ['payments'],
+      ratings: ['5'],
+    })
+    expect(lastListQuery()?.createdFrom).toBeDefined()
+
+    app?.unmount()
+    host?.remove()
+    vi.mocked(supportApi.listAdminTickets).mockClear()
+    await mount('/console/support?cat=bogus&rating=9&period=year')
+    expect(lastListQuery()).toEqual({ status: 'open', limit: 20 })
+  })
+
+  it('lets go of the open ticket when a filter changes, and keeps the filters across the tabs', async () => {
+    await mount('/console/support?ticket=t_mine_0002&cat=payments')
+
+    await click(pill('rating'))
+    await click(choiceByText('5 ★'))
+    expect(urlQuery()).toMatchObject({ cat: 'payments', rating: '5' })
+    expect(urlQuery().ticket).toBeUndefined()
+
+    await click(
+      must(
+        Array.from(host?.querySelectorAll<HTMLElement>('[role="tab"]') ?? []).find((t) =>
+          t.textContent?.includes('Закрытые'),
+        ),
+      ),
+    )
+    expect(urlQuery()).toMatchObject({ tab: 'closed', cat: 'payments', rating: '5' })
+  })
+
+  it('says nothing matches the filters, and closes the choices on Escape', async () => {
+    vi.mocked(supportApi.listAdminTickets).mockResolvedValue({ tickets: [], next_cursor: null })
+    await mount('/console/support?cat=payments')
+    expect(host?.textContent).toContain('По выбранным фильтрам ничего не найдено')
+
+    await click(pill('period'))
+    expect(byId('filter-choices')).not.toBeNull()
+    byId('ticket-filters')?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    )
+    await flush()
+
+    expect(byId('filter-choices')).toBeNull()
+  })
+})
+
+describe('ConsoleSupportView: background refetch', () => {
+  /** Ask a held answer again, as a focus return does; a failure is the screen's to tell. */
+  async function refetch(key: readonly unknown[]): Promise<void> {
+    useQueryCache()
+      .invalidateQueries({ key: key as never })
+      .catch(() => {})
+    await flush()
+  }
+  function gate(): { wait: Promise<void>; open: () => void } {
+    let open = () => {}
+    const wait = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    return { wait, open }
+  }
+
+  it('keeps the list and the open ticket on screen while the list refetches, then takes the news', async () => {
+    await mount()
+    const held = gate()
+    const real = must(vi.mocked(supportApi.listAdminTickets).getMockImplementation())
+    vi.mocked(supportApi.listAdminTickets).mockImplementationOnce(async (query) => {
+      await held.wait
+      return real(query)
+    })
+    server.tickets.t_new_0006 = { ...T_FREE, id: 't_new_0006', topic: 'withdrawal' }
+
+    await refetch(adminKeys.supportTicketsAll())
+
+    expect(rows()).toHaveLength(3)
+    expect(host?.querySelector('.v-loader')).toBeNull()
+    expect(feedText()).toContain('The Zoom link did not arrive')
+    held.open()
+    await flush()
+    expect(rows()).toHaveLength(4)
+  })
+
+  it('keeps the feed and the reply draft on screen while the feed refetches', async () => {
+    await mount('/console/support?tab=mine')
+    typeInto(composer(), 'Half a reply')
+    await flush()
+    const held = gate()
+    const real = must(vi.mocked(supportApi.getAdminSupportMessages).getMockImplementation())
+    vi.mocked(supportApi.getAdminSupportMessages).mockImplementationOnce(async (...args) => {
+      await held.wait
+      return real(...args)
+    })
+
+    await refetch(adminKeys.supportMessages('t_mine_0002'))
+
+    expect(feedText()).toContain('The payment failed twice')
+    expect(byId('ticket-feed')?.querySelector('.v-loader')).toBeNull()
+    expect(composer()?.value).toBe('Half a reply')
+    held.open()
+    await flush()
+    expect(composer()?.value).toBe('Half a reply')
+  })
+
+  it('tells a failed list refetch once and keeps the list, until an answer arrives', async () => {
+    await mount()
+    const real = must(vi.mocked(supportApi.listAdminTickets).getMockImplementation())
+    vi.mocked(supportApi.listAdminTickets).mockImplementation(() =>
+      Promise.reject(new Error('down')),
+    )
+
+    await refetch(adminKeys.supportTicketsAll())
+    await refetch(adminKeys.supportTicketsAll())
+
+    expect(rows()).toHaveLength(3)
+    expect(toastError).toHaveBeenCalledTimes(1)
+
+    vi.mocked(supportApi.listAdminTickets).mockImplementation(real)
+    await refetch(adminKeys.supportTicketsAll())
+    vi.mocked(supportApi.listAdminTickets).mockImplementation(() =>
+      Promise.reject(new Error('down again')),
+    )
+    await refetch(adminKeys.supportTicketsAll())
+    expect(toastError).toHaveBeenCalledTimes(2)
+  })
+
+  it('tells a failed feed refetch once and keeps the feed and the ticket', async () => {
+    await mount()
+    vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(() =>
+      Promise.reject(new Error('down')),
+    )
+
+    await refetch(adminKeys.supportMessages('t_free_0001'))
+    await refetch(adminKeys.supportMessages('t_free_0001'))
+
+    expect(toastError).toHaveBeenCalledTimes(1)
+    expect(toastError).toHaveBeenCalledWith('Не удалось загрузить сообщения')
+    expect(feedText()).toContain('The Zoom link did not arrive')
+    expect(byId('ticket-detail')?.textContent).toContain(TOPIC_TECH)
+  })
+
+  it('keeps the not-found state when the missing ticket is read again in the background', async () => {
+    await mount('/console/support?ticket=t_missing')
+    expect(byId('ticket-detail')?.textContent).toContain('Обращение не найдено')
+
+    await refetch(adminKeys.supportTicket('t_missing'))
+
+    expect(byId('ticket-detail')?.textContent).toContain('Обращение не найдено')
+    expect(byId('ticket-detail')?.querySelector('.v-loader')).toBeNull()
   })
 })

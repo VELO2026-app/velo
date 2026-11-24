@@ -94,7 +94,7 @@
         variant="ghost"
         size="sm"
         data-testid="reports-back"
-        @click="onDecided"
+        @click="reportInUrl.clear"
       >
         ‹ {{ t('console.moderation.backToList') }}
       </VButton>
@@ -121,8 +121,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useInfiniteQuery, useQuery } from '@pinia/colada'
+import { useInfiniteQuery, useQuery, useQueryCache } from '@pinia/colada'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import RequestChip from '@/components/console/requests/RequestChip.vue'
 import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
@@ -131,10 +130,12 @@ import ConsoleSplit from '@/components/console/ConsoleSplit.vue'
 import ReportDetail from '@/components/console/requests/ReportDetail.vue'
 import { reportTitle } from '@/components/console/requests/reportTitle'
 import { useSplitLayout } from '@/components/console/requests/useSplitLayout'
+import { useUrlSelection } from '@/components/console/requests/useUrlSelection'
 import type { ReportResponse, ReportStatusFilter } from '@/api/admin'
 import {
   adminReportQuery,
   adminReportsQuery,
+  dropReport,
   usePagedListFailures,
 } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
@@ -151,8 +152,7 @@ const props = defineProps<{
 /** The verdicts the "decided" chips offer. */
 const DECIDED_STATUSES = ['resolved', 'dismissed'] as const
 
-const route = useRoute()
-const router = useRouter()
+const queryCache = useQueryCache()
 const toast = useToast()
 
 const decidedStatus = ref<(typeof DECIDED_STATUSES)[number]>('resolved')
@@ -184,14 +184,13 @@ function retry(): void {
   void reportsQuery.refetch()
 }
 
-const urlId = computed<string | null>(() => {
-  const fromUrl = route.query.id
-  return typeof fromUrl === 'string' && fromUrl ? fromUrl : null
-})
-const layout = useSplitLayout(() => urlId.value !== null)
+const reportInUrl = useUrlSelection('id')
+const layout = useSplitLayout(() => reportInUrl.urlId.value !== null)
 
 /** The complaint in the URL, else the first of the list (a narrow window shows the list until one is picked). */
-const selectedId = computed<string | null>(() => urlId.value ?? items.value[0]?.id ?? null)
+const selectedId = computed<string | null>(
+  () => reportInUrl.urlId.value ?? items.value[0]?.id ?? null,
+)
 const listed = computed(() => items.value.find((r) => r.id === selectedId.value) ?? null)
 
 // A complaint the list does not hold (a deep link, a reload) is read by
@@ -212,21 +211,23 @@ const lookingUp = computed(
 )
 
 function select(item: ReportResponse): void {
-  void router.replace({ query: { ...route.query, id: item.id } })
+  reportInUrl.select(item.id)
 }
 
 /** Switch the verdict chips: the open complaint belonged to the other list. */
 function setDecided(next: (typeof DECIDED_STATUSES)[number]): void {
   decidedStatus.value = next
-  void router.replace({ query: { ...route.query, id: undefined } })
+  reportInUrl.clear()
 }
 
 /**
- * Leave the open complaint: after a verdict, and back to the list on a narrow
- * window. A wide window then opens the next complaint of the list.
+ * A verdict landed: the complaint leaves the lists held at once (the
+ * verdict's refetch is still on its way), and the URL lets go of it, so the
+ * next complaint opens on a wide window and the list shows on a narrow one.
  */
-function onDecided(): void {
-  void router.replace({ query: { ...route.query, id: undefined } })
+function onDecided(reportId: string): void {
+  dropReport(queryCache, reportId)
+  reportInUrl.clear()
 }
 </script>
 

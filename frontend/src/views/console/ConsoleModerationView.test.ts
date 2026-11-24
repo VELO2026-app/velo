@@ -16,8 +16,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick, ref, type App } from 'vue'
 import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsoleModerationView from '@/views/console/ConsoleModerationView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -464,5 +465,97 @@ describe('ConsoleModerationView: empty and failed lists', () => {
     await click(button('Повторить'))
 
     expect(host?.querySelector('[data-testid="method-request"]')).not.toBeNull()
+  })
+})
+
+describe('ConsoleModerationView: a verdict and the background refetch', () => {
+  /** Ask a held answer again, as a focus return does; a failure is the screen's to tell. */
+  async function refetch(key: readonly unknown[]): Promise<void> {
+    useQueryCache()
+      .invalidateQueries({ key: key as never })
+      .catch(() => {})
+    await flush()
+  }
+  function gate(): { wait: Promise<void>; open: () => void } {
+    let open = () => {}
+    const wait = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    return { wait, open }
+  }
+
+  it('takes the decided complaint off the list at once, before the list answers again', async () => {
+    await mount()
+    const held = gate()
+    const real = must(vi.mocked(adminApi.getReports).getMockImplementation())
+    // The list's refetch (a page of 20) waits; the badge's read (one row) does not.
+    vi.mocked(adminApi.getReports).mockImplementation(async (status, type, limit, offset) => {
+      if (limit === 20) await held.wait
+      return real(status, type, limit, offset)
+    })
+
+    typeInto(textarea(), 'Warning sent')
+    await flush()
+    await click(button('Принять меры'))
+
+    expect(rows()).toHaveLength(1)
+    expect(reasonShown()).toBe('Advertising in practice chats')
+    expect(adminApi.resolveReport).toHaveBeenCalledTimes(1)
+    expect(adminApi.getReportById).not.toHaveBeenCalled()
+    held.open()
+    await flush()
+    expect(rows()).toHaveLength(1)
+  })
+
+  it('keeps the list and the open complaint on screen while the list refetches, then takes the news', async () => {
+    await mount()
+    const held = gate()
+    const real = must(vi.mocked(adminApi.getReports).getMockImplementation())
+    vi.mocked(adminApi.getReports).mockImplementationOnce(async (status, type, limit, offset) => {
+      await held.wait
+      return real(status, type, limit, offset)
+    })
+    server.reports.pending = [report({ id: 'r_new_0004', reason: 'A new one' }), R_MASTER, R_USER]
+
+    await refetch(adminKeys.reportsAll())
+
+    expect(rows()).toHaveLength(2)
+    expect(host?.querySelector('.v-loader')).toBeNull()
+    expect(reasonShown()).toBe('The master was rude to the group')
+    held.open()
+    await flush()
+    expect(rows()).toHaveLength(3)
+  })
+
+  it('tells a failed list refetch once and keeps the list, until an answer arrives', async () => {
+    await mount()
+    const real = must(vi.mocked(adminApi.getReports).getMockImplementation())
+    vi.mocked(adminApi.getReports).mockImplementation(() => Promise.reject(new Error('down')))
+
+    await refetch(adminKeys.reportsAll())
+    await refetch(adminKeys.reportsAll())
+
+    expect(rows()).toHaveLength(2)
+    expect(toastError).toHaveBeenCalledTimes(1)
+
+    vi.mocked(adminApi.getReports).mockImplementation(real)
+    await refetch(adminKeys.reportsAll())
+    vi.mocked(adminApi.getReports).mockImplementation(() => Promise.reject(new Error('down again')))
+    await refetch(adminKeys.reportsAll())
+    expect(toastError).toHaveBeenCalledTimes(2)
+  })
+
+  it('tells a failed refetch of the method requests once and keeps them', async () => {
+    await mount('/console/moderation?tab=methods')
+    vi.mocked(adminApi.getMethodChangeRequests).mockImplementation(() =>
+      Promise.reject(new Error('down')),
+    )
+
+    await refetch(adminKeys.methodRequests())
+    await refetch(adminKeys.methodRequests())
+
+    expect(host?.querySelector('[data-testid="method-request"]')).not.toBeNull()
+    expect(toastError).toHaveBeenCalledTimes(1)
+    expect(toastError).toHaveBeenCalledWith('Ошибка загрузки заявок')
   })
 })

@@ -34,27 +34,16 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
 import { VSegment } from '@/components/ui'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import SupportStatsPanel from '@/components/console/requests/SupportStatsPanel.vue'
 import TicketsPanel from '@/components/console/requests/TicketsPanel.vue'
+import { TICKET_FILTER_PARAMS } from '@/components/console/requests/ticketFilters'
+import { useUrlTab } from '@/components/console/requests/useUrlTab'
 
-type SupportTab = 'open' | 'mine' | 'closed' | 'stats'
-
-const route = useRoute()
-const router = useRouter()
-
-const tab = computed<SupportTab>(() => {
-  const asked = route.query.tab
-  return asked === 'mine' || asked === 'closed' || asked === 'stats' ? asked : 'open'
-})
+// The filters stay when the tab changes: they apply to all three ticket tabs.
+const { tab, tabModel } = useUrlTab(['open', 'mine', 'closed', 'stats'], TICKET_FILTER_PARAMS)
 const isStats = computed(() => tab.value === 'stats')
-// A tab change drops the open ticket: it belongs to the tab it was opened in.
-const tabModel = computed<string>({
-  get: () => tab.value,
-  set: (next) => void router.replace({ query: { tab: next } }),
-})
 
 const tabOptions = computed(() => [
   { value: 'open', label: t('console.support.tabs.open') },

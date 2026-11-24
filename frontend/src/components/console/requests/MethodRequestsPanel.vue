@@ -209,8 +209,9 @@ const rejectError = ref('')
 
 // A proposed method that does not match the taxonomy (parseMethods surfaces
 // it as a custom one) pauses the approval on a confirm: add the label to the
-// catalog, or approve for this master only. Dismissing the dialog counts as
-// "this master only" -- it always still approves.
+// catalog (i18n:adminScreens.adminMethodRequests.addToCatalog), or approve
+// for this master only (i18n:adminScreens.adminMethodRequests.thisMasterOnly).
+// Dismissing the dialog counts as the second -- it always still approves.
 const promoteTarget = ref<AdminMethodChangeItem | null>(null)
 /** One entry per unmatched method, scoped or promoted separately (FE-89). */
 const promoteLabels = ref<string[]>([])
@@ -278,14 +279,14 @@ async function doApprove(
   }
 }
 
-/** "Add to catalog": approve and promote the custom labels (each its own catalog row). */
+/** Add to the catalog: approve and promote the custom labels (each its own catalog row). */
 function onPromoteConfirm(): void {
   const item = promoteTarget.value
   if (!item) return
   void doApprove(item, [...promoteLabels.value])
 }
 
-/** "This master only" (or the dialog dismissed): approve, each label scoped to this master. */
+/** This master only (or the dialog dismissed): approve, each label scoped to this master. */
 function onPromoteCancel(): void {
   const item = promoteTarget.value
   if (!item) return

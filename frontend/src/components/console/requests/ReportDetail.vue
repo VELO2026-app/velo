@@ -3,14 +3,17 @@
 
   One complaint open in the console: what it is about, who sent it (the API
   names no one -- the ids are shown), its text, and the decision. A pending
-  complaint takes one decision text: "Take action" (resolve) needs it,
-  "Dismiss" takes it as an optional reason. A decided complaint shows the
-  verdict, its date and its note. A master or practice target links to its
-  admin screen (the mobile one until the console has its own).
+  complaint takes one decision text: the resolve button
+  (i18n:console.moderation.resolve) needs it, the dismiss button
+  (i18n:adminScreens.adminReportDetail.reject) takes it as an optional
+  reason. A decided complaint shows the verdict, its date and its note. A
+  master or practice target links to its admin screen (the mobile one until
+  the console has its own).
 
   Mount it with `:key="report.id"` so the text starts empty for each complaint.
-  A verdict emits `decided`; the list around it drops the complaint (the
-  verdict invalidates every complaints list and the moderation badge).
+  A verdict emits `decided` with the complaint's id; the list around it drops
+  the complaint at once (the verdict also invalidates every complaints list
+  and the moderation badge).
 -->
 
 <template>
@@ -124,8 +127,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  /** A verdict landed (resolved or dismissed). */
-  decided: []
+  /** A verdict landed (resolved or dismissed): the id of the decided complaint. */
+  decided: [reportId: string]
 }>()
 
 const router = useRouter()
@@ -163,18 +166,18 @@ const targetRoute = computed<RouteLocationRaw | null>(() => {
 const decodedReason = computed(() => decodeReportReason(props.report.reason))
 
 async function onResolve(): Promise<void> {
+  if (busy.value) return
   noteError.value = ''
   const text = note.value.trim()
   if (!text) {
     noteError.value = t('adminScreens.adminReportDetail.resolutionNotePlaceholder')
     return
   }
-  if (busy.value) return
   resolving.value = true
   try {
     await resolve.mutateAsync(text)
     toast.success(t('adminScreens.adminReportDetail.resolvedToast'))
-    emit('decided')
+    emit('decided', props.report.id)
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminReportDetail.processError')))
   } finally {
@@ -189,7 +192,7 @@ async function onDismiss(): Promise<void> {
   try {
     await dismiss.mutateAsync(note.value.trim() || undefined)
     toast.success(t('adminScreens.adminReportDetail.rejectedToast'))
-    emit('decided')
+    emit('decided', props.report.id)
   } catch (e) {
     toast.error(extractApiError(e, t('adminScreens.adminReportDetail.processError')))
   } finally {

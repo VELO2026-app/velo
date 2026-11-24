@@ -7,7 +7,8 @@
   back in time at a time, forward only up to the current month.
 
   Four tiles: the month's tickets (with the change against the month before,
-  read from the same endpoint), spam, and the rating of the answers (average
+  read from the same endpoint, for a finished month only: the running month
+  is not comparable with a whole one), spam, and the rating of the answers (average
   and share of 4-5 stars, folded from the categories). Below: the tickets by
   category with each category's rating line, and the ratings per admin.
   `average` and `share_4_5` are null when nothing was rated -- the tiles say
@@ -173,15 +174,18 @@ const {
   (e) => toast.error(extractApiError(e, t('common.loadError'))),
 )
 
-// The month before, for the change under the total. Quiet: a failed or
-// pending read just leaves the line out.
-const previousQuery = useQuery(() =>
-  adminSupportStatsQuery(windowOf(monthStart.value.minus({ months: 1 }))),
-)
+// The month before, for the change under the total: only for a finished
+// month. The running month is not comparable with a whole one (it would show
+// a deep loss at the start of every month), so it is not read at all. Quiet:
+// a failed or pending read just leaves the line out.
+const previousQuery = useQuery(() => ({
+  ...adminSupportStatsQuery(windowOf(monthStart.value.minus({ months: 1 }))),
+  enabled: monthOffset.value > 0,
+}))
 const delta = computed(() => {
   const now = stats.value
   const before = previousQuery.data.value
-  return now && before
+  return monthOffset.value > 0 && now && before
     ? t('console.support.stats.versusPrevious', { delta: signedDelta(now.total, before.total) })
     : ''
 })
@@ -199,7 +203,11 @@ function shareLabel(row: SupportStatsCategory): string {
   return share === null ? '—' : `${share}%`
 }
 
-/** One row's figures: "12 tickets · 3 rated · avg 4.33 · 4-5: 67%". */
+/**
+ * One row's figures as a line: the tickets, the rated tickets, the average and
+ * the 4-5 share (i18n:adminScreens.adminSupportStats.ticketsCount, `.ratedCount`,
+ * `.average`, `.share`); a resolver row has no tickets of its own.
+ */
 function figuresLine(row: SupportStatsFigures & { tickets?: number }): string {
   const parts: string[] = []
   if (row.tickets !== undefined) {

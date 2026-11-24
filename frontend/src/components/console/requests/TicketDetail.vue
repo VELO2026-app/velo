@@ -17,19 +17,17 @@
 <template>
   <div class="ticket-detail" data-testid="ticket-detail">
     <ConsoleCard class="ticket-detail__thread">
-      <div v-if="session.loadingTicket.value" class="ticket-detail__center">
+      <div v-if="loadingTicket" class="ticket-detail__center">
         <VLoader size="lg" />
       </div>
 
       <VEmptyState
-        v-else-if="session.ticketError.value"
+        v-else-if="ticketError"
         icon="warning"
         :title="t('common.loadError')"
-        :description="session.ticketError.value"
+        :description="ticketError"
       >
-        <VButton size="sm" variant="outline" @click="session.fetchTicket">{{
-          t('common.retry')
-        }}</VButton>
+        <VButton size="sm" variant="outline" @click="fetchTicket">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <VEmptyState
@@ -57,25 +55,32 @@
               v-if="!ticket.claimed_by"
               variant="secondary"
               size="sm"
-              :loading="session.claiming.value"
-              @click="session.claim"
+              :loading="claiming"
+              @click="claim"
             >
               {{ t('console.support.take') }}
+            </VButton>
+            <VButton variant="secondary" size="sm" @click="openAssign">
+              {{ t('adminScreens.adminSupportDetail.menu.assign') }}
+            </VButton>
+            <VButton
+              v-if="ticket.claimed_by"
+              variant="secondary"
+              size="sm"
+              :loading="releasing"
+              @click="release"
+            >
+              {{ t('adminScreens.adminSupportDetail.menu.release') }}
             </VButton>
             <VButton
               v-if="ticket.status === 'open'"
               size="sm"
-              :loading="session.changingTo.value !== null"
+              :loading="changingTo !== null"
               @click="statusOpen = true"
             >
               {{ t('console.support.close') }}
             </VButton>
-            <VButton
-              v-if="reopenLabel"
-              size="sm"
-              :loading="session.reopening.value"
-              @click="session.reopen"
-            >
+            <VButton v-if="reopenLabel" size="sm" :loading="reopening" @click="reopen">
               {{ reopenLabel }}
             </VButton>
           </div>
@@ -83,7 +88,7 @@
 
         <!-- Claim notice: shown whenever the caller is NOT the taker, so "why
              can't I type" is answered before it is asked. -->
-        <p v-if="!session.canReply.value" class="ticket-detail__notice" data-testid="claim-notice">
+        <p v-if="!canReply" class="ticket-detail__notice" data-testid="claim-notice">
           {{
             ticket.claimed_by
               ? t('adminScreens.adminSupportDetail.claimedByOtherHint')
@@ -92,81 +97,76 @@
         </p>
 
         <div ref="feedEl" class="ticket-detail__feed" data-testid="ticket-feed">
-          <div v-if="session.loadingMessages.value" class="ticket-detail__center">
+          <div v-if="loadingMessages" class="ticket-detail__center">
             <VLoader size="lg" />
           </div>
           <VEmptyState
-            v-else-if="session.messagesError.value"
+            v-else-if="messagesError"
             icon="warning"
             :title="t('adminScreens.adminSupportDetail.messagesLoadFailed')"
-            :description="session.messagesError.value"
+            :description="messagesError"
           >
-            <VButton size="sm" variant="outline" @click="session.loadMessages">{{
+            <VButton size="sm" variant="outline" @click="loadMessages">{{
               t('common.retry')
             }}</VButton>
           </VEmptyState>
           <template v-else>
-            <p v-if="session.messages.value.length === 0" class="ticket-detail__empty">
+            <p v-if="messages.length === 0" class="ticket-detail__empty">
               {{ t('adminScreens.adminSupportDetail.noMessages') }}
             </p>
             <SupportMessageBubble
-              v-for="m in session.messages.value"
+              v-for="m in messages"
               :key="m.id"
               :message="m"
-              :from-person="session.isPerson(m)"
-              :mine="m.sender === session.myId.value"
-              :show-original="session.originalShown.value.has(m.id)"
-              :retrying="session.retrying.value.has(m.id)"
+              :from-person="isPerson(m)"
+              :mine="m.sender === myId"
+              :show-original="originalShown.has(m.id)"
+              :retrying="retrying.has(m.id)"
               :time="formatMessageTime(m.created_at)"
-              @toggle="session.toggleOriginal(m.id)"
-              @retry="session.retryTranslation(ticket.id, m.id)"
+              @toggle="toggleOriginal(m.id)"
+              @retry="retryTranslation(ticket.id, m.id)"
             />
-            <button type="button" class="ticket-detail__link" @click="session.loadMessages">
+            <button type="button" class="ticket-detail__link" @click="loadMessages">
               {{ t('adminScreens.adminSupportDetail.refresh') }}
             </button>
 
             <!-- The person's conversation before tickets: read-only, on demand. -->
             <template v-if="ticket.history_thread_id">
-              <VButton
-                v-if="!session.historyShown.value"
-                variant="secondary"
-                size="sm"
-                @click="session.loadHistory"
-              >
+              <VButton v-if="!historyShown" variant="secondary" size="sm" @click="loadHistory">
                 {{ t('adminScreens.adminSupportDetail.history.show') }}
               </VButton>
               <section v-else class="ticket-detail__history">
                 <h3 class="ticket-detail__history-title">
                   {{ t('adminScreens.adminSupportDetail.history.title') }}
                 </h3>
-                <div v-if="session.loadingHistory.value" class="ticket-detail__center">
+                <div v-if="loadingHistory" class="ticket-detail__center">
                   <VLoader size="lg" />
                 </div>
                 <VEmptyState
-                  v-else-if="session.historyError.value"
+                  v-else-if="historyError"
                   icon="warning"
                   :title="t('adminScreens.adminSupportDetail.messagesLoadFailed')"
-                  :description="session.historyError.value"
+                  :description="historyError"
                 >
-                  <VButton size="sm" variant="outline" @click="session.loadHistory">{{
+                  <VButton size="sm" variant="outline" @click="loadHistory">{{
                     t('common.retry')
                   }}</VButton>
                 </VEmptyState>
                 <template v-else>
-                  <p v-if="session.historyMessages.value.length === 0" class="ticket-detail__empty">
+                  <p v-if="historyMessages.length === 0" class="ticket-detail__empty">
                     {{ t('adminScreens.adminSupportDetail.noMessages') }}
                   </p>
                   <SupportMessageBubble
-                    v-for="m in session.historyMessages.value"
+                    v-for="m in historyMessages"
                     :key="m.id"
                     :message="m"
-                    :from-person="session.isPerson(m)"
-                    :mine="m.sender === session.myId.value"
-                    :show-original="session.originalShown.value.has(m.id)"
-                    :retrying="session.retrying.value.has(m.id)"
+                    :from-person="isPerson(m)"
+                    :mine="m.sender === myId"
+                    :show-original="originalShown.has(m.id)"
+                    :retrying="retrying.has(m.id)"
                     :time="formatMessageTime(m.created_at)"
-                    @toggle="session.toggleOriginal(m.id)"
-                    @retry="session.retryTranslation(session.historyThreadId.value, m.id)"
+                    @toggle="toggleOriginal(m.id)"
+                    @retry="retryTranslation(historyThreadId, m.id)"
                   />
                 </template>
               </section>
@@ -174,25 +174,25 @@
           </template>
         </div>
 
-        <div v-if="session.canReply.value" class="ticket-detail__composer">
+        <div v-if="canReply" class="ticket-detail__composer">
           <div class="ticket-detail__input">
             <VTextarea
-              v-model="session.draft.value"
+              v-model="draft"
               :placeholder="t('console.support.replyPlaceholder')"
               :label="t('adminScreens.adminSupportDetail.reply')"
               hide-label
               :rows="1"
               autogrow
               maxlength="4000"
-              :disabled="session.sending.value"
+              :disabled="sending"
             />
           </div>
           <VButton
             size="sm"
             data-testid="ticket-send"
-            :disabled="session.sending.value || !session.draft.value.trim()"
-            :loading="session.sending.value"
-            @click="session.send"
+            :disabled="sending || !draft.trim()"
+            :loading="sending"
+            @click="send"
           >
             {{ t('common.submitSend') }}
           </VButton>
@@ -201,13 +201,7 @@
     </ConsoleCard>
 
     <ConsoleCard class="ticket-detail__aside">
-      <TicketAside
-        :ticket="ticket"
-        :my-id="session.myId.value"
-        :releasing="session.releasing.value"
-        @assign="session.openAssign"
-        @release="session.release"
-      />
+      <TicketAside :ticket="ticket" :my-id="myId" />
     </ConsoleCard>
 
     <!-- Close: the four closing statuses of an open ticket. -->
@@ -228,34 +222,32 @@
     </VModal>
 
     <!-- Hand over: the roster of the other admins, read each time it opens. -->
-    <VModal :open="session.assignOpen.value" @close="session.assignOpen.value = false">
+    <VModal :open="assignOpen" @close="assignOpen = false">
       <div class="ticket-detail__dialog">
         <h2 class="ticket-detail__dialog-title">
           {{ t('adminScreens.adminSupportDetail.menu.assignTitle') }}
         </h2>
-        <div v-if="session.loadingAdmins.value" class="ticket-detail__center">
+        <div v-if="loadingAdmins" class="ticket-detail__center">
           <VLoader size="lg" />
         </div>
         <VEmptyState
-          v-else-if="session.adminsError.value"
+          v-else-if="adminsError"
           icon="warning"
           :title="t('adminScreens.adminSupportDetail.menu.assignLoadFailed')"
-          :description="session.adminsError.value"
+          :description="adminsError"
         >
-          <VButton size="sm" variant="outline" @click="session.loadAdmins">{{
-            t('common.retry')
-          }}</VButton>
+          <VButton size="sm" variant="outline" @click="loadAdmins">{{ t('common.retry') }}</VButton>
         </VEmptyState>
-        <p v-else-if="session.admins.value.length === 0" class="ticket-detail__empty">
+        <p v-else-if="admins.length === 0" class="ticket-detail__empty">
           {{ t('adminScreens.adminSupportDetail.menu.assignEmpty') }}
         </p>
         <div v-else class="ticket-detail__rows">
           <VMenuRow
-            v-for="admin in session.admins.value"
+            v-for="admin in admins"
             :key="admin.id"
             :label="admin.name"
             :show-arrow="false"
-            @click="session.assignTo(admin)"
+            @click="assignTo(admin)"
           />
         </div>
       </div>
@@ -289,8 +281,47 @@ const props = defineProps<{
   handed?: AdminSupportTicket | null
 }>()
 
-const session = useTicketSession(props.ticketId, props.handed ?? null)
-const ticket = session.ticket
+const {
+  myId,
+  ticket,
+  loadingTicket,
+  ticketError,
+  fetchTicket,
+  messages,
+  loadingMessages,
+  messagesError,
+  loadMessages,
+  historyShown,
+  historyThreadId,
+  historyMessages,
+  loadingHistory,
+  historyError,
+  loadHistory,
+  isPerson,
+  originalShown,
+  toggleOriginal,
+  retrying,
+  retryTranslation,
+  canReply,
+  draft,
+  sending,
+  send,
+  claiming,
+  claim,
+  changingTo,
+  setStatus,
+  releasing,
+  release,
+  reopening,
+  reopen,
+  assignOpen,
+  admins,
+  loadingAdmins,
+  adminsError,
+  openAssign,
+  loadAdmins,
+  assignTo,
+} = useTicketSession(props.ticketId, props.handed ?? null)
 const viewerTz = useViewerTimezone()
 
 /** A closed-but-not-spam ticket: "back to work" reopens it. */
@@ -312,7 +343,7 @@ const statusOpen = ref(false)
 
 function onPickStatus(status: SupportClosingStatus): void {
   statusOpen.value = false
-  void session.setStatus(status)
+  void setStatus(status)
 }
 
 /** Message clock time in the viewer's profile timezone and the active locale. */
@@ -328,7 +359,7 @@ function scrollToEnd(): void {
     if (feedEl.value) feedEl.value.scrollTop = feedEl.value.scrollHeight
   })
 }
-watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
+watch(() => messages.value.length, scrollToEnd, { flush: 'post' })
 </script>
 
 <style scoped>
@@ -380,12 +411,14 @@ watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
 
 .ticket-detail__head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
 }
 
 .ticket-detail__heading {
+  flex: 1 1 200px;
   min-width: 0;
 }
 
@@ -405,7 +438,6 @@ watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
 
 .ticket-detail__actions {
   display: flex;
-  flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);

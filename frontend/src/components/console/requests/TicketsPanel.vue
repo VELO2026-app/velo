@@ -6,11 +6,13 @@
   `open` -- tickets still open; `mine` -- the open ones this admin holds (the
   API has no "held by" filter, so they are picked from the open pages loaded
   so far); `closed` -- one closing status at a time (resolved by default),
-  chosen with the chips over the list.
+  chosen with the chips over the list. Category, rating and period filter all
+  three (TicketFilters).
 
-  The open ticket rides the URL (`?ticket=<id>`), so a reload or the back
-  button lands on it; without one the first ticket of the list is open. The
-  list is a Pinia Colada infinite query, one entry per status
+  The open ticket and the filters ride the URL (`?ticket=`, `?cat=`,
+  `?rating=`, `?period=`), so a reload or the back button lands on them;
+  without a ticket in the URL the first ticket of the list is open. The list
+  is a Pinia Colada infinite query, one entry per status and filter
   (composables/queries/admin.ts): a slow answer for an earlier tab lands in
   its own entry. Every failed request is told once.
 
@@ -22,6 +24,8 @@
   <ConsoleSplit :list-width="layout.listWidth(340, 300)" :pane="layout.pane.value">
     <template #list>
       <ConsoleCard class="tickets-list" data-testid="tickets-list">
+        <TicketFilters :model-value="filter" @update:model-value="setFilter" />
+
         <div v-if="scope === 'closed'" class="tickets-list__chips">
           <RequestChip
             v-for="s in CLOSED_STATUSES"
@@ -54,11 +58,7 @@
             v-if="shown.length === 0"
             icon="empty"
             :title="t('adminScreens.adminSupport.empty.title')"
-            :description="
-              scope === 'mine'
-                ? t('console.support.emptyMine')
-                : t('adminScreens.adminSupport.empty.text')
-            "
+            :description="emptyText"
           />
           <ul v-else class="tickets-list__items">
             <li v-for="item in shown" :key="item.id">
@@ -80,16 +80,13 @@
                 <span class="ticket-row__sub">
                   {{ openerName(item) }} · {{ supportCategoryLabel(item.category) }}
                 </span>
-                <span class="ticket-row__claim">{{ claimText(item) }}</span>
-                <span v-if="item.rating" class="ticket-row__rating" data-testid="ticket-row-rating">
-                  <IconStar
-                    v-for="n in STAR_VALUES"
-                    :key="n"
-                    :size="14"
-                    :filled="n <= item.rating.stars"
-                    :class="{ 'ticket-row__star--on': n <= item.rating.stars }"
-                  />
-                </span>
+                <span class="ticket-row__claim">{{ takerLabel(item.claimed_by, myId) }}</span>
+                <RatingStars
+                  v-if="item.rating"
+                  :stars="item.rating.stars"
+                  :size="14"
+                  data-testid="ticket-row-rating"
+                />
               </button>
             </li>
           </ul>
@@ -135,13 +132,23 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@pinia/colada'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
+import RatingStars from '@/components/console/requests/RatingStars.vue'
 import RequestChip from '@/components/console/requests/RequestChip.vue'
 import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
-import { IconStar } from '@/components/icons'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleSplit from '@/components/console/ConsoleSplit.vue'
 import TicketDetail from '@/components/console/requests/TicketDetail.vue'
+import TicketFilters from '@/components/console/requests/TicketFilters.vue'
+import {
+  filterFromQuery,
+  filterToQuery,
+  isFiltered,
+  ticketQueryOf,
+  type TicketFilter,
+} from '@/components/console/requests/ticketFilters'
+import { takerLabel } from '@/components/console/requests/ticketTaker'
 import { useSplitLayout } from '@/components/console/requests/useSplitLayout'
+import { useUrlSelection } from '@/components/console/requests/useUrlSelection'
 import type { AdminSupportTicket, SupportTicketStatus } from '@/api/support'
 import { adminSupportTicketsQuery, usePagedListFailures } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
@@ -168,7 +175,6 @@ const CLOSED_STATUSES: readonly SupportTicketStatus[] = [
   'duplicate',
   'spam',
 ]
-const STAR_VALUES = [1, 2, 3, 4, 5] as const
 
 const route = useRoute()
 const router = useRouter()
@@ -176,9 +182,18 @@ const toast = useToast()
 const authStore = useAuthStore()
 
 const closedStatus = ref<SupportTicketStatus>('resolved')
+const myId = computed(() => authStore.user?.id ?? '')
+
+const filter = computed<TicketFilter>(() => filterFromQuery(route.query))
 
 const ticketsQuery = useInfiniteQuery(() =>
-  adminSupportTicketsQuery({ status: props.scope === 'closed' ? closedStatus.value : 'open' }),
+  adminSupportTicketsQuery(
+    ticketQueryOf(
+      props.scope === 'closed' ? closedStatus.value : 'open',
+      filter.value,
+      authStore.user?.timezone,
+    ),
+  ),
 )
 const items = computed<AdminSupportTicket[]>(
   () => ticketsQuery.data.value?.pages.flatMap((page) => page.tickets) ?? [],
@@ -186,9 +201,15 @@ const items = computed<AdminSupportTicket[]>(
 /** The tickets on screen: for "mine", the open ones this admin holds. */
 const shown = computed<AdminSupportTicket[]>(() =>
   props.scope === 'mine'
-    ? items.value.filter((i) => i.claimed_by?.user_id === authStore.user?.id)
+    ? items.value.filter((i) => i.claimed_by?.user_id === myId.value)
     : items.value,
 )
+const emptyText = computed(() => {
+  if (isFiltered(filter.value)) return t('adminScreens.adminReports.filterNoHits')
+  return props.scope === 'mine'
+    ? t('console.support.emptyMine')
+    : t('adminScreens.adminSupport.empty.text')
+})
 const { loading, failed: error } = screenQueryState(ticketsQuery)
 const hasMore = ticketsQuery.hasNextPage
 
@@ -207,44 +228,41 @@ function retry(): void {
   void ticketsQuery.refetch()
 }
 
+const ticketInUrl = useUrlSelection('ticket')
+const layout = useSplitLayout(() => ticketInUrl.urlId.value !== null)
+
 /** Switch the closed-status chips: the open ticket belonged to the other list. */
 function setClosed(next: SupportTicketStatus): void {
   closedStatus.value = next
-  void router.replace({ query: { ...route.query, ticket: undefined } })
+  ticketInUrl.clear()
 }
 
-const urlTicket = computed<string | null>(() => {
-  const fromUrl = route.query.ticket
-  return typeof fromUrl === 'string' && fromUrl ? fromUrl : null
-})
-const layout = useSplitLayout(() => urlTicket.value !== null)
+/** A filter changed: the URL takes it, and the open ticket may no longer be in the list. */
+function setFilter(next: TicketFilter): void {
+  void router.replace({
+    query: { ...route.query, ...filterToQuery(next), ticket: undefined },
+  })
+}
 
 /** The ticket in the URL, else the first of the list (a narrow window shows the list until one is picked). */
-const selectedId = computed<string | null>(() => urlTicket.value ?? shown.value[0]?.id ?? null)
+const selectedId = computed<string | null>(
+  () => ticketInUrl.urlId.value ?? shown.value[0]?.id ?? null,
+)
 const selectedRow = computed<AdminSupportTicket | null>(
   () => items.value.find((i) => i.id === selectedId.value) ?? null,
 )
 
 function select(item: AdminSupportTicket): void {
-  void router.replace({ query: { ...route.query, ticket: item.id } })
+  ticketInUrl.select(item.id)
 }
 
 /** Back to the list on a narrow window: the ticket leaves the URL. */
 function back(): void {
-  void router.replace({ query: { ...route.query, ticket: undefined } })
+  ticketInUrl.clear()
 }
 
 function openerName(item: AdminSupportTicket): string {
   return item.opener?.name ?? t('adminScreens.adminSupport.userFallback')
-}
-
-/** Who took the ticket: nobody, me, or another admin by name. */
-function claimText(item: AdminSupportTicket): string {
-  const taker = item.claimed_by
-  if (!taker) return t('adminScreens.adminSupport.claimedBy.none')
-  if (taker.user_id === authStore.user?.id) return t('adminScreens.adminSupport.claimedBy.mine')
-  const name = taker.name ?? t('adminScreens.adminSupport.claimedBy.adminFallback')
-  return t('adminScreens.adminSupport.claimedBy.other', { name })
 }
 </script>
 
@@ -331,16 +349,6 @@ function claimText(item: AdminSupportTicket): string {
 
 .ticket-row__claim {
   color: var(--velo-text-secondary);
-}
-
-.ticket-row__rating {
-  display: flex;
-  gap: var(--space-1);
-  color: var(--velo-text-muted);
-}
-
-.ticket-row__star--on {
-  color: var(--velo-peach-500);
 }
 
 .tickets-pick {

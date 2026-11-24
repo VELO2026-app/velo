@@ -3,10 +3,10 @@
 
   The right-hand panel of the support screen: the person who wrote and the
   facts of the ticket -- only what the ticket row carries (status, category,
-  dates, who holds it, who resolved it, the person's rating). Two actions for
-  the taker side live here: hand the ticket over, or give it back to the
-  pool. The person's role, practices, payments and profile link are not in
-  the ticket (see the PR: needs backend).
+  dates, who holds it, who resolved it, the person's rating). The actions on
+  the ticket are in the header of the conversation. The person's role,
+  practices, payments and profile link are not in the ticket (see the PR:
+  needs backend).
 -->
 
 <template>
@@ -52,15 +52,7 @@
       <!-- The person's rating: the stars, the comment as written (the backend
            does not translate it), its language and the admin it is about. -->
       <div v-if="ticket.rating" class="ticket-aside__rating" data-testid="ticket-rating">
-        <div class="ticket-aside__stars">
-          <IconStar
-            v-for="n in STAR_VALUES"
-            :key="n"
-            :size="18"
-            :filled="n <= ticket.rating.stars"
-            :class="{ 'ticket-aside__star--on': n <= ticket.rating.stars }"
-          />
-        </div>
+        <RatingStars :stars="ticket.rating.stars" :size="18" />
         <p v-if="ticket.rating.comment" class="ticket-aside__comment">
           {{ ticket.rating.comment }}
         </p>
@@ -75,31 +67,16 @@
           {{ t('adminScreens.adminSupport.rating.aboutResolver', { name: ratingResolverName }) }}
         </p>
       </div>
-
-      <div class="ticket-aside__actions">
-        <VButton variant="secondary" size="sm" @click="emit('assign')">
-          {{ t('adminScreens.adminSupportDetail.menu.assign') }}
-        </VButton>
-        <VButton
-          v-if="ticket.claimed_by"
-          variant="secondary"
-          size="sm"
-          :loading="releasing"
-          @click="emit('release')"
-        >
-          {{ t('adminScreens.adminSupportDetail.menu.release') }}
-        </VButton>
-      </div>
     </template>
   </div>
 </template>
-
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { VAvatar, VButton } from '@/components/ui'
+import { VAvatar } from '@/components/ui'
+import RatingStars from '@/components/console/requests/RatingStars.vue'
 import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
-import { IconStar } from '@/components/icons'
+import { takerLabel } from '@/components/console/requests/ticketTaker'
 import type { AdminSupportTicket } from '@/api/support'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { formatDate } from '@/utils/format'
@@ -110,17 +87,7 @@ const props = defineProps<{
   ticket: AdminSupportTicket | null
   /** The viewing admin's id: "mine" in the taker line. */
   myId: string
-  /** A release is in flight. */
-  releasing: boolean
 }>()
-
-const emit = defineEmits<{
-  assign: []
-  release: []
-}>()
-
-/** The rating's five stars, one value at a time. */
-const STAR_VALUES = [1, 2, 3, 4, 5] as const
 
 const viewerTz = useViewerTimezone()
 const adminFallback = computed(() => t('adminScreens.adminSupport.claimedBy.adminFallback'))
@@ -129,13 +96,7 @@ const openerName = computed(
   () => props.ticket?.opener?.name ?? t('adminScreens.adminSupport.userFallback'),
 )
 
-/** Who holds the ticket: nobody, the viewer, or another admin by name. */
-const takerText = computed(() => {
-  const taker = props.ticket?.claimed_by
-  if (!taker) return t('adminScreens.adminSupport.claimedBy.none')
-  if (taker.user_id === props.myId) return t('adminScreens.adminSupport.claimedBy.mine')
-  return t('adminScreens.adminSupport.claimedBy.other', { name: taker.name ?? adminFallback.value })
-})
+const takerText = computed(() => takerLabel(props.ticket?.claimed_by ?? null, props.myId))
 
 const ratingResolverName = computed(() => {
   const resolver = props.ticket?.rating?.rated_resolver
@@ -215,16 +176,6 @@ function localeName(code: string): string {
   background: var(--velo-bg-subtle);
 }
 
-.ticket-aside__stars {
-  display: flex;
-  gap: var(--space-1);
-  color: var(--velo-text-muted);
-}
-
-.ticket-aside__star--on {
-  color: var(--velo-peach-500);
-}
-
 .ticket-aside__comment {
   margin: 0;
   font-size: var(--velo-fs-14);
@@ -238,11 +189,5 @@ function localeName(code: string): string {
   font-size: var(--velo-fs-12);
   /* On the grey rating block the secondary text is under 4.5:1. */
   color: var(--velo-text-primary);
-}
-
-.ticket-aside__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
 }
 </style>

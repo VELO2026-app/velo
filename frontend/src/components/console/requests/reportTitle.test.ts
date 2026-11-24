@@ -3,10 +3,10 @@ import { reportTitle } from '@/components/console/requests/reportTitle'
 
 describe('reportTitle', () => {
   it.each([
-    ['user', 'Жалоба на пользователя'],
-    ['master', 'Жалоба на мастера'],
-    ['practice', 'Жалоба на практику'],
-  ])('titles a %s complaint by what it is about', (target_type, title) => {
+    ['user', 'Жалоба: Юзер'],
+    ['master', 'Жалоба: Мастер'],
+    ['practice', 'Жалоба: Практика'],
+  ])('titles a %s complaint with the target label of the admin helpers', (target_type, title) => {
     expect(reportTitle({ target_type })).toBe(title)
   })
 

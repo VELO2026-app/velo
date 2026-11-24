@@ -601,12 +601,7 @@
         "methods": "Method changes",
         "decided": "Decided"
       },
-      "about": {
-        "user": "Complaint about a user",
-        "master": "Complaint about a master",
-        "practice": "Complaint about a practice",
-        "other": "Complaint: {target}"
-      },
+      "about": "Complaint: {target}",
       "submitted": "Filed {date} · No. {id}",
       "reporter": "Reported by",
       "target": "About",
@@ -657,6 +652,14 @@
           "average": "Average",
           "share": "4–5 share"
         }
+      },
+      "filters": {
+        "category": "Category",
+        "rating": "Rating",
+        "period": "Period",
+        "today": "Today",
+        "week": "7 days",
+        "month": "30 days"
       }
     }
   }
