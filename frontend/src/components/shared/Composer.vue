@@ -176,9 +176,7 @@ const props = withDefaults(
   {
     maxLength: 4000,
     draftKey: null,
-    growCap: undefined,
     showDraftPreview: false,
-    sendTestId: undefined,
     voiceInput: false,
   },
 )

@@ -97,7 +97,7 @@ const props = withDefaults(
     recurrence?: string | null
     /** Content direction (taxonomy) -- taxonomy values (PracticeDirection)
      *  pick the dedicated hero glyph; unknown/absent falls back to default. */
-    direction?: string | null
+    direction?: string | null | undefined
     /** Filled-dot count for difficulty (0 hides the block). */
     difficultyDots?: number
     /** Human difficulty label -- used for aria only (not rendered as text). */

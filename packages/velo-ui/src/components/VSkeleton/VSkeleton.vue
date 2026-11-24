@@ -41,7 +41,6 @@ withDefaults(
   {
     shape: 'line',
     width: '100%',
-    height: undefined,
     size: 'var(--velo-size-40)',
   },
 )

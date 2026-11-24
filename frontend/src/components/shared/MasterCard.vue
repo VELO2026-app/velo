@@ -47,10 +47,10 @@ import { methodChipFor } from '@/utils/methodChips'
 
 const props = withDefaults(
   defineProps<{
-    masterName?: string | null
-    methods?: string[] | null
+    masterName?: string | null | undefined
+    methods?: string[] | null | undefined
     /** Master avatar URL (User.avatar_url). `Null -> placeholder glyph.` */
-    avatarUrl?: string | null
+    avatarUrl?: string | null | undefined
     /** Master user id -- target of the public-profile link. */
     masterId?: string | null
   }>(),

@@ -41,8 +41,8 @@ import movement from '@/assets/practice-cards/movement.svg'
 
 const props = withDefaults(
   defineProps<{
-    direction?: string | null
-    title?: string | null
+    direction?: string | null | undefined
+    title?: string | null | undefined
   }>(),
   { direction: null, title: null },
 )

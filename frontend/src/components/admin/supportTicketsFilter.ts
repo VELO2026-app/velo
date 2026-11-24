@@ -79,8 +79,10 @@ export function supportTicketQuery(
   else if (filter.status) query.status = filter.status
   if (filter.date) {
     const start = DateTime.fromISO(filter.date, { zone: timezone }).startOf('day')
-    query.createdFrom = start.toISO() ?? undefined
-    query.createdTo = start.plus({ days: 1 }).toISO() ?? undefined
+    const createdFrom = start.toISO()
+    const createdTo = start.plus({ days: 1 }).toISO()
+    if (createdFrom) query.createdFrom = createdFrom
+    if (createdTo) query.createdTo = createdTo
   }
   return query
 }

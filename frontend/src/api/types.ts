@@ -385,10 +385,10 @@ export type DiaryFeedCategory = 'entries' | 'dreams' | 'feedbacks' | 'checkins' 
 /** Query params of the diary feed endpoint: chips, date window, search (cursor pagination). */
 export interface DiaryFeedFilters {
   // Filter chips -> repeated \`category\` params. Empty/undefined = all.
-  categories?: DiaryFeedCategory[]
-  date_from?: string
-  date_to?: string
-  search?: string
+  categories?: DiaryFeedCategory[] | undefined
+  date_from?: string | undefined
+  date_to?: string | undefined
+  search?: string | undefined
 }
 
 // -- Query / filter types (used by stores and API modules) -------------------
@@ -396,22 +396,22 @@ export interface DiaryFeedFilters {
 /** List/filter query params for practices: facets, date window, sort. */
 export interface PracticeFilters {
   // Multi-select: OR within the facet, sent as repeated query params.
-  practice_type?: PracticeType[]
+  practice_type?: PracticeType[] | undefined
   // Calendar facets (all optional). Multi-select facets are arrays.
-  direction?: PracticeDirection[]
-  difficulty?: PracticeDifficulty[]
+  direction?: PracticeDirection[] | undefined
+  difficulty?: PracticeDifficulty[] | undefined
   // F-8 (2026-05-29): style is now multi-select chips, sent as an array
   // (same as direction/difficulty). Backend B-4 accepts list[str] and
   // filters via .in_().
-  style?: string[]
-  duration_bucket?: DurationBucket
-  time_of_day?: TimeOfDay
-  status?: 'scheduled' | 'live'
-  master_id?: string
-  date_from?: string
-  date_to?: string
-  sort_by?: 'scheduled_at' | 'price_cents'
-  sort_order?: 'asc' | 'desc'
+  style?: string[] | undefined
+  duration_bucket?: DurationBucket | undefined
+  time_of_day?: TimeOfDay | undefined
+  status?: 'scheduled' | 'live' | undefined
+  master_id?: string | undefined
+  date_from?: string | undefined
+  date_to?: string | undefined
+  sort_by?: 'scheduled_at' | 'price_cents' | undefined
+  sort_order?: 'asc' | 'desc' | undefined
 }
 
 // Admin report-list query-param literals -- not response fields, no

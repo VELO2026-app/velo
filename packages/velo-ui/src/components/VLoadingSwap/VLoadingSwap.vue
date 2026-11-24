@@ -87,13 +87,10 @@ const props = withDefaults(
      * loading (one name per block). */
     memoryKey?: string
     /** Changes when the content's shape changes (row ids): glide to it. */
-    revision?: string | number
+    revision?: string | number | undefined
   }>(),
   {
-    label: undefined,
     animateHeight: true,
-    memoryKey: undefined,
-    revision: undefined,
   },
 )
 

@@ -104,7 +104,7 @@ import type { DiaryFeedItem } from '@/api/types'
 const props = defineProps<{
   item: DiaryFeedItem
   /** User timezone for date formatting (diary is a personal timeline). */
-  timezone?: string
+  timezone?: string | undefined
 }>()
 
 const emit = defineEmits<{

@@ -74,7 +74,7 @@ import SchoolMandalaBadge from '@/components/shared/SchoolMandalaBadge.vue'
 
 const props = defineProps<{
   name: string
-  avatarUrl?: string | null
+  avatarUrl?: string | null | undefined
   studentsCount: number
   mastersCount: number
   /** A future analytic weekly line (§6); wins over the description. */

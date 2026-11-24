@@ -250,7 +250,7 @@ async function onPurchase(): Promise<void> {
     // open -- a free practice is still bookable.
     await purchaseBooking.mutateAsync({
       practiceId: props.practice.id,
-      promoCode: appliedPromo,
+      ...(appliedPromo !== undefined ? { promoCode: appliedPromo } : {}),
       viaPurchase: topupAvailable,
     })
 

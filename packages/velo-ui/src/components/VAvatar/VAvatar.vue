@@ -53,7 +53,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 const props = withDefaults(
   defineProps<{
     name: string
-    url?: string
+    url?: string | undefined
     size?: 'sm' | 'md' | 'lg' | 'xl'
     /** Squared corners for school/brand marks (tz-curator.md §1.4/§1.6) --
      *  the same image+initials contract, a rounded-square plate. */

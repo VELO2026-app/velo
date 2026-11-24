@@ -99,24 +99,24 @@ const props = defineProps<{
   /** Eligible schools (kind === 'schools' targets). */
   schools: AudienceSchoolOption[]
   /** Single validation-error line, shown for whichever kind is active. */
-  error?: string
+  error?: string | undefined
   /** T24-24 (PROMPT №639): Create relabels the 'students' option
    *  (i18n:masterScreens.createPractice.audience.allMyStudents) LOCALLY; Edit
    *  keeps the shared label (i18n:practice.audience.students). A narrow seam,
    *  not a second options list -- everything else is identical. */
-  studentsLabel?: string
+  studentsLabel?: string | undefined
   /** FE-92: only these audience kinds are offered. A practice a curator
    *  creates for a school's master belongs to that school, and a school
    *  practice is for everyone or for the school's students
    *  (check_school_audience) -- so that flow passes ['public',
    *  'schools']. `Absent -> every kind`, as before. */
-  allowedKinds?: PracticeAudienceKind[]
+  allowedKinds?: PracticeAudienceKind[] | undefined
   /** BE-74 edit seam: the school of an EXISTING practice never changes
    *  (practice_school_immutable). Edit passes the practice's own school in
    *  `schools` -- so the school pair of kinds is offered -- plus this flag,
    *  and the school chips (a select) are suppressed: the caller shows the
    *  fixed school itself. */
-  schoolLocked?: boolean
+  schoolLocked?: boolean | undefined
 }>()
 
 const kindModel = defineModel<PracticeAudienceKind>('kind', { required: true })

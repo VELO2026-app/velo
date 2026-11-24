@@ -83,7 +83,7 @@ export interface RequestOptions {
   /** JSON body; omitted means no body and no Content-Type. */
   body?: unknown
   /** Extra headers (e.g. `Idempotency-Key`); Authorization is the client's own. */
-  headers?: Record<string, string>
+  headers?: Record<string, string> | undefined
   /**
    * Abort after this many milliseconds and reject with ApiTimeoutError.
    *
@@ -218,7 +218,7 @@ async function send<T>(method: HttpMethod, path: string, options: RequestOptions
     response = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: controller.signal,
     })
   } catch {

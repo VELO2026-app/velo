@@ -170,7 +170,7 @@ import type { DiaryFeedItem } from '@/api/types'
 
 const props = defineProps<{
   item: DiaryFeedItem
-  timezone?: string
+  timezone?: string | undefined
 }>()
 
 const emit = defineEmits<{

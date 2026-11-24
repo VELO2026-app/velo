@@ -227,7 +227,7 @@ export function listDiaryEntries(
 export interface ListDiaryFeedParams extends DiaryFeedFilters {
   // occurred_at of the last item from the previous page; the next page
   // returns events strictly older than this. Omit for the first page.
-  cursor?: string
+  cursor?: string | undefined
   limit?: number
 }
 

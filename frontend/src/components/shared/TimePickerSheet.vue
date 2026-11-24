@@ -34,7 +34,7 @@ const props = withDefaults(
     open: boolean
     modelValue?: string
     /** Sheet heading — defaults to the practice-form label; override for reuse. */
-    title?: string
+    title?: string | undefined
   }>(),
   { modelValue: '' },
 )

@@ -40,7 +40,7 @@ import { ref, watch } from 'vue'
 
 const props = defineProps<{
   /** Current error text; falsy collapses the row to exactly 0px. */
-  message?: string | null
+  message?: string | null | undefined
   /** Put on the text node so a control can aria-describedby it. */
   id?: string
   /** `lg` — the fs-16 error line (MasterApplyView's two slots keep their size). */

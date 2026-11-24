@@ -167,9 +167,9 @@ export const DIRECTION_ICON_FALLBACK: Component = IconDirectionDefault
 export function practiceIconFor(p: {
   /** `direction` arrives from generated.ts as a plain string (the backend
    *  widened the enum); accept string and check it against DIRECTION_ICON. */
-  direction?: string | null
+  direction?: string | null | undefined
   /** Kept for backwards compatibility — ignored after B-1 (2026-05-28). */
-  title?: string | null
+  title?: string | null | undefined
 }): Component {
   const dir = p.direction as PracticeDirection | undefined
   if (dir && DIRECTION_ICON[dir]) {

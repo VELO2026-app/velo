@@ -33,7 +33,7 @@ import { VAvatar } from '@/components/ui'
 
 defineProps<{
   name: string
-  avatarUrl?: string | null
+  avatarUrl?: string | null | undefined
 }>()
 </script>
 

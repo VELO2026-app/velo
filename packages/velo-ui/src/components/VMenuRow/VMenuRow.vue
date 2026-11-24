@@ -46,7 +46,7 @@ withDefaults(
     label: string
     variant?: 'default' | 'primary' | 'danger'
     showArrow?: boolean
-    badge?: string | number
+    badge?: string | number | undefined
     /** Colour indicator, never a count (B52). */
     dot?: boolean
   }>(),

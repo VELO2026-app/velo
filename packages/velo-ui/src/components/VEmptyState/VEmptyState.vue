@@ -68,14 +68,14 @@ const props = withDefaults(
     /** `Semantic key -> DS glyph` (see ICON_MAP). Not an emoji. */
     icon?: string
     title: string
-    description?: string
+    description?: string | undefined
     /** 'full' (default) = icon + title + desc + action; 'note' = compact card line. */
     variant?: 'full' | 'note'
     /**
      * Is this a failure state (data-testid="screen-error" for the e2e crash
      * detector)? Unset: the `warning` / `notfound` icons are.
      */
-    error?: boolean
+    error?: boolean | undefined
   }>(),
   {
     icon: 'empty',
