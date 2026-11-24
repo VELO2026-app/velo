@@ -20,7 +20,7 @@
 
 Пропущенный джоб иногда отчитывается не под тем именем, под которым он проходит:
 
-- reusable workflow: запущенный sweep — это `e2e-stack / e2e-stack — sweep on a real backend`, пропущенный — просто `e2e-stack` (видно на PR #160, только docs);
+- reusable workflow: запущенный sweep — это джобы `e2e-stack / e2e-stack — <проект> (<скин>) on a real backend` (с FE-240 — по джобу на проект и скин, например `e2e-stack / e2e-stack — sweep (synthetic) on a real backend`), пропущенный — просто `e2e-stack` (видно на PR #160, только docs);
 - матрицы: `matrix — ${{ matrix.cell }}` и `test — vitest shard ${{ matrix.shard }}/3` в пропущенном виде, `matrix — golden/ai` в запущенном;
 - у `visual — base vs head (<скин>)` имя с выражением и скином, поэтому обязательным его делать нельзя; вместо него обязателен `visual — verdict` (FE-234, ниже).
 

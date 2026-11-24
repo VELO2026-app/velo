@@ -282,8 +282,9 @@ onMounted(load)
   align-items: center;
   justify-content: center;
   /* Standalone route (outside MobileLayout) — apply the screen rail directly
-     so content matches the app's rail (WS-1), same as SchoolJoinView. */
-  padding: var(--space-8) var(--velo-rail-pad-x) var(--space-5);
+     so content matches the app's rail (WS-1), same as SchoolJoinView; clear
+     the home indicator (--velo-safe-bottom, global.css; FE-240). */
+  padding: var(--space-8) var(--velo-rail-pad-x) calc(var(--space-5) + var(--velo-safe-bottom));
   gap: var(--space-4);
 }
 

@@ -1159,6 +1159,14 @@ async function onReject(): Promise<void> {
   gap: var(--space-2);
 }
 
+/* FE-240: a long legacy method ("yoga — hatha, meditation — ...") wraps
+   inside its chip instead of running past the screen's edge (the kit's VChip
+   is white-space: nowrap). */
+.mreview__chips > .v-chip {
+  max-width: 100%;
+  white-space: normal;
+}
+
 .mreview__muted {
   color: var(--velo-text-muted);
 }

@@ -755,7 +755,7 @@ function goCreatePractice(): void {
   position: fixed;
   left: var(--velo-rail-pad-x);
   right: var(--velo-rail-pad-x);
-  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-8) + var(--velo-safe-bottom));
   z-index: var(--z-sticky);
 }
 

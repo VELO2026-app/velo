@@ -538,6 +538,10 @@ onMounted(async () => {
 
 .live__zoom-note {
   align-self: center;
+  /* FE-240: the long error wraps on a narrow screen instead of running past
+     its edge (the kit's VBadge is white-space: nowrap). */
+  max-width: 100%;
+  white-space: normal;
   text-align: center;
 }
 

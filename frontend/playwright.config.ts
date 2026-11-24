@@ -20,6 +20,10 @@
 //           (its /api proxy goes to :8000), http://localhost:5173 for the
 //           velo-dev stand. E2E_API_URL is the backend for the setup's own
 //           calls (default http://127.0.0.1:8000).
+//   sweep-layout-390 / -320 / -430 -- the same screens launched as Telegram
+//           fullscreen on an iPhone (safe-area insets) at one screen size
+//           each, judged by the layout detector as well (FE-240,
+//           docs/agents/e2e.md).
 //   sweep-webkit -- the same on WebKit (Telegram on iOS); nightly, or on demand.
 //
 // Every test of every project runs under the crash detector (e2e/support/test.ts).
@@ -28,6 +32,7 @@
 // =============================================================================
 
 import { defineConfig, devices } from '@playwright/test'
+import { LAYOUT_SIZES } from './e2e/support/layout-sizes'
 
 // VISUAL_DIST: serve another build (e2e/visual/run.sh shoots the base and the
 // head build one after the other, on the same port: the HAR matches by URL).
@@ -46,6 +51,7 @@ export default defineConfig({
   reporter: [
     CI ? ['github'] : ['list'],
     ['./e2e/support/crash-reporter.ts'],
+    ['./e2e/support/layout-reporter.ts'],
     ...(CI ? [] : [['html', { open: 'never' }] as const]),
   ],
   timeout: 30_000,
@@ -79,6 +85,16 @@ export default defineConfig({
       testMatch: 'sweep/*.spec.ts',
       dependencies: ['sweep-setup'],
     },
+    // FE-240: the sweep as Telegram on an iPhone in fullscreen opens it
+    // (safe-area insets), plus the layout detector -- one project per screen
+    // size, the screen LOADED at it (e2e/sweep/layout-host.ts). Chromium: its
+    // safe-area override is CDP.
+    ...LAYOUT_SIZES.map((size) => ({
+      name: `sweep-layout-${size.width}`,
+      testMatch: 'sweep/sweep.spec.ts',
+      dependencies: ['sweep-setup'],
+      use: { viewport: size },
+    })),
     {
       // FE-241: axe-core on every sweep route, on ONE skin per run
       // (A11Y_SKIN=gold|goodo, the build of that brand package; CI runs both).
