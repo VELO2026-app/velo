@@ -194,8 +194,6 @@ export const INSTANCE = {
   // Live reads are correct: the consumers (i18n's catalog setup, the manifest
   // is build-time) evaluate later, inside the dynamically imported app
   // graph -- after the config is in.
-  // No brand here: the brand name is a skin property (owner 09.11), served
-  // at build by virtual:skin-brand (FE-231).
   get defaultLocale(): Locale {
     return parseLocale(runtimeConfig.defaultLocale || import.meta.env.VITE_DEFAULT_LOCALE, 'ru')
   },

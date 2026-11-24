@@ -58,7 +58,11 @@ describe('brand-grep: the brand word (tz-i18n §7.2)', () => {
       ['src/platform/skin.ts', "export const CORE_SKIN = { displayName: 'VELO' }"],
       ['src/locales/index.ts', "const BRAND = 'VELO'"],
     ])
-    expect(report.brand).toHaveLength(3)
+    expect(report.brand.map((h) => h.split(':')[0])).toEqual([
+      'src/pwa/manifest.ts',
+      'src/platform/skin.ts',
+      'src/locales/index.ts',
+    ])
   })
 
   it('build-seam markers are technical tokens, not brand copy', () => {

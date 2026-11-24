@@ -20,6 +20,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   CORE_DISPLAY_NAME,
+  CORE_THEME_COLOR,
   isSkinPackage,
   loadSkinPackage,
   readGoldenTokens,
@@ -58,7 +59,7 @@ export interface SkinPackage {
 export const CORE_SKIN: SkinPackage = {
   displayName: CORE_DISPLAY_NAME,
   shortName: CORE_DISPLAY_NAME,
-  themeColor: '#4c4c4c',
+  themeColor: CORE_THEME_COLOR,
   backgroundColor: '#f2f2f2',
   fonts: [],
   hasLogo: true,

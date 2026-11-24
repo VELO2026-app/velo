@@ -146,7 +146,7 @@ describe('UserMessagesView', () => {
   })
 
   // FE-103 / BE-163: the caller's own support conversation rides the same
-  // list -- VELO logo instead of the avatar, the support title instead of
+  // list -- the brand logo instead of the avatar, the support title instead of
   // the role fallback, and the newest-message line with its time.
   it('a support row renders the brand logo, «Поддержка <brand>» and the last message, not «Мастер»', async () => {
     vi.mocked(chatsApi.listChats).mockResolvedValue({

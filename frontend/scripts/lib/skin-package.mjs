@@ -85,6 +85,12 @@ const TOKEN_PATH = /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/
  *  build (platform/skin.ts CORE_SKIN) and the checks (build-matrix,
  *  instance-checklist), so the three cannot drift. */
 export const CORE_DISPLAY_NAME = 'App'
+/** The header color of the build without a skin package (FE-230): the
+ *  index.html theme-color and the manifest theme_color. Shared like
+ *  CORE_DISPLAY_NAME. The client keeps its own mirror (--velo-tg-header in
+ *  variables.css, the fallback in platform/telegram.ts): this module reads
+ *  node:fs and never reaches the bundle. */
+export const CORE_THEME_COLOR = '#4c4c4c'
 export const MANIFEST = 'primer-package.yaml'
 /** The $extensions key of the brand record. */
 export const BRAND_EXTENSION = 'velo-skin'

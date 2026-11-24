@@ -309,8 +309,21 @@ describe('brand/token grep helpers', () => {
     expect(bundleHas('const b="НОВА"', 'НОВА')).toBe(true)
     expect(bundleHas('const b="\\u041D\\u041E\\u0412\\u0410"', 'НОВА')).toBe(true)
     expect(bundleHas('const b="VELO"', 'НОВА')).toBe(false)
-    // A substring of an identifier is not the name: every --velo-* has it.
-    expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'velo')).toBe(false)
+  })
+
+  it('bundleHas finds the name as a word inside a message, in any case', () => {
+    expect(bundleHas('{s:"Поддержка Goodo"}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"Откройте GOODO."}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"in Velo Pro: start"}', 'Velo Pro')).toBe(true)
+  })
+
+  it('bundleHas does not take the core identifiers for the name', () => {
+    // --velo-* names, velo:* storage keys, an e-mail host: all identifiers.
+    expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'VELO')).toBe(false)
+    expect(bundleHas('const k="velo:diary:recent-searches"', 'VELO')).toBe(false)
+    expect(bundleHas('console.error(`[velo:${t.source}] ${t.name}`)', 'VELO')).toBe(false)
+    expect(bundleHas('href:"mailto:support@velo.app"', 'VELO')).toBe(false)
+    expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'Velo Pro')).toBe(false)
   })
 })
 

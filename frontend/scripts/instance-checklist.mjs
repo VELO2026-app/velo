@@ -15,7 +15,8 @@
 // acceptance, same as in validate-skin.mjs). So do the bot's settings in
 // @BotFather (FE-231): name, avatar, description, the menu button and the
 // sign-in domain. Neither comms nor velo sets them (comms, 22.11) -- only a
-// person in BotFather; the rows name the values the build already knows.
+// person in BotFather. Each row names the BotFather command; the name row
+// also carries the brand name of this build.
 //
 // Runs against an EXISTING dist/ produced from the current working tree
 // (public/skin/ + .env / process.env are read as the build read them):
@@ -31,6 +32,7 @@ import { loadEnv } from 'vite'
 import { pngInfo } from './validate-skin.mjs'
 import {
   CORE_DISPLAY_NAME,
+  CORE_THEME_COLOR,
   isSkinPackage,
   loadSkinPackage,
   readGoldenTokens,
@@ -67,8 +69,8 @@ export function expectedFromSources() {
     brand: brand.value,
     brandSource: brand.source,
     shortBrand: pick(skin?.shortName, undefined, CORE_DISPLAY_NAME).value,
-    themeColor: pick(skin?.themeColor, undefined, '#4c4c4c').value,
-    themeSource: pick(skin?.themeColor, undefined, '#4c4c4c').source,
+    themeColor: pick(skin?.themeColor, undefined, CORE_THEME_COLOR).value,
+    themeSource: pick(skin?.themeColor, undefined, CORE_THEME_COLOR).source,
     defaultLocale: pick(undefined, 'VITE_DEFAULT_LOCALE', 'ru').value,
     locales: (env.VITE_LOCALES ?? 'ru')
       .split(',')

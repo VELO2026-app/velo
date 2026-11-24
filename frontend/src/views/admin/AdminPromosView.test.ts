@@ -303,7 +303,7 @@ describe('AdminPromosView', () => {
     it('a company promo is the brand, ignoring any name fields', async () => {
       // Company promos come back with master_id=null and both name parts null
       // (generated.ts:161). Labelling one as a master's would blame a master for
-      // a discount VELO is paying for.
+      // a discount the company is paying for.
       vi.mocked(adminApi.getAdminPromos).mockResolvedValue(
         page([
           promo('p1', {

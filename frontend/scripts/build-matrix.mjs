@@ -24,7 +24,7 @@
 //
 //   a. identity: title + theme-color equal the cell's source of record --
 //      the skin's brand record, or the core defaults (CORE_DISPLAY_NAME,
-//      #4c4c4c) for golden cells. "golden" names the cells WITHOUT a skin
+//      CORE_THEME_COLOR) for golden cells. "golden" names the cells WITHOUT a skin
 //      package; since FE-230 that build is the neutral core, not VELO;
 //   b. brand grep: a skin cell's bundle carries the skin's displayName and
 //      every one of its token declarations; a golden cell carries NO
@@ -74,6 +74,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
 import {
   CORE_DISPLAY_NAME,
+  CORE_THEME_COLOR,
   SKIN_ASSETS,
   loadSkinPackage,
   readGoldenTokens,
@@ -90,11 +91,6 @@ const frontendDir = () => resolve(fileURLToPath(new URL('..', import.meta.url)))
 export const MODULE_CHUNKS = {
   ai: [/AiSummary/, /AiConnections/],
 }
-
-/** CORE_SKIN.themeColor (platform/skin.ts) -- the skinless build's header
- *  color, pinned here the same mirror-and-pin way passport-html.test.ts and
- *  the manifest comments pin it. No env seam exists for colors (§1). */
-const CORE_THEME = '#4c4c4c'
 
 /** The edition every skin cell is built at: `full` while editions.json has
  *  it, and the one edition there is once the file holds a single one
@@ -181,23 +177,25 @@ export function cssHasDecl(css, decl) {
   return false
 }
 
-/** Does the bundle text carry `text` as a whole string literal (any quote)
- *  -- verbatim (UTF-8) or as the \uXXXX escape esbuild may emit for
- *  non-ASCII? The brand name reaches the bundle as such a literal
- *  (virtual:skin-brand); a mere substring is no evidence: "VELO" is part of
- *  every --velo-* name (FE-231). */
+/** Does the bundle text carry `text` as a word, in any case -- verbatim
+ *  (UTF-8) or as the \uXXXX escape esbuild may emit for non-ASCII? A word,
+ *  so the name is found inside a message ("Support Goodo") and a name like
+ *  "Velo Pro" is told from the core's own identifiers: a letter, digit, `_`
+ *  or `-` next to it means an identifier (--velo-primary), and so does
+ *  `@`/`.`/`:`/`/` glued to anything but a space or a quote (the velo:*
+ *  storage keys and log tags, an e-mail or URL host). A sentence end
+ *  ("Goodo." / "Goodo: ...") stays a word. */
 export function bundleHas(bundle, text) {
-  const quotes = ['"', "'", '`']
-  if (quotes.some((q) => bundle.includes(q + text + q))) return true
   const escaped = [...text]
     .map((ch) =>
       ch.charCodeAt(0) > 0x7e ? `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}` : ch,
     )
     .join('')
-  if (escaped === text) return false
-  // The hex digits of an escape may come in either case.
-  const lower = bundle.toLowerCase()
-  return quotes.some((q) => lower.includes((q + escaped + q).toLowerCase()))
+  const forms = escaped === text ? [text] : [text, escaped]
+  return forms.some((form) => {
+    const name = form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(?<![\\w\\-@./:])${name}(?![\\w-]|[.:/@][^\\s"'\`])`, 'i').test(bundle)
+  })
 }
 
 /** The declarations of a skin cell the dist CSS lacks. A declaration the
@@ -500,7 +498,7 @@ function snapshot(cell, skins, goldenDecls, coreName) {
 }
 
 function expectationOf(cell) {
-  if (!cell.skin) return { title: CORE_DISPLAY_NAME, theme: CORE_THEME }
+  if (!cell.skin) return { title: CORE_DISPLAY_NAME, theme: CORE_THEME_COLOR }
   const { brand } = skinRecord(cell.skin)
   return { title: brand.displayName, theme: brand.themeColor }
 }
