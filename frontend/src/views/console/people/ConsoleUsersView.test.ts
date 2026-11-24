@@ -62,7 +62,7 @@ let app: App | null = null
 let root: HTMLElement | null = null
 let router: Router
 
-async function mount(url = '/console/users'): Promise<HTMLElement> {
+async function mount(url = '/console/users', expectRows = true): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/console/users', name: 'console-users', component: ConsoleUsersView }],
@@ -78,7 +78,7 @@ async function mount(url = '/console/users'): Promise<HTMLElement> {
     .use(PiniaColada, coladaOptions)
     .use(router)
   app.mount(root)
-  await vi.waitFor(() => expect(rows().length).toBeGreaterThan(0))
+  if (expectRows) await vi.waitFor(() => expect(rows().length).toBeGreaterThan(0))
   return root
 }
 
@@ -124,6 +124,25 @@ afterEach(() => {
 })
 
 describe('ConsoleUsersView', () => {
+  it('tells a failed load with an error state, and Retry asks again', async () => {
+    vi.mocked(adminApi.getUsersList).mockRejectedValue(new Error('down'))
+    await mount('/console/users', false)
+    await vi.waitFor(() =>
+      expect(root?.querySelector('[data-testid="screen-error"]')).not.toBeNull(),
+    )
+    expect(toastError).toHaveBeenCalled()
+
+    vi.mocked(adminApi.getUsersList).mockImplementation(async () => ({
+      items: ALL,
+      total: ALL.length,
+      limit: 20,
+      offset: 0,
+    }))
+    root?.querySelector<HTMLButtonElement>('[data-testid="screen-error"] button')?.click()
+
+    await vi.waitFor(() => expect(rows().length).toBe(3))
+  })
+
   it('asks the server for the role of the tab', async () => {
     await mount()
 

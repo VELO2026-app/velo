@@ -290,6 +290,39 @@ describe('ConsoleMasterDetailView: the verdict on a pending application', () => 
   })
 })
 
+describe('ConsoleMasterDetailView: the verdict dialogs and their failures', () => {
+  it('closes the reject dialog on Cancel without a request', async () => {
+    await mount()
+
+    inside(
+      root?.querySelector('[data-testid="master-review-card"]') ?? undefined,
+      'Отклонить',
+    )?.click()
+    await vi.waitFor(() => expect(dialog()).not.toBeNull())
+    inside(dialog() ?? undefined, 'Отмена')?.click()
+
+    await vi.waitFor(() => expect(dialog()).toBeNull())
+    expect(adminApi.rejectMaster).not.toHaveBeenCalled()
+  })
+
+  it('tells a failed rejection and keeps the dialog with the reason typed', async () => {
+    vi.mocked(adminApi.rejectMaster).mockRejectedValue(new Error('500'))
+    await mount()
+
+    inside(
+      root?.querySelector('[data-testid="master-review-card"]') ?? undefined,
+      'Отклонить',
+    )?.click()
+    await vi.waitFor(() => expect(dialog()).not.toBeNull())
+    setValue(dialog()?.querySelector('textarea'), 'Documents are missing')
+    inside(dialog() ?? undefined, 'Отклонить заявку')?.click()
+
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
+    expect(dialog()).not.toBeNull()
+    expect(router.currentRoute.value.name).toBe('console-masters-detail')
+  })
+})
+
 describe('ConsoleMasterDetailView: a verified master', () => {
   beforeEach(() => {
     serve(master({ master_status: 'verified' }))
@@ -348,6 +381,48 @@ describe('ConsoleMasterDetailView: a verified master', () => {
       expect(root?.querySelector('[data-testid="master-rights-card"]')).toBeNull(),
     )
     expect(root?.textContent).toContain('Заблокирован')
+  })
+
+  it('tells a failed school-right change and leaves the switch where it was', async () => {
+    vi.mocked(adminApi.setMasterSchoolRight).mockRejectedValue(new Error('500'))
+    await mount()
+
+    const toggle = () =>
+      root?.querySelector<HTMLButtonElement>('[data-testid="master-rights-card"] [role="switch"]')
+    toggle()?.click()
+
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
+    expect(toggle()?.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('closes the revoke dialog on Cancel without a request', async () => {
+    await mount()
+
+    inside(
+      root?.querySelector('[data-testid="master-revoke-card"]') ?? undefined,
+      'Отозвать мастера',
+    )?.click()
+    await vi.waitFor(() => expect(dialog()).not.toBeNull())
+    inside(dialog() ?? undefined, 'Отмена')?.click()
+
+    await vi.waitFor(() => expect(dialog()).toBeNull())
+    expect(adminApi.revokeMaster).not.toHaveBeenCalled()
+  })
+
+  it('tells a failed revoke and keeps the dialog', async () => {
+    vi.mocked(adminApi.revokeMaster).mockRejectedValue(new Error('500'))
+    await mount()
+
+    inside(
+      root?.querySelector('[data-testid="master-revoke-card"]') ?? undefined,
+      'Отозвать мастера',
+    )?.click()
+    await vi.waitFor(() => expect(dialog()).not.toBeNull())
+    inside(dialog() ?? undefined, 'Отозвать')?.click()
+
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
+    expect(dialog()).not.toBeNull()
+    expect(root?.querySelector('[data-testid="master-rights-card"]')).not.toBeNull()
   })
 
   it('says the check did not run when the revoke preview fails, and still lets the revoke through', async () => {

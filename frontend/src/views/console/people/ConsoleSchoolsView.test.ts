@@ -55,7 +55,7 @@ let app: App | null = null
 let root: HTMLElement | null = null
 let router: Router
 
-async function mount(url = '/console/schools'): Promise<HTMLElement> {
+async function mount(url = '/console/schools', expectRows = true): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -78,7 +78,7 @@ async function mount(url = '/console/schools'): Promise<HTMLElement> {
     .use(PiniaColada, coladaOptions)
     .use(router)
   app.mount(root)
-  await vi.waitFor(() => expect(rows().length).toBeGreaterThan(0))
+  if (expectRows) await vi.waitFor(() => expect(rows().length).toBeGreaterThan(0))
   return root
 }
 
@@ -109,6 +109,25 @@ describe('ConsoleSchoolsView', () => {
     expect(rows()[0]?.textContent).toContain('Активна')
     expect(rows()[1]?.textContent).toContain('Veter')
     expect(rows()[1]?.textContent).toContain('Заморожена')
+  })
+
+  it('tells a failed load with an error state, and Retry asks again', async () => {
+    vi.mocked(schoolsApi.getAdminSchools).mockRejectedValue(new Error('down'))
+    await mount('/console/schools', false)
+    await vi.waitFor(() =>
+      expect(root?.querySelector('[data-testid="screen-error"]')).not.toBeNull(),
+    )
+    expect(toastError).toHaveBeenCalled()
+
+    vi.mocked(schoolsApi.getAdminSchools).mockResolvedValue({
+      items: [ACTIVE],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    root?.querySelector<HTMLButtonElement>('[data-testid="screen-error"] button')?.click()
+
+    await vi.waitFor(() => expect(rows().length).toBe(1))
   })
 
   it('asks for the page named by the URL', async () => {

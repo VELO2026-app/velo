@@ -18,6 +18,8 @@ import { coladaOptions } from '@/composables/queries/setup'
 import ConsoleMastersView from '@/views/console/people/ConsoleMastersView.vue'
 import * as adminApi from '@/api/admin'
 import type { AdminMasterListItem } from '@/api/admin'
+import { ApiResponseError } from '@/api/client'
+import { errorMessage } from '@/composables/useApiError'
 
 vi.mock('@/api/admin')
 
@@ -27,8 +29,9 @@ vi.mock('@/utils/methodTaxonomy', async (importOriginal) => {
 })
 
 const toastError = vi.fn()
+const toastSuccess = vi.fn()
 vi.mock('@/composables/useToast', () => ({
-  useToast: () => ({ error: toastError, success: vi.fn(), info: vi.fn() }),
+  useToast: () => ({ error: toastError, success: toastSuccess, info: vi.fn() }),
 }))
 
 function master(overrides: Partial<AdminMasterListItem> = {}): AdminMasterListItem {
@@ -119,6 +122,7 @@ function button(text: string): HTMLButtonElement | undefined {
 
 beforeEach(() => {
   toastError.mockReset()
+  toastSuccess.mockReset()
   vi.mocked(adminApi.getMastersList)
     .mockReset()
     .mockImplementation(async (status, limit) => {
@@ -216,5 +220,87 @@ describe('ConsoleMastersView', () => {
         'https://t.me/bot?start=abc',
       ),
     )
+  })
+
+  describe('the invite dialog', () => {
+    const LINK = 'https://t.me/bot?start=abc'
+    const writeText = vi.fn()
+
+    async function openWithLink(): Promise<void> {
+      vi.mocked(adminApi.inviteMaster).mockResolvedValue({
+        invite_link: LINK,
+        issued_at: '2026-11-24T10:00:00Z',
+      })
+      await mount()
+      button('Пригласить мастера')?.click()
+      await vi.waitFor(() => expect(button('Создать ссылку')).toBeDefined())
+      button('Создать ссылку')?.click()
+      await vi.waitFor(() => expect(button('Скопировать')).toBeDefined())
+    }
+
+    beforeEach(() => {
+      writeText.mockReset()
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    })
+
+    it('copies the link and says so', async () => {
+      writeText.mockResolvedValue(undefined)
+      await openWithLink()
+
+      button('Скопировать')?.click()
+
+      await vi.waitFor(() => expect(toastSuccess).toHaveBeenCalled())
+      expect(writeText).toHaveBeenCalledWith(LINK)
+    })
+
+    it('tells a failed copy', async () => {
+      writeText.mockRejectedValue(new Error('denied'))
+      await openWithLink()
+
+      button('Скопировать')?.click()
+
+      await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
+      expect(toastSuccess).not.toHaveBeenCalled()
+    })
+
+    it('starts from the form again when it is opened a second time', async () => {
+      await openWithLink()
+
+      document.body.querySelector<HTMLElement>('.v-modal__close')?.click()
+      await vi.waitFor(() => expect(document.body.querySelector('.v-modal__overlay')).toBeNull())
+      button('Пригласить мастера')?.click()
+
+      await vi.waitFor(() => expect(button('Создать ссылку')).toBeDefined())
+      expect(document.body.querySelector('[data-testid="master-invite-link"]')).toBeNull()
+    })
+
+    it('names the server setup gap when the bot link is not configured', async () => {
+      vi.mocked(adminApi.inviteMaster).mockRejectedValue(
+        new ApiResponseError(503, 'not configured', 'bot_url_not_configured'),
+      )
+      await mount()
+
+      button('Пригласить мастера')?.click()
+      await vi.waitFor(() => expect(button('Создать ссылку')).toBeDefined())
+      button('Создать ссылку')?.click()
+
+      await vi.waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith(errorMessage('bot_url_not_configured')),
+      )
+      expect(document.body.querySelector('[data-testid="master-invite-link"]')).toBeNull()
+    })
+
+    it('tells any other failure and shows no link', async () => {
+      vi.mocked(adminApi.inviteMaster).mockRejectedValue(new Error('500'))
+      await mount()
+
+      button('Пригласить мастера')?.click()
+      await vi.waitFor(() => expect(button('Создать ссылку')).toBeDefined())
+      button('Создать ссылку')?.click()
+
+      await vi.waitFor(() => expect(toastError).toHaveBeenCalled())
+      expect(toastError).not.toHaveBeenCalledWith(errorMessage('bot_url_not_configured'))
+      expect(document.body.querySelector('[data-testid="master-invite-link"]')).toBeNull()
+    })
   })
 })
