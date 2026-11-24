@@ -23,6 +23,8 @@
 //                2.1, FE-230) is a WARN down to EXCEPTION_FLOOR, never below
 //   PNG          dimensions from IHDR; the apple-touch icon must have NO
 //                alpha channel (iOS paints transparency black)
+//   copied asset a file byte-identical to a golden VELO asset (hash list in
+//                lib/velo-asset-hashes.json) in a brand that is not VELO: WARN
 //   manual       maskable safe-zone (80%) needs pixel inspection -- reported
 //                as MANUAL, owner's acceptance (tz-whitelabel §3: snapshots
 //                are manual)
@@ -35,6 +37,7 @@
 // validateSkin() and skinBuildGate() are exported for the unit suite.
 // =============================================================================
 
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -45,6 +48,16 @@ import {
   goldenTokenMap,
   shipsLogo,
 } from './lib/skin-package.mjs'
+
+/** sha256 -> asset path of every file of the golden VELO skin (velo-brand,
+ *  see the file's `source`). The core carries no VELO look since FE-230, so the
+ *  only way to spot a copied VELO logo in another brand is by its hash. */
+const VELO_ASSET_HASHES = new Map(
+  Object.entries(
+    JSON.parse(readFileSync(new URL('./lib/velo-asset-hashes.json', import.meta.url), 'utf8'))
+      .assets,
+  ).map(([name, hash]) => [hash, name]),
+)
 
 /** An assets/bg/background.png above this is warned about: the golden VELO skin ships WebP. */
 const BG_PNG_WARN_KB = 300
@@ -159,8 +172,10 @@ function deprecatedTokens(tokensDoc) {
 /** Validates the skin package at `skinDir`. `frontendDir` anchors
  * tokens.json (the token names a skin may set, and the core values the
  * contrast pairs resolve against). Returns the report; `fails.length === 0`
- * means the package may ship. */
-export function validateSkin(skinDir, frontendDir) {
+ * means the package may ship. `veloHashes` (sha256 -> path, default: the
+ * golden VELO list) is a test seam.
+ * @internal */
+export function validateSkin(skinDir, frontendDir, veloHashes = VELO_ASSET_HASHES) {
   /** @type {{ fails: string[], warns: string[], manual: string[], passed: string[] }} */
   const out = { fails: [], warns: [], manual: [], passed: [] }
   skinDir = resolve(skinDir)
@@ -368,6 +383,23 @@ export function validateSkin(skinDir, frontendDir) {
     const head = readFileSync(join(assets, asset), 'utf8').slice(0, 200)
     if (!/<svg|<\?xml/.test(head)) fail(out, `FAIL assets/${asset}: does not look like an SVG`)
   }
+
+  // A file (any under assets/) byte-identical to the golden VELO file in a brand that is not
+  // VELO: a copied logo (FE-234; goodo-brand v0.3.0 carried the VELO mandala
+  // and wordmark). A warning: only the owner can tell a deliberate reuse.
+  if (brand.displayName !== 'VELO')
+    for (const file of pkg.files.filter((f) => f.startsWith('assets/'))) {
+      const name = veloHashes.get(
+        createHash('sha256')
+          .update(readFileSync(join(skinDir, file)))
+          .digest('hex'),
+      )
+      if (name !== undefined)
+        warn(
+          out,
+          `${file} is byte-identical to the golden VELO file assets/${name}: a copied logo in the brand "${brand.displayName}"? Replace it with the brand's own, or confirm the reuse with the owner`,
+        )
+    }
 
   // 6. manual items -----------------------------------------------------------
   out.manual.push(

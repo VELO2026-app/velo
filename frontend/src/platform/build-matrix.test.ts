@@ -50,14 +50,27 @@ const {
   cssHasDecl,
   evaluateMatrix,
   fanInFails,
+  missingTokens,
   MODULE_CHUNKS,
   normalizeDecl,
   planCells,
+  skinLeaks,
   tokenDecls,
 } = matrixModule as unknown as {
   assetCountFails(entries: FactsEntry[]): string[]
   fanInFails(cellNames: string[], entries: FactsEntry[]): string[]
   bundleHas(bundle: string, text: string): boolean
+  missingTokens(decls: string[], css: string, goldenDecls: Set<string>): string[]
+  skinLeaks(input: {
+    label: string
+    brand: { displayName: string }
+    decls: string[]
+    js: string
+    html: string
+    css: string
+    goldenDecls: Set<string>
+    coreName: string
+  }): string[]
   cssHasDecl(css: string, decl: string): boolean
   evaluateMatrix(input: {
     cells: Cell[]
@@ -359,5 +372,53 @@ describe('per-cell CI mode: the fan-in (--check-assets)', () => {
     expect(run.status).toBe(1)
     expect(run.stderr).toContain('no cell "nope/none"')
     expect(run.stderr).toContain('golden/ai')
+  })
+})
+
+describe('real-brand cells (FE-234)', () => {
+  const GOLD = { displayName: 'VELO' }
+  const decls = ['--velo-primary:#334d6e', '--velo-dur-pulse:1800ms']
+  const core = new Set(['--velo-dur-pulse:1800ms'])
+  const leak = (css: string, js = '', coreName = 'VELO') =>
+    skinLeaks({
+      label: 'velo-brand',
+      brand: GOLD,
+      decls,
+      js,
+      html: '',
+      css,
+      goldenDecls: core,
+      coreName,
+    })
+
+  it('a gold token in a core build is a leak, and the golden cell goes red', () => {
+    const leaked = leak(':root{--velo-primary:#334d6e}')
+    expect(leaked).toEqual(['velo-brand tokens (--velo-primary:#334d6e)'])
+    const fails = evaluateMatrix({
+      cells: CELLS,
+      facts: { ...GREEN, 'golden/full': { ...GREEN['golden/full']!, leaked } },
+      expected: EXPECTED,
+    })
+    expect(fails.join('\n')).toContain('golden/full')
+  })
+
+  it('a brand named like the core is not told by its name; another name is', () => {
+    expect(leak(':root{}', 'const n="VELO"')).toEqual([])
+    const named = skinLeaks({
+      label: 'goodo-brand',
+      brand: { displayName: 'Goodo' },
+      decls: [],
+      js: 'const n="Goodo"',
+      html: '',
+      css: '',
+      goldenDecls: core,
+      coreName: 'VELO',
+    })
+    expect(named).toEqual(['goodo-brand displayName'])
+  })
+
+  it('a value the core keeps is not a missing declaration; a changed one is', () => {
+    expect(missingTokens(decls, ':root{--velo-primary:#334d6e}', core)).toEqual([])
+    expect(missingTokens(decls, ':root{}', core)).toEqual(['--velo-primary:#334d6e'])
   })
 })

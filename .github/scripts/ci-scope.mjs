@@ -17,8 +17,9 @@
 //   docker = true | false  -- build the frontend image + smoke it (FE-159)
 //   visual = true | false  -- the PR touches what the screens are drawn from
 //                             (FE-162): styles, tokens, velo-ui, public
-//                             assets, the lockfile -- or the comparison
-//                             itself (FE-212)
+//                             assets, components and views (.vue, FE-234),
+//                             the lockfile, the brand pins -- or the
+//                             comparison itself (FE-212)
 //
 // Every file lands in exactly one class; the PR takes the strongest one.
 //   docs          -- prose nobody executes: docs/**, diagrams/**,
@@ -83,6 +84,10 @@ const FORCE_ALL = [
   /^\.github\/workflows\/ci\.yml$/,
   /^\.github\/scripts\/ci-scope\.mjs$/,
   /^\.github\/scripts\/ci-scope\.test\.mjs$/,
+  // FE-234: the brand pins and the script that fetches them feed the matrix.
+  /^\.github\/brand-skins\.json$/,
+  /^\.github\/scripts\/fetch-brand-skins(\.test)?\.mjs$/,
+  /^\.github\/scripts\/visual-decide(\.test)?\.mjs$/,
   /^frontend\/src\/api\/generated\.ts$/,
 ]
 const DOCS = [/^docs\//, /^diagrams\//, /^Design_prototype\//]
@@ -93,6 +98,10 @@ const VISUAL = [
   /^frontend\/src\/.*variables\.css$/,
   /^packages\/velo-ui\//,
   /^frontend\/public\//,
+  // FE-234: the screens themselves -- any template under src/ (components,
+  // views, App.vue, the shells): that is what a skin paints. Templates only:
+  // a .ts edit there is code the other jobs police.
+  /^frontend\/src\/.*\.vue$/,
   /^pnpm-lock\.yaml$/,
   // FE-212: the comparison itself, so a PR that changes it also runs it.
   // Only what decides how the shots are taken and that no other job runs the
@@ -104,6 +113,7 @@ const VISUAL = [
   // e2e/sweep/routes.ts (changes with every new route; typecheck and the
   // sweep cover it, and screens.ts throws on a row it cannot open).
   /^\.github\/workflows\/visual\.yml$/,
+  /^\.github\/brand-skins\.json$/,
   /^frontend\/e2e\/visual\//,
   /^frontend\/playwright\.config\.ts$/,
   /^frontend\/e2e\/support\/settle\.ts$/,

@@ -4,8 +4,8 @@
 //
 // Writes <dir>/report.json and <dir>/report.html (changed screens only: base,
 // head, diff, pixel count), prints the changed screens, and appends them to
-// $GITHUB_STEP_SUMMARY. Exit 0 always, except VISUAL_STRICT=1 (the PR carries
-// `no-visual-change`): then any changed screen exits 1.
+// $GITHUB_STEP_SUMMARY. Exit 0 always, except VISUAL_STRICT=1 (the PR has no
+// `visual-change` label, FE-234): then any changed screen exits 1.
 //
 // A screen is changed when pixelmatch counts > 0 differing pixels (color
 // threshold 0.1, anti-aliasing ignored), when the sizes differ, or when it is
@@ -87,10 +87,13 @@ console.log(
     ? `visual: ${changed.length} of ${all.length} screens changed\n${list}`
     : `visual: no changes in ${all.length} screens`,
 )
+// FE-234: one comparison per brand skin; its artifact is visual-out-<skin>.
+const skin = process.env.VISUAL_SKIN ?? ''
+const artifact = skin ? `visual-out-${skin}` : 'visual-out'
 if (process.env.GITHUB_STEP_SUMMARY) {
   appendFileSync(
     process.env.GITHUB_STEP_SUMMARY,
-    `### Visual diff: ${changed.length} of ${all.length} screens changed\n\n${list || 'no changes'}\n\nReport: artifact \`visual-out\` (report.html).\n`,
+    `### Visual diff${skin ? ` (${skin})` : ''}: ${changed.length} of ${all.length} screens changed\n\n${list || 'no changes'}\n\nReport: artifact \`${artifact}\` (report.html).\n`,
   )
 }
 if (changed.length && process.env.VISUAL_STRICT === '1') process.exit(1)

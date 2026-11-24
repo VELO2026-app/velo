@@ -55,9 +55,11 @@
 #                       (a raised budget needs `bundle-growth`, a raised
 #                       ceiling `bundle-ceiling`; docs/agents/bundle.md).
 #   visual.yml        — FE-162: key screens of the head and the base build
-#                       from recorded API answers, pixel-compared;
-#                       informational, red only for a PR labeled
-#                       `no-visual-change` (docs/agents/e2e.md).
+#                       from recorded API answers, pixel-compared on both
+#                       skins; strict (FE-234): a changed screen is red
+#                       unless a human put `visual-change` on the PR; the
+#                       status to require is `visual — verdict`
+#                       (docs/agents/e2e.md).
 #
 # The BACKEND lint gate (ruff) is deliberately absent: the backend is
 # owned outside this contour — first CI run measured 383 ruff errors at the
@@ -143,7 +145,7 @@ jobs:
       # The classifier is the gate's size: its own test runs where it runs.
       # FE-222: so does the check that the gate waits for every job.
       - name: Test the classifier and the gate's needs
-        run: node --test .github/scripts/ci-scope.test.mjs .github/scripts/ci-gate.test.mjs
+        run: node --test .github/scripts/ci-scope.test.mjs .github/scripts/ci-gate.test.mjs .github/scripts/fetch-brand-skins.test.mjs .github/scripts/visual-decide.test.mjs
 
       - name: Classify the PR diff or the push range
         id: scope
@@ -636,6 +638,11 @@ jobs:
   # build per cell, one runner per cell; the cell list comes from the
   # script itself (--list), so a new edition joins the gate without
   # touching this file.
+  # FE-234: plus one skin x full cell per brand package at its pinned tag
+  # (.github/brand-skins.json: velo-brand = gold, goodo-brand): the real
+  # packages must build on the core a PR leaves behind, so a PR that breaks
+  # a brand's contract (a token the core renamed, a contrast the palette
+  # loses, an asset the build rejects) is red here.
   matrix-plan:
     name: matrix — plan
     needs: scope
@@ -651,6 +658,12 @@ jobs:
         with:
           node-version: 24
 
+      # FE-234: the brand packages at their pinned tags (.github/brand-skins.json).
+      - name: Fetch the brand skin packages
+        env:
+          BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
+        run: node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands" >> "$GITHUB_ENV"
+
       # --list needs no node_modules (vite is imported lazily); neither does
       # make-test-skin. The skin must exist here too: it names its cell.
       - name: List the cells
@@ -658,7 +671,7 @@ jobs:
         run: |
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
-          echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo")" >> "$GITHUB_OUTPUT"
+          echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS)" >> "$GITHUB_OUTPUT"
 
   matrix:
     name: matrix — ${{ matrix.cell }}
@@ -685,6 +698,12 @@ jobs:
       - name: Install (workspace root, frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # FE-234: the brand packages at their pinned tags (.github/brand-skins.json).
+      - name: Fetch the brand skin packages
+        env:
+          BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
+        run: node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands" >> "$GITHUB_ENV"
+
       # Runs on the plain checkout (no prior plain build): a red cell reads
       # as the whitelabel gate failing. --no-restore skips the pointless
       # final rebuild; --facts-out feeds the fan-in below.
@@ -697,7 +716,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/facts"
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
-          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
+          pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -735,6 +754,12 @@ jobs:
           pattern: matrix-facts-*
           path: ${{ runner.temp }}/facts
 
+      # FE-234: the brand packages at their pinned tags (.github/brand-skins.json).
+      - name: Fetch the brand skin packages
+        env:
+          BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
+        run: node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands" >> "$GITHUB_ENV"
+
       - name: Asset-count invariant across the full cells
         run: |
           mkdir -p "$RUNNER_TEMP/facts-flat"
@@ -742,7 +767,7 @@ jobs:
           for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
-          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo"
+          node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS
 
   # FE-159: the image the machine runs. The stand fell three times (05-07.11)
   # on what no other job builds: the node digest, the Dockerfile's pnpm
