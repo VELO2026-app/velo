@@ -930,11 +930,7 @@ describe('CheckinView', () => {
       it.each([
         [404, 'no_active_booking', 'У вас нет подтверждённой брони на эту практику'],
         [400, 'checkin_window_closed', 'Check-in закрыт — практика уже началась'],
-        [
-          400,
-          'checkin_window_not_open',
-          'Check-in ещё не открыт — он откроется ближе к началу практики',
-        ],
+        [400, 'checkin_window_not_open', 'Check-in на практику откроется за сутки до старта'],
       ])('%s %s shows its own phrase', async (status, code, phrase) => {
         upsertCheckinMock.mockRejectedValue(new ApiResponseError(status, 'English detail', code))
         mount()
