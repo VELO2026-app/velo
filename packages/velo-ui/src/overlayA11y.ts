@@ -12,9 +12,10 @@
 //     Live regions (toasts, role=status/alert, aria-live) stay reachable. A
 //     per-element counter keeps nested overlays from clearing each other's
 //     `inert`.
-//  3. Backdrop dismiss: a tap closes the overlay only when the press did not
-//     START inside the dialog. Selecting text and releasing the finger on the
-//     backdrop used to close it (`@click.self` alone fires for that gesture).
+//  3. Backdrop dismiss: a tap closes the overlay only when the press both
+//     STARTED and ENDED on the backdrop. Selecting text and releasing the
+//     finger on the backdrop (or the reverse) used to close it, because
+//     `@click.self` alone fires for both gestures.
 //
 // The approach of 2 and 3 follows the modal / dismiss modules of Vercel's UI
 // SDK (https://github.com/vercel-labs/ui, Apache-2.0); this is an independent
@@ -25,11 +26,16 @@
 // seam (src/platform/dom.ts).
 // =============================================================================
 
-import { onUnmounted, watch } from 'vue'
-import { bodyChildren, focusedElement } from './platform/dom'
+import { nextTick, onUnmounted, watch } from 'vue'
+import { bodyChildren, elementAtPoint, focusedElement, onDocumentEvent } from './platform/dom'
+
+type Root = HTMLElement | null | undefined
 
 /** Top-level elements that must stay reachable while an overlay is open. */
 const LIVE_REGION = '[role="status"], [role="alert"], [aria-live]:not([aria-live="off"])'
+
+/** What a tap can realistically have opened an overlay from. */
+const FOCUSABLE = 'button, a[href], input, select, textarea, summary, [role="button"], [tabindex]'
 
 /** How many open overlays currently hold each element inert. */
 const inertHolders = new Map<HTMLElement, number>()
@@ -50,19 +56,82 @@ function releaseInert(el: HTMLElement): void {
   el.removeAttribute('inert')
 }
 
+// WebKit (iOS) does not focus a <button> on tap, so `activeElement` is <body>
+// when an overlay opens from one. The last pointerdown target stands in as the
+// element to hand focus back to. Bound once, on the first overlay set up.
+let lastPressTarget: Element | null = null
+let trackingPress = false
+
+function trackPress(): void {
+  if (trackingPress) return
+  trackingPress = true
+  onDocumentEvent(
+    'pointerdown',
+    (event) => {
+      lastPressTarget = event.target instanceof Element ? event.target : null
+    },
+    { capture: true, passive: true },
+  )
+}
+
+interface Layer {
+  /** False once closed or unmounted; a layer closed before its batch ran never holds anything. */
+  live: boolean
+  roots: () => ReadonlyArray<Root>
+  focusTarget: () => Root
+  /** Filled when the batch runs: the template refs are set by then. */
+  ownRoots: ReadonlyArray<Root>
+  focusReturnTarget: HTMLElement | null
+  held: HTMLElement[]
+}
+
+// Layers that opened in the same tick are applied together, so none of them
+// makes another one's roots inert (a modal and a sheet nested in its slot,
+// both mounted open). A layer opened in a LATER tick does inert the earlier
+// ones: they are ordinary body children to it.
+let batch: Layer[] = []
+
+function applyBatch(): void {
+  const layers = batch.filter((layer) => layer.live)
+  batch = []
+  for (const layer of layers) {
+    // Roots are read now and kept: by close time Vue has cleared the template
+    // refs behind roots() (the elements linger only for the leave transition).
+    layer.ownRoots = layer.roots()
+    layer.focusReturnTarget = resolveFocusReturnTarget(layer.ownRoots)
+  }
+  const batchRoots = layers.flatMap((layer) => layer.ownRoots)
+  for (const layer of layers) {
+    layer.held = bodyChildren().filter((el) => !batchRoots.includes(el) && !el.matches(LIVE_REGION))
+    layer.held.forEach(holdInert)
+  }
+  // Document order = open order: the last layer of the batch is the top one.
+  for (const layer of layers) layer.focusTarget()?.focus({ preventScroll: true })
+}
+
+function resolveFocusReturnTarget(ownRoots: ReadonlyArray<Root>): HTMLElement | null {
+  const focused = focusedElement()
+  if (focused) return focused
+  const pressed = lastPressTarget?.closest<HTMLElement>(FOCUSABLE) ?? null
+  lastPressTarget = null
+  return pressed && !ownRoots.some((root) => root?.contains(pressed)) ? pressed : null
+}
+
 /**
  * Make the page under an overlay inert and move focus into it, for as long as
  * `isOpen()` is true.
  *
  * @remarks
  * On open (after render) every direct child of `<body>` that is not one of
- * `roots()` and not a live region becomes `inert`; the previously focused
- * element is remembered and `focusTarget()` takes focus. On close or unmount
- * exactly those elements are released and focus goes back to the remembered
- * element, unless the user has already moved focus somewhere outside the
- * overlay. An overlay opened on top of another one inerts the lower one (its
- * roots are body children too); the lower one stays inert until the upper one
- * releases it. Must be called inside a component's setup.
+ * `roots()` and not a live region becomes `inert`, and `focusTarget()` takes
+ * focus. The element to return focus to is the focused one, or, where the
+ * platform did not focus the tapped button (iOS), the last pointerdown target
+ * outside the overlay. On close or unmount exactly the elements this layer
+ * made inert are released and focus goes back, unless the caller already moved
+ * it outside the overlay or the opener left the document. An overlay opened
+ * on top of another one inerts the lower one; the lower one stays inert until
+ * the upper one releases it. Overlays opened in the same tick do not inert
+ * each other. Must be called inside a component's setup.
  *
  * @param isOpen - Reactive getter; the layer is active exactly while it returns true.
  * @param roots - The overlay's own top-level elements (teleported scrim and overlay).
@@ -72,38 +141,32 @@ function releaseInert(el: HTMLElement): void {
  */
 export function useOverlayLayer(
   isOpen: () => boolean,
-  roots: () => ReadonlyArray<HTMLElement | null | undefined>,
-  focusTarget: () => HTMLElement | null | undefined,
+  roots: () => ReadonlyArray<Root>,
+  focusTarget: () => Root,
 ): void {
-  let held: HTMLElement[] = []
-  let opener: HTMLElement | null = null
-  let active = false
-  // Captured on open: by close time Vue has already cleared the template refs
-  // behind roots() (the elements linger only for the leave transition).
-  let own: ReadonlyArray<HTMLElement | null | undefined> = []
+  trackPress()
+  let layer: Layer | null = null
 
   function activate(): void {
-    if (active) return
-    active = true
-    own = roots()
-    opener = focusedElement()
-    held = bodyChildren().filter((el) => !own.includes(el) && !el.matches(LIVE_REGION))
-    held.forEach(holdInert)
-    focusTarget()?.focus({ preventScroll: true })
+    layer = { live: true, roots, focusTarget, ownRoots: [], focusReturnTarget: null, held: [] }
+    batch.push(layer)
+    if (batch.length === 1) void nextTick(applyBatch)
   }
 
   function deactivate(): void {
-    if (!active) return
-    active = false
-    held.forEach(releaseInert)
-    held = []
-    const back = opener
-    opener = null
-    if (!back) return
+    const closing = layer
+    layer = null
+    if (!closing) return
+    closing.live = false
+    closing.held.forEach(releaseInert)
+    const back = closing.focusReturnTarget
+    if (!back?.isConnected) return
     const current = focusedElement()
     // Focus still inside the overlay (or lost to <body>): hand it back.
     // Anywhere else means the caller already moved it on purpose.
-    if (!current || own.some((el) => el?.contains(current))) back.focus({ preventScroll: true })
+    if (!current || closing.ownRoots.some((root) => root?.contains(current))) {
+      back.focus({ preventScroll: true })
+    }
   }
 
   watch(isOpen, (open) => (open ? activate() : deactivate()), {
@@ -114,13 +177,17 @@ export function useOverlayLayer(
 }
 
 /**
- * Backdrop-tap handlers that ignore a press that began inside the dialog.
+ * Backdrop-tap handlers: a tap dismisses only when the press started AND ended
+ * on the backdrop.
  *
  * @remarks
- * Bind `onPointerdown` and `onClick` on the overlay element. A click whose
- * target is the overlay itself dismisses only if the matching pointerdown also
- * landed on the overlay. A click with no pointerdown at all (assistive tech,
- * synthetic click) still dismisses.
+ * Bind `onPointerdown`, `onPointerup`, `onPointercancel` and `onClick` on the
+ * overlay element. The gesture is judged at pointerup (a click after a drag
+ * lands on the common ancestor, which is the backdrop for any press that
+ * started inside the dialog); the flag is cleared there, and on pointercancel.
+ * Touch pointers are implicitly captured by the element they went down on, so
+ * their release position is read with `elementFromPoint`. A click with no
+ * pointer events at all (assistive technology, synthetic click) dismisses.
  *
  * @param dismiss - Called for a genuine backdrop tap.
  *
@@ -128,18 +195,31 @@ export function useOverlayLayer(
  */
 export function useBackdropDismiss(dismiss: () => void): {
   onPointerdown: (event: PointerEvent) => void
+  onPointerup: (event: PointerEvent) => void
+  onPointercancel: () => void
   onClick: (event: MouseEvent) => void
 } {
-  let pressStartedInside = false
+  let downOnBackdrop = false
+  // null: no pointer gesture seen for this click (assistive tech, synthetic).
+  let verdict: boolean | null = null
   return {
     onPointerdown(event) {
-      pressStartedInside = event.target !== event.currentTarget
+      downOnBackdrop = event.target === event.currentTarget
+    },
+    onPointerup(event) {
+      const upTarget =
+        event.pointerType === 'touch' ? elementAtPoint(event.clientX, event.clientY) : event.target
+      verdict = downOnBackdrop && upTarget === event.currentTarget
+      downOnBackdrop = false
+    },
+    onPointercancel() {
+      downOnBackdrop = false
+      verdict = false
     },
     onClick(event) {
-      if (event.target !== event.currentTarget) return
-      const startedInside = pressStartedInside
-      pressStartedInside = false
-      if (!startedInside) dismiss()
+      const ok = verdict !== false
+      verdict = null
+      if (event.target === event.currentTarget && ok) dismiss()
     },
   }
 }

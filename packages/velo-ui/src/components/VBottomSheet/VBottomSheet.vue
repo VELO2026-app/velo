@@ -80,6 +80,8 @@
         class="v-sheet__overlay"
         v-bind="attrs"
         @pointerdown="backdrop.onPointerdown"
+        @pointerup="backdrop.onPointerup"
+        @pointercancel="backdrop.onPointercancel"
         @click="backdrop.onClick"
       >
         <div
@@ -217,11 +219,20 @@ onDeactivated(() => {
 })
 
 const overlayEl = ref<HTMLElement | null>(null)
+const panelEl = ref<HTMLElement | null>(null)
 
 // A backdrop tap closes only if the press began on the backdrop too (FE-233).
 const backdrop = useBackdropDismiss(() => {
   if (props.closeOnOverlay) emit('close')
 })
+
+// Focus moves into the sheet and returns to the opener; the page under it is
+// inert while open (FE-233).
+useOverlayLayer(
+  () => props.open,
+  () => [overlayEl.value],
+  () => panelEl.value,
+)
 
 // Escape closes only the top open overlay, not every open one (FE-215).
 useEscapeLayer(
@@ -235,15 +246,6 @@ useEscapeLayer(
 // quarter of the panel (capped) or flicked down -> it keeps going and the
 // sheet closes; otherwise it settles back. Only with Telegram's vertical
 // swipes disabled (platform/telegram.ts) does the host leave this drag to us.
-const panelEl = ref<HTMLElement | null>(null)
-
-// Focus moves into the sheet and returns to the opener; the page under it is
-// inert while open (FE-233).
-useOverlayLayer(
-  () => props.open,
-  () => [overlayEl.value],
-  () => panelEl.value,
-)
 const CLOSE_DISTANCE_MAX_PX = 160
 const CLOSE_VELOCITY_PX_PER_MS = 0.5
 let dragPointer: number | null = null

@@ -61,6 +61,7 @@ function overlay(): HTMLElement {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   apps.forEach((a) => a.unmount())
   apps = []
   document.body.innerHTML = ''
@@ -126,23 +127,113 @@ describe.each([
     expect(page.hasAttribute('inert')).toBe(false)
   })
 
-  it('a press that starts inside the dialog and ends on the backdrop does not close it', async () => {
+  it.each([
+    ['starts inside the dialog, ends on the backdrop', 'inside', 'backdrop'],
+    ['starts on the backdrop, ends inside the dialog', 'backdrop', 'inside'],
+  ] as const)('a press that %s does not close it', async (_label, from, to) => {
     mountPage()
     const { onClose } = mountOverlay(component, true)
     await flush()
+    const at = (where: 'inside' | 'backdrop') => (where === 'inside' ? dialog() : overlay())
 
-    dialog().dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    at(from).dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    at(to).dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     overlay().dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(onClose).not.toHaveBeenCalled()
 
     // The next genuine backdrop tap still closes (rejection comes with admission).
     overlay().dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    overlay().dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
     overlay().dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('touch: a press that went down on the backdrop but was released over the dialog does not close it', async () => {
+    mountPage()
+    const { onClose } = mountOverlay(component, true)
+    await flush()
+    // A touch pointer is captured by the element it went down on, so its
+    // pointerup reports the backdrop; the finger is really over the dialog.
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(dialog())
+
+    overlay().dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }),
+    )
+    overlay().dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }))
+    overlay().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('a click with no pointer events (assistive tech) on the backdrop closes it, also after a cancelled gesture', async () => {
+    mountPage()
+    const { onClose } = mountOverlay(component, true)
+    await flush()
+
+    overlay().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    // A cancelled press (the browser took the touch for a scroll) is not a tap.
+    overlay().dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    overlay().dispatchEvent(new MouseEvent('pointercancel', { bubbles: true }))
+    overlay().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    // ...and the cancel does not poison the next click.
+    overlay().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('iOS: with no focused element, focus returns to the control of the last pointerdown', async () => {
+    const { opener } = mountPage()
+    // WebKit leaves <body> focused after a tap on a button.
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    const icon = document.createElement('span')
+    opener.appendChild(icon)
+    icon.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    const { open } = mountOverlay(component, false)
+
+    open.value = true
+    await flush()
+    open.value = false
+    await flush()
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('does not try to focus an opener that left the document', async () => {
+    const { opener } = mountPage()
+    opener.focus()
+    const focus = vi.spyOn(opener, 'focus')
+    const { open } = mountOverlay(component, false)
+    open.value = true
+    await flush()
+
+    opener.remove()
+    open.value = false
+    await flush()
+    expect(focus).not.toHaveBeenCalled()
   })
 })
 
 describe('nested overlays share inert by count', () => {
+  it('overlays opened in the same tick do not make each other inert', async () => {
+    const { page } = mountPage()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const app = createApp({
+      render: () => h(VModal, { open: true }, { default: () => h(VBottomSheet, { open: true }) }),
+    })
+    app.mount(host)
+    apps.push(app)
+    await flush()
+
+    const roots = Array.from(document.body.children).filter((el) =>
+      el.matches('.v-modal__scrim, .v-modal__overlay, .v-sheet__overlay'),
+    )
+    expect(roots).toHaveLength(3)
+    expect(roots.some((el) => el.hasAttribute('inert'))).toBe(false)
+    expect(page.hasAttribute('inert')).toBe(true)
+  })
+
   it('closing the upper overlay keeps the page inert and re-opens the lower one', async () => {
     const { page } = mountPage()
     const lower = mountOverlay(VModal, true)

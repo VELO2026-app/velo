@@ -52,6 +52,8 @@
         class="v-modal__overlay"
         v-bind="attrs"
         @pointerdown="backdrop.onPointerdown"
+        @pointerup="backdrop.onPointerup"
+        @pointercancel="backdrop.onPointercancel"
         @click="backdrop.onClick"
       >
         <div
