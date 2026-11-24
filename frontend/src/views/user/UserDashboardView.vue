@@ -99,9 +99,9 @@
          NEAREST PRACTICE
          ================================================================ -->
     <section class="dashboard__section">
-      <h3 class="dashboard__section-title">
+      <h2 class="dashboard__section-title">
         {{ t('user.screens.userDashboard.sections.upcoming') }}
-      </h3>
+      </h2>
 
       <!-- Loading: placeholders in the cards' own geometry, swapped for the
            list in place (VLoadingSwap: nothing for a fast answer, at least
@@ -236,9 +236,9 @@
          user mode keeps the quick access, curator capability or not.
          ================================================================ -->
     <section class="dashboard__section">
-      <h3 class="dashboard__section-title">
+      <h2 class="dashboard__section-title">
         {{ t('user.screens.userDashboard.quickAccess.title') }}
-      </h3>
+      </h2>
       <div class="dashboard__quick">
         <button
           type="button"
@@ -262,7 +262,7 @@
          PROGRESS
          ================================================================ -->
     <section class="dashboard__section">
-      <h3 class="dashboard__section-title">{{ t('user.screens.userDashboard.progress.title') }}</h3>
+      <h2 class="dashboard__section-title">{{ t('user.screens.userDashboard.progress.title') }}</h2>
       <div class="dashboard__stats-grid">
         <VStatCard
           class="dashboard__stat"

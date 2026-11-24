@@ -47,9 +47,9 @@
            STEP 1: PROFILE
            ================================================================ -->
       <template v-if="step === 1">
-        <h3 class="apply-view__step-title">
+        <h2 class="apply-view__step-title">
           {{ t('masterScreens.masterApply.step1.title') }}<span class="apply-view__req">*</span>
-        </h3>
+        </h2>
 
         <VInput
           v-model="form.display_name"
@@ -82,9 +82,9 @@
            STEP 2: EXPERIENCE
            ================================================================ -->
       <template v-else-if="step === 2">
-        <h3 class="apply-view__step-title">
+        <h2 class="apply-view__step-title">
           {{ t('masterScreens.masterApply.step2.title') }}<span class="apply-view__req">*</span>
-        </h3>
+        </h2>
 
         <!-- Practice directions
              (i18n:masterScreens.masterApply.fields.directions) — TWO-LEVEL
@@ -140,9 +140,9 @@
            STEP 3: DOCUMENTS (upload = honest stub, Zod E13)
            ================================================================ -->
       <template v-else>
-        <h3 class="apply-view__step-title">
+        <h2 class="apply-view__step-title">
           {{ t('masterScreens.masterApply.step3.title') }}<span class="apply-view__req">*</span>
-        </h3>
+        </h2>
         <p class="apply-view__intro">
           {{ t('masterScreens.masterApply.step3.privacyNote') }}
         </p>

@@ -58,6 +58,7 @@
           :when="practiceTime"
           :duration="practiceDuration"
           :clickable="false"
+          :heading-level="2"
         />
 
         <!-- The check-in / feedback pill -->
