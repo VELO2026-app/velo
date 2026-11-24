@@ -853,6 +853,8 @@ onBeforeUnmount(() => {
 
 .chat-thread__composer {
   flex: 0 0 auto;
-  padding: var(--space-2) var(--velo-rail-pad-x, var(--space-4)) var(--space-3);
+  /* FE-240: clear the home indicator (--velo-safe-bottom, global.css). */
+  padding: var(--space-2) var(--velo-rail-pad-x, var(--space-4))
+    calc(var(--space-3) + var(--velo-safe-bottom));
 }
 </style>

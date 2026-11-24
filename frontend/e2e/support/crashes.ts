@@ -13,14 +13,17 @@
  * - `api`         an `/api/` answer of 5xx, or a 4xx nobody allowed;
  * - `asset`       a same-origin script, style or chunk that failed to load;
  * - `screen`      a visible error state (`data-testid` screen-error / not-found);
- * - `blank`       nothing rendered in `#app`.
+ * - `blank`       nothing rendered in `#app`;
+ * - `layout`      a broken geometry (FE-240): found by the layout detector
+ *                 (./layout.ts) and handed in with `crashes.record()`.
  */
 import type { Page } from '@playwright/test'
 import { GLOBAL_ALLOWLIST } from './allowlist'
 import type { BrowserName, CrashAllowance } from './allowance'
 
 /** What kind of breakage a signal reports. */
-export type SignalKind = 'exception' | 'reported' | 'console' | 'api' | 'asset' | 'screen' | 'blank'
+export type SignalKind =
+  'exception' | 'reported' | 'console' | 'api' | 'asset' | 'screen' | 'blank' | 'layout'
 
 /** One observed breakage. */
 export interface CrashSignal {
@@ -40,6 +43,8 @@ export interface Crashes {
   signals(): CrashSignal[]
   /** Skip the end-of-test `screen` / `blank` checks (the page is gone by design). */
   skipScreenCheck(reason: string): void
+  /** Add a signal another detector found (`layout`, FE-240); its own allowlist already applied. */
+  record(signal: CrashSignal): void
 }
 
 /** Name of the binding the page reports `velo:error` events through. */
@@ -168,6 +173,9 @@ export async function watchCrashes(page: Page): Promise<CrashWatch> {
     skipScreenCheck(reason) {
       if (!reason.trim()) throw new Error('crashes.skipScreenCheck: a reason is required')
       screenCheck = false
+    },
+    record(signal) {
+      raw.push(signal)
     },
   }
   return {

@@ -823,6 +823,10 @@ onUnmounted(pause)
 .dashboard__zoom-note {
   display: block;
   width: fit-content;
+  /* FE-240: the long error wraps on a narrow screen instead of running past
+     its edge (the kit's VBadge is white-space: nowrap). */
+  max-width: 100%;
+  white-space: normal;
   margin: var(--space-2) auto 0;
   text-align: center;
 }

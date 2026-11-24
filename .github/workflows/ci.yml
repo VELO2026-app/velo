@@ -84,8 +84,8 @@
 # Required checks (FE-222): the ruleset names `CI — gate`, never the jobs
 # above. A skipped job reports under a name of its own: a matrix job as
 # `matrix — ${{ matrix.cell }}`, a reusable workflow under the caller's
-# name (`e2e-stack`) instead of `e2e-stack / e2e-stack — sweep on a real
-# backend`. A check required by its "ran" name would wait in Expected on
+# name (`e2e-stack`) instead of `e2e-stack / e2e-stack — <project> on a
+# real backend`. A check required by its "ran" name would wait in Expected on
 # every PR that skips it. The gate has one name and always runs.
 # A push is sized like a PR (FE-187). It gets the full gate only when its
 # range cannot be trusted: a new branch (before all zeros), a before outside
@@ -637,7 +637,18 @@ jobs:
     if: needs.scope.outputs.frontend == 'full' || needs.scope.outputs.drift == 'true'
     uses: ./.github/workflows/e2e-stack.yml
     with:
-      projects: sweep
+      # FE-240: the layout sweep -- the same screens as Telegram fullscreen on
+      # an iPhone, judged by the layout detector. On a PR (owner, 24.11): the
+      # common size on both brand skins and the narrow one on gold; the rest
+      # of the grid (430, and 320 on goodo) runs nightly (e2e-stack.yml).
+      projects: >-
+        sweep
+        sweep-layout-390@velo-brand
+        sweep-layout-390@goodo-brand
+        sweep-layout-320@velo-brand
+    # The brand skin packages may be private (the read key, as visual.yml).
+    secrets:
+      BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
 
   # tz-whitelabel F5 (FE-114, FE-152): the build matrix IS the whitelabel
   # gate -- the core without a skin (cells named golden/*; neutral since

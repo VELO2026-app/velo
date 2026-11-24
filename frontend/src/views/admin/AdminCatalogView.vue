@@ -392,7 +392,12 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
   flex-wrap: wrap;
 }
 
-.admin-catalog__add-input {
+/* FE-240: the flex rules of the three fields sit on the VInput ROOT. A class
+   passed to <VInput> lands on its inner <input> (inheritAttrs: false in
+   packages/velo-ui/src/components/VInput/VInput.vue), so rules on that class
+   never reached the flex item: the field kept its intrinsic width and ran
+   past the card on a 320 px screen. The classes stay as the tests' hooks. */
+.admin-catalog__add > .v-input {
   flex: 1;
   min-width: 0;
   margin-bottom: 0;
@@ -441,7 +446,8 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
   letter-spacing: 0.02em;
 }
 
-.admin-catalog__edit-input {
+.admin-catalog__dir-head > .v-input {
+  /* On the VInput root, as .admin-catalog__add > .v-input. */
   flex: 1;
   min-width: 0;
   margin-bottom: 0;
@@ -495,7 +501,8 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
   align-items: center;
 }
 
-.admin-catalog__add-style-input {
+.admin-catalog__add-style > .v-input {
+  /* On the VInput root, as .admin-catalog__add > .v-input. */
   flex: 1;
   min-width: 0;
   margin-bottom: 0;

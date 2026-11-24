@@ -528,6 +528,9 @@ function onTap(): void {
   display: flex;
   gap: var(--velo-gap-6); /* the transparent gap between the two white surfaces */
   width: calc(267px * var(--velo-de-k, 1));
+  /* FE-240: scaled up by --velo-de-k the card can be wider than a narrow
+     screen's rail (320 px); the body column (min-width: 0) gives way. */
+  max-width: 100%;
   height: calc(47px * var(--velo-de-k, 1));
 }
 .tcard__entry-icon {

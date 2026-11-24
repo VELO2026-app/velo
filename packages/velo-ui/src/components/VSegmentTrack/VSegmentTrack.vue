@@ -143,6 +143,10 @@ const emit = defineEmits<{
 
 .v-segment-track--tabs .v-segment-track__btn {
   flex: 1;
+  /* Equal shares even when a label is wider than its share (a skin's wider
+     font on a 320 px screen): the label uses the side padding instead of
+     pushing the last tab past the track (FE-240). */
+  min-width: 0;
   font-size: var(--velo-fs-16);
   color: var(--velo-text-primary);
   padding: var(--velo-gap-6) var(--velo-gap-11);
