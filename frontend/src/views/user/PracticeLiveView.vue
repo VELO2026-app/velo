@@ -525,6 +525,10 @@ onMounted(async () => {
 
 .live__zoom-note {
   align-self: center;
+  /* FE-240: the long error wraps on a narrow screen instead of running past
+     its edge (VBadge keeps short labels on one line). */
+  max-width: 100%;
+  white-space: normal;
   text-align: center;
 }
 

@@ -125,8 +125,10 @@ onMounted(join)
   align-items: center;
   justify-content: center;
   /* Standalone route (outside MobileLayout) — apply the screen rail directly
-     so content matches the app's 24px rail (WS-1). */
-  padding: var(--space-8) var(--velo-rail-pad-x) var(--space-5);
+     so content matches the app's 24px rail (WS-1); clear the home indicator
+     as MobileLayout does (FE-240). */
+  padding: var(--space-8) var(--velo-rail-pad-x)
+    calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
   gap: var(--space-4);
 }
 

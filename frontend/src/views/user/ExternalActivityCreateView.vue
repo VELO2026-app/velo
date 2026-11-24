@@ -987,7 +987,8 @@ async function onSubmit(): Promise<void> {
   z-index: 2; /* above the masked body, like the header */
   display: flex;
   justify-content: center;
-  padding: 0 var(--space-8) var(--space-4);
+  /* FE-240: clear the home indicator. */
+  padding: 0 var(--space-8) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
 }
 
