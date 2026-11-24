@@ -496,16 +496,41 @@ describe('EditPracticeView', () => {
       expect(button('Сохранить')).toBeUndefined()
     })
 
-    it('falls back to a generic message on a non-API error', async () => {
-      vi.mocked(practicesApi.getPractice).mockRejectedValue(new TypeError('boom'))
+    it('falls back to a generic message on a non-API error, as a load error with Retry (FE-242)', async () => {
+      vi.mocked(practicesApi.getPractice).mockRejectedValueOnce(new TypeError('boom'))
       mount()
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить практику')
+      expect(text()).toContain('Ошибка загрузки')
+      expect(text()).not.toContain('Практика не найдена')
+
+      vi.mocked(practicesApi.getPractice).mockResolvedValue(practice())
+      button('Повторить')?.click()
+      await flush()
+
+      expect(titleField()).not.toBeNull()
     })
 
+    it.each([404, 403])(
+      'a %i is «not found» with Back only, never a Retry (FE-242)',
+      async (status) => {
+        vi.mocked(practicesApi.getPractice).mockRejectedValue(
+          new ApiResponseError(status, 'gone', 'not_found'),
+        )
+        mount()
+        await flush()
+
+        expect(text()).toContain('Практика не найдена')
+        expect(host?.querySelector('[data-testid="not-found"]')).not.toBeNull()
+        expect(button('Повторить')).toBeUndefined()
+      },
+    )
+
     it('the not-found state offers a way back to the list', async () => {
-      vi.mocked(practicesApi.getPractice).mockRejectedValue(new TypeError('boom'))
+      vi.mocked(practicesApi.getPractice).mockRejectedValue(
+        new ApiResponseError(404, 'gone', 'not_found'),
+      )
       mount()
       await flush()
 

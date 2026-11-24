@@ -148,6 +148,8 @@
             <VInput
               v-model="draftText"
               type="email"
+              kind="email"
+              autocomplete="off"
               placeholder="you@example.com"
               :error="fieldError"
             />
@@ -165,7 +167,13 @@
           @save="saveField"
         >
           <template #edit>
-            <VInput v-model="draftText" placeholder="+7…" :error="fieldError" />
+            <VInput
+              v-model="draftText"
+              kind="tel"
+              autocomplete="off"
+              placeholder="+7…"
+              :error="fieldError"
+            />
           </template>
           {{ phone }}
         </EditableFieldRow>
@@ -651,6 +659,10 @@ const revokeAdvisory = computed<RevokeMasterAdvisory | null>(() =>
 const revokeMessage = computed<string>(() => {
   const base = t('adminScreens.adminMasterReview.revokeMessage', { name: displayName.value })
   const a = revokeAdvisory.value
+  // A failed preview must not read as "no warnings" (FE-242): say the check did not run.
+  if (!a && revokePreview.error.value) {
+    return t('adminScreens.adminMasterReview.revokePreviewFailed', { base })
+  }
   if (!a || !a.has_warnings) return base
   const warns: string[] = []
   if (a.scheduled_or_live_practices > 0) {

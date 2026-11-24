@@ -87,7 +87,15 @@ async function typeDraft(body: string): Promise<void> {
   await flush()
 }
 
+let minted = 0
+
 beforeEach(() => {
+  minted = 0
+  // The keeper's key source (automocked with the rest of @/api/chats): a counter,
+  // so each fresh key is distinguishable.
+  vi.mocked(chatsApi.newIdempotencyKey)
+    .mockReset()
+    .mockImplementation(() => `key-${++minted}`)
   vi.mocked(chatsApi.openStudentChat).mockReset().mockResolvedValue(thread())
   vi.mocked(chatsApi.sendChatMessage).mockReset().mockResolvedValue({
     id: 'm-1',
@@ -138,6 +146,7 @@ describe('SendMessageModal', () => {
     expect(chatsApi.sendChatMessage).toHaveBeenCalledWith(
       THREAD_ID,
       'Проверьте, пожалуйста, домашку',
+      'key-1',
     )
     expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
     expect(closed).toHaveBeenCalledTimes(1)
@@ -157,6 +166,36 @@ describe('SendMessageModal', () => {
     // The draft survives for the retry (the thread dedups, so it is safe).
     expect(liveModal()?.querySelector('textarea')?.value).toBe('Привет')
     expect(chatsApi.sendChatMessage).not.toHaveBeenCalled()
+  })
+
+  it('a send that fails after the thread opened is retried with the SAME key; an edited text mints a new one (FE-242)', async () => {
+    vi.mocked(chatsApi.sendChatMessage).mockRejectedValueOnce(new TypeError('lost answer'))
+    await flush()
+    await typeDraft('Привет')
+
+    buttonWith('Отправить')?.click()
+    await flush()
+    buttonWith('Отправить')?.click()
+    await flush()
+
+    const keys = vi.mocked(chatsApi.sendChatMessage).mock.calls.map((c) => c[2])
+    expect(keys).toEqual(['key-1', 'key-1'])
+    expect(closed).toHaveBeenCalledTimes(1)
+  })
+
+  it('an edited draft after a failure is a NEW write, not an answer from the old key (FE-242)', async () => {
+    vi.mocked(chatsApi.sendChatMessage).mockRejectedValueOnce(new TypeError('lost answer'))
+    await flush()
+    await typeDraft('Привет')
+    buttonWith('Отправить')?.click()
+    await flush()
+
+    await typeDraft('Привет, как дела')
+    buttonWith('Отправить')?.click()
+    await flush()
+
+    const keys = vi.mocked(chatsApi.sendChatMessage).mock.calls.map((c) => c[2])
+    expect(keys).toEqual(['key-1', 'key-2'])
   })
 
   it('one send at a time: a second tap while the first is unresolved adds no API call', async () => {

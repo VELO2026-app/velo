@@ -32,6 +32,7 @@
            4000 cap the chat thread's own Composer enforces. -->
       <VTextarea
         v-model="text"
+        kind="message"
         :placeholder="t('chat.messagePlaceholder')"
         :rows="5"
         maxlength="4000"
@@ -55,6 +56,7 @@ import { VModal, VAvatar, VTextarea, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
 import { openChat, openStudentChat, sendChatMessage } from '@/api/chats'
+import { createAttemptKeys } from '@/api/attemptKeys'
 
 // tz-i18n 2.2b: composer copy + result toasts via chat.* / ui.*.
 
@@ -75,6 +77,8 @@ const emit = defineEmits<{ close: [] }>()
 const toast = useToast()
 const text = ref('')
 const sending = ref(false)
+// One key per send attempt (FE-242): a repeat after a lost answer is the same write.
+const sendKeys = createAttemptKeys()
 
 // Reset the field each time the sheet opens.
 watch(
@@ -96,10 +100,12 @@ async function onSend(): Promise<void> {
     const thread = props.masterId
       ? await openChat(props.masterId)
       : await openStudentChat(props.studentId)
-    await sendChatMessage(thread.id, body)
+    await sendChatMessage(thread.id, body, sendKeys.keyFor(thread.id, body))
+    sendKeys.settle()
     toast.success(t('chat.sent'))
     emit('close')
   } catch (e) {
+    sendKeys.settle(e)
     toast.error(extractApiError(e, t('chat.sendFailed')))
   } finally {
     sending.value = false
