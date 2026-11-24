@@ -149,6 +149,7 @@
               v-model="draftText"
               type="email"
               kind="email"
+              autocomplete="off"
               placeholder="you@example.com"
               :error="fieldError"
             />
@@ -166,7 +167,13 @@
           @save="saveField"
         >
           <template #edit>
-            <VInput v-model="draftText" kind="tel" placeholder="+7…" :error="fieldError" />
+            <VInput
+              v-model="draftText"
+              kind="tel"
+              autocomplete="off"
+              placeholder="+7…"
+              :error="fieldError"
+            />
           </template>
           {{ phone }}
         </EditableFieldRow>

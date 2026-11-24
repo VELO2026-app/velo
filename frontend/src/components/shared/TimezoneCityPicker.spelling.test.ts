@@ -239,3 +239,15 @@ describe('TimezoneCityPicker -- one request per session', () => {
     b.unmount()
   })
 })
+
+describe('TimezoneCityPicker -- the catalog arrives while a row is highlighted', () => {
+  it('the keyboard highlight is cleared, so it cannot sit on a different city', async () => {
+    const wrapper = mount(Picker, { props: { modelValue: '' } })
+    await wrapper.find('input').trigger('keydown', { key: 'ArrowDown' })
+    expect(wrapper.find('input').attributes('aria-activedescendant')).toBeTruthy()
+    await flushPromises() // the mocked backend catalog lands and re-builds the rows
+    expect(wrapper.find('input').attributes('aria-activedescendant')).toBeUndefined()
+    expect(wrapper.find('.tz-picker__row--highlight').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

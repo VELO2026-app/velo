@@ -97,8 +97,29 @@ describe('TimezoneCityPicker -- keyboard navigation (combobox)', () => {
     await key(wrapper, 'ArrowDown')
     await key(wrapper, 'ArrowDown')
     await key(wrapper, 'Enter')
-    const expected = CURATED_CITIES[1]!.iana
+    // The row the user sees as highlighted is the one that gets picked.
+    const highlighted = wrapper.find('[role="option"].tz-picker__row--highlight')
+    const expected = highlighted.find('.tz-picker__zone').text()
+    expect(expected).toBe(CURATED_CITIES[1]!.iana)
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([expected])
+    wrapper.unmount()
+  })
+
+  it('ArrowDown from the last row wraps to the first', async () => {
+    const wrapper = mountPicker()
+    await key(wrapper, 'ArrowUp')
+    await key(wrapper, 'ArrowDown')
+    const rows = wrapper.findAll('[role="option"]')
+    expect(rows[0]!.classes()).toContain('tz-picker__row--highlight')
+    expect(wrapper.findAll('.tz-picker__row--highlight')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('aria-selected marks the saved zone only', () => {
+    const wrapper = mountPicker('Asia/Tokyo')
+    const selected = wrapper.findAll('[role="option"][aria-selected="true"]')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]!.find('.tz-picker__zone').text()).toBe('Asia/Tokyo')
     wrapper.unmount()
   })
 

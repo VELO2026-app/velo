@@ -172,6 +172,7 @@
         <div class="finance-view__amount-row">
           <VInput
             v-model="amountInput"
+            kind="decimal"
             type="number"
             :min="MIN_WITHDRAWAL_EUROS"
             step="0.01"

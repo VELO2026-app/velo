@@ -63,7 +63,7 @@
         :min="1"
         :max="500"
         step="1"
-        inputmode="numeric"
+        kind="numeric"
         @update:model-value="onCustomInput"
       >
         <template #prefix>€</template>

@@ -12,7 +12,16 @@
  * https://github.com/vercel-labs/ui); this implementation is VELO's own.
  */
 
-import { computed, nextTick, ref, useId, type ComputedRef, type Ref } from 'vue'
+import {
+  computed,
+  nextTick,
+  ref,
+  useId,
+  watch,
+  type ComputedRef,
+  type Ref,
+  type WatchSource,
+} from 'vue'
 
 /** Inputs of `useListboxNav`: how many options exist and what Enter does. */
 export interface ListboxNavOptions {
@@ -22,6 +31,12 @@ export interface ListboxNavOptions {
   onSelect: (index: number) => void
   /** Whether the list is currently shown (drives `aria-expanded`). */
   expanded?: () => boolean
+  /**
+   * A reactive source that changes whenever the option list changes (the
+   * query, the filtered rows, ...). The highlight is cleared on every change,
+   * so it never lands on a different row than the one the user chose.
+   */
+  resetOn?: WatchSource
 }
 
 /** What `useListboxNav` hands back: highlight state and the attributes to bind. */
@@ -32,6 +47,10 @@ export interface ListboxNav {
   activeIndex: Ref<number>
   /** Attributes for the input element. */
   comboboxAttrs: ComputedRef<Record<string, string | boolean | undefined>>
+  /** Attributes for the list container: its id and `role="listbox"`; `labelledBy` is the id of its visible label. */
+  listAttrs: (labelledBy?: string) => Record<string, string | undefined>
+  /** Whether option `index` carries the keyboard highlight. */
+  isActive: (index: number) => boolean
   /** Attributes for option `index`. `selected` feeds `aria-selected`. */
   optionAttrs: (index: number, selected?: boolean) => Record<string, string | boolean>
   /** Clear the highlight (call when the list changes). */
@@ -43,7 +62,14 @@ export interface ListboxNav {
   onKeydown: (event: KeyboardEvent) => boolean
 }
 
-/** Wires a search input and its option list for arrow-key navigation (see the file header). */
+/**
+ * Wires a search input and the list of options below it for keyboard
+ * navigation. ArrowDown/ArrowUp move a highlight through the options and wrap
+ * around, Enter picks the highlighted one, and DOM focus never leaves the
+ * input (ARIA combobox with `aria-activedescendant`). Returns the attributes
+ * to bind on the input, the list container and each option, plus the keydown
+ * handler for the input.
+ */
 export function useListboxNav(options: ListboxNavOptions): ListboxNav {
   const uid = useId()
   const listId = `${uid}-list`
@@ -53,6 +79,8 @@ export function useListboxNav(options: ListboxNavOptions): ListboxNav {
   function reset(): void {
     activeIndex.value = -1
   }
+
+  if (options.resetOn) watch(options.resetOn, reset)
 
   function move(delta: 1 | -1, root: Node | null): void {
     const n = options.count()
@@ -103,6 +131,16 @@ export function useListboxNav(options: ListboxNavOptions): ListboxNav {
     }
   })
 
+  function listAttrs(labelledBy?: string): Record<string, string | undefined> {
+    return { id: listId, role: 'listbox', 'aria-labelledby': labelledBy }
+  }
+
+  function isActive(index: number): boolean {
+    return activeIndex.value === index
+  }
+
+  // Options are not tab stops (tabindex -1): per the WAI-ARIA combobox pattern
+  // Tab leaves the field, and the arrow keys reach the options.
   function optionAttrs(index: number, selected = false): Record<string, string | boolean> {
     return {
       id: optionId(index),
@@ -112,5 +150,5 @@ export function useListboxNav(options: ListboxNavOptions): ListboxNav {
     }
   }
 
-  return { listId, activeIndex, comboboxAttrs, optionAttrs, reset, onKeydown }
+  return { listId, activeIndex, comboboxAttrs, listAttrs, isActive, optionAttrs, reset, onKeydown }
 }

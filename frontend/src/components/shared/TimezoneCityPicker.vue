@@ -33,13 +33,7 @@
       <template #suffix><IconSearch :size="18" /></template>
     </VInput>
 
-    <div
-      v-if="filtered.length"
-      :id="nav.listId"
-      ref="listEl"
-      class="tz-picker__list"
-      role="listbox"
-    >
+    <div v-if="filtered.length" ref="listEl" class="tz-picker__list" v-bind="nav.listAttrs()">
       <button
         v-for="(c, i) in filtered"
         :key="c.iana + c.city"
@@ -47,7 +41,7 @@
         class="tz-picker__row"
         :class="{
           'tz-picker__row--active': c.iana === modelValue,
-          'tz-picker__row--highlight': nav.activeIndex.value === i,
+          'tz-picker__row--highlight': nav.isActive(i),
         }"
         v-bind="nav.optionAttrs(i, c.iana === modelValue)"
         @click="select(c.iana)"
@@ -135,13 +129,15 @@ const filtered = computed(() => {
 // view instead of a mid-list scroll position.
 watch([query, () => props.modelValue], () => {
   if (listEl.value) listEl.value.scrollTop = 0
-  nav.reset()
 })
 
 // Arrow keys move a virtual highlight through the rows and Enter picks one,
 // while DOM focus stays in the search field (aria-activedescendant).
 const nav = useListboxNav({
   count: () => filtered.value.length,
+  // The rows also change when the backend catalog arrives or the selection
+  // reorders them: a stale highlight would then sit on another city.
+  resetOn: filtered,
   onSelect: (i) => {
     const row = filtered.value[i]
     if (row) select(row.iana)

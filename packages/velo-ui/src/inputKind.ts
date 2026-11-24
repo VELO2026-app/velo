@@ -4,23 +4,17 @@
  * Maps a field `kind` to the native attributes that steer the mobile soft
  * keyboard: which layout opens (`inputmode`), what the action key says
  * (`enterkeyhint`), what the browser may fill in (`autocomplete`) and whether
- * it capitalises or autocorrects what is typed.
+ * it capitalizes or autocorrects what is typed.
  *
  * Idea adapted from the input-hints helper of vercel-labs/ui (Apache-2.0,
  * https://github.com/vercel-labs/ui); the table below is VELO's own.
  */
 
-export type InputKind = 'text' | 'name' | 'email' | 'tel' | 'search' | 'numeric' | 'url' | 'message'
+export type InputKind = 'email' | 'tel' | 'search' | 'numeric' | 'decimal' | 'message'
 
 type KindAttrs = Readonly<Record<string, string>>
 
 const KIND_ATTRS: Readonly<Record<InputKind, KindAttrs>> = {
-  text: {},
-  name: {
-    autocomplete: 'name',
-    autocapitalize: 'words',
-    enterkeyhint: 'next',
-  },
   email: {
     inputmode: 'email',
     autocomplete: 'email',
@@ -42,20 +36,19 @@ const KIND_ATTRS: Readonly<Record<InputKind, KindAttrs>> = {
     spellcheck: 'false',
     enterkeyhint: 'search',
   },
+  // Whole numbers (a count, a whole-euro amount).
   numeric: {
     inputmode: 'numeric',
     autocomplete: 'off',
     enterkeyhint: 'done',
   },
-  url: {
-    inputmode: 'url',
-    autocomplete: 'url',
-    autocapitalize: 'none',
-    autocorrect: 'off',
-    spellcheck: 'false',
-    enterkeyhint: 'go',
+  // Numbers with a decimal separator (a money amount).
+  decimal: {
+    inputmode: 'decimal',
+    autocomplete: 'off',
+    enterkeyhint: 'done',
   },
-  // Multi-line free text: Enter inserts a line break, sentences start capitalised.
+  // Multi-line free text: Enter inserts a line break, sentences start capitalized.
   message: {
     autocomplete: 'off',
     autocapitalize: 'sentences',

@@ -217,8 +217,10 @@ describe('DiarySearchBar', () => {
 })
 
 describe('DiarySearchBar -- recents keyboard navigation', () => {
-  function press(key: string): void {
-    input().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+  function press(key: string): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+    input().dispatchEvent(event)
+    return event
   }
 
   it('ArrowDown + Enter applies the highlighted recent immediately', async () => {
@@ -254,8 +256,37 @@ describe('DiarySearchBar -- recents keyboard navigation', () => {
     await flush()
     typeInto(input(), 'лес')
     await flush()
+    const event = press('ArrowDown')
+    await flush()
+    expect(event.defaultPrevented).toBe(false)
+    expect(input().hasAttribute('aria-activedescendant')).toBe(false)
+  })
+
+  it('the heading sits outside the listbox and names it', async () => {
+    localStorage.setItem('velo:diary:recent-searches', JSON.stringify(['сон']))
+    mount()
+    await flush()
+    const list = host?.querySelector('[role="listbox"]')
+    const heading = host?.querySelector('h3')
+    expect(list?.contains(heading ?? null)).toBe(false)
+    expect(heading?.id).toBeTruthy()
+    expect(list?.getAttribute('aria-labelledby')).toBe(heading?.id)
+    expect(input().getAttribute('aria-controls')).toBe(list?.id)
+  })
+
+  it('the highlight does not survive the recents closing and reopening', async () => {
+    localStorage.setItem('velo:diary:recent-searches', JSON.stringify(['сон', 'море']))
+    mount()
+    await flush()
     press('ArrowDown')
     await flush()
+    expect(input().getAttribute('aria-activedescendant')).toBeTruthy()
+
+    typeInto(input(), 'л') // the recents close while text is in the field
+    await flush()
+    typeInto(input(), '') // ... and reopen once it is empty again
+    await flush()
     expect(input().hasAttribute('aria-activedescendant')).toBe(false)
+    expect(host?.querySelector('.diary-search__recent-item--highlight')).toBeNull()
   })
 })

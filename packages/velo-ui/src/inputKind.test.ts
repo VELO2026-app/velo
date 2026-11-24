@@ -60,6 +60,19 @@ describe('VInput kind', () => {
     expect(el.getAttribute('inputmode')).toBe('search')
   })
 
+  it('decimal opens the decimal keypad', () => {
+    const el = mountField(VInput, { kind: 'decimal', type: 'number' })
+    expect(el.getAttribute('inputmode')).toBe('decimal')
+    expect(el.getAttribute('autocomplete')).toBe('off')
+  })
+
+  it('reaches the input on the floating-label render path too', () => {
+    const el = mountField(VInput, { kind: 'email', floatingLabel: true, label: 'E-mail' })
+    expect(host?.querySelector('.v-input__float')).not.toBeNull()
+    expect(el.getAttribute('inputmode')).toBe('email')
+    expect(el.getAttribute('enterkeyhint')).toBe('next')
+  })
+
   it('reaches the input on the affix render path too', () => {
     const el = mountField(VInput, { kind: 'tel' }, true)
     expect(el.getAttribute('inputmode')).toBe('tel')
@@ -80,7 +93,7 @@ describe('VInput kind', () => {
 })
 
 describe('VTextarea kind', () => {
-  it('message keeps Enter as a line break and capitalises sentences', () => {
+  it('message keeps Enter as a line break and capitalizes sentences', () => {
     const el = mountField(VTextarea, { kind: 'message' })
     expect(el.getAttribute('enterkeyhint')).toBe('enter')
     expect(el.getAttribute('autocapitalize')).toBe('sentences')
