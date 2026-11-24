@@ -17,6 +17,7 @@ import { ROOT_ROUTE, PUBLIC_ROUTES } from '@/router/routes/public'
 import { AI_USER_ROUTES, userRoutes } from '@/router/routes/user'
 import { masterRoutes } from '@/router/routes/master'
 import { adminRoutes } from '@/router/routes/admin'
+import { consoleRoutes } from '@/router/routes/console'
 
 // -- Module route groups (tz-whitelabel §4, F3) --
 // Registration is gated by the BUILD-TIME feature literals (vite `define`,
@@ -42,6 +43,7 @@ const router = createRouter({
     ...userRoutes({ ai: __VELO_FEATURE_AI__ ? AI_USER_ROUTES : [] }),
     ...masterRoutes(),
     ...adminRoutes(),
+    ...consoleRoutes(),
     ...PUBLIC_ROUTES,
   ],
 })

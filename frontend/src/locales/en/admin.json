@@ -551,5 +551,50 @@
       "noShare": "4–5: —",
       "noRatings": "No ratings in this period yet"
     }
+  },
+  "console": {
+    "brand": "Instance admin",
+    "navLabel": "Admin sections",
+    "role": "Administrator",
+    "userMode": "User mode",
+    "mobileAdmin": "Mobile admin",
+    "groups": {
+      "people": "People",
+      "content": "Content",
+      "requests": "Requests",
+      "money": "Money",
+      "growth": "Growth",
+      "system": "System"
+    },
+    "modules": {
+      "dashboard": "Dashboard",
+      "masters": "Masters",
+      "users": "Users",
+      "schools": "Schools and companies",
+      "practices": "Practices",
+      "catalog": "Catalog",
+      "moderation": "Moderation",
+      "support": "Support",
+      "finance": "Finance",
+      "analytics": "Analytics",
+      "mail": "Announcements",
+      "settings": "Settings"
+    },
+    "placeholder": {
+      "title": "This section is moving to the web version",
+      "legacy": "For now it works in the mobile admin.",
+      "soon": "This section will come in a later version.",
+      "open": "Open in the mobile admin"
+    },
+    "stub": {
+      "title": "The admin opens on a computer or a tablet",
+      "telegram": "The admin does not open in Telegram. Open the link in a browser on a computer or a tablet.",
+      "narrow": "The screen is too small for the admin. Open it on a computer or a tablet.",
+      "openBrowser": "Open in browser",
+      "copy": "Copy link",
+      "copied": "Link copied",
+      "userMode": "Go to user mode",
+      "copyFailed": "Could not copy"
+    }
   }
 }

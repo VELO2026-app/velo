@@ -52,7 +52,7 @@
 
 <template>
   <!-- Single safe-area frame around every gated screen (see AppFrame). -->
-  <AppFrame>
+  <AppFrame :wide="wideFrame">
     <!-- Stage changes crossfade (styles/motion.css «velo-stage»): the leaving
          stage is lifted out of flow and fades over the arriving one, so the
          splash dissolves into the first screen instead of cutting to it.
@@ -73,8 +73,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { firstScreenReady } from '@/router/firstScreen'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
@@ -159,6 +159,13 @@ provideToast()
  */
 type EntryStage = 'welcome' | 'onboarding' | 'app'
 const stage = ref<EntryStage | null>(null)
+
+// FE-262: a web screen (route meta.web -- the /console zone) spans the whole
+// window instead of the phone column, once the app itself is on screen.
+const route = useRoute()
+const wideFrame = computed(
+  () => isAuthenticated.value && stage.value === 'app' && route.meta.web === true,
+)
 
 /**
  * FE-39: pick the entry stage once auth is ready. A returning user
