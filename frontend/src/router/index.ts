@@ -12,6 +12,7 @@ import { installTabPrefetch } from '@/router/prefetch'
 import { installDataPrefetch } from '@/router/dataPrefetch'
 import { installRouteCatalogs } from '@/router/catalogs'
 import { installAccessGuard } from '@/router/guards'
+import { installRouteEvents } from '@/router/routeEvents'
 import { ROOT_ROUTE, PUBLIC_ROUTES } from '@/router/routes/public'
 import { AI_USER_ROUTES, userRoutes } from '@/router/routes/user'
 import { masterRoutes } from '@/router/routes/master'
@@ -54,5 +55,13 @@ installAccessGuard(router)
 installViewTransitions(router)
 installTabPrefetch(router)
 installDataPrefetch(router)
+
+// FE-238: "a navigation just finished" for consumers outside router/ (the
+// K3f keyboard reset in useViewportGeometry.ts, mounted by the views this
+// table is built from). They subscribe via routeEvents.ts -- importing THIS
+// module from a composable would close the index -> views -> composables ->
+// index cycle. Registered last: navigation is fully finished for listeners,
+// the position the composable-side router.afterEach used to hold.
+installRouteEvents(router)
 
 export default router

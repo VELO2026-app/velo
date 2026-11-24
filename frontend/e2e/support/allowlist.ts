@@ -5,7 +5,7 @@
  * engine it comes from (`browsers`, FE-188). Prefer a per-test
  * `crashes.allow(...)` over a global entry.
  */
-import type { CrashAllowance } from './crashes'
+import type { CrashAllowance } from './allowance'
 
 export const GLOBAL_ALLOWLIST: CrashAllowance[] = [
   {

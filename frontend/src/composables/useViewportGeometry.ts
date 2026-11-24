@@ -9,7 +9,7 @@ import {
 } from '@/platform/dom'
 import { onMounted, onBeforeUnmount, ref, readonly } from 'vue'
 import { getTmaViewport } from '@/platform/tma-viewport'
-import router from '@/router'
+import { onRouteChange } from '@/router/routeEvents'
 import { KEYBOARD_VIEWPORT_THRESHOLD } from '@/utils/constants'
 import { resetKeyboardViewportState } from '@/utils/keyboardViewportState'
 
@@ -491,8 +491,11 @@ export function useViewportGeometry(): void {
     // K3f (moved verbatim from useBackgroundStabilizer.ts): clear stale
     // keyboard state the instant the route changes, dismiss the keyboard,
     // then suppress re-assertion while it animates shut so the next screen
-    // never inherits keyboard-open geometry.
-    stopAfterEach = router.afterEach(() => {
+    // never inherits keyboard-open geometry. FE-238: subscribed through
+    // router/routeEvents.ts -- importing the router instance here closed
+    // the index -> views -> composables cycle; the event fires from the
+    // same afterEach moment as before.
+    stopAfterEach = onRouteChange(() => {
       activeHTMLElement()?.blur?.()
       resetState()
       suppressUntil = Date.now() + NAV_SUPPRESS_MS
