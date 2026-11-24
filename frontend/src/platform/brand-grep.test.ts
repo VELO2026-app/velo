@@ -17,7 +17,13 @@ import { join } from 'node:path'
 import { brandGrepReport, goldenAssetHits } from '../../scripts/brand-grep.mjs'
 import { createHash } from 'node:crypto'
 
-type Report = { brand: string[]; features: string[]; switchedOff: string[]; look: string[] }
+type Report = {
+  brand: string[]
+  features: string[]
+  switchedOff: string[]
+  look: string[]
+  contact: string[]
+}
 
 const scan = (files: Array<[string, string]>): Report =>
   brandGrepReport(files.map(([path, content]) => ({ path, content }))) as Report
@@ -201,6 +207,25 @@ describe('brand-grep: the golden look (FE-230)', () => {
   })
 })
 
+describe('brand-grep: the golden contact (FE-251)', () => {
+  it('a golden domain in code or a catalog is a hit; in a comment or another word it is not', () => {
+    const report = scan([
+      ['src/views/user/A.vue', "<script setup>\nconst href = 'mailto:support@velo.app'\n</script>"],
+      ['src/locales/en/common.json', '{ "hint": "Write to support{\'@\'}velo.app" }'],
+      ['src/utils/c.ts', "// was support@velo.app\nconst bot = 'https://telegram.me/veloappbot'"],
+      ['src/utils/d.ts', "const site = 'https://myvelo.application.example'"],
+      ['src/utils/e.ts', "const api = 'https://api.velo.app/v1'"],
+      ['src/utils/f.ts', "const mail = 'help@mail.velo.app'"],
+    ])
+    expect(report.contact).toEqual([
+      'src/views/user/A.vue:~2 golden domain velo.app',
+      'src/locales/en/common.json:~1 golden domain velo.app',
+      'src/utils/e.ts:~1 golden domain velo.app',
+      'src/utils/f.ts:~1 golden domain velo.app',
+    ])
+  })
+})
+
 describe('brand-grep: the repo tree', () => {
   it('passes every gate today', () => {
     const files: Array<{ path: string; content: string }> = []
@@ -220,5 +245,6 @@ describe('brand-grep: the repo tree', () => {
     expect(report.brand).toEqual([])
     expect(report.features).toEqual([])
     expect(report.switchedOff).toEqual([])
+    expect(report.contact).toEqual([])
   })
 })

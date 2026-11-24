@@ -77,7 +77,7 @@ describe('compileMessage renders every catalog message as the compiler does', ()
 describe('compileMessage: syntax corners, compared with the compiler', () => {
   const corners: Tree = {
     escapes: 'a \\{b\\} \\@ \\| \\\\ c',
-    literal: "mail{'@'}velo.app, {'{'}x{'}'}, {'\\u0041'}, {'it\\'s'}",
+    literal: "mail{'@'}example.com, {'{'}x{'}'}, {'\\u0041'}, {'it\\'s'}",
     spacedNamed: '{ n } and {n}',
     pipes: 'one  |  two | three ',
     tightPipes: 'a|b|c',
@@ -99,7 +99,7 @@ describe('compileMessage: syntax corners, compared with the compiler', () => {
 
   it('the rendered corners themselves (both sides could agree on a raw key)', () => {
     expect(fn.t('escapes')).toBe('a {b} @ | \\ c')
-    expect(fn.t('literal')).toBe("mail@velo.app, {x}, A, it's")
+    expect(fn.t('literal')).toBe("mail@example.com, {x}, A, it's")
     expect(fn.t('pipes', 1)).toBe('one')
     expect(fn.t('pipes', 5)).toBe('three ')
     expect(fn.t('linkedModifier')).toBe('x VELO y')

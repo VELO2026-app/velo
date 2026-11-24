@@ -12,6 +12,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { CORE_SKIN, type SkinPackage } from './skin'
+
 const created: string[] = []
 
 /** A fresh temp dir, removed by cleanupSkinFixtures().
@@ -40,6 +42,13 @@ export function png(width: number, height: number, colorType = 2): Buffer {
   ihdr[16] = 8 // bit depth
   ihdr[17] = colorType
   return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), ihdr])
+}
+
+/** A built skin record for tests: the core's values with `patch` on top, so
+ *  a new SkinPackage field does not touch every test that builds one.
+ *  @internal */
+export function fakeSkin(patch: Partial<SkinPackage> = {}): SkinPackage {
+  return { ...CORE_SKIN, ...patch }
 }
 
 /** The brand record of the default fixture (a light skin with a font).

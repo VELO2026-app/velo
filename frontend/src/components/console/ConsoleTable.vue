@@ -125,7 +125,7 @@ function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined 
   border-radius: var(--velo-radius-10);
   background: var(--velo-bg-subtle);
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-secondary);
+  color: var(--velo-text-primary);
 }
 
 .console-table__row--clickable {

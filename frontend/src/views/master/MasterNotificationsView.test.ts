@@ -16,14 +16,9 @@
 //       profile edit later, not a UI bug)
 //   reminder / msg_participants / msg_support -> their own categories
 //   schedule {from,to,days} -> comms quiet hours (proxy converts semantics)
-//   new_checkin / new_feedback / ai_summary / monthly_report -> STILL LOCAL
-//       stubs (no comms types yet; explicit disposition, Master-chat
-//       2026-07-28). Owner ruling 2026-08-16 (PROMPT №746): these four stay
-//       VISIBLE, DISABLED (VSwitch's own `disabled`, click is a no-op -- not
-//       moved-then-reverted), each carrying the short "coming soon" marker
-//       (i18n:masterScreens.masterNotifications.soon). This
-//       superseded the earlier "flips visually, lost on remount" shape;
-//       asserted below.
+//   Every toggle row has a comms category; the former local stub rows
+//   (check-in / feedback / AI summary / monthly report) were removed
+//   (FE-261), so no row is local-only.
 //
 // TimePickerSheet (.vue:68-74) wraps VBottomSheet, teleported to
 // document.body, `v-if="open"` -- absent from the DOM entirely when closed,
@@ -169,7 +164,7 @@ afterEach(() => {
 
 describe('MasterNotificationsView', () => {
   // ===========================================================================
-  describe('THE PERSISTENCE ANSWER -- comms via the proxy for categories/schedule; four rows still local stubs', () => {
+  describe('THE PERSISTENCE ANSWER -- comms via the proxy for categories/schedule', () => {
     it('mount loads prefs from the proxy and merges categories over the defaults', async () => {
       prefsGet.mockResolvedValueOnce({
         ...structuredClone(FACADE),
@@ -181,8 +176,6 @@ describe('MasterNotificationsView', () => {
       // ONE category behind TWO rows: both render the server value.
       expect(isOn('Новое бронирование')).toBe(false)
       expect(isOn('Отмена бронирования')).toBe(false)
-      // Stub rows keep their hardcoded defaults -- nothing to load.
-      expect(isOn('Ежемесячный отчет')).toBe(false)
       expect(prefsGet).toHaveBeenCalledTimes(1)
     })
 
@@ -297,22 +290,6 @@ describe('MasterNotificationsView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('a STUB row (Ежемесячный отчет) carries the "Скоро" marker; a live row does not', () => {
-      mount()
-
-      const stubRow = Array.from(host?.querySelectorAll<HTMLElement>('.mn-card') ?? []).find(
-        (r) => r.querySelector('.mn-card__title')?.textContent?.trim() === 'Ежемесячный отчет',
-      )
-      const liveRow = Array.from(host?.querySelectorAll<HTMLElement>('.mn-card') ?? []).find(
-        (r) => r.querySelector('.mn-card__title')?.textContent?.trim() === 'Новое бронирование',
-      )
-
-      expect(stubRow?.querySelector('.v-badge')?.textContent?.trim()).toBe('Скоро')
-      expect(stubRow?.querySelector('.v-switch')?.hasAttribute('disabled')).toBe(true)
-      expect(liveRow?.querySelector('.v-badge')).toBeNull()
-      expect(liveRow?.querySelector('.v-switch')?.hasAttribute('disabled')).toBe(false)
-    })
-
     it('a failed load (comms down / recipient unsynced) leaves the defaults on screen -- degrade, never crash', async () => {
       prefsGet.mockRejectedValueOnce(new Error('502'))
       mount()
@@ -325,14 +302,6 @@ describe('MasterNotificationsView', () => {
 
   // ===========================================================================
   describe('toggles (.vue:111-158) -- representative rows, both directions', () => {
-    // The former "default-OFF row toggles on" case lived here and used
-    // the monthly-report row (i18n:masterScreens.masterNotifications.monthlyReport)
-    // as its example -- the one row this file's own defaults comment calls
-    // out as default-off. It is now a disabled stub (PROMPT №746) and no
-    // live row is default-off, so there is no row left to carry this
-    // scenario; its disabled-click behaviour is covered above (the
-    // stub-row-disabled case).
-
     it('toggling one row does not affect a sibling row with its OWN category (msg_* are independent)', async () => {
       mount()
       await flush()
