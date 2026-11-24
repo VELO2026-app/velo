@@ -350,7 +350,7 @@ describe('AnalyticsView (master)', () => {
     mount()
     await flush()
 
-    expect(host?.querySelector('[data-testid="attention-error"]')).not.toBeNull()
+    expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
 
     vi.mocked(mastersApi.getMasterReviews).mockResolvedValue({
       items: [attentionReview()],
@@ -363,7 +363,7 @@ describe('AnalyticsView (master)', () => {
       .click()
     await flush()
 
-    expect(host?.querySelector('[data-testid="attention-error"]')).toBeNull()
+    expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
     expect(text()).toContain('Анна')
   })
 })

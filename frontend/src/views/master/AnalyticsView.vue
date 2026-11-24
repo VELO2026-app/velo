@@ -89,12 +89,13 @@
              none. Card tap goes to the student's profile; the message button
              is @click.stop -- it sends a message without navigating. -->
         <!-- A failed read must not pass for "nobody needs attention" (FE-242). -->
-        <section v-if="reviewsFailed" class="analytics__section" data-testid="attention-error">
+        <section v-if="reviewsFailed" class="analytics__section">
           <h2 class="velo-section-title">{{ t('masterScreens.analytics.sections.attention') }}</h2>
-          <p>{{ t('common.loadError') }}</p>
-          <VButton size="sm" variant="outline" @click="loadReviews">{{
-            t('common.retry')
-          }}</VButton>
+          <VEmptyState icon="warning" :title="t('common.loadError')">
+            <VButton size="sm" variant="outline" @click="loadReviews">{{
+              t('common.retry')
+            }}</VButton>
+          </VEmptyState>
         </section>
 
         <section v-else-if="attentionItems.length > 0" class="analytics__section">

@@ -68,9 +68,10 @@ interface Profile {
   frozen_cents: number
   payout: PayoutDetails | null
 }
-const masterState = reactive<{ profile: Profile | null; failed: boolean }>({
+const masterState = reactive<{ profile: Profile | null; failed: boolean; loading: boolean }>({
   profile: null,
   failed: false,
+  loading: false,
 })
 const reloadProfile = vi.fn()
 vi.mock('@/composables/queries/master', () => ({
@@ -78,6 +79,7 @@ vi.mock('@/composables/queries/master', () => ({
     profile: computed(() => masterState.profile),
     reload: reloadProfile,
     failed: computed(() => masterState.failed),
+    loading: computed(() => masterState.loading),
   }),
   setMasterProfile: (_queryCache: unknown, update: (p: Profile) => Profile) => {
     if (masterState.profile) masterState.profile = update(masterState.profile)
@@ -175,6 +177,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
   masterState.profile = { available_cents: 100000, frozen_cents: 0, payout: PAYPAL }
   masterState.failed = false
+  masterState.loading = false
   reloadProfile.mockReset().mockResolvedValue({ status: 'success' })
   vi.mocked(mastersApi.getMyWithdrawals).mockReset().mockResolvedValue(page([]))
   vi.mocked(mastersApi.createWithdrawal).mockReset().mockResolvedValue(withdrawal('w1'))
@@ -204,9 +207,26 @@ describe('MasterFinanceView', () => {
 
       expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
       expect(host?.querySelector('.finance-view__balance-value')).toBeNull()
-      expect(button('Запросить вывод')).toBeUndefined()
+      // Neither the withdrawal form nor the "add a method first" hint: both would
+      // be claims about a payout method nobody has read.
+      expect(amountField()).toBeNull()
+      expect(text()).not.toContain('Сначала добавьте способ выплаты')
+      expect(button('Добавить метод оплаты')).toBeUndefined()
       button('Повторить')!.click()
       expect(reloadProfile).toHaveBeenCalled()
+    })
+
+    it('while the profile loads or is retried: a loader, no €0,00, no form, no error (FE-242)', async () => {
+      masterState.profile = null
+      masterState.loading = true
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.finance-view__loader')).not.toBeNull()
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+      expect(host?.querySelector('.finance-view__balance-value')).toBeNull()
+      expect(amountField()).toBeNull()
+      expect(text()).not.toContain('Сначала добавьте способ выплаты')
     })
 
     it('renders the available balance from the profile', async () => {
@@ -706,7 +726,7 @@ describe('MasterFinanceView', () => {
       expect(button('Запросить вывод')).toBeDefined()
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить историю выводов')
       // FE-242: and the list itself says "error + Retry", not "no withdrawals yet".
-      expect(host?.querySelector('[data-testid="history-error"]')).not.toBeNull()
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
       expect(host?.textContent).not.toContain('Выводов ещё не было')
     })
 
@@ -719,7 +739,7 @@ describe('MasterFinanceView', () => {
       button('Повторить')!.click()
       await flush()
 
-      expect(host?.querySelector('[data-testid="history-error"]')).toBeNull()
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
       expect(host?.querySelectorAll('.finance-view__hitem')).toHaveLength(1)
     })
 

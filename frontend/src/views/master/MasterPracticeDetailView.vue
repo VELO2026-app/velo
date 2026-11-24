@@ -358,12 +358,7 @@
             </div>
           </template>
           <!-- A failed read is not "no reviews yet" (FE-242). -->
-          <VEmptyState
-            v-else-if="reviewsFailed"
-            variant="note"
-            :title="t('common.loadError')"
-            data-testid="reviews-error"
-          >
+          <VEmptyState v-else-if="reviewsFailed" icon="warning" :title="t('common.loadError')">
             <VButton size="sm" variant="outline" @click="loadReviews">{{
               t('common.retry')
             }}</VButton>

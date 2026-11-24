@@ -512,6 +512,21 @@ describe('EditPracticeView', () => {
       expect(titleField()).not.toBeNull()
     })
 
+    it.each([404, 403])(
+      'a %i is «not found» with Back only, never a Retry (FE-242)',
+      async (status) => {
+        vi.mocked(practicesApi.getPractice).mockRejectedValue(
+          new ApiResponseError(status, 'gone', 'not_found'),
+        )
+        mount()
+        await flush()
+
+        expect(text()).toContain('Практика не найдена')
+        expect(host?.querySelector('[data-testid="not-found"]')).not.toBeNull()
+        expect(button('Повторить')).toBeUndefined()
+      },
+    )
+
     it('the not-found state offers a way back to the list', async () => {
       vi.mocked(practicesApi.getPractice).mockRejectedValue(
         new ApiResponseError(404, 'gone', 'not_found'),

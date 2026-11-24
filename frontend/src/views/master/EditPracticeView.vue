@@ -70,13 +70,19 @@
 
     <!-- Error / not found -->
     <div v-else-if="!practice" class="edit-practice__content">
+      <!-- 404/403: gone, Back only; any other failure is retryable (FE-242). -->
       <VEmptyState
-        icon="warning"
-        :title="loadGone ? t('masterScreens.editPractice.notFound') : t('common.loadError')"
-        :data-testid="loadGone ? undefined : 'screen-error'"
+        v-if="loadGone"
+        icon="notfound"
+        :title="t('masterScreens.editPractice.notFound')"
+        data-testid="not-found"
       >
-        <!-- A transient failure is retryable and is not "not found" (FE-242). -->
-        <VButton v-if="!loadGone" size="sm" @click="loadPractice">{{ t('common.retry') }}</VButton>
+        <VButton size="sm" variant="outline" @click="router.push({ name: 'master-practices' })">
+          {{ t('ui.back') }}
+        </VButton>
+      </VEmptyState>
+      <VEmptyState v-else icon="warning" :title="t('common.loadError')">
+        <VButton size="sm" @click="loadPractice">{{ t('common.retry') }}</VButton>
         <VButton size="sm" variant="outline" @click="router.push({ name: 'master-practices' })">
           {{ t('ui.back') }}
         </VButton>
