@@ -164,6 +164,18 @@ test('push: a forced push (before not an ancestor of sha) -> the full gate', () 
   assert.match(log, /a forced push/)
 })
 
+// FE-239: the shared clone module behind the fetch script feeds the matrix
+// like the script itself -- a change to it forces the whole gate.
+test('pull request: the shared brand clone -> the full gate', () => {
+  const { dir, commit } = repo()
+  commit({ 'frontend/scripts/lib/brand-git.mjs': 'export const a = 1\n' }, 'base of the file')
+  commit({ 'frontend/scripts/lib/brand-git.mjs': 'export const a = 2\n' })
+  const got = classify(dir, 'HEAD^1', 'HEAD')
+  assert.equal(got.frontend, 'full')
+  assert.equal(got.drift, 'true')
+  assert.equal(got.docker, 'true')
+})
+
 test('pull request: the merge commit against its first parent, as before', () => {
   const { dir, commit } = repo()
   commit({ 'backend/app/main.py': 'x = 4\n' })
