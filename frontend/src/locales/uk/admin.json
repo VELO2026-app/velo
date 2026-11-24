@@ -596,12 +596,145 @@
       "userMode": "Перейти в режим користувача",
       "copyFailed": "Не вдалося скопіювати"
     },
-    "telegramId": "ID: {id}",
     "pager": {
-      "shown": "Показано {shown} із {total}",
       "nav": "Сторінки",
-      "page": "Сторінка {n}"
+      "page": "Сторінка {n}",
+      "shown": "Показано {from}–{to} з {total}"
     },
+    "practices": {
+      "scope": {
+        "upcoming": "Майбутні",
+        "past": "Минулі",
+        "all": "Усі"
+      },
+      "scopesLabel": "Які практики показати",
+      "tableLabel": "Практики платформи",
+      "columns": {
+        "when": "Коли",
+        "practice": "Практика",
+        "master": "Майстер",
+        "booked": "Записано"
+      },
+      "empty": "Практик тут поки немає",
+      "loadFailed": "Не вдалося завантажити практики",
+      "detail": {
+        "back": "До практик",
+        "loadFailed": "Не вдалося завантажити практику",
+        "notFound": "Практику не знайдено",
+        "tabsLabel": "Розділи практики",
+        "tabs": {
+          "participants": "Учасники",
+          "zoom": "Відвідуваність Zoom"
+        },
+        "state": {
+          "upcoming": "Попереду",
+          "past": "Завершена"
+        },
+        "stats": {
+          "booked": "Записано",
+          "attended": "Був",
+          "noShow": "Не прийшов",
+          "free": "Вільно"
+        },
+        "participants": {
+          "title": "Учасники",
+          "label": "Учасники практики",
+          "name": "Учасник",
+          "status": "Статус",
+          "empty": "Поки ніхто не записався"
+        },
+        "booking": {
+          "confirmed": "Записаний",
+          "attended": "Був",
+          "no_show": "Не прийшов",
+          "pending": "Очікує"
+        },
+        "about": {
+          "title": "Про практику",
+          "when": "Коли",
+          "duration": "Тривалість",
+          "master": "Майстер",
+          "direction": "Напрямок",
+          "seats": "Місць"
+        },
+        "zoom": {
+          "title": "Зустріч у Zoom",
+          "meetingStatus": "Статус зустрічі",
+          "report": "Звіт про відвідуваність",
+          "reportReady": "Отримано",
+          "reportWaiting": "Ще не отримано",
+          "unmatched": "Нерозпізнані учасники",
+          "lastError": "Причина помилки",
+          "loadFailed": "Не вдалося завантажити відвідуваність Zoom",
+          "status": {
+            "active": "Активна",
+            "pending_creation": "Очікує створення",
+            "create_failed": "Помилка створення",
+            "deleted": "Видалена",
+            "none": "Не створена"
+          },
+          "bookingsTitle": "Відвідуваність за записами",
+          "bookingsLabel": "Відвідуваність учасників у Zoom",
+          "bookingsEmpty": "Немає записів для звірки",
+          "columns": {
+            "name": "Учасник",
+            "status": "Статус",
+            "minutes": "На зустрічі",
+            "via": "Підсумок поставлено"
+          },
+          "via": {
+            "zoom_report": "За звітом Zoom",
+            "legacy_proxy": "За входом і позначкою"
+          },
+          "unmatchedTitle": "Без прив’язки до учасника",
+          "unmatchedLabel": "Рядки Zoom без учасника",
+          "unmatchedColumns": {
+            "email": "Пошта",
+            "joined": "Зайшов",
+            "left": "Вийшов",
+            "duration": "Час"
+          },
+          "unknownEmail": "Пошти немає"
+        }
+      }
+    },
+    "catalog": {
+      "title": "Каталог напрямків",
+      "directions": "Напрямки",
+      "directionsLabel": "Напрямки",
+      "stylesCount": "{n} стиль | {n} стилі | {n} стилів",
+      "hidden": "Приховано",
+      "addDirection": "Додати",
+      "newDirectionPlaceholder": "Назва напрямку",
+      "empty": "У каталозі поки немає напрямків",
+      "loadFailed": "Не вдалося завантажити каталог",
+      "directionAdded": "Напрямок додано",
+      "addDirectionFailed": "Не вдалося додати напрямок",
+      "saveFailed": "Не вдалося зберегти",
+      "statusChangeFailed": "Не вдалося змінити видимість",
+      "detail": {
+        "name": "Назва",
+        "order": "Порядок у каталозі",
+        "visible": "Видно майстрам",
+        "save": "Зберегти"
+      },
+      "styles": {
+        "title": "Стилі",
+        "label": "Стилі напрямку",
+        "name": "Стиль",
+        "order": "Порядок",
+        "visible": "Видно",
+        "actions": "Дії",
+        "add": "Додати стиль",
+        "newPlaceholder": "Назва стилю",
+        "edit": "Змінити стиль {name}",
+        "empty": "У цьому напрямку поки немає стилів",
+        "added": "Стиль додано",
+        "addFailed": "Не вдалося додати стиль"
+      },
+      "note": "Напрямок і стиль не видаляються: їх можна приховати. Методи, які майстри вже обрали, залишаються."
+    },
+    "telegramId": "ID: {id}",
     "masters": {
       "invite": "Запросити майстра",
       "tabs": {

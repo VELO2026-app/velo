@@ -32,8 +32,7 @@ describe('PeoplePager', () => {
     const pages: number[] = []
     const el = mount({ page: 2, pageSize: 20, total: 70, shown: 20 }, (p) => pages.push(p))
 
-    expect(el.querySelector('.people-pager__shown')?.textContent).toContain('20')
-    expect(el.querySelector('.people-pager__shown')?.textContent).toContain('70')
+    expect(el.querySelector('.people-pager__shown')?.textContent).toBe('Показано 21–40 из 70')
     expect(pageButton(el, 2)?.getAttribute('aria-current')).toBe('page')
 
     pageButton(el, 2)?.click()
@@ -44,7 +43,13 @@ describe('PeoplePager', () => {
   it('shows the count only, no page buttons, when everything fits one page', () => {
     const el = mount({ page: 1, pageSize: 20, total: 7, shown: 7 })
 
-    expect(el.querySelector('.people-pager__shown')).not.toBeNull()
+    expect(el.querySelector('.people-pager__shown')?.textContent).toBe('Показано 1–7 из 7')
     expect(el.querySelector('.people-pager__pages')).toBeNull()
+  })
+
+  it('reads 0–0 of 0 for an empty list', () => {
+    const el = mount({ page: 1, pageSize: 20, total: 0, shown: 0 })
+
+    expect(el.querySelector('.people-pager__shown')?.textContent).toBe('Показано 0–0 из 0')
   })
 })

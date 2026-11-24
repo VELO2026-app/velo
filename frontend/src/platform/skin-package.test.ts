@@ -251,6 +251,43 @@ describe('supportEmail (contract 2.2, FE-251)', () => {
   })
 })
 
+describe("the brand record's supportMark (contract 2.2, FE-261)", () => {
+  const withMark = (supportMark: unknown, contract: string): string =>
+    problemsOf(
+      writeSkinPackage({
+        manifest: `schema: 1\ncontract: "${contract}"\n`,
+        brand: { ...FIXTURE_BRAND, supportMark },
+      }),
+    )
+
+  it('"icon" and "logo" are accepted from contract 2.2 on', () => {
+    expect(withMark('icon', '2.2')).toBe('')
+    expect(withMark('logo', '2.2')).toBe('')
+  })
+
+  it('a 2.0 or 2.1 reader refuses the field as unknown, so the package must say 2.2', () => {
+    expect(withMark('icon', '2.1')).toContain(
+      'supportMark needs contract "2.2" or later, got "2.1"',
+    )
+    expect(withMark('icon', '2.0')).toContain(
+      'supportMark needs contract "2.2" or later, got "2.0"',
+    )
+  })
+
+  it('any other value is refused', () => {
+    expect(withMark('mandala', '2.2')).toContain('supportMark: "logo" or "icon"')
+  })
+
+  it('absent is null and fine on every minor -- a 2.0 or 2.1 package without it passes', () => {
+    for (const minor of ['2.0', '2.1', '2.2']) {
+      const dir = writeSkinPackage({ manifest: `schema: 1\ncontract: "${minor}"\n` })
+      const pkg = loadSkinPackage(dir, GOLDEN)
+      expect(pkg.problems).toEqual([])
+      expect(pkg.brand?.supportMark).toBeNull()
+    }
+  })
+})
+
 describe('DTCG values -> CSS', () => {
   it('verbatim CSS, references, numbers and family lists', () => {
     const dir = writeSkinPackage({

@@ -20,7 +20,12 @@ export interface SkinBrand {
   contrastExceptions: SkinContrastException[]
   /** Contract 2.2: the brand's support address; null = the record has none. */
   supportEmail: string | null
+  /** Contract 2.2: what the support conversation's mark shows; null = the
+   *  record has none (the reader's default is the logo set). */
+  supportMark: SupportMark | null
 }
+
+export type SupportMark = 'logo' | 'icon'
 
 export interface SkinContrastException {
   /** Token path of the text, e.g. `velo.text.secondary`. */
@@ -45,6 +50,7 @@ export const CORE_DISPLAY_NAME: string
 export const CORE_THEME_COLOR: string
 export const MANIFEST: string
 export const BRAND_EXTENSION: string
+export const SUPPORT_MARKS: SupportMark[]
 export const MANDATORY_ASSETS: string[]
 export const LOGO_ASSETS: string[]
 export const SKIN_ASSETS: string[]

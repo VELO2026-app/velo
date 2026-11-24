@@ -23,11 +23,13 @@ declare module 'vue-router' {
 
 const placeholder = () => import('@/views/console/ConsolePlaceholderView.vue')
 
-/** The modules that have their own web screen; the rest show the placeholder. */
+/** The module screens that have replaced the placeholder (by module key). */
 const SCREENS: Partial<Record<ConsoleModuleKey, () => Promise<Component>>> = {
   masters: () => import('@/views/console/people/ConsoleMastersView.vue'),
   users: () => import('@/views/console/people/ConsoleUsersView.vue'),
   schools: () => import('@/views/console/people/ConsoleSchoolsView.vue'),
+  practices: () => import('@/views/console/ConsolePracticesView.vue'),
+  catalog: () => import('@/views/console/ConsoleCatalogView.vue'),
 }
 
 /** The /console zone: ConsoleShell and one screen per module. */
@@ -44,12 +46,17 @@ export function consoleRoutes(): RouteRecordRaw[] {
           meta: module.option === undefined ? {} : { option: module.option },
           component: SCREENS[module.key] ?? placeholder,
         })),
-        // A screen inside a module is named `console-<module>-<what>`: the
+        // A screen inside a module is named console-<module>-<what>, so the
         // menu keeps the module lit (consoleModuleOf).
         {
           path: 'masters/:id',
           name: 'console-masters-detail',
           component: () => import('@/views/console/people/ConsoleMasterDetailView.vue'),
+        },
+        {
+          path: 'practices/:id',
+          name: 'console-practices-detail',
+          component: () => import('@/views/console/ConsolePracticeDetailView.vue'),
         },
         {
           path: '',

@@ -380,3 +380,13 @@ export function formatPercent(percent: number): string {
   if (percent > 99 && percent < 100) return '>99%'
   return `${Math.round(percent)}%`
 }
+
+/**
+ * A count with the locale's digit grouping, as in `1 208` for 1208 in ru.
+ *
+ * @param count - the number to show
+ * @param locale - defaults to the current UI locale
+ */
+export function formatCount(count: number, locale: string = getLocale()): string {
+  return new Intl.NumberFormat(locale).format(count)
+}

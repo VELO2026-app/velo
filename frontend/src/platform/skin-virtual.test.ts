@@ -53,6 +53,8 @@ describe('skinVirtualModules', () => {
       `SKIN_BRAND = ${JSON.stringify(CORE_SKIN.displayName)}`,
     )
     expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_SUPPORT_EMAIL = null')
+    // FE-261: the support mark defaults to the logo set.
+    expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_SUPPORT_MARK = "logo"')
   })
 
   it('skin build: the skin tokens, its display name and support address', () => {
@@ -67,6 +69,14 @@ describe('skinVirtualModules', () => {
     expect(serve(plugin, SKIN_TOKENS_ID)).toContain('--velo-primary: #123456;')
     expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_BRAND = "Yoga | {Life}"')
     expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_SUPPORT_EMAIL = "help@yoga.example"')
+  })
+
+  it("skin build: the brand record's supportMark reaches the brand module (FE-261)", () => {
+    const dir = publicWithTokens({ primary: { $value: '#123456' } })
+    const skin = readSkin(dir)
+    if (skin === null) throw new Error('the fixture skin did not load')
+    const plugin = skinVirtualModules(dir, { ...skin, supportMark: 'icon' })
+    expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_SUPPORT_MARK = "icon"')
   })
 
   it('leaves foreign ids alone', () => {

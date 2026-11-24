@@ -596,12 +596,145 @@
       "userMode": "Go to user mode",
       "copyFailed": "Could not copy"
     },
-    "telegramId": "ID: {id}",
     "pager": {
-      "shown": "Showing {shown} of {total}",
       "nav": "Pages",
-      "page": "Page {n}"
+      "page": "Page {n}",
+      "shown": "Showing {from}–{to} of {total}"
     },
+    "practices": {
+      "scope": {
+        "upcoming": "Upcoming",
+        "past": "Past",
+        "all": "All"
+      },
+      "scopesLabel": "Practices to show",
+      "tableLabel": "Platform practices",
+      "columns": {
+        "when": "When",
+        "practice": "Practice",
+        "master": "Master",
+        "booked": "Booked"
+      },
+      "empty": "No practices here yet",
+      "loadFailed": "Failed to load the practices",
+      "detail": {
+        "back": "To the practices",
+        "loadFailed": "Failed to load the practice",
+        "notFound": "The practice was not found",
+        "tabsLabel": "Practice sections",
+        "tabs": {
+          "participants": "Participants",
+          "zoom": "Zoom attendance"
+        },
+        "state": {
+          "upcoming": "Upcoming",
+          "past": "Finished"
+        },
+        "stats": {
+          "booked": "Booked",
+          "attended": "Attended",
+          "noShow": "No-show",
+          "free": "Free"
+        },
+        "participants": {
+          "title": "Participants",
+          "label": "Practice participants",
+          "name": "Participant",
+          "status": "Status",
+          "empty": "Nobody has booked yet"
+        },
+        "booking": {
+          "confirmed": "Booked",
+          "attended": "Attended",
+          "no_show": "No-show",
+          "pending": "Pending"
+        },
+        "about": {
+          "title": "About the practice",
+          "when": "When",
+          "duration": "Duration",
+          "master": "Master",
+          "direction": "Direction",
+          "seats": "Seats"
+        },
+        "zoom": {
+          "title": "Zoom meeting",
+          "meetingStatus": "Meeting status",
+          "report": "Attendance report",
+          "reportReady": "Received",
+          "reportWaiting": "Not received yet",
+          "unmatched": "Unrecognized participants",
+          "lastError": "Error reason",
+          "loadFailed": "Failed to load the Zoom attendance",
+          "status": {
+            "active": "Active",
+            "pending_creation": "Awaiting creation",
+            "create_failed": "Creation error",
+            "deleted": "Deleted",
+            "none": "Not created"
+          },
+          "bookingsTitle": "Attendance by booking",
+          "bookingsLabel": "Zoom attendance of the participants",
+          "bookingsEmpty": "No bookings to match",
+          "columns": {
+            "name": "Participant",
+            "status": "Status",
+            "minutes": "In the meeting",
+            "via": "Decided by"
+          },
+          "via": {
+            "zoom_report": "Zoom report",
+            "legacy_proxy": "Join and check-in"
+          },
+          "unmatchedTitle": "Not matched to a participant",
+          "unmatchedLabel": "Zoom rows without a participant",
+          "unmatchedColumns": {
+            "email": "Email",
+            "joined": "Joined",
+            "left": "Left",
+            "duration": "Time"
+          },
+          "unknownEmail": "No email"
+        }
+      }
+    },
+    "catalog": {
+      "title": "Directions and styles",
+      "directions": "Directions",
+      "directionsLabel": "Directions",
+      "stylesCount": "{n} style | {n} styles",
+      "hidden": "Hidden",
+      "addDirection": "Add",
+      "newDirectionPlaceholder": "Direction name",
+      "empty": "The catalog has no directions yet",
+      "loadFailed": "Failed to load the catalog",
+      "directionAdded": "Direction added",
+      "addDirectionFailed": "Failed to add the direction",
+      "saveFailed": "Failed to save",
+      "statusChangeFailed": "Failed to change the visibility",
+      "detail": {
+        "name": "Name",
+        "order": "Order in the catalog",
+        "visible": "Visible to masters",
+        "save": "Save"
+      },
+      "styles": {
+        "title": "Styles",
+        "label": "Styles of the direction",
+        "name": "Style",
+        "order": "Order",
+        "visible": "Visible",
+        "actions": "Actions",
+        "add": "Add style",
+        "newPlaceholder": "Style name",
+        "edit": "Edit style {name}",
+        "empty": "No styles in this direction yet",
+        "added": "Style added",
+        "addFailed": "Failed to add the style"
+      },
+      "note": "A direction or a style is never deleted: hide it instead. Masters keep the methods they already chose."
+    },
+    "telegramId": "ID: {id}",
     "masters": {
       "invite": "Invite a master",
       "tabs": {

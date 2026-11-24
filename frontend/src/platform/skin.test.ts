@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { materializedSkinTokens, readSkin, skinBackgroundFormat } from './skin'
-import { png, writeSkinPackage, type FixturePatch } from './skin.test.fixture'
+import { FIXTURE_BRAND, png, writeSkinPackage, type FixturePatch } from './skin.test.fixture'
 
 const created: string[] = []
 afterEach(() => {
@@ -50,7 +50,15 @@ describe('readSkin (tz-whitelabel §3)', () => {
       ],
       hasLogo: true,
       supportEmail: null,
+      supportMark: 'logo',
     })
+  })
+
+  it("a brand record's supportMark is read; absent means the logo set (contract 2.2)", () => {
+    const brand = { ...FIXTURE_BRAND, supportMark: 'icon' }
+    const dir = withPackage({ manifest: 'schema: 1\ncontract: "2.2"\n', brand })
+    expect(readSkin(dir)?.supportMark).toBe('icon')
+    expect(readSkin(withPackage({}))?.supportMark).toBe('logo')
   })
 
   it('a package without the logo set reads hasLogo: false (VeloLogo shows its icon)', () => {

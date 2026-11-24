@@ -9,7 +9,7 @@
 
 <template>
   <footer class="people-pager" data-testid="people-pager">
-    <span class="people-pager__shown">{{ t('console.pager.shown', { shown, total }) }}</span>
+    <span class="people-pager__shown">{{ summary }}</span>
     <nav v-if="items.length" class="people-pager__pages" :aria-label="t('console.pager.nav')">
       <template v-for="(item, i) in items" :key="`${item}-${i}`">
         <span v-if="item === 'gap'" class="people-pager__gap" aria-hidden="true">…</span>
@@ -50,6 +50,14 @@ const emit = defineEmits<{
 }>()
 
 const items = computed(() => pagerItems(props.page, Math.ceil(props.total / props.pageSize)))
+
+// "Showing 21-40 of 70": the rows of this page by their place in the list
+// (an empty list reads 0-0). The wording is the console's shared one.
+const summary = computed(() => {
+  const from = props.shown === 0 ? 0 : (props.page - 1) * props.pageSize + 1
+  const to = props.shown === 0 ? 0 : from + props.shown - 1
+  return t('console.pager.shown', { from, to, total: props.total })
+})
 </script>
 
 <style scoped>

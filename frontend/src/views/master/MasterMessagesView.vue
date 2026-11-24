@@ -10,7 +10,7 @@
   arrives; peer=null degrades to the student fallback
   (i18n:masterScreens.masterMessages.peerFallback). Alongside the DMs the
   master now also sees HIS own support conversation (channel `support` --
-  VELO logo + the support title (i18n:chat.supportTitle), preview speaks
+  the skin's brand icon + the support title (i18n:chat.supportTitle), preview speaks
   the translation states via utils/chatRows.ts) and the DMs he opened with
   other masters as a client.
   The list itself is not polled (approved plan §4).
