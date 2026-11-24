@@ -127,3 +127,22 @@ describe('VToast', () => {
     expect(toast.toasts.value.map((t) => t.message)).toEqual(['stays'])
   })
 })
+
+describe('VToast live region (FE-233)', () => {
+  it('is a role=status region that an open overlay leaves reachable', async () => {
+    const { default: VModal } = await import('../VModal/VModal.vue')
+    await render()
+    const modalHost = document.createElement('div')
+    document.body.appendChild(modalHost)
+    const modalApp = createApp({ render: () => h(VModal, { open: true }) })
+    modalApp.mount(modalHost)
+    for (let i = 0; i < 3; i++) await nextTick()
+
+    const region = document.querySelector('.v-toast-container')
+    expect(region?.getAttribute('role')).toBe('status')
+    expect(region?.hasAttribute('inert')).toBe(false)
+
+    modalApp.unmount()
+    modalHost.remove()
+  })
+})

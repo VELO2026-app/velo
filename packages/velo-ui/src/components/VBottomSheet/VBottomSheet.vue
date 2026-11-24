@@ -74,8 +74,23 @@
       <!-- §7.2 attrs-root: caller attrs merge HERE, onto the teleported
            overlay -- inheritAttrs is false above, so nothing rides Vue's
            (Teleport-blind) fallthrough. -->
-      <div v-if="open" class="v-sheet__overlay" v-bind="attrs" @click.self="onOverlay">
-        <div ref="panelEl" class="v-sheet__panel velo-kbd-scroll" role="dialog" aria-modal="true">
+      <div
+        v-if="open"
+        ref="overlayEl"
+        class="v-sheet__overlay"
+        v-bind="attrs"
+        @pointerdown="backdrop.onPointerdown"
+        @pointerup="backdrop.onPointerup"
+        @pointercancel="backdrop.onPointercancel"
+        @click="backdrop.onClick"
+      >
+        <div
+          ref="panelEl"
+          class="v-sheet__panel velo-kbd-scroll"
+          role="dialog"
+          aria-modal="true"
+          tabindex="-1"
+        >
           <div
             class="v-sheet__handle"
             aria-hidden="true"
@@ -145,6 +160,7 @@
 import { ref, watch, onUnmounted, onDeactivated, useAttrs } from 'vue'
 import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
 import { useEscapeLayer } from '../../escapeStack'
+import { useBackdropDismiss, useOverlayLayer } from '../../overlayA11y'
 
 defineOptions({ inheritAttrs: false })
 const attrs = useAttrs()
@@ -202,9 +218,21 @@ onDeactivated(() => {
   if (props.open) emit('close')
 })
 
-function onOverlay(): void {
+const overlayEl = ref<HTMLElement | null>(null)
+const panelEl = ref<HTMLElement | null>(null)
+
+// A backdrop tap closes only if the press began on the backdrop too (FE-233).
+const backdrop = useBackdropDismiss(() => {
   if (props.closeOnOverlay) emit('close')
-}
+})
+
+// Focus moves into the sheet and returns to the opener; the page under it is
+// inert while open (FE-233).
+useOverlayLayer(
+  () => props.open,
+  () => [overlayEl.value],
+  () => panelEl.value,
+)
 
 // Escape closes only the top open overlay, not every open one (FE-215).
 useEscapeLayer(
@@ -218,7 +246,6 @@ useEscapeLayer(
 // quarter of the panel (capped) or flicked down -> it keeps going and the
 // sheet closes; otherwise it settles back. Only with Telegram's vertical
 // swipes disabled (platform/telegram.ts) does the host leave this drag to us.
-const panelEl = ref<HTMLElement | null>(null)
 const CLOSE_DISTANCE_MAX_PX = 160
 const CLOSE_VELOCITY_PX_PER_MS = 0.5
 let dragPointer: number | null = null
@@ -323,6 +350,8 @@ onUnmounted(() => {
 }
 
 .v-sheet__panel {
+  /* Takes programmatic focus on open (tabindex=-1); not a control, no ring. */
+  outline: none;
   /* Keyboard-safe (bg-freeze batch): carries .velo-kbd-scroll so a field
      focused inside the sheet (e.g. a reject-reason VTextarea) stays reachable
      -- html.is-keyboard-open .v-sheet__panel (global.css) overrides the
