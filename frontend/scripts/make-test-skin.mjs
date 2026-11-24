@@ -13,7 +13,9 @@
 //
 // Usage: node scripts/make-test-skin.mjs <out-dir> [--logo]   (out-dir must not exist)
 //        --logo  ship the logo set too (the core's, made distinct) -- the
-//                matrix builds one skin with it and one without (FE-230)
+//                matrix builds one skin with it and one without (FE-230) --
+//                and a supportEmail (contract 2.2, FE-251): so the matrix
+//                runs a package with an address and one without
 // CI:    node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
 //        node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
 //        pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo"
@@ -91,6 +93,7 @@ writeFileSync(
           themeColor: '#14213D',
           backgroundColor: '#FFFFFF',
           fonts: [{ family: 'CI Sans', file: 'assets/fonts/ci-sans-400.woff2', weight: 400 }],
+          ...(withLogo ? { supportEmail: 'support@ci-skin.example' } : {}),
         },
       },
     },

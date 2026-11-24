@@ -67,6 +67,7 @@ describe('pwaManifest -- the single manifest', () => {
       backgroundColor: '#F5F1EA',
       fonts: [],
       hasLogo: true,
+      supportEmail: null,
     }
     expect(pwaManifestFor(skin)).toMatchObject({
       name: 'ШКОЛА ГАРМОНИИ',

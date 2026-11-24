@@ -51,6 +51,13 @@
 // Semantic colors (warning, error, the mood and analytics scales) and white
 // or black are product colors, not the brand: they are not listed.
 //
+// GATE 5 -- the golden contact (FE-251). The support address is the brand's:
+// the supportEmail of the package's brand record (contract 2.2), served as
+// SKIN_SUPPORT_EMAIL. A golden domain (velo.app) in the core -- src/ with the
+// locale catalogs, index.html, the text files of public/ -- is a hit; tests
+// and comments are skipped. Without it an instance of another brand would
+// send its users' mail to VELO's support.
+//
 // Exit 1 on any hit. Wired into `pnpm lint`. brandGrepReport() is exported
 // for the unit suite (src/platform/brand-grep.test.ts).
 // =============================================================================
@@ -362,15 +369,34 @@ export function goldenAssetHits(files, hashes = GOLDEN_ASSET_SHA256) {
     .map(({ path }) => `${path}: a golden VELO asset (it belongs to the velo-brand skin package)`)
 }
 
+// -- gate 5: the golden contact (FE-251) ---------------------------------------
+
+/** The golden VELO mail and web domains. */
+const GOLDEN_DOMAINS = ['velo.app']
+
+function contactHits(files) {
+  const hits = []
+  for (const { path, raw } of files) {
+    const text = lookText(path, raw).toLowerCase()
+    for (const domain of GOLDEN_DOMAINS) {
+      const re = new RegExp(`(?<![\\w.-])${domain.replaceAll('.', '\\.')}(?![\\w-])`)
+      const m = re.exec(text)
+      if (m) hits.push(`${path}:~${lineOf(text, m[0])} golden domain ${domain}`)
+    }
+  }
+  return hits
+}
+
 // -- the report ----------------------------------------------------------------
 
 /** The gates over `files` (Array of { path, content }); paths are
  *  frontend-root-relative ('src/...', 'env.d.ts', 'vite.config.ts').
  *  Gates 1-3 read the .ts/.vue files; gate 4 (`look`) reads every file it
- *  is given, `lookFiles` when passed (the CLI hands it a wider set).
- *  Returns { brand, features, switchedOff, look } hit lists -- empty lists
- *  mean the gate passes. */
-export function brandGrepReport(files, lookFiles = files) {
+ *  is given, `lookFiles` when passed (the CLI hands it a wider set); gate 5
+ *  (`contact`) likewise reads `contactFiles` (the CLI adds the catalogs).
+ *  Returns { brand, features, switchedOff, look, contact } hit lists --
+ *  empty lists mean the gate passes. */
+export function brandGrepReport(files, lookFiles = files, contactFiles = files) {
   const prepared = files.map(({ path, content }) => ({ path, raw: content }))
   const code = prepared.filter(({ path }) => /\.(ts|vue)$/.test(path))
   return {
@@ -378,6 +404,7 @@ export function brandGrepReport(files, lookFiles = files) {
     features: featureHits(code),
     switchedOff: switchedOffHits(code),
     look: lookHits(lookFiles.map(({ path, content }) => ({ path, raw: content }))),
+    contact: contactHits(contactFiles.map(({ path, content }) => ({ path, raw: content }))),
   }
 }
 
@@ -421,12 +448,24 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     .filter((p) => /\.(ts|vue|css|svg|html)$/.test(p) && !p.includes('.test.'))
     .concat('index.html', 'tokens.json', '../docs/oauth-consent/index.html')
     .map((p) => ({ path: p, content: readFileSync(p, 'utf8') }))
+  // Gate 5 reads the code with the locale catalogs, index.html and the text
+  // files of public/.
+  const contactFiles = [...listAll(SRC_ROOT), ...listAll('public')]
+    .filter((p) => /\.(ts|vue|json|html|svg|webmanifest|txt)$/.test(p) && !p.includes('.test.'))
+    .concat('index.html')
+    .map((p) => ({ path: p, content: readFileSync(p, 'utf8') }))
   const binaries = [...listAll('public'), ...listAll('src/assets')].map((p) => ({
     path: p,
     bytes: readFileSync(p),
   }))
 
-  const { brand, features, switchedOff, look: lookText } = brandGrepReport(files, lookFiles)
+  const {
+    brand,
+    features,
+    switchedOff,
+    look: lookText,
+    contact,
+  } = brandGrepReport(files, lookFiles, contactFiles)
   const look = [...lookText, ...goldenAssetHits(binaries)]
   if (brand.length > 0) {
     console.error(
@@ -452,7 +491,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     )
     for (const h of look) console.error('  ' + h)
   }
-  if (brand.length > 0 || features.length > 0 || switchedOff.length > 0 || look.length > 0)
+  if (contact.length > 0) {
+    console.error(
+      `brand-grep: ${contact.length} golden-contact hit(s) in the core -- the support address is the brand's supportEmail in its skin package (FE-251):\n`,
+    )
+    for (const h of contact) console.error('  ' + h)
+  }
+  if (
+    brand.length > 0 ||
+    features.length > 0 ||
+    switchedOff.length > 0 ||
+    look.length > 0 ||
+    contact.length > 0
+  )
     process.exit(1)
   console.log(`brand-grep: clean (${files.length} files scanned)`)
 }

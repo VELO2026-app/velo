@@ -15,7 +15,8 @@ import { CORE_SKIN, materializedSkinTokens, type SkinPackage } from './skin'
 /** Import id of the skin's token cascade (a stylesheet; app.ts imports it LAST). */
 export const SKIN_TOKENS_ID = 'virtual:skin-tokens.css'
 /** Import id of the skin's brand facts: `SKIN_BRAND` (the text, see
- *  locales/index.ts) and `SKIN_HAS_LOGO` (components/ui/VeloLogo.vue). */
+ *  locales/index.ts), `SKIN_HAS_LOGO` (components/ui/VeloLogo.vue) and
+ *  `SKIN_SUPPORT_EMAIL` (components/shared/SupportEmailLink.vue). */
 export const SKIN_BRAND_ID = 'virtual:skin-brand'
 
 /** Rollup convention: a `\0` prefix marks a resolved virtual id. */
@@ -25,14 +26,16 @@ const RESOLVED_PREFIX = '\0'
  * Source of the brand module: the skin's display name, or the core's neutral
  * word when no package ships (FE-231: no brand name in the core), and
  * whether the build shows a logo set -- the core's neutral one, or the
- * package's; false = the package left it out (FE-230).
+ * package's; false = the package left it out (FE-230) -- and the brand's
+ * support address, null for the core or a package without one (FE-251).
  *
  * @param skin - The skin package, or null for the core build.
  */
 export function skinBrandSource(skin: SkinPackage | null): string {
   return (
     `export const SKIN_BRAND = ${JSON.stringify((skin ?? CORE_SKIN).displayName)}\n` +
-    `export const SKIN_HAS_LOGO = ${JSON.stringify(skin?.hasLogo ?? true)}\n`
+    `export const SKIN_HAS_LOGO = ${JSON.stringify(skin?.hasLogo ?? true)}\n` +
+    `export const SKIN_SUPPORT_EMAIL = ${JSON.stringify(skin?.supportEmail ?? null)}\n`
   )
 }
 

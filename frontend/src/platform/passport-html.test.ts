@@ -101,6 +101,7 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
         { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
       ],
       hasLogo: true,
+      supportEmail: null,
     })
     const transformSkin = (html: string): string => {
       const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
@@ -127,6 +128,7 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
       backgroundColor: '#F5F1EA',
       fonts: [],
       hasLogo: true,
+      supportEmail: null,
     })
     const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
     expect(hook.handler('<title>%VELO_BRAND%</title>')).toBe(
@@ -157,6 +159,7 @@ describe('real index.html font block -- no webfont in the core, the skin brings 
         { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
       ],
       hasLogo: true,
+      supportEmail: null,
     })
     expect(out).toContain(
       '<link rel="preload" href="/skin/assets/fonts/rubik-400.woff2" as="font" type="font/woff2" crossorigin />',
