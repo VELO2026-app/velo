@@ -8,10 +8,11 @@
 | --- | --- | --- |
 | `CI — gate` | `.github/workflows/ci.yml`, джоб `gate` | Сводный джоб. Ждёт все остальные джобы `ci.yml`: `scope`, lint, format, typecheck, три шарда vitest и `test — merge + coverage ratchet`, `test — @velo/ui`, build с бюджетом бандла, `e2e — Playwright smoke`, `e2e-stack` (sweep на настоящем бэке), матрицу редакций, `image`, `generated.ts drift`. Зелёный, если `scope` прошёл, а каждый остальной джоб прошёл или пропущен по размеру PR. |
 | `bundle budget guard` | `.github/workflows/bundle-budget.yml` | Правило меток бюджета бандла: поднятый бюджет требует метку `bundle-growth`, поднятый потолок — `bundle-ceiling`. Сам размер проверяет build внутри гейта. |
+| `visual — verdict` | `.github/workflows/visual.yml`, джоб `visual-verdict` | Вид на gold и goodo: красный при расхождении 19 экранов без метки `visual-change` (FE-234). Запускается всегда, без `paths`-фильтра. |
 
-Обе проверки отвечают на любом PR в `deploy-machine`:
+Все проверки отвечают на любом PR в `deploy-machine`:
 
-- у `ci.yml` и `bundle-budget.yml` нет фильтра путей, оба запускаются на `opened`, `synchronize` и `reopened`;
+- у `ci.yml`, `bundle-budget.yml` и `visual.yml` нет фильтра путей. Все три запускаются на `opened`, `synchronize` и `reopened`; `bundle-budget.yml` и `visual.yml` слушают ещё `labeled` и `unlabeled`;
 - гейт объявлен с `if: always()` и стоит под одним именем. Он запускается после успеха, падения, пропуска и отмены остальных джобов;
 - пропуск по размеру PR (только `docs/**` или только `backend/**`) гейт засчитывает как пройденный. Падение выше по цепочке всегда видно как падение: `test` → `test-report`, `matrix-plan` / `matrix` → `matrix-gate`, `scope` проверяется отдельно.
 
@@ -21,13 +22,17 @@
 
 - reusable workflow: запущенный sweep — это `e2e-stack / e2e-stack — sweep on a real backend`, пропущенный — просто `e2e-stack` (видно на PR #160, только docs);
 - матрицы: `matrix — ${{ matrix.cell }}` и `test — vitest shard ${{ matrix.shard }}/3` в пропущенном виде, `matrix — golden/ai` в запущенном;
-- у `visual — base vs head` имя с выражением, поэтому он остаётся информационным (`docs/agents/e2e.md`).
+- у `visual — base vs head (<скин>)` имя с выражением и скином, поэтому обязательным его делать нельзя; вместо него обязателен `visual — verdict` (FE-234, ниже).
 
 Если сделать обязательным «запущенное» имя, PR, который этот джоб пропускает, навсегда повиснет в «Expected». Гейт этой ловушки избегает: у него одно имя, и он запускается всегда. Ещё одна причина: переименование или новый джоб не требуют правки ruleset. Новый джоб нужно добавить в `needs` гейта, иначе упадёт `.github/scripts/ci-gate.test.mjs` в джобе `scope`.
 
+### Обязательный статус «visual — verdict» (FE-234)
+
+Решение владельца 24.11: расхождение вида на gold или goodo краснит CI. Статус `visual — verdict` (workflow `Visual`, `.github/workflows/visual.yml`) запускается на каждом PR в `deploy-machine`, под одним именем; красный он при расхождении вида без метки `visual-change`. В `required_status_checks` пишется контекст `visual — verdict` (в [`deploy-machine-ruleset-gate.json`](deploy-machine-ruleset-gate.json) строка уже есть). Применяет админ.
+
 ### Что не обязательно и почему
 
-- `visual — base vs head` информационный по решению владельца, и его имя нестабильно (см. выше).
+- `visual — base vs head (<скин>)`: имя нестабильно (см. выше); обязателен только `visual — verdict`.
 - `backend -- pytest (full suite, backend image)` (`backend-tests.yml`) запускается только при изменениях бэка (`paths`). Если сделать его обязательным, он повиснет на любом фронтовом PR. Если Zodd захочет сделать его обязательным, нужен тот же приём, что у гейта: workflow без `paths`, решение о запуске внутри джоба.
 - `pridem check -- the repository as the deploy machine reads it` (`primer-check.yml`) запускается на каждом PR в `deploy-machine`, так что технически может быть обязательным. Это проверка бэка и деплой-машины, решение за Zodd. Чтобы добавить её, допишите имя в `required_status_checks`.
 
@@ -45,7 +50,7 @@
 **B. Мерж** — [`deploy-machine-ruleset-gate.json`](deploy-machine-ruleset-gate.json):
 
 - `pull_request` — изменения идут через PR, одобрение не требуется (`required_approving_review_count: 0`), разрешён только merge-коммит (`allowed_merge_methods: ["merge"]`, как сейчас). Squash и rebase в кнопке мержа пропадут.
-- `required_status_checks` — `CI — gate` и `bundle budget guard` от GitHub Actions (`integration_id: 15368`: проверку с тем же именем от другого приложения GitHub не засчитает). `strict_required_status_checks_policy: false` — ветке PR не обязательно быть на вершине `deploy-machine`. Оркестратор и так делает update-branch перед мержем, а строгий режим выстраивал бы все мержи в очередь.
+- `required_status_checks` — `CI — gate`, `bundle budget guard` и `visual — verdict` (FE-234) от GitHub Actions (`integration_id: 15368`: проверку с тем же именем от другого приложения GitHub не засчитает). `strict_required_status_checks_policy: false` — ветке PR не обязательно быть на вершине `deploy-machine`. Оркестратор и так делает update-branch перед мержем, а строгий режим выстраивал бы все мержи в очередь.
 - `bypass_actors`:
   - роль Repository admin (`RepositoryRole` 5) и владельцы организации (`OrganizationAdmin`) в режиме `pull_request`. Они могут влить PR с красной проверкой, явно отметив обход в кнопке мержа (это пишется в журнал), но напрямую пушить не могут. Это аварийный выход для варианта (a), см. ниже;
   - deploy key (`DeployKey`, `always`). Машина на сервере роли test при расхождении типов коммитит `generated.ts` от имени `velo-types` (`primer.yaml`, `types.commit_as`) поверх выкаченного коммита и обычным push отправляет его в ветку сервера ключом записи (`pridem/steps/types.py`, DM-63). Без этого исключения push отклонится, и шаг `types` останется несделанным (`incomplete`).
@@ -122,7 +127,7 @@ gh api --method PUT repos/VELO2026-app/velo/rulesets/<ID> -f enforcement=disable
 ## Проверка после применения
 
 1. Открыть черновой PR из ветки фронта с намеренно красным джобом (например, сломать формат одного файла). В кнопке мержа должно быть «Required statuses must pass», `gh pr merge` от `sstark21` должен отказать. Закрыть PR, удалить ветку.
-2. PR только с `docs/**`: `CI — gate` и `bundle budget guard` зелёные за минуту, мерж доступен.
+2. PR только с `docs/**`: `CI — gate`, `bundle budget guard` и `visual — verdict` зелёные за минуту, мерж доступен.
 3. `git push --force` в `deploy-machine` отклоняется у всех, админа включительно (ruleset A).
 4. Вариант (a): прямой `git push` в `deploy-machine` отклоняется и у админа.
 

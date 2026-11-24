@@ -1,0 +1,27 @@
+{
+  "_": "sha256 of every file under assets/ of velo-brand (the golden VELO skin), by path under assets/. validate-skin warns when another brand ships a byte-identical file. Hashes only: no brand file lives in this repo. Raise it with the velo-brand pin in .github/brand-skins.json.",
+  "source": "VELO2026-app/velo-brand@v0.1.1",
+  "assets": {
+    "apple-touch-icon-180.png": "448f866fc7ae0814bff7e54154bdfe47159d634cb95c2a6c683203364de4bca8",
+    "bg/background.webp": "1dde39b76fb1537d8c5d42906fe9f525ade329d67139d18b698c1a071b7f8dda",
+    "favicon.svg": "2fd312a1724f49efee3d71e05ec18bf02d1b33feae09884a915ba07d8b6a629c",
+    "fonts/marmelad-subset.woff2": "12c2dea232636ae1f050974f8674def76ec2a47b9c9cd814a1d8e7b5e94818bd",
+    "icon-192.png": "c5482fe8a177af4ff0536ae66bcc90263f4bc5e903a6f5fca34faa448bc43655",
+    "icon-512.png": "520eb5ce9845fc700ba8595dbe4f5877268dd6b6a4758b503dd6c9b70bfa7889",
+    "icon-maskable-512.png": "3634452ad3e9403f2be8a6c079fadba3647760ca71bc8a5631e66f24a13cf962",
+    "logo-white.svg": "569c4b1dd060a44e6e3e3442fc842dee933b6748a772a31e24137c883e2781c6",
+    "mandala-blue.png": "92fa4c394837649a77bed132b7aa44164515ab41f2e1882c0f5bd1ded895aad0",
+    "mandala-white.png": "a778ba38d8add34999ba08391bb832e5fae30f885ce6df9708adea8507911fb2",
+    "onboarding/master-analytics.svg": "d30907bdecb26ae453e3da2fc5742bc24ee1cbc526b265d22baa114ccb695a05",
+    "onboarding/master-space.svg": "5f1e846b5cf99bcef570202648a6ed1dc9d6468c338549424c3300d4ace09fdf",
+    "onboarding/master-verdict-approved.svg": "c6fa5b97960794504bc85c823b9f21c51b0db21b053b611dda04604e18c7e48c",
+    "onboarding/master-verdict-reject.svg": "25d575284c9142d76be35140ba0dc500befa8de0e237715bbb10ab06086c9b3a",
+    "onboarding/master-verdict-sent.svg": "e370568d2f5a8b534f80262aa2a17e0a4d9613e923b59c97579fcefaa897735e",
+    "onboarding/master-welcome.svg": "9ed306330f63189c3f7c5d61994a1851918c1e242f5570d68de7e1339776deaf",
+    "onboarding/onboarding-diary.svg": "b013d7a0244b27fafd94521477bc4a7d868125e9b879a9e906bf6ac0f28f47bf",
+    "onboarding/onboarding-masters.svg": "5fb6512842d83d2513d96ecade009f65483ea1e780d2066b871cf6a421f5447b",
+    "onboarding/onboarding-practice.svg": "f4c4e60779b2654db08169160481c7852dc450b44fd39f29abcb601e821ea9ad",
+    "velo-word-blue.svg": "6341130ab0d1c874b15a61a52f1988bf56fc43efd461330026fa537985429577",
+    "velo-word-filled.svg": "498eafea8d0e9ed10cfa0eb7dcefd45d922250e3145e9eb248498747212babe6"
+  }
+}

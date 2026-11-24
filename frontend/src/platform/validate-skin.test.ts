@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -292,6 +293,50 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     const dir = writeSkinPackage()
     writeFileSync(join(dir, 'assets', 'apple-touch-icon-180.png'), png(180, 180, 6))
     expect(failsOf(dir)).toContain('assets/apple-touch-icon-180.png: has an alpha channel')
+  })
+})
+
+// tz-whitelabel §3.5: another brand does not ship the golden VELO's files.
+describe('copied golden assets (FE-234)', () => {
+  const fixtureLogo = (dir: string) => readFileSync(join(dir, 'assets', 'favicon.svg'))
+  const hashesOf = (bytes: Buffer) =>
+    new Map([[createHash('sha256').update(bytes).digest('hex'), 'favicon.svg']])
+  const warnsOf = (dir: string, hashes: Map<string, string>) =>
+    (validateSkin(dir, FRONTEND, hashes) as Report).warns.join('\n')
+
+  it('a file byte-identical to a golden VELO file warns, named, in another brand', () => {
+    const dir = writeSkinPackage()
+    expect(warnsOf(dir, hashesOf(fixtureLogo(dir)))).toContain(
+      'assets/favicon.svg is byte-identical to the golden VELO file',
+    )
+  })
+
+  it('the warning never fails the package', () => {
+    const dir = writeSkinPackage()
+    expect((validateSkin(dir, FRONTEND, hashesOf(fixtureLogo(dir))) as Report).fails).toEqual([])
+  })
+
+  it('a copied file in a subfolder (assets/bg/, onboarding/) warns too', () => {
+    const dir = writeSkinPackage({
+      extra: {
+        'assets/onboarding/onboarding-diary.svg':
+          '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"/>',
+      },
+    })
+    const bytes = readFileSync(join(dir, 'assets', 'onboarding', 'onboarding-diary.svg'))
+    const hashes = new Map([
+      [createHash('sha256').update(bytes).digest('hex'), 'onboarding/onboarding-diary.svg'],
+    ])
+    expect(warnsOf(dir, hashes)).toContain(
+      'assets/onboarding/onboarding-diary.svg is byte-identical',
+    )
+  })
+
+  it('the golden VELO brand itself and a changed file stay quiet', () => {
+    const own = writeSkinPackage({ brand: { ...FIXTURE_BRAND, displayName: 'VELO' } })
+    expect(warnsOf(own, hashesOf(fixtureLogo(own)))).not.toContain('byte-identical')
+    const other = writeSkinPackage()
+    expect(warnsOf(other, hashesOf(Buffer.from('another file')))).not.toContain('byte-identical')
   })
 })
 

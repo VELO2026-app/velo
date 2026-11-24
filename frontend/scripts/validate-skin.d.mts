@@ -8,6 +8,11 @@ export interface SkinReport {
   passed: string[]
 }
 
-export function validateSkin(skinDir: string, frontendDir: string): SkinReport
+/** `veloHashes` (sha256 -> asset name) is the golden VELO list; a test passes its own. */
+export function validateSkin(
+  skinDir: string,
+  frontendDir: string,
+  veloHashes?: Map<string, string>,
+): SkinReport
 export function skinBuildGate(skinDir: string, frontendDir: string): SkinReport | null
 export function pngInfo(file: string): { width: number; height: number; colorType: number } | null
