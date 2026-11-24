@@ -104,6 +104,27 @@ WebKit: `pnpm -C frontend exec playwright test --project=sweep-webkit`.
 
 Sweep только читает. Два экрана пишут при открытии — по задумке и идемпотентно: `master-invite` (гасит одноразовый токен; setup выпускает новый на каждый прогон) и `group-join` (ada уже в группе).
 
+## Доступность: axe-core на обоих скинах (FE-241)
+
+Проект `a11y` (`frontend/e2e/a11y/`) гоняет axe-core по тем же роутам и ролям, что и sweep, на **одном скине за прогон**: `A11Y_SKIN=gold` (пакет `velo-brand`) или `goodo` (`goodo-brand`). Пакеты берутся по закреплённым тегам из `.github/brand-skins.json` (`.github/scripts/fetch-brand-skins.mjs`, общий клон `frontend/scripts/lib/brand-git.mjs`). В CI это шаги `Accessibility (gold)` и `Accessibility (goodo)` job'а `e2e-stack`: для каждого скина своя сборка (`dist-gold`, `dist-goodo`) на том же стеке.
+
+Правила: WCAG 2.1 A и AA (теги `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`) плюс `heading-order` и `label-content-name-mismatch`.
+
+Что не считается нарушением:
+
+- **Пара, объявленная пакетом в `contrastExceptions`** (контракт 2.1): вторичный текст на белой карточке, не ниже 3:1. Пара читается из бренд-записи пакета, не копируется в тест. Любая другая пара и ниже 3:1 остаются нарушением.
+- **Строка в `frontend/e2e/a11y/allowlist.ts`**: одно правило на перечисленных роутах (по желанию — на одной паре цветов и одном скине), с `reason` и номером задачи. Правило целиком не глушится. Исправил — убери строку в том же PR. Новое нарушение без строки — красный job.
+
+Запуск локально (нужен стек, как для sweep; пакеты — `node .github/scripts/fetch-brand-skins.mjs <каталог>`):
+
+```sh
+cd frontend
+node scripts/apply-skin.mjs <каталог>/velo-brand/skin && pnpm exec vite build --outDir dist-gold
+A11Y_SKIN=gold A11Y_SKIN_DIR=<каталог>/velo-brand/skin VISUAL_DIST=dist-gold pnpm exec playwright test --project=a11y
+```
+
+Спека сверяет цвета страницы с hex-токенами пакета: сборка не того скина (или устаревшая) падает с `the build is not the <skin> package`, а не проходит за чужой скин.
+
 ## Визуальное сравнение с базовой веткой (FE-162)
 
 Отвечает на вопрос «что поменялось на экране — и задумано ли это?». Собирает базу PR (`deploy-machine`) и ветку PR, снимает 19 ключевых экранов (390×844, светлая тема; тёмной в приложении пока нет) на одних и тех же данных и выдаёт отчёт только по изменившимся экранам. Эталонов в git нет.
