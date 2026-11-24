@@ -110,6 +110,7 @@
             v-model="payoutForm.email"
             label="PayPal Email *"
             type="email"
+            kind="email"
             placeholder="you@example.com"
             :error="formErrors.email"
           />

@@ -64,3 +64,57 @@ describe('TimezoneCityPicker -- the selected zone leads the list', () => {
     wrapper.unmount()
   })
 })
+
+describe('TimezoneCityPicker -- keyboard navigation (combobox)', () => {
+  function key(wrapper: ReturnType<typeof mountPicker>, k: string) {
+    return wrapper.find('input').trigger('keydown', { key: k })
+  }
+
+  it('ArrowDown highlights the first row and points aria-activedescendant at it', async () => {
+    const wrapper = mountPicker()
+    await key(wrapper, 'ArrowDown')
+    const input = wrapper.find('input')
+    const rows = wrapper.findAll('[role="option"]')
+    expect(rows[0]!.classes()).toContain('tz-picker__row--highlight')
+    expect(input.attributes('aria-activedescendant')).toBe(rows[0]!.attributes('id'))
+    expect(input.attributes('role')).toBe('combobox')
+    expect(wrapper.find('[role="listbox"]').attributes('id')).toBe(
+      input.attributes('aria-controls'),
+    )
+    wrapper.unmount()
+  })
+
+  it('ArrowUp from nothing wraps to the last row', async () => {
+    const wrapper = mountPicker()
+    await key(wrapper, 'ArrowUp')
+    const rows = wrapper.findAll('[role="option"]')
+    expect(rows[rows.length - 1]!.classes()).toContain('tz-picker__row--highlight')
+    wrapper.unmount()
+  })
+
+  it('Enter picks the highlighted row', async () => {
+    const wrapper = mountPicker('')
+    await key(wrapper, 'ArrowDown')
+    await key(wrapper, 'ArrowDown')
+    await key(wrapper, 'Enter')
+    const expected = CURATED_CITIES[1]!.iana
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([expected])
+    wrapper.unmount()
+  })
+
+  it('Enter with nothing highlighted selects nothing', async () => {
+    const wrapper = mountPicker()
+    await key(wrapper, 'Enter')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('typing clears the highlight', async () => {
+    const wrapper = mountPicker()
+    await key(wrapper, 'ArrowDown')
+    await wrapper.find('input').setValue('моск')
+    expect(wrapper.find('input').attributes('aria-activedescendant')).toBeUndefined()
+    expect(wrapper.find('.tz-picker__row--highlight').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

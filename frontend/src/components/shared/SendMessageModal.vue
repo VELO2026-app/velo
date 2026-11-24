@@ -32,6 +32,7 @@
            4000 cap the chat thread's own Composer enforces. -->
       <VTextarea
         v-model="text"
+        kind="message"
         :placeholder="t('chat.messagePlaceholder')"
         :rows="5"
         maxlength="4000"

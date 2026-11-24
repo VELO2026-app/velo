@@ -215,3 +215,47 @@ describe('DiarySearchBar', () => {
     expect(events.live).toEqual([]) // closing is not a query change
   })
 })
+
+describe('DiarySearchBar -- recents keyboard navigation', () => {
+  function press(key: string): void {
+    input().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+  }
+
+  it('ArrowDown + Enter applies the highlighted recent immediately', async () => {
+    localStorage.setItem('velo:diary:recent-searches', JSON.stringify(['сон', 'море']))
+    mount()
+    await flush()
+
+    press('ArrowDown')
+    press('ArrowDown')
+    await flush()
+    const rows = Array.from(host?.querySelectorAll('[role="option"]') ?? [])
+    expect(input().getAttribute('aria-activedescendant')).toBe(rows[1]?.id)
+
+    press('Enter')
+    await flush()
+    expect(events.live).toEqual(['море'])
+    expect(input().value).toBe('море')
+  })
+
+  it('Enter with no highlight still commits the typed query', async () => {
+    localStorage.setItem('velo:diary:recent-searches', JSON.stringify(['сон']))
+    mount()
+    await flush()
+    typeInto(input(), 'лес')
+    press('Enter')
+    await flush()
+    expect(events.live).toEqual(['лес'])
+  })
+
+  it('arrows do nothing once the field has text (the recents are gone)', async () => {
+    localStorage.setItem('velo:diary:recent-searches', JSON.stringify(['сон']))
+    mount()
+    await flush()
+    typeInto(input(), 'лес')
+    await flush()
+    press('ArrowDown')
+    await flush()
+    expect(input().hasAttribute('aria-activedescendant')).toBe(false)
+  })
+})

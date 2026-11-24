@@ -25,18 +25,31 @@
     <VInput
       v-model="query"
       :placeholder="placeholder ?? t('timezone.placeholder')"
+      kind="search"
+      v-bind="nav.comboboxAttrs.value"
       @focus="onFieldFocus"
+      @keydown="nav.onKeydown"
     >
       <template #suffix><IconSearch :size="18" /></template>
     </VInput>
 
-    <div v-if="filtered.length" ref="listEl" class="tz-picker__list">
+    <div
+      v-if="filtered.length"
+      :id="nav.listId"
+      ref="listEl"
+      class="tz-picker__list"
+      role="listbox"
+    >
       <button
-        v-for="c in filtered"
+        v-for="(c, i) in filtered"
         :key="c.iana + c.city"
         type="button"
         class="tz-picker__row"
-        :class="{ 'tz-picker__row--active': c.iana === modelValue }"
+        :class="{
+          'tz-picker__row--active': c.iana === modelValue,
+          'tz-picker__row--highlight': nav.activeIndex.value === i,
+        }"
+        v-bind="nav.optionAttrs(i, c.iana === modelValue)"
         @click="select(c.iana)"
       >
         <span class="tz-picker__main">
@@ -65,6 +78,7 @@ import { timezoneRows } from '@/utils/timezoneCities'
 import { useTimezoneCatalog } from '@/composables/useTimezoneCatalog'
 import { formatUtcOffset } from '@/utils/practiceOptions'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import { useListboxNav } from '@/composables/useListboxNav'
 
 // tz-i18n 2.2a: the empty hint and the placeholder are keys; the SEARCH
 // itself stays data-driven (city names + latin aliases are the data, §3.1).
@@ -121,6 +135,17 @@ const filtered = computed(() => {
 // view instead of a mid-list scroll position.
 watch([query, () => props.modelValue], () => {
   if (listEl.value) listEl.value.scrollTop = 0
+  nav.reset()
+})
+
+// Arrow keys move a virtual highlight through the rows and Enter picks one,
+// while DOM focus stays in the search field (aria-activedescendant).
+const nav = useListboxNav({
+  count: () => filtered.value.length,
+  onSelect: (i) => {
+    const row = filtered.value[i]
+    if (row) select(row.iana)
+  },
 })
 
 /** Current local time in the given zone ("14:35"), live + DST-aware. */
@@ -210,6 +235,12 @@ function select(iana: string): void {
 
 .tz-picker__row + .tz-picker__row {
   border-top: 1px solid var(--velo-border-light);
+}
+
+/* Keyboard highlight (arrow keys): a ring, so it never reads as the selection. */
+.tz-picker__row--highlight {
+  outline: 2px solid var(--velo-border-input-focus);
+  outline-offset: -2px;
 }
 
 .tz-picker__row--active {

@@ -76,6 +76,7 @@
 
     <VTextarea
       v-model="comment"
+      kind="message"
       :placeholder="t('report.placeholder')"
       :rows="4"
       bordered-at-rest

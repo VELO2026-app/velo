@@ -44,10 +44,10 @@
         class="diary-search__input"
         type="text"
         :placeholder="t('diary.search.placeholder')"
-        enterkeyhint="search"
+        v-bind="{ ...inputKindAttrs('search'), ...nav.comboboxAttrs.value }"
         :aria-label="t('diary.search.aria')"
         @input="onUserInput"
-        @keydown.enter.prevent="commit"
+        @keydown="onKeydown"
       />
       <!-- The SMALL x lives INSIDE the field and clears the TEXT (and, like
            backspacing to empty, debounces a live('') that drops the filter)
@@ -72,13 +72,15 @@
 
       <!-- Recent searches: a glass panel under the field, only while the
            field is empty -- typing anything dismisses it. -->
-      <section v-if="recentsVisible" class="diary-search__recents">
+      <section v-if="recentsVisible" :id="nav.listId" class="diary-search__recents" role="listbox">
         <h3 class="diary-search__recent-label">{{ t('diary.search.recent') }}</h3>
         <button
-          v-for="term in recents"
+          v-for="(term, i) in recents"
           :key="term"
           type="button"
           class="diary-search__recent-item"
+          :class="{ 'diary-search__recent-item--highlight': nav.activeIndex.value === i }"
+          v-bind="nav.optionAttrs(i)"
           @click="applyRecent(term)"
         >
           <span class="diary-search__recent-text">{{ term }}</span>
@@ -127,7 +129,8 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { useEscapeLayer } from '@/components/ui'
+import { useEscapeLayer, inputKindAttrs } from '@/components/ui'
+import { useListboxNav } from '@/composables/useListboxNav'
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 
 const props = defineProps<{
@@ -192,6 +195,26 @@ function recordRecent(t: string): void {
 }
 
 loadRecents()
+
+// Arrow keys walk the recents while the field is empty; Enter on a highlighted
+// one applies it (aria-activedescendant, focus stays in the field).
+const nav = useListboxNav({
+  count: () => (recentsVisible.value ? recents.value.length : 0),
+  expanded: () => recentsVisible.value,
+  onSelect: (i) => {
+    const term = recents.value[i]
+    if (term !== undefined) applyRecent(term)
+  },
+})
+watch(recentsVisible, () => nav.reset())
+
+function onKeydown(event: KeyboardEvent): void {
+  if (nav.onKeydown(event)) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    commit()
+  }
+}
 
 // Sync the field from the active search: initial mount and external resets
 // (e.g. the contextual back clearing the filter while the bar is up).
@@ -448,6 +471,11 @@ defineExpose({ focus })
   cursor: pointer;
   transition: opacity var(--transition-fast);
   text-align: left;
+}
+
+.diary-search__recent-item--highlight {
+  outline: 2px solid var(--velo-border-input-focus);
+  outline-offset: -2px;
 }
 
 .diary-search__recent-item:hover {

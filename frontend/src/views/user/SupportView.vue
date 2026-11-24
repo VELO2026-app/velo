@@ -70,6 +70,7 @@
         <h2 class="support__title">{{ t('user.screens.support.message.label') }}</h2>
         <VTextarea
           v-model="message"
+          kind="message"
           :rows="5"
           maxlength="4000"
           :placeholder="t('user.screens.support.message.placeholder')"

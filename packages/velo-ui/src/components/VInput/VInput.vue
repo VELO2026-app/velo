@@ -50,7 +50,7 @@
           :disabled="disabled"
           :aria-invalid="!!error || undefined"
           :aria-describedby="error ? errorId : undefined"
-          v-bind="$attrs"
+          v-bind="{ ...kindAttrs, ...$attrs }"
           @focus="onFieldFocus"
           @input="onInput"
         />
@@ -71,7 +71,7 @@
           :disabled="disabled"
           :aria-invalid="!!error || undefined"
           :aria-describedby="error ? errorId : undefined"
-          v-bind="$attrs"
+          v-bind="{ ...kindAttrs, ...$attrs }"
           @focus="onFieldFocus"
           @input="onInput"
         />
@@ -90,7 +90,7 @@
         :disabled="disabled"
         :aria-invalid="!!error || undefined"
         :aria-describedby="error ? errorId : undefined"
-        v-bind="$attrs"
+        v-bind="{ ...kindAttrs, ...$attrs }"
         @focus="onFieldFocus"
         @input="onInput"
       />
@@ -112,10 +112,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, useId, useSlots } from 'vue'
+import { computed, ref, nextTick, useId, useSlots } from 'vue'
 import { IconRequired, IconRequiredDone } from '../../icons'
 import VFieldError from '../VFieldError'
 import { useKeyboardFieldScroll } from '../../keyboardFieldScroll'
+import { inputKindAttrs, type InputKind } from '../../inputKind'
 
 // inheritAttrs:false — forward native attrs (min/max/step/inputmode/…) onto the
 // inner <input>, not the wrapper div. Keeps VInput at parity with VSelect/VTextarea.
@@ -167,6 +168,9 @@ const props = withDefaults(
      *  applies again when an affix slot sends `floatingLabel` to the external
      *  label. */
     hideLabel?: boolean
+    /** Soft-keyboard preset (inputmode/enterkeyhint/autocomplete/autocapitalize).
+     *  A native attribute the caller passes still wins. Default: none. */
+    kind?: InputKind
   }>(),
   {
     modelValue: '',
@@ -190,6 +194,8 @@ const slots = useSlots()
 function isFloating(): boolean {
   return props.floatingLabel && !slots.prefix && !slots.suffix
 }
+
+const kindAttrs = computed(() => inputKindAttrs(props.kind))
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
