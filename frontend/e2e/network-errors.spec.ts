@@ -10,6 +10,7 @@ import { expect, test } from './support/test'
 import { mockApi, type MockReply } from './support/api'
 import {
   freezeClock,
+  makeBooking,
   makePractice,
   makeUser,
   mockSignedIn,
@@ -44,26 +45,7 @@ test.describe('network failures: error state, then recovery', () => {
     mockSignedIn(api, makeUser())
     const practice = makePractice()
     const bookings = flaky({ status: 500, body: { detail: 'boom' } }, () =>
-      paged([
-        {
-          id: '00000000-0000-4000-8000-0000000000c1',
-          practice_id: practice.id,
-          user_id: 'u1',
-          status: 'confirmed',
-          purchase_id: null,
-          cancelled_at: null,
-          cancellation_reason: null,
-          joined_at: null,
-          left_at: null,
-          checkin_skipped: false,
-          created_at: '2026-11-10T08:00:00Z',
-          updated_at: null,
-          has_feedback: false,
-          has_checkin: false,
-          has_reflection: false,
-          practice,
-        },
-      ]),
+      paged([makeBooking(practice)]),
     )
     api.on('GET', '/api/v1/bookings/me', bookings.handler)
     await seedSession(page)
@@ -72,6 +54,7 @@ test.describe('network failures: error state, then recovery', () => {
 
     await expect(page.getByText('Load error')).toBeVisible()
     await expect(page.getByText('Morning Breathwork')).toHaveCount(0)
+    await expect(page.getByText('No bookings')).toHaveCount(0)
 
     bookings.heal()
     await page.getByRole('button', { name: 'Try again' }).click()
@@ -108,6 +91,7 @@ test.describe('network failures: error state, then recovery', () => {
     await page.getByRole('button', { name: 'Retry' }).click()
 
     await expect(page.getByText('Morning Breathwork').first()).toBeVisible()
+    await expect(page.getByText('Load error')).toHaveCount(0)
   })
 
   test('dashboard: a failed upcoming list is an error with Retry, not "no upcoming practices"', async ({
@@ -157,6 +141,7 @@ test.describe('network failures: error state, then recovery', () => {
     await page.goto('/user/calendar')
 
     await expect(page.getByTestId('screen-error')).toBeVisible()
+    await expect(page.getByText('No practices')).toHaveCount(0)
     week.heal()
     await page.getByRole('button', { name: 'Retry' }).click()
 
