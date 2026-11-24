@@ -465,6 +465,8 @@ export function useAdminStats() {
     pendingModeration: computed(() => query.data.value?.pendingReports ?? 0),
     /** Nothing held and a request in flight. */
     loading: screenQueryState(query).loading,
+    /** Nothing held and the last request failed: the counters are unknown, not zero. */
+    failed: screenQueryState(query).failed,
     /** The raw error of the last request, or null. */
     error: query.error,
     /** The query itself, for onFailedRequest. */

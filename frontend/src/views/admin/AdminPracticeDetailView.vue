@@ -68,7 +68,15 @@
            inert, and until this screen it did (PROMPT №540 audit: zero admin
            consumers existed at all). Best-effort: shown only once loaded,
            never blocks the rest of the page if this secondary fetch fails. -->
-      <VCard v-if="zoomAttendance" class="admin-detail__zoom">
+      <!-- A failed read is not "no Zoom data" (FE-242): a compact error with Retry. -->
+      <VCard v-if="zoomFailed" class="admin-detail__zoom" data-testid="zoom-error">
+        <h3 class="admin-detail__section admin-detail__section--first">Zoom</h3>
+        <p>{{ t('common.loadError') }}</p>
+        <VButton size="sm" variant="outline" @click="attendanceQuery.refetch()">{{
+          t('common.retry')
+        }}</VButton>
+      </VCard>
+      <VCard v-else-if="zoomAttendance" class="admin-detail__zoom">
         <h3 class="admin-detail__section admin-detail__section--first">Zoom</h3>
         <div class="admin-detail__zoom-row">
           <span class="admin-detail__zoom-label">{{
@@ -230,6 +238,10 @@ const error = computed<string | null>(() =>
 const attendanceQuery = useQuery(() => adminPracticeAttendanceQuery(practiceId))
 const zoomAttendance = computed<AdminZoomAttendanceResponse | null>(() =>
   attendanceQuery.error.value ? null : (attendanceQuery.data.value ?? null),
+)
+
+const zoomFailed = computed<boolean>(
+  () => attendanceQuery.error.value != null && attendanceQuery.data.value === undefined,
 )
 
 const isPast = computed<boolean>(() => practice.value?.status === 'past')

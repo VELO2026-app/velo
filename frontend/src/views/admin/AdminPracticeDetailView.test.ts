@@ -535,14 +535,26 @@ describe('AdminPracticeDetailView', () => {
       }
     }
 
-    it('does not render at all when the fetch fails -- never blocks the rest of the page', async () => {
-      vi.mocked(adminApi.getAdminZoomAttendance).mockRejectedValue(new Error('network down'))
+    it('a failed fetch shows a compact error with Retry, never blocks the rest of the page (FE-242)', async () => {
+      vi.mocked(adminApi.getAdminZoomAttendance).mockRejectedValueOnce(new Error('network down'))
       mount('p_upcoming')
       await flush()
 
       expect(text()).not.toContain('Статус встречи')
+      expect(host?.querySelector('[data-testid="zoom-error"]')).not.toBeNull()
       // the rest of the page is unaffected
       expect(statValue('Записалось')).not.toBe('')
+
+      vi.mocked(adminApi.getAdminZoomAttendance).mockResolvedValue(
+        zoomAttendance({ zoom_meeting_status: 'active' }),
+      )
+      Array.from(host!.querySelectorAll('[data-testid="zoom-error"] button'))
+        .find((b) => b.textContent?.includes('Повторить'))!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+
+      expect(host?.querySelector('[data-testid="zoom-error"]')).toBeNull()
+      expect(text()).toContain('Статус встречи')
     })
 
     it('active meeting: shows the "Активна" badge', async () => {
