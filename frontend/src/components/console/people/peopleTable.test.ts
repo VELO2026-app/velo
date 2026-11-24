@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pagerItems } from '@/components/console/people/peopleTable'
+import { masterStatusTone, pagerItems, roleTone } from '@/components/console/people/peopleTable'
 
 describe('pagerItems', () => {
   it.each([
@@ -15,5 +15,25 @@ describe('pagerItems', () => {
   it('has no pager for fewer than two pages', () => {
     expect(pagerItems(1, 1)).toEqual([])
     expect(pagerItems(1, 0)).toEqual([])
+  })
+})
+
+describe('pill tones', () => {
+  it.each([
+    ['verified', 'success'],
+    ['pending', 'warning'],
+    ['rejected', 'danger'],
+    ['suspended', 'danger'],
+    ['cancelled_by_user', 'neutral'],
+  ])('master status %s -> %s', (status, tone) => {
+    expect(masterStatusTone(status)).toBe(tone)
+  })
+
+  it.each([
+    ['admin', 'warning'],
+    ['master', 'success'],
+    ['user', 'neutral'],
+  ])('role %s -> %s', (role, tone) => {
+    expect(roleTone(role)).toBe(tone)
   })
 })

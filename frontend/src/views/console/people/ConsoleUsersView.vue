@@ -53,7 +53,7 @@
             />
           </template>
           <template #cell-role="{ row }">
-            <VBadge :variant="roleVariant(row.user.role)">{{ roleLabel(row.user.role) }}</VBadge>
+            <PeoplePill :tone="roleTone(row.user.role)">{{ roleLabel(row.user.role) }}</PeoplePill>
           </template>
           <template #cell-registered="{ row }">{{ formatDay(row.user.created_at) }}</template>
           <template #cell-lastSeen="{ row }">
@@ -96,14 +96,15 @@
 import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { useQuery } from '@pinia/colada'
-import { VBadge, VButton, VConfirmDialog, VEmptyState, VLoader, VSegment } from '@/components/ui'
+import { VButton, VConfirmDialog, VEmptyState, VLoader, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import PeoplePager from '@/components/console/people/PeoplePager.vue'
+import PeoplePill from '@/components/console/people/PeoplePill.vue'
 import PersonCell from '@/components/console/people/PersonCell.vue'
-import { formatDay } from '@/components/console/people/peopleTable'
+import { formatDay, roleTone } from '@/components/console/people/peopleTable'
 import { makeMaster } from '@/api/admin'
 import type { UserResponse } from '@/api/admin'
 import {
@@ -173,12 +174,6 @@ function roleLabel(role: string): string {
   if (role === 'admin') return t('adminScreens.adminUsers.roleAdmin')
   if (role === 'master') return t('adminScreens.adminUsers.roleMaster')
   return t('adminScreens.adminUsers.roleUser')
-}
-
-function roleVariant(role: string): 'success' | 'warning' | 'info' {
-  if (role === 'admin') return 'warning'
-  if (role === 'master') return 'success'
-  return 'info'
 }
 
 // -- Make-master confirm flow --

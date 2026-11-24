@@ -136,7 +136,8 @@ function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined 
   border-radius: var(--velo-radius-10);
   background: var(--velo-bg-subtle);
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-secondary);
+  /* Primary, not secondary: secondary on this tint is under 4.5:1 on gold. */
+  color: var(--velo-text-primary);
 }
 
 .console-table__row--clickable {

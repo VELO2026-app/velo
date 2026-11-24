@@ -6,6 +6,7 @@
 // Kept apart from the components so they are tested without a DOM.
 // =============================================================================
 
+import type { PillTone } from '@/components/console/people/PeoplePill.vue'
 import type { AdminMasterListItem } from '@/api/admin'
 import { getLocale } from '@/locales'
 import { directionLabel, parseMethods, resolveStyleLabel } from '@/utils/methodTaxonomy'
@@ -72,4 +73,19 @@ export function methodChips(master: Pick<AdminMasterListItem, 'methods'>): Metho
     chips.push({ label: parsed.customText, muted: false })
   }
   return chips
+}
+
+/** The pill tone of a master's verification status. */
+export function masterStatusTone(status: string): PillTone {
+  if (status === 'verified') return 'success'
+  if (status === 'pending') return 'warning'
+  if (status === 'rejected' || status === 'suspended') return 'danger'
+  return 'neutral'
+}
+
+/** The pill tone of a user's role. */
+export function roleTone(role: string): PillTone {
+  if (role === 'admin') return 'warning'
+  if (role === 'master') return 'success'
+  return 'neutral'
 }

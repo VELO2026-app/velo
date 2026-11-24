@@ -67,16 +67,16 @@
             }}</span>
             <span v-else class="masters-muted">{{ DASH }}</span>
           </template>
-          <template #cell-schools="{ row }">
-            <VBadge v-if="(row.master.schools_count ?? 0) > 0" variant="blue">
-              {{ t('adminScreens.adminMasters.curatorRole') }} · {{ row.master.schools_count }}
-            </VBadge>
-            <span v-else class="masters-muted">{{ DASH }}</span>
-          </template>
           <template #cell-status="{ row }">
-            <VBadge :variant="masterStatusVariant(row.master.master_status)">
-              {{ statusLabel(row.master.master_status) }}
-            </VBadge>
+            <div class="masters-status">
+              <PeoplePill :tone="masterStatusTone(row.master.master_status)">
+                {{ statusLabel(row.master.master_status) }}
+              </PeoplePill>
+              <!-- A school counts active and frozen alike (the admin needs to see what stays attached). -->
+              <PeoplePill v-if="(row.master.schools_count ?? 0) > 0" tone="accent">
+                {{ t('adminScreens.adminMasters.curatorRole') }} · {{ row.master.schools_count }}
+              </PeoplePill>
+            </div>
           </template>
           <template #cell-practices="{ row }">{{ count(row.master.practices_count) }}</template>
           <template #cell-students="{ row }">{{ count(row.master.students_count) }}</template>
@@ -102,15 +102,16 @@ import { t, getLocale } from '@/locales'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
-import { VBadge, VButton, VEmptyState, VLoader, VSegment } from '@/components/ui'
+import { VButton, VEmptyState, VLoader, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import MasterInviteModal from '@/components/console/people/MasterInviteModal.vue'
 import PeoplePager from '@/components/console/people/PeoplePager.vue'
+import PeoplePill from '@/components/console/people/PeoplePill.vue'
 import PersonCell from '@/components/console/people/PersonCell.vue'
-import { methodChips } from '@/components/console/people/peopleTable'
+import { masterStatusTone, methodChips } from '@/components/console/people/peopleTable'
 import type { AdminMasterListItem } from '@/api/admin'
 import {
   CONSOLE_PAGE_SIZE,
@@ -123,7 +124,7 @@ import { screenQueryState } from '@/composables/queries/screenState'
 import { useRouteListState } from '@/composables/console/useRouteListState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
-import { masterDisplayName, masterStatusVariant } from '@/utils/adminHelpers'
+import { masterDisplayName } from '@/utils/adminHelpers'
 import { formatMoney } from '@/utils/format'
 
 const DASH = '—'
@@ -177,12 +178,11 @@ const tabOptions = computed<SegmentOption[]>(() =>
 const columns = computed<ConsoleTableColumn[]>(() => [
   { key: 'master', label: t('console.masters.columns.master') },
   { key: 'methods', label: t('console.masters.columns.methods') },
-  { key: 'schools', label: t('console.masters.columns.schools'), width: 120, secondary: true },
-  { key: 'status', label: t('console.masters.columns.status'), width: 190 },
+  { key: 'status', label: t('console.masters.columns.status'), width: 200 },
   {
     key: 'practices',
     label: t('adminScreens.adminMasters.practicesStat'),
-    width: 90,
+    width: 80,
     align: 'end',
     secondary: true,
   },
@@ -196,7 +196,7 @@ const columns = computed<ConsoleTableColumn[]>(() => [
   {
     key: 'payout',
     label: t('adminScreens.adminMasters.toWithdrawStat'),
-    width: 120,
+    width: 110,
     align: 'end',
     secondary: true,
   },
@@ -240,6 +240,13 @@ function open(master: AdminMasterListItem): void {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow-wrap: anywhere;
+}
+
+.masters-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
 }
 
 .masters-muted {

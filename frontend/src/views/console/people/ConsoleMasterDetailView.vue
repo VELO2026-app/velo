@@ -29,9 +29,9 @@
     testid="console-master-detail"
   >
     <template v-if="master" #title-extra>
-      <VBadge :variant="masterStatusVariant(master.master_status)">{{
+      <PeoplePill :tone="masterStatusTone(master.master_status)">{{
         masterStatusLabel(master.master_status)
-      }}</VBadge>
+      }}</PeoplePill>
     </template>
     <template #actions>
       <VButton variant="ghost" @click="back">{{ t('console.masters.detail.back') }}</VButton>
@@ -73,14 +73,13 @@
           </div>
           <div class="master-summary__chips">
             <template v-if="chips.length">
-              <VChip
+              <PeoplePill
                 v-for="(chip, i) in chips"
                 :key="`${chip.label}-${i}`"
-                size="sm"
-                :active="!chip.muted"
+                :tone="chip.muted ? 'neutral' : 'accent'"
               >
                 {{ chip.label }}
-              </VChip>
+              </PeoplePill>
             </template>
             <span v-else class="master-summary__muted">{{
               t('adminScreens.adminMasters.directionsMissing')
@@ -116,20 +115,21 @@ import { host } from '@/platform/host'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
-import { VAvatar, VBadge, VButton, VChip, VEmptyState, VLoader } from '@/components/ui'
+import { VAvatar, VButton, VEmptyState, VLoader } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import MasterProfileForm from '@/components/console/people/MasterProfileForm.vue'
 import MasterReviewCard from '@/components/console/people/MasterReviewCard.vue'
 import MasterRightsCard from '@/components/console/people/MasterRightsCard.vue'
-import { methodChips } from '@/components/console/people/peopleTable'
+import PeoplePill from '@/components/console/people/PeoplePill.vue'
+import { masterStatusTone, methodChips } from '@/components/console/people/peopleTable'
 import { ApiResponseError } from '@/api/client'
 import { adminMasterQuery, onFailedRequest } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { routeParam } from '@/router/routeParam'
-import { masterDisplayName, masterStatusLabel, masterStatusVariant } from '@/utils/adminHelpers'
+import { masterDisplayName, masterStatusLabel } from '@/utils/adminHelpers'
 import { formatMoney } from '@/utils/format'
 
 const DASH = '—'

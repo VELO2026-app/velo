@@ -155,7 +155,7 @@
           </div>
         </template>
         <div v-if="languages.length" class="profile-form__chips">
-          <VChip v-for="l in languages" :key="l" size="md">{{ l }}</VChip>
+          <PeoplePill v-for="l in languages" :key="l">{{ l }}</PeoplePill>
         </div>
         <span v-else class="profile-form__muted">{{ DASH }}</span>
       </ConsoleFieldRow>
@@ -180,7 +180,7 @@
           readonly
         />
         <div v-else-if="methods.length" class="profile-form__chips">
-          <VChip v-for="m in methods" :key="m" size="md">{{ m }}</VChip>
+          <PeoplePill v-for="m in methods" :key="m">{{ m }}</PeoplePill>
         </div>
         <span v-else class="profile-form__muted">{{ DASH }}</span>
       </ConsoleFieldRow>
@@ -218,7 +218,7 @@
           </div>
         </template>
         <div v-if="certifications.length" class="profile-form__chips">
-          <VChip v-for="(c, i) in certifications" :key="`${c}-${i}`" size="md">{{ c }}</VChip>
+          <PeoplePill v-for="(c, i) in certifications" :key="`${c}-${i}`">{{ c }}</PeoplePill>
         </div>
         <span v-else class="profile-form__muted">{{ DASH }}</span>
       </ConsoleFieldRow>
@@ -233,6 +233,7 @@ import { useQueryCache } from '@pinia/colada'
 import { VButton, VChip, VInput, VTextarea } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleFieldRow from '@/components/console/people/ConsoleFieldRow.vue'
+import PeoplePill from '@/components/console/people/PeoplePill.vue'
 import {
   buildProfilePatch,
   type PatchProblem,

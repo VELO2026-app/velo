@@ -50,13 +50,13 @@
           <template #cell-students="{ row }">{{ row.school.students_count }}</template>
           <template #cell-created="{ row }">{{ formatDay(row.school.created_at) }}</template>
           <template #cell-status="{ row }">
-            <VBadge :variant="row.school.is_active ? 'success' : 'muted'">
+            <PeoplePill :tone="row.school.is_active ? 'success' : 'neutral'">
               {{
                 row.school.is_active
                   ? t('adminScreens.adminSchools.active')
                   : t('adminScreens.adminSchools.frozen')
               }}
-            </VBadge>
+            </PeoplePill>
           </template>
           <template #empty>{{ t('adminScreens.adminSchools.emptyNote') }}</template>
         </ConsoleTable>
@@ -77,11 +77,12 @@ import { t } from '@/locales'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
-import { VBadge, VButton, VEmptyState, VLoader } from '@/components/ui'
+import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import PeoplePager from '@/components/console/people/PeoplePager.vue'
+import PeoplePill from '@/components/console/people/PeoplePill.vue'
 import PersonCell from '@/components/console/people/PersonCell.vue'
 import { formatDay } from '@/components/console/people/peopleTable'
 import type { AdminSchoolListItem } from '@/api/types'
