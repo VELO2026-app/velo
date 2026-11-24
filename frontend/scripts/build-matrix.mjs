@@ -225,26 +225,63 @@ export function bundleHasEmail(bundle, email) {
   return unescapeBundle(bundle).toLowerCase().includes(email.toLowerCase())
 }
 
-/** The first path data of a mood icon tree: a literal the bundle carries
- *  when the icon is in it. Null = the tree draws no path. Pure. */
-export function moodProbe(node) {
-  if (node.attrs?.d) return node.attrs.d
-  for (const child of node.children ?? []) {
-    const found = moodProbe(child)
-    if (found !== null) return found
-  }
-  return null
+/** @typedef {import('./lib/skin-package.mjs').MoodSvgNode} MoodSvgNode */
+/** The mood icons of a package by key (the engine's trees).
+ *  @typedef {Record<string, MoodSvgNode>} MoodSet */
+
+/** Every path data string of an icon tree, in drawing order.
+ *  @param {MoodSvgNode} node
+ *  @returns {string[]} */
+function pathData(node) {
+  return [...(node.attrs?.d ? [node.attrs.d] : []), ...(node.children ?? []).flatMap(pathData)]
 }
 
-/** Does the bundle carry the icons of a mood set: every one (all = true) or
- *  any one (all = false)? Pure. */
-export function bundleHasMoodIcons(bundle, set, all) {
+/**
+ * The literals that tell the icons of a set apart in a bundle: per icon, its
+ * longest path data that no OTHER icon of the set carries. Two icons can share
+ * a path (the glow of one size), so "the first path" would not tell them
+ * apart; an icon with no path of its own is told by all of its paths. Pure.
+ *
+ * @param {MoodSet} set
+ * @returns {Record<string, string[]>}
+ */
+export function moodProbes(set) {
+  /** @type {Array<[string, string[]]>} */
+  const own = Object.entries(set).map(([key, tree]) => [key, pathData(tree)])
+  return Object.fromEntries(
+    own.map(([key, paths]) => {
+      const others = new Set(own.filter(([other]) => other !== key).flatMap(([, d]) => d))
+      const [longest] = paths.filter((d) => !others.has(d)).sort((a, b) => b.length - a.length)
+      return [key, longest === undefined ? paths : [longest]]
+    }),
+  )
+}
+
+/** Which icons of the set the bundle carries, in key order.
+ *  @param {string} bundle
+ *  @param {MoodSet} set
+ *  @returns {boolean[]} */
+function carriedMoodIcons(bundle, set) {
   const text = unescapeBundle(bundle)
-  const found = Object.values(set).map((tree) => {
-    const probe = moodProbe(tree)
-    return probe !== null && text.includes(probe)
-  })
-  return all ? found.every(Boolean) : found.some(Boolean)
+  return Object.values(moodProbes(set)).map(
+    (probes) => probes.length > 0 && probes.every((d) => text.includes(d)),
+  )
+}
+
+/** Does the bundle carry EVERY icon of the mood set? Pure.
+ *  @param {string} bundle
+ *  @param {MoodSet} set
+ *  @returns {boolean} */
+export function bundleHasAllMoodIcons(bundle, set) {
+  return carriedMoodIcons(bundle, set).every(Boolean)
+}
+
+/** Does the bundle carry at least ONE icon of the mood set? Pure.
+ *  @param {string} bundle
+ *  @param {MoodSet} set
+ *  @returns {boolean} */
+export function bundleHasAnyMoodIcon(bundle, set) {
+  return carriedMoodIcons(bundle, set).some(Boolean)
 }
 
 /** What of one skin leaked into a core (skinless) build, as labels for
@@ -262,7 +299,7 @@ export function skinLeaks({
   css,
   goldenDecls,
   coreName,
-  moodIcons = /** @type {Record<string, any> | null} */ (null),
+  moodIcons = /** @type {MoodSet | null} */ (null),
 }) {
   const leaked = []
   const title = html.match(/<title>([^<]*)<\/title>/)?.[1]
@@ -273,8 +310,7 @@ export function skinLeaks({
     leaked.push(`${label} displayName`)
   if (brand.supportEmail && bundleHasEmail(js, brand.supportEmail))
     leaked.push(`${label} supportEmail`)
-  if (moodIcons !== null && bundleHasMoodIcons(js, moodIcons, false))
-    leaked.push(`${label} moodIcons`)
+  if (moodIcons !== null && bundleHasAnyMoodIcon(js, moodIcons)) leaked.push(`${label} moodIcons`)
   const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
   if (foreign.length > 0) leaked.push(`${label} tokens (${foreign.join(', ')})`)
   return leaked
@@ -541,7 +577,7 @@ function snapshot(cell, skins, goldenDecls, coreName) {
     facts.brandMissing = !bundleHas(js, brand.displayName)
     facts.supportEmailMissing =
       brand.supportEmail !== null && !bundleHasEmail(js, brand.supportEmail)
-    facts.moodIconsMissing = moodIcons !== null && !bundleHasMoodIcons(js, moodIcons, true)
+    facts.moodIconsMissing = moodIcons !== null && !bundleHasAllMoodIcons(js, moodIcons)
     facts.tokensMissing = missingTokens(decls, css, goldenDecls)
     facts.layout = skinLayout(
       cell.skin.source,

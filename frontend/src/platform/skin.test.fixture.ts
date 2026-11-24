@@ -82,11 +82,27 @@ ${body ?? '<circle cx="20" cy="20" r="20" fill="url(#glow)"/>\n<path d="M12 14h4
 `
 }
 
-/** The five files of a valid mood icon set, for FixturePatch.extra.
+/** The five mood keys, worst to best. @internal */
+export const MOOD_FIXTURE_KEYS = ['bad', 'low', 'neutral', 'good', 'fire'] as const
+
+/** The mark of one key's fixture icon: its path data is its own, so an icon
+ *  that lands under another key shows.
+ *  @internal */
+export function moodMark(key: (typeof MOOD_FIXTURE_KEYS)[number]): string {
+  return `M${12 + MOOD_FIXTURE_KEYS.indexOf(key)} 14h4v6h-4z`
+}
+
+/** The five files of a valid mood icon set, for FixturePatch.extra: the same
+ *  glow, a mark of its own per key.
  *  @internal */
 export function moodIconFiles(): Record<string, string> {
   return Object.fromEntries(
-    ['bad', 'low', 'neutral', 'good', 'fire'].map((key) => [`assets/mood/${key}.svg`, moodSvg()]),
+    MOOD_FIXTURE_KEYS.map((key) => [
+      `assets/mood/${key}.svg`,
+      moodSvg(
+        `<circle cx="20" cy="20" r="20" fill="url(#glow)"/>\n<path d="${moodMark(key)}" fill="currentColor"/>`,
+      ),
+    ]),
   )
 }
 

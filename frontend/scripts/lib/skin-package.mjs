@@ -156,6 +156,14 @@ export const PRECACHED_ICONS = [
 /** The first minor of contract 2 that lets a package leave the logo set out. */
 const OPTIONAL_LOGO_MINOR = 1
 
+/** The minor of a contract point: "2.3" -> 3. The one reading of it -- every
+ *  "needs contract 2.N or later" rule goes through here.
+ *  @param {string} contract
+ *  @returns {number} */
+function contractMinor(contract) {
+  return Number(contract.split('.')[1])
+}
+
 /** Does the package (its file list) ship the logo set? */
 export function shipsLogo(files) {
   return LOGO_ASSETS.every((asset) => files.includes(`assets/${asset}`))
@@ -172,12 +180,17 @@ export const MOOD_KEYS = ['bad', 'low', 'neutral', 'good', 'fire']
 /** The first minor of contract 2 that knows the mood icon set. */
 const MOOD_ICONS_MINOR = 3
 /** One icon, in bytes: the trees travel in a JS chunk, so a cap tighter than
- *  the generic SVG one (the Goodo set is about 60 KB an icon). */
+ *  the generic SVG one (the Goodo icons are 27 to 39 KB each, 160 KB the set). */
 const MOOD_SVG_MAX_BYTES = 128 * 1024
 const MOOD_MAX_ELEMENTS = 2000
 const MOOD_MAX_DEPTH = 8
 
-/** Does the package (its file list) ship any file of the mood icon set? */
+/** One node of a mood icon tree: the root is the `svg`.
+ *  @typedef {{ tag: string, attrs?: Record<string, string>, children?: MoodNode[] }} MoodNode */
+
+/** Does the package (its file list) ship any file of the mood icon set?
+ *  @param {string[]} files
+ *  @returns {boolean} */
 export function shipsMoodIcons(files) {
   return files.some((file) => file.startsWith('assets/mood/'))
 }
@@ -245,9 +258,11 @@ allow(
   ],
   MOOD_NUMBER,
 )
-// Paint: nothing, the text color (the line color of the app -- the one the
-// core faces use), a hex, or a gradient of this file.
-allow(['fill', 'stroke'], new RegExp(`^(none|currentColor|${MOOD_HEX}|url${MOOD_URL})$`))
+// Paint of a shape: nothing, the text color (the ink of the app -- the one the
+// core faces draw their lines with) or a gradient of this file. A hex is for
+// the stops of a gradient only (the glow); a line in a hex is refused by name
+// in parseMoodSvg, so the lines of every skin stay one themable color.
+allow(['fill', 'stroke'], new RegExp(`^(none|currentColor|url${MOOD_URL})$`))
 allow(['stop-color'], new RegExp(`^(currentColor|${MOOD_HEX})$`))
 allow(['clip-path'], new RegExp(`^url${MOOD_URL}$`))
 allow(['fill-rule', 'clip-rule'], /^(nonzero|evenodd)$/)
@@ -255,6 +270,8 @@ allow(['stroke-linecap'], /^(butt|round|square)$/)
 allow(['stroke-linejoin'], /^(miter|round|bevel)$/)
 allow(['gradientUnits'], /^(userSpaceOnUse|objectBoundingBox)$/)
 allow(['id'], MOOD_ID)
+/** A hex color: what a line may NOT be painted with. */
+const MOOD_HEX_PAINT = new RegExp(`^${MOOD_HEX}$`)
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 const MOOD_TAG =
   /<(\/?)([A-Za-z][A-Za-z0-9]*)((?:\s+[^\s=/<>"']+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/y
@@ -268,21 +285,24 @@ function quoted(text) {
 /**
  * Reads one mood icon file into a tree of the closed vocabulary above.
  *
- * @returns `{ tree }` -- `{ tag, attrs?, children? }` nodes, the root an `svg`
- *   whose attrs are its viewBox (a square: the icon's nominal box, the art may
- *   run outside it) and `fill`; its width, height and xmlns are dropped, the
- *   client sizes the icon. Or `{ error }` -- the file is not a well-formed
- *   SVG of the vocabulary (truncated, mismatched tags, text, an element or
- *   attribute outside the lists, a gradient that is not there, nothing drawn).
+ * @param {string} text
+ * @returns {{ tree: MoodNode } | { error: string }} `{ tree }` -- `{ tag,
+ *   attrs?, children? }` nodes, the root an `svg` whose attrs are its viewBox
+ *   (a square: the icon's nominal box, the art may run outside it) and `fill`;
+ *   its width, height and xmlns are dropped, the client sizes the icon. Or
+ *   `{ error }` -- the file is not a well-formed SVG of the vocabulary
+ *   (truncated, mismatched tags, text, an element or attribute outside the
+ *   lists, a gradient that is not there, nothing drawn, a line painted in a
+ *   hex instead of currentColor).
  */
 export function parseMoodSvg(text) {
   const src = text
     .replace(/^\uFEFF/, '')
     .replace(/^\s*<\?xml[^>]*\?>/, '')
     .replace(/<!--[\s\S]*?-->/g, '')
-  /** @type {any} */
+  /** @type {MoodNode | null} */
   let root = null
-  /** @type {any[]} */
+  /** @type {MoodNode[]} */
   const stack = []
   const ids = new Set()
   const refs = new Set()
@@ -327,6 +347,10 @@ export function parseMoodSvg(text) {
           return { error: `xmlns must be ${SVG_NAMESPACE} on <svg>` }
         continue
       }
+      if ((key === 'fill' || key === 'stroke') && MOOD_HEX_PAINT.test(value))
+        return {
+          error: `<${name} ${key}=${quoted(value)}>: lines take the ink -- use currentColor (a hex is for a gradient stop)`,
+        }
       const shape = MOOD_ATTRS.get(key)
       if (shape === undefined)
         return { error: `<${name}> has the attribute ${quoted(key)}, not allowed` }
@@ -339,13 +363,14 @@ export function parseMoodSvg(text) {
       for (const [, ref] of value.matchAll(/url\(#([^)]+)\)/g)) refs.add(ref)
       attrs[key] = value
     }
-    /** @type {any} */
+    /** @type {MoodNode} */
     const node = { tag: name }
     if (MOOD_DRAWN.has(name)) drawn++
     if (root === null) {
       root = node
     } else {
-      const parent = stack[stack.length - 1]
+      // Open: the check on top of the loop refused content after the root.
+      const parent = /** @type {MoodNode} */ (stack[stack.length - 1])
       parent.children = parent.children ?? []
       parent.children.push(node)
     }
@@ -855,14 +880,19 @@ function checkAsset(dir, file, problems) {
 
 /** The mood icon set of the package: the five trees, or null when the
  *  package ships none (the core faces then draw). Whole or not at all, like
- *  the logo set; any file of it needs contract 2.3. */
+ *  the logo set; any file of it needs contract 2.3.
+ *  @param {string} dir
+ *  @param {string[]} files
+ *  @param {string | null} contract
+ *  @param {string[]} problems
+ *  @returns {Record<string, MoodNode> | null} */
 function loadMoodIcons(dir, files, contract, problems) {
   if (!shipsMoodIcons(files)) return null
-  if (contract !== null && Number(contract.split('.')[1]) < MOOD_ICONS_MINOR)
+  if (contract !== null && contractMinor(contract) < MOOD_ICONS_MINOR)
     problems.push(
       `assets/mood/: the mood icon set needs contract "2.${MOOD_ICONS_MINOR}" or later, got "${contract}"`,
     )
-  /** @type {Record<string, unknown>} */
+  /** @type {Record<string, MoodNode>} */
   const set = {}
   for (const key of MOOD_KEYS) {
     const file = `assets/mood/${key}.svg`
@@ -878,7 +908,7 @@ function loadMoodIcons(dir, files, contract, problems) {
       continue
     }
     const parsed = parseMoodSvg(readFileSync(path, 'utf8'))
-    if (parsed.error) problems.push(`${file}: ${parsed.error}`)
+    if ('error' in parsed) problems.push(`${file}: ${parsed.error}`)
     else set[key] = parsed.tree
   }
   return MOOD_KEYS.every((key) => key in set) ? set : null
@@ -1009,7 +1039,7 @@ export function loadSkinPackage(dir, tokensDoc) {
           `assets/${asset}: missing -- the logo set (${LOGO_ASSETS.join(', ')}) ships whole or not at all`,
         )
   if (logoShipped.length === 0 && contract !== null) {
-    const minor = Number(contract.split('.')[1])
+    const minor = contractMinor(contract)
     if (minor < OPTIONAL_LOGO_MINOR)
       problems.push(
         `assets/: no logo set -- leaving it out needs contract "2.${OPTIONAL_LOGO_MINOR}" or later, got "${contract}"`,
@@ -1018,7 +1048,7 @@ export function loadSkinPackage(dir, tokensDoc) {
 
   // A brand field newer than the declared minor (BRAND_FIELD_MINORS).
   if (brand !== null && contract !== null) {
-    const declared = Number(contract.split('.')[1])
+    const declared = contractMinor(contract)
     for (const { field, minor } of BRAND_FIELD_MINORS) {
       const value = brand[field]
       const carried = Array.isArray(value) ? value.length > 0 : value !== null

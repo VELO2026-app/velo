@@ -55,8 +55,9 @@ interface Facts {
 const {
   assetCountFails,
   bundleHas,
-  bundleHasMoodIcons,
-  moodProbe,
+  bundleHasAllMoodIcons,
+  bundleHasAnyMoodIcon,
+  moodProbes,
   cssHasDecl,
   evaluateMatrix,
   fanInFails,
@@ -70,8 +71,9 @@ const {
   assetCountFails(entries: FactsEntry[]): string[]
   fanInFails(cellNames: string[], entries: FactsEntry[]): string[]
   bundleHas(bundle: string, text: string): boolean
-  bundleHasMoodIcons(bundle: string, set: Record<string, MoodNode>, all: boolean): boolean
-  moodProbe(node: MoodNode): string | null
+  bundleHasAllMoodIcons(bundle: string, set: Record<string, MoodNode>): boolean
+  bundleHasAnyMoodIcon(bundle: string, set: Record<string, MoodNode>): boolean
+  moodProbes(set: Record<string, MoodNode>): Record<string, string[]>
   missingTokens(decls: string[], css: string, goldenDecls: Set<string>): string[]
   skinLeaks(input: {
     label: string
@@ -492,20 +494,38 @@ describe('real-brand cells (FE-234)', () => {
   })
 
   describe('mood icons (FE-273)', () => {
-    const icon = (d: string): MoodNode => ({
+    // Two icons of one size share the glow path; only the faces differ (the
+    // real Goodo set: bad and fire, low and good).
+    const GLOW = 'M0 0C9 0 9 9 0 9Z'
+    const icon = (...paths: string[]): MoodNode => ({
       tag: 'svg',
-      children: [{ tag: 'g', children: [{ tag: 'path', attrs: { d } }] }],
+      children: [{ tag: 'g', children: paths.map((d) => ({ tag: 'path', attrs: { d } })) }],
     })
-    const set = { bad: icon('M1 1h2z'), low: icon('M2 2h2z') }
+    const set = { bad: icon(GLOW, 'M1 1h2z'), low: icon(GLOW, 'M2 2h2z') }
 
-    it("the probe of an icon is its first path's data, wherever it sits in the tree", () => {
-      expect(moodProbe(set.bad)).toBe('M1 1h2z')
-      expect(moodProbe({ tag: 'svg' })).toBeNull()
+    it('an icon is told by the path data it alone carries, not by the glow it shares', () => {
+      expect(moodProbes(set)).toEqual({ bad: ['M1 1h2z'], low: ['M2 2h2z'] })
     })
 
-    it('a skin bundle carries the set only when EVERY icon is in it', () => {
-      expect(bundleHasMoodIcons('x="M1 1h2z",y="M2 2h2z"', set, true)).toBe(true)
-      expect(bundleHasMoodIcons('x="M1 1h2z"', set, true)).toBe(false)
+    it('an icon with no path of its own is told by all of its paths', () => {
+      expect(moodProbes({ bad: icon(GLOW), low: icon(GLOW, 'M2 2h2z') })).toEqual({
+        bad: [GLOW],
+        low: ['M2 2h2z'],
+      })
+    })
+
+    it('a skin bundle carries the set only when EVERY icon is in it, shared glow or not', () => {
+      expect(bundleHasAllMoodIcons(`${GLOW}|M1 1h2z|M2 2h2z`, set)).toBe(true)
+      // The glow and one face: the other icon is not there, whatever it shares.
+      expect(bundleHasAllMoodIcons(`${GLOW}|M1 1h2z`, set)).toBe(false)
+      expect(bundleHasAllMoodIcons(GLOW, set)).toBe(false)
+    })
+
+    it('a core bundle has an icon of the set only when that icon is proven there', () => {
+      expect(bundleHasAnyMoodIcon('x="M2 2h2z"', set)).toBe(true)
+      // The shared glow alone proves no icon of the set.
+      expect(bundleHasAnyMoodIcon(GLOW, set)).toBe(false)
+      expect(bundleHasAnyMoodIcon('x="M9 9h2z"', set)).toBe(false)
     })
 
     const leakOf = (js: string) =>

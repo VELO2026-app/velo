@@ -21,7 +21,8 @@ export const SKIN_TOKENS_ID = 'virtual:skin-tokens.css'
 export const SKIN_BRAND_ID = 'virtual:skin-brand'
 /** Import id of the skin's mood icon set (FE-273): `SKIN_MOOD_ICONS`, read by
  *  utils/ratingIcons.ts. Its own module, not a line of `virtual:skin-brand`:
- *  the five trees are tens of KB, and only the mood places should carry them. */
+ *  the five trees are about 160 KB for the Goodo set, and only the mood
+ *  places should carry them. */
 export const SKIN_MOOD_ID = 'virtual:skin-mood'
 
 /** Rollup convention: a `\0` prefix marks a resolved virtual id. */

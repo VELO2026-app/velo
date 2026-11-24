@@ -18,7 +18,13 @@ import {
   readGoldenTokens,
 } from '../../scripts/lib/skin-package.mjs'
 import { MOOD_SCALE_KEYS } from '@/utils/moodScale'
-import { cleanupSkinFixtures, moodIconFiles, moodSvg, writeSkinPackage } from './skin.test.fixture'
+import {
+  cleanupSkinFixtures,
+  moodIconFiles,
+  moodMark,
+  moodSvg,
+  writeSkinPackage,
+} from './skin.test.fixture'
 
 afterEach(cleanupSkinFixtures)
 
@@ -39,6 +45,14 @@ describe('the mood icon set of a package (contract 2.3)', () => {
     const tree = pkg.moodIcons?.neutral
     expect(tree?.tag).toBe('svg')
     expect(tree?.attrs).toEqual({ viewBox: '4 4 32 32', fill: 'none' })
+  })
+
+  it('each key reads its own file: five icons, five different marks', () => {
+    const pkg = load(moodIconFiles())
+    const markOf = (key: (typeof MOOD_KEYS)[number]): string | undefined =>
+      pkg.moodIcons?.[key]?.children?.[2]?.attrs?.d
+    expect(MOOD_KEYS.map(markOf)).toEqual(MOOD_KEYS.map(moodMark))
+    expect(new Set(MOOD_KEYS.map(markOf)).size).toBe(5)
   })
 
   it('the file names are the same five keys the mood scale knows', () => {
@@ -87,6 +101,21 @@ describe('one icon file: a closed SVG vocabulary, no half-read file', () => {
     expect(problemsWith(moodSvg('<script>alert(1)</script><path d="M0 0h1"/>'))).toContain(
       'assets/mood/neutral.svg: has a script',
     )
+  })
+
+  it.each([
+    ['fill', '<path d="M0 0h1" fill="#120054"/>', '<path fill="#120054">: lines take the ink'],
+    ['stroke', '<path d="M0 0h1" stroke="#fff"/>', '<path stroke="#fff">: lines take the ink'],
+  ])(
+    'a line painted in a hex (%s) is refused: lines take the ink, currentColor',
+    (_, shape, reason) => {
+      expect(problemsWith(moodSvg(shape))).toContain(`assets/mood/neutral.svg: ${reason}`)
+    },
+  )
+
+  it('a hex is fine where it is a color of the glow: a gradient stop; lines stay currentColor', () => {
+    expect(moodSvg()).toContain('stop-color="#14213D"')
+    expect(problemsWith(moodSvg())).toBe('')
   })
 
   it.each([

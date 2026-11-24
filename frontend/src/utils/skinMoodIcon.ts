@@ -16,8 +16,11 @@
 // the core faces draw their lines with.
 //
 // The icon's viewBox is its NOMINAL box: the art may run outside it (the
-// Goodo glow does), so the root is `overflow: visible` and a mood card laid
-// out for `size` px holds the same box as with a core face.
+// Goodo glow does, by 37 %), so from GLOW_CLIP_BELOW px up the root is
+// `overflow: visible` and a mood card laid out for `size` px holds the same
+// box as with a core face. Below it the places are rows of text and pills,
+// where that overflow runs into the digits and words next to the icon: the art
+// is held to a disc of the icon's box, the footprint of a core face.
 // =============================================================================
 
 import { defineComponent, h, useId, type Component, type VNode } from 'vue'
@@ -28,6 +31,11 @@ const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 /** The ink of the lines: `currentColor` in the file resolves to this. */
 const INK = 'var(--velo-primary-dark)'
 
+/** Below this size (px) the art is held to a disc of the icon's box. The
+ *  smallest places (badges 14 and 16, rows 22) sit beside text; a card, an
+ *  avatar or the slider (36 and up) have room for the glow. */
+const GLOW_CLIP_BELOW = 24
+
 /** Attribute values that point at an element of the file: `url(#id)`. */
 const URL_REF = /url\(#([^)]+)\)/g
 
@@ -36,16 +44,20 @@ const URL_REF = /url\(#([^)]+)\)/g
  * suffix, so two icons on a screen never share a gradient (the file's ids
  * are only unique inside the file; the same trick the core faces play with
  * `useId()`).
+ *
+ * @param node - The tree node.
+ * @param uid - The instance suffix.
+ * @param extra - Props of this node over the file's (the root: size, style).
  */
-function drawNode(node: MoodSvgNode, uid: string): VNode {
-  const attrs: Record<string, string> = {}
+function drawNode(node: MoodSvgNode, uid: string, extra: Record<string, unknown> = {}): VNode {
+  const attrs: Record<string, unknown> = {}
   for (const [name, value] of Object.entries(node.attrs ?? {})) {
     attrs[name] =
       name === 'id' ? `${value}-${uid}` : value.replace(URL_REF, (_, id) => `url(#${id}-${uid})`)
   }
   return h(
     node.tag,
-    attrs,
+    { ...attrs, ...extra },
     (node.children ?? []).map((child) => drawNode(child, uid)),
   )
 }
@@ -62,19 +74,15 @@ export function createSkinMoodIcon(tree: MoodSvgNode): Component {
     setup(props) {
       const uid = useId()
       return () => {
-        const root = drawNode(tree, uid)
-        const { props: rootProps, children } = root
-        return h(
-          'svg',
-          {
-            ...rootProps,
-            xmlns: SVG_NAMESPACE,
-            width: props.size,
-            height: props.size,
-            style: { overflow: 'visible', color: INK },
-          },
-          children as VNode[],
-        )
+        const small = Number(props.size) < GLOW_CLIP_BELOW
+        return drawNode(tree, uid, {
+          xmlns: SVG_NAMESPACE,
+          width: props.size,
+          height: props.size,
+          style: small
+            ? { overflow: 'hidden', clipPath: 'circle(50%)', color: INK }
+            : { overflow: 'visible', color: INK },
+        })
       }
     },
   })

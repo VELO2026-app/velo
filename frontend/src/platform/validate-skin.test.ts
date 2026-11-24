@@ -19,6 +19,7 @@ import {
   FIXTURE_TOKENS,
   cleanupSkinFixtures,
   moodIconFiles,
+  moodSvg,
   png,
   tempDir,
   writeSkinPackage,
@@ -55,6 +56,17 @@ describe('validate-skin (tz-whitelabel §3)', () => {
     expect(withSet.passed).toContain('mood icon set present (bad, low, neutral, good, fire)')
     const without = validateSkin(writeSkinPackage({ manifest }), FRONTEND) as Report
     expect(without.passed).toContain('no mood icon set: the app draws the core faces')
+  })
+
+  it('a package whose icon lines are a hex instead of currentColor fails, naming the file (FE-273)', () => {
+    const extra = {
+      ...moodIconFiles(),
+      'assets/mood/good.svg': moodSvg('<path d="M0 0h1" fill="#005409"/>'),
+    }
+    const manifest = 'schema: 1\ncontract: "2.3"\n'
+    expect(failsOf(writeSkinPackage({ manifest, extra }))).toContain(
+      'assets/mood/good.svg: <path fill="#005409">: lines take the ink',
+    )
   })
 
   it('a package with a broken mood icon fails, naming the file (FE-273)', () => {

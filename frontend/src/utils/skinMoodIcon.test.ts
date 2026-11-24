@@ -38,8 +38,29 @@ describe('createSkinMoodIcon', () => {
   })
 
   it('lets the art run out of the box, so a card laid out for `size` keeps its box', () => {
-    const svg = mount(createSkinMoodIcon(tree())).find('svg')
+    const svg = mount(createSkinMoodIcon(tree()), { props: { size: 36 } }).find('svg')
     expect(svg.attributes('style')).toContain('overflow: visible')
+    expect(svg.attributes('style')).not.toContain('clip-path')
+  })
+
+  it.each([14, 16, 22])(
+    'holds the art to a disc of its box at %s px: beside text it must not run into the words',
+    (size) => {
+      const style = mount(createSkinMoodIcon(tree()), { props: { size } })
+        .find('svg')
+        .attributes('style')
+      expect(style).toContain('overflow: hidden')
+      expect(style).toContain('clip-path: circle(50%)')
+      expect(style).toContain('color: var(--velo-primary-dark)')
+      expect(style).not.toContain('overflow: visible')
+    },
+  )
+
+  it('a size given as text is read as a number: "16" is small, "40" is not', () => {
+    const styleAt = (size: string): string | undefined =>
+      mount(createSkinMoodIcon(tree()), { props: { size } }).find('svg').attributes('style')
+    expect(styleAt('16')).toContain('clip-path')
+    expect(styleAt('40')).toContain('overflow: visible')
   })
 
   it('passes the class of the place on to the svg, as the core faces do', () => {
