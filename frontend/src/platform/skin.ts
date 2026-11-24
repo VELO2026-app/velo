@@ -28,9 +28,10 @@ import {
   skinCss,
   type LoadedSkinPackage,
   type SkinFont,
+  type SupportMark,
 } from '../../scripts/lib/skin-package.mjs'
 
-export type { SkinFont }
+export type { SkinFont, SupportMark }
 
 /** A skin package's brand identity, materialized into the build's derivatives. */
 export interface SkinPackage {
@@ -54,6 +55,10 @@ export interface SkinPackage {
    *  screens' mailto. Null = the package names none; the screens then show
    *  no address line. */
   supportEmail: string | null
+  /** What the support conversation's mark shows (brand record `supportMark`,
+   *  contract 2.2; FE-261): 'logo' keeps the logo set (the default), 'icon'
+   *  draws the brand's favicon.svg. The other logo places ignore it. */
+  supportMark: SupportMark
 }
 
 /** The no-skin build: the neutral core (FE-230). Colors mirror
@@ -68,6 +73,7 @@ export const CORE_SKIN: SkinPackage = {
   fonts: [],
   hasLogo: true,
   supportEmail: null,
+  supportMark: 'logo',
 }
 
 /** Loads public/skin/ with the engine; throws on the first problems. */
@@ -105,6 +111,7 @@ export function readSkin(publicDir: string): SkinPackage | null {
     fonts,
     hasLogo: shipsLogo(pkg.files),
     supportEmail,
+    supportMark: brand.supportMark ?? 'logo',
   }
 }
 
