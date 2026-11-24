@@ -29,8 +29,8 @@
   when the proxy could not resolve the user.
 
   BE-163 support conversation: the wrapper passes `support` (the row's
-  `channel === 'support'`) and the screen then renders the VELO logo in the
-  header, the support caption (i18n:chat.supportSender) on peer bubbles
+  `channel === 'support'`) and the screen then renders the skin's brand
+  icon (FE-261) in the header, the support caption (i18n:chat.supportSender) on peer bubbles
   (never an admin's name),
   the BE-166 translation states for body-less messages, and sends with an
   Idempotency-Key minted HERE (a failed draft's key rides its retry, so a
@@ -47,7 +47,7 @@
 
 <template>
   <div class="chat-thread">
-    <VHeader :title="peerTitle" :logo="support" show-back @back="emit('back')" />
+    <VHeader :title="peerTitle" :brand-mark="support" show-back @back="emit('back')" />
 
     <!-- Loading (first fetch only; polls refresh silently): bubble skeletons
          settled at the bottom, where the newest messages will land. Once
@@ -228,7 +228,7 @@ const props = defineProps<{
    *  (i18n:chat.supportTitle, resolves with the brand) here. */
   peerFallback: string
   /** BE-163: the thread is the caller's own support conversation -- the
-   *  header carries the VELO logo and peer bubbles the support caption
+   *  header carries the skin's brand icon and peer bubbles the support caption
    *  (i18n:chat.supportSender). */
   support?: boolean
 }>()

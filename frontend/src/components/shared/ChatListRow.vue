@@ -7,14 +7,15 @@
   VAvatar/VBadge/VeloLogo; the name falls back to the wording the parent
   supplies (peer may be null -- P-1 degrades instead of breaking).
 
-  `support` rows swap the avatar for the VELO logo and their preview speaks
-  the translation states (the parent derives the wording -- the row stays
-  content-agnostic).
+  `support` rows swap the avatar for the support conversation's mark (FE-261:
+  the logo set or the brand icon, by the skin's `supportMark` setting) and their
+  preview speaks the translation states (the parent derives the wording -- the
+  row stays content-agnostic).
 -->
 
 <template>
   <button type="button" class="chat-row" @click="emit('open')">
-    <VeloLogo v-if="support" :size="40" class="chat-row__logo" />
+    <VeloLogo v-if="support" support-mark :size="40" class="chat-row__brand-mark" />
     <VAvatar v-else :name="displayName" :url="avatarUrl || ''" size="md" />
     <span class="chat-row__main">
       <span class="chat-row__name">{{ displayName }}</span>
@@ -38,8 +39,8 @@ const props = defineProps<{
   peer?: ChatPeer | null | undefined
   peerFallback: string
   unread?: number
-  /** BE-163: the row is the caller's own support conversation -- the VELO
-   *  logo stands in for the (always null) peer avatar. */
+  /** BE-163: the row is the caller's own support conversation -- the skin's
+   *  brand icon stands in for the (always null) peer avatar. */
   support?: boolean
   /** Newest-message preview, already worded by the parent (translation
    *  states included). Empty/absent = no second line. */
@@ -69,9 +70,9 @@ const unread = computed(() => props.unread ?? 0)
   text-align: left;
 }
 
-/* The logo rides where the avatar would -- same 40px plate (VeloLogo sizes
-   in px), never squashed by the row's flex competition. */
-.chat-row__logo {
+/* The brand icon rides where the avatar would -- same 40px plate (VeloLogo
+   sizes in px), never squashed by the row's flex competition. */
+.chat-row__brand-mark {
   flex-shrink: 0;
 }
 
