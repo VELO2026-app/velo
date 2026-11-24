@@ -6,6 +6,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { RuleTester } from 'eslint'
+import tseslint from 'typescript-eslint'
 import { describe, expect, it } from 'vitest'
 import { findRuleDisables } from './directives.mjs'
 import { loadAllowlist } from './index.mjs'
@@ -287,6 +288,24 @@ tester.run('no-headers-outside-api', noHeadersOutsideApi, {
     "const get = api.get; get('/a')",
     "const { get } = api; get('/a')",
     "import { api } from '@/api/client'",
+    "import * as other from '@/api/other'",
+    // A field named fetch, in a type or a class, is not the global fetch.
+    {
+      code: 'interface Deps { fetch: () => void; fetch2(): void }',
+      languageOptions: { parser: tseslint.parser },
+    },
+    {
+      code: 'type Deps = { fetch: typeof fetch }',
+      languageOptions: { parser: tseslint.parser },
+    },
+    {
+      code: 'enum E { fetch }',
+      languageOptions: { parser: tseslint.parser },
+    },
+    'class A { fetch = 1; fetch() {} }',
+    // A shorthand that declares: a parameter and a destructured local.
+    'function f({ fetch }) { return fetch }',
+    'const { fetch } = deps; fetch()',
   ],
   invalid: [
     { code: "fetch('/a')", errors: [{ messageId: 'fetch' }] },
@@ -328,5 +347,11 @@ tester.run('no-headers-outside-api', noHeadersOutsideApi, {
     { code: 'const { request: r } = api', errors: [{ messageId: 'alias' }] },
     { code: 'const { ...all } = api', errors: [{ messageId: 'alias' }] },
     { code: "import { api as client } from '@/api/client'", errors: [{ messageId: 'rename' }] },
+    { code: "import * as client from '@/api/client'", errors: [{ messageId: 'namespace' }] },
+    { code: "import * as client from '../api/client'", errors: [{ messageId: 'namespace' }] },
+    { code: "const client = await import('@/api/client')", errors: [{ messageId: 'namespace' }] },
+    // One report for a shorthand that refers to the global fetch.
+    { code: 'const deps = { fetch }', errors: [{ messageId: 'fetch' }] },
+    { code: 'f({ fetch })', errors: [{ messageId: 'fetch' }] },
   ],
 })

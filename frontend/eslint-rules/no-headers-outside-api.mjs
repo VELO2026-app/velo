@@ -16,13 +16,16 @@
 //   - `api.post` / `api.request` used as a value, not called on the spot:
 //     `const p = api.post`, `api.post.call(...)`, `.bind`, `.apply`,
 //     `{ post } = api`, `api['post']` is read like `api.post`;
-//   - `api` imported under another name.
+//   - `api` imported under another name, and the client imported as a
+//     namespace (`import * as client from '@/api/client'`, `import('...')`):
+//     `client.api.post(...)` would hide the call.
 // A write with an Idempotency-Key goes through postIdempotent
 // (api/idempotent.ts).
 //
 // Known gaps (syntax only, no data flow): `api` passed around as a whole
 // value (`useClient(api)`), a computed key that is not a literal
-// (`api[name](...)`), XMLHttpRequest, `new Request`, navigator.sendBeacon.
+// (`api[name](...)`), a re-export of the client from another module,
+// XMLHttpRequest, `new Request`, navigator.sendBeacon.
 
 const FETCH_HOSTS = new Set(['window', 'globalThis', 'self', 'global'])
 const HEADER_METHODS = new Set(['post', 'request'])
@@ -62,17 +65,34 @@ function mayCarryHeaders(arg) {
   )
 }
 
-/** Whether the Identifier is a property name, not a reference to a variable. */
+/** Nodes whose `key` names a member without referring to a variable. */
+const KEYED = new Set([
+  'Property',
+  'PropertyDefinition',
+  'MethodDefinition',
+  'AccessorProperty',
+  'TSPropertySignature',
+  'TSMethodSignature',
+  'TSAbstractPropertyDefinition',
+  'TSAbstractMethodDefinition',
+  'TSEnumMember',
+])
+
+/** Whether the Identifier is a name, not a reference to the variable. */
 function isNameOnly(node) {
   const parent = node.parent
   // `typeof fetch` in a type: a type, not a call channel.
   if (parent.type === 'TSTypeQuery') return true
   if (parent.type === 'MemberExpression') return parent.property === node && !parent.computed
-  if (parent.type === 'Property' || parent.type === 'PropertyDefinition') {
-    return parent.key === node && !parent.computed && !parent.shorthand
-  }
-  return parent.type === 'MethodDefinition' && parent.key === node && !parent.computed
+  // A field `fetch` in an object, a class, an interface or a type literal.
+  // A shorthand `{ fetch }` has the key and the value as two nodes of one
+  // text: the value is the reference, the key is skipped (one report).
+  if (parent.type === 'Property' && parent.shorthand) return parent.value !== node
+  if (KEYED.has(parent.type)) return parent.key === node && !parent.computed
+  return false
 }
+
+const CLIENT_MODULE = /(?:^|\/)api\/client(?:\.ts)?$/
 
 /** @type {import('eslint').Rule.RuleModule} */
 export default {
@@ -91,6 +111,8 @@ export default {
         'api.post / api.request must be called on the spot (FE-232): an alias hides the headers from the CORS guard.',
       rename:
         'Import api under its own name (FE-232): the rules and the CORS guard look for `api`.',
+      namespace:
+        'Import `api` by name from the client (FE-232): a namespace import hides api.post / api.request.',
     },
   },
   create(context) {
@@ -128,6 +150,19 @@ export default {
                 (p.key.type === 'Literal' && HEADER_METHODS.has(String(p.key.value))))),
         )
         if (takes) context.report({ node, messageId: 'alias' })
+      },
+      ImportDeclaration(node) {
+        if (!CLIENT_MODULE.test(String(node.source.value))) return
+        for (const spec of node.specifiers) {
+          if (spec.type === 'ImportNamespaceSpecifier') {
+            context.report({ node: spec, messageId: 'namespace' })
+          }
+        }
+      },
+      ImportExpression(node) {
+        if (node.source.type === 'Literal' && CLIENT_MODULE.test(String(node.source.value))) {
+          context.report({ node, messageId: 'namespace' })
+        }
       },
       ImportSpecifier(node) {
         if (

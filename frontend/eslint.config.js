@@ -296,17 +296,7 @@ export default [
 
   // FE-232: headers and fetch() only in src/api/ -- the CORS guard of the
   // backend reads that directory and nothing else.
-  ...apiBoundaryConfig(
-    ['src/**/*.{ts,vue}'],
-    [
-      'src/api/**',
-      'src/**/*.test.ts',
-      // The two static-file loads of the platform seam (the instance config
-      // and the texts, from the frontend's own origin): no header, not API.
-      'src/platform/launch.ts',
-      'src/platform/texts.ts',
-    ],
-  ),
+  ...apiBoundaryConfig(['src/**/*.{ts,vue}'], ['src/api/**', 'src/**/*.test.ts']),
 
   {
     // The barrels and the components themselves may use deep paths internally

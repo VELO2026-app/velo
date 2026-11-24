@@ -234,9 +234,11 @@ async function onSubmit(): Promise<void> {
   submitting.value = true
   try {
     await createTicket(topic.value, text, appealKeys.keyFor(topic.value, text))
+    appealKeys.settle()
     submitted.value = true
     void openConversation()
   } catch (e) {
+    appealKeys.settle(e)
     toast.error(extractApiError(e, t('masterScreens.masterSupport.toast.sendFailed')))
   } finally {
     submitting.value = false

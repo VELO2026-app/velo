@@ -28,6 +28,7 @@ import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import SupportView from '@/views/user/SupportView.vue'
+import { ApiResponseError } from '@/api/client'
 
 const back = vi.fn()
 const push = vi.fn()
@@ -364,6 +365,25 @@ describe('SupportView', () => {
       expect(first?.[2]).toBe('key-1')
       expect(second?.[2]).toBe('key-1')
       expect(isTerminal()).toBe(true)
+    })
+
+    it('a retry after a refusal (422) mints a NEW key; after a 409 it keeps the key', async () => {
+      createTicket
+        .mockReset()
+        .mockRejectedValueOnce(new ApiResponseError(409, 'Still being processed'))
+        .mockRejectedValueOnce(new ApiResponseError(422, 'Body is wrong'))
+        .mockResolvedValue(CREATED)
+      mount()
+      await flush()
+
+      setValue(messageField(), 'У меня вопрос')
+      await flush()
+      for (let i = 0; i < 3; i++) {
+        submitBtn().click()
+        await flush()
+      }
+
+      expect(createTicket.mock.calls.map((c) => c[2])).toEqual(['key-1', 'key-1', 'key-2'])
     })
 
     it('an edit of the message after a failure mints a NEW key', async () => {

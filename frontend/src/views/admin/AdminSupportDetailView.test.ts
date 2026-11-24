@@ -1221,10 +1221,10 @@ describe('AdminSupportDetailView', () => {
       expect(keys[2]).not.toBe(keys[1])
     })
 
-    it('a 5xx keeps the key of the retry; a 4xx refusal gives the retry a new one', async () => {
+    it('a 503 and a 409 keep the key of the retry; a 403 refusal gives the retry a new one', async () => {
       vi.mocked(supportApi.sendAdminSupportReply)
         .mockRejectedValueOnce(new ApiResponseError(503, 'Service unavailable'))
-        .mockRejectedValueOnce(new ApiResponseError(503, 'Service unavailable'))
+        .mockRejectedValueOnce(new ApiResponseError(409, 'The same key is still being processed'))
         .mockRejectedValueOnce(new ApiResponseError(403, 'Not your ticket'))
         .mockRejectedValue(new Error('stop'))
       mount('t_1', ticket({ claimed_by: ME }))
@@ -1240,7 +1240,7 @@ describe('AdminSupportDetailView', () => {
       expect(supportApi.sendAdminSupportReply).toHaveBeenCalledTimes(4)
       const keys = vi.mocked(supportApi.sendAdminSupportReply).mock.calls.map((c) => c[2])
       expect(keys[1]).toBe(keys[0]) // after a 503: same key
-      expect(keys[2]).toBe(keys[0]) // after a second 503: same key
+      expect(keys[2]).toBe(keys[0]) // after a 409: same key
       expect(keys[3]).not.toBe(keys[2]) // after a 403: a new key
     })
 

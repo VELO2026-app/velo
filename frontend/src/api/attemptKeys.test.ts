@@ -7,6 +7,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { createAttemptKeys } from '@/api/attemptKeys'
+import { ApiResponseError } from '@/api/client'
 
 function keeper() {
   let n = 0
@@ -46,12 +47,36 @@ describe('createAttemptKeys -- one attempt, one key', () => {
     expect(keys.keyFor('payment', 'А')).toBe('k3')
   })
 
-  it('release makes the same parts a new write', () => {
+  it('a landed write frees the key: the same parts are a new write', () => {
     const { keys } = keeper()
 
     keys.keyFor('t1', 'Ok')
-    keys.release()
+    keys.settle()
     expect(keys.keyFor('t1', 'Ok')).toBe('k2')
+  })
+
+  it.each([400, 401, 403, 404, 422])('a %i refusal frees the key', (status) => {
+    const { keys } = keeper()
+
+    keys.keyFor('t1', 'Ok')
+    keys.settle(new ApiResponseError(status, 'refused'))
+    expect(keys.keyFor('t1', 'Ok')).toBe('k2')
+  })
+
+  it.each([409, 429, 500, 503])('a %i keeps the key: the write may be in flight', (status) => {
+    const { keys } = keeper()
+
+    keys.keyFor('t1', 'Ok')
+    keys.settle(new ApiResponseError(status, 'not a refusal'))
+    expect(keys.keyFor('t1', 'Ok')).toBe('k1')
+  })
+
+  it('a lost connection or any other error keeps the key', () => {
+    const { keys } = keeper()
+
+    keys.keyFor('t1', 'Ok')
+    keys.settle(new TypeError('network'))
+    expect(keys.keyFor('t1', 'Ok')).toBe('k1')
   })
 
   it('two keepers (two form instances) never share a key', () => {
