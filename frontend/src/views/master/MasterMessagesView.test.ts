@@ -34,6 +34,7 @@ import { createApp, nextTick, type App } from 'vue'
 import MasterMessagesView from '@/views/master/MasterMessagesView.vue'
 import * as chatsApi from '@/api/chats'
 import type { ChatThread } from '@/api/chats'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 vi.mock('@/api/chats')
 
@@ -144,7 +145,7 @@ describe('MasterMessagesView', () => {
   // (i18n:chat.supportTitle) instead of the student fallback
   // (i18n:masterScreens.masterMessages.peerFallback) a null peer would
   // degrade to.
-  it("the master's own support row renders the VELO logo and «Поддержка VELO», not «Ученик»", async () => {
+  it("the master's own support row renders the brand logo and «Поддержка <brand>», not «Ученик»", async () => {
     const supportThread = commsThread({
       id: 'support-1',
       channel: 'support',
@@ -167,7 +168,9 @@ describe('MasterMessagesView', () => {
     mount()
     await flush()
 
-    expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Поддержка VELO')
+    expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe(
+      `Поддержка ${SKIN_BRAND}`,
+    )
     expect(row(0).querySelector('.chat-row__logo')).not.toBeNull()
     expect(row(0).querySelector('.v-avatar')).toBeNull()
     expect(row(0).querySelector('.chat-row__preview')?.textContent?.trim()).toBe(

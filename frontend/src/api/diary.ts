@@ -31,6 +31,7 @@
 // =============================================================================
 
 import { api } from '@/api/client'
+import { postIdempotent } from '@/api/idempotent'
 import { buildQuery } from '@/api/utils'
 import type {
   CheckinRequest,
@@ -188,7 +189,7 @@ export function createDiaryEntry(
   idempotencyKey?: string,
 ): Promise<DiaryEntryResponse> {
   if (!idempotencyKey) return api.post<DiaryEntryResponse>('/api/v1/diary', body)
-  return api.post<DiaryEntryResponse>('/api/v1/diary', body, { 'Idempotency-Key': idempotencyKey })
+  return postIdempotent<DiaryEntryResponse>('/api/v1/diary', body, idempotencyKey)
 }
 
 /** Filters of the diary-entries list endpoint: practice, mood, date window, pagination. */

@@ -6,11 +6,13 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { RuleTester } from 'eslint'
+import tseslint from 'typescript-eslint'
 import { describe, expect, it } from 'vitest'
 import { findRuleDisables } from './directives.mjs'
 import { loadAllowlist } from './index.mjs'
 import noFixedSleep from './no-fixed-sleep.mjs'
 import noFlakeMasking from './no-flake-masking.mjs'
+import noHeadersOutsideApi from './no-headers-outside-api.mjs'
 import noWaitForTimeout from './no-wait-for-timeout.mjs'
 import { REPO_ROOT } from './ratchet.mjs'
 
@@ -268,4 +270,88 @@ describe('directives that switch the rules off', () => {
     ].join('\n')
     expect(findRuleDisables(text)).toEqual([])
   })
+})
+
+tester.run('no-headers-outside-api', noHeadersOutsideApi, {
+  valid: [
+    "api.get('/a')",
+    "api.post('/a', body)",
+    "api.request('POST', '/a', { body, timeoutMs: 5 })",
+    "api.request('GET', '/a')",
+    "other.post('/a', body, { 'X-One': '1' })",
+    "obj.fetch('/a')",
+    'const o = { fetch: 1 }; o.fetch',
+    // A local named fetch is not the global one.
+    'async function f(fetch) { return await fetch() }',
+    'const fetch = makeFetch(); fetch()',
+    // Other members of api are not the header channel.
+    "const get = api.get; get('/a')",
+    "const { get } = api; get('/a')",
+    "import { api } from '@/api/client'",
+    "import * as other from '@/api/other'",
+    // A field named fetch, in a type or a class, is not the global fetch.
+    {
+      code: 'interface Deps { fetch: () => void; fetch2(): void }',
+      languageOptions: { parser: tseslint.parser },
+    },
+    {
+      code: 'type Deps = { fetch: typeof fetch }',
+      languageOptions: { parser: tseslint.parser },
+    },
+    {
+      code: 'enum E { fetch }',
+      languageOptions: { parser: tseslint.parser },
+    },
+    'class A { fetch = 1; fetch() {} }',
+    // A shorthand that declares: a parameter and a destructured local.
+    'function f({ fetch }) { return fetch }',
+    'const { fetch } = deps; fetch()',
+  ],
+  invalid: [
+    { code: "fetch('/a')", errors: [{ messageId: 'fetch' }] },
+    { code: "window.fetch('/a')", errors: [{ messageId: 'fetch' }] },
+    { code: "globalThis.fetch('/a')", errors: [{ messageId: 'fetch' }] },
+    { code: "self.fetch('/a')", errors: [{ messageId: 'fetch' }] },
+    { code: "global.fetch('/a')", errors: [{ messageId: 'fetch' }] },
+    { code: "window['fetch']('/a')", errors: [{ messageId: 'fetch' }] },
+    { code: 'const f = fetch', errors: [{ messageId: 'fetch' }] },
+    { code: 'const f = window.fetch', errors: [{ messageId: 'fetch' }] },
+    { code: "fetch.call(null, '/a')", errors: [{ messageId: 'fetch' }] },
+    {
+      code: "api.post('/a', body, { 'Idempotency-Key': key })",
+      errors: [{ messageId: 'postHeaders' }],
+    },
+    { code: "api.post('/a', body, h)", errors: [{ messageId: 'postHeaders' }] },
+    { code: "api['post']('/a', body, h)", errors: [{ messageId: 'postHeaders' }] },
+    {
+      code: "api.request('POST', '/a', { body, headers: { 'X-One': '1' } })",
+      errors: [{ messageId: 'requestHeaders' }],
+    },
+    {
+      code: "api.request('POST', '/a', { body, headers })",
+      errors: [{ messageId: 'requestHeaders' }],
+    },
+    { code: "api.request('POST', '/a', { ...opts })", errors: [{ messageId: 'requestHeaders' }] },
+    {
+      code: "api.request('POST', '/a', { ['headers']: h })",
+      errors: [{ messageId: 'requestHeaders' }],
+    },
+    { code: "api.request('POST', '/a', opts)", errors: [{ messageId: 'requestHeaders' }] },
+    { code: 'api.post(...args)', errors: [{ messageId: 'spread' }] },
+    { code: "api.post('/a', ...rest)", errors: [{ messageId: 'spread' }] },
+    { code: 'api.request(...args)', errors: [{ messageId: 'spread' }] },
+    { code: "const p = api.post; p('/a', b, h)", errors: [{ messageId: 'alias' }] },
+    { code: "api.post.call(api, '/a', b, h)", errors: [{ messageId: 'alias' }] },
+    { code: 'const p = api.request.bind(api)', errors: [{ messageId: 'alias' }] },
+    { code: "const { post } = api; post('/a', b, h)", errors: [{ messageId: 'alias' }] },
+    { code: 'const { request: r } = api', errors: [{ messageId: 'alias' }] },
+    { code: 'const { ...all } = api', errors: [{ messageId: 'alias' }] },
+    { code: "import { api as client } from '@/api/client'", errors: [{ messageId: 'rename' }] },
+    { code: "import * as client from '@/api/client'", errors: [{ messageId: 'namespace' }] },
+    { code: "import * as client from '../api/client'", errors: [{ messageId: 'namespace' }] },
+    { code: "const client = await import('@/api/client')", errors: [{ messageId: 'namespace' }] },
+    // One report for a shorthand that refers to the global fetch.
+    { code: 'const deps = { fetch }', errors: [{ messageId: 'fetch' }] },
+    { code: 'f({ fetch })', errors: [{ messageId: 'fetch' }] },
+  ],
 })

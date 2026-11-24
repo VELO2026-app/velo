@@ -10,7 +10,8 @@
 //   - The ru catalog carries the strings that were hardcoded verbatim, so
 //     the ~3400 existing tests keep asserting the same rendered text.
 //   - Brand text renders through the linked message @:brand -- the value
-//     comes from INSTANCE.brand (passport), never hardcoded in messages.
+//     comes from the skin package (virtual:skin-brand), never hardcoded in
+//     messages.
 //
 // What loads when (FE-157):
 //   - ru CORE is eager (in the main bundle): every domain file of the folder
@@ -114,12 +115,11 @@ const i18n = createI18n({
 // The brand word never lives in the catalogs (tz-i18n §7.2 item 3): messages
 // reference it as the linked key @:brand, so every locale that gets messages
 // gets the brand with them (mergeRuntimeMessages). The brand word of THIS
-// build: a skin's displayName wins (tz-whitelabel §1 priority, skin > env);
-// no skin -> the VITE_BRAND passport value. A message function, not a
+// build is the skin's displayName -- the one source of the name (owner
+// 09.11); no skin -> the neutral core word (FE-231). A message function, not a
 // string: there is no compiler at runtime, and the brand is raw text that
 // must never be read as message syntax ('@', '|' or braces in a name).
-const BRAND_TEXT = SKIN_BRAND ?? INSTANCE.brand
-const BRAND_MESSAGE = { brand: (() => BRAND_TEXT) as MessageFunction }
+const BRAND_MESSAGE = { brand: (() => SKIN_BRAND) as MessageFunction }
 
 // Instance overlays (applyInstanceOverrides), per locale, in the order they
 // came. Kept so they can be merged again on top of every catalog load: a

@@ -58,6 +58,7 @@ async function fetchOverrides(
  * product's own strings.
  */
 export async function loadInstanceTexts(
+  // eslint-disable-next-line velo-api/no-headers-outside-api -- a static file of the frontend's own origin: no header, not the API
   fetchImpl: typeof fetch = fetch.bind(globalThis),
 ): Promise<void> {
   const locales = INSTANCE.locales

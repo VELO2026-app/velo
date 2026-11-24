@@ -121,6 +121,7 @@ export const INSTANCE_CONFIG_URL = '/config.json'
  * app's problem to crash on.
  */
 export async function loadInstanceConfig(
+  // eslint-disable-next-line velo-api/no-headers-outside-api -- a static file of the frontend's own origin: no header, not the API
   fetchImpl: typeof fetch = fetch.bind(globalThis),
 ): Promise<void> {
   let response: Response

@@ -118,8 +118,15 @@
           </div>
         </template>
 
+        <!-- Error (nothing to show, last request failed): never the empty copy -->
+        <VEmptyState v-if="upcomingFailed" icon="warning" :title="t('common.loadError')">
+          <VButton size="sm" variant="outline" @click="loadUpcoming">
+            {{ t('common.retry') }}
+          </VButton>
+        </VEmptyState>
+
         <!-- Empty -->
-        <div v-if="nearestBookings.length === 0" class="dashboard__empty">
+        <div v-else-if="nearestBookings.length === 0" class="dashboard__empty">
           <p class="dashboard__empty-text">{{ t('user.screens.userDashboard.upcoming.empty') }}</p>
           <VButton size="sm" variant="outline" @click="router.push({ name: 'user-calendar' })">
             {{ t('user.screens.userDashboard.findPractice') }}
@@ -287,7 +294,14 @@ import { extractApiError } from '@/composables/useApiError'
 import { useUnreadBadge } from '@/composables/queries/notifications'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
-import { VButton, VBadge, VStatCard, VSkeletonPracticeCard, VLoadingSwap } from '@/components/ui'
+import {
+  VButton,
+  VBadge,
+  VStatCard,
+  VSkeletonPracticeCard,
+  VLoadingSwap,
+  VEmptyState,
+} from '@/components/ui'
 import { useQuery } from '@pinia/colada'
 import { myStatsQuery } from '@/composables/queries/stats'
 import { screenQueryState } from '@/composables/queries/screenState'
@@ -365,7 +379,7 @@ const { showSkeleton: statsPending } = useLoadingHold(screenQueryState(statsQuer
 const upcomingQuery = useQuery(() => upcomingBookingsQuery())
 const upcoming = computed(() => upcomingQuery.data.value ?? [])
 /** Nothing known yet and a request in flight (an EMPTY answer is data, not loading). */
-const upcomingPending = screenQueryState(upcomingQuery).loading
+const { loading: upcomingPending, failed: upcomingFailed } = screenQueryState(upcomingQuery)
 
 const nearestBookings = computed((): BookingWithPracticeResponse[] =>
   selectNearestBookings(upcoming.value, now.value),

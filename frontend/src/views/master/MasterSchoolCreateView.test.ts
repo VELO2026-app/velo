@@ -144,6 +144,20 @@ describe('MasterSchoolCreateView', () => {
     expect(replace).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
+  it('a repeat tap while the create is in flight sends ONE request (FE-242)', async () => {
+    vi.mocked(cgApi.createSchool).mockReturnValue(new Promise(() => {}))
+    mount()
+    await flush()
+
+    await type(['Тихая школа', ''])
+    const create = buttonWith('Создать школу')
+    create?.click()
+    create?.click()
+    await flush()
+
+    expect(cgApi.createSchool).toHaveBeenCalledTimes(1)
+  })
+
   it('media kill-switch OFF (shipped default): no pickers render', async () => {
     mount()
     await flush()
