@@ -203,10 +203,16 @@ const FOG_ROUTES = [
   // list scrolls, and without the fog its intro and the create-token CTA
   // (i18n:user.screens.aiConnections.create.cta) showed
   // through the transparent floating header. Same fix and same default
-  // tuning as user-support above. The timezone screen it sits next to is
-  // not listed because it does not scroll as a page, not because the two
-  // differ in kind.
+  // tuning as user-support above.
   'user-ai-connections',
+  // Language + timezone (FE-261, PM report): the screen scrolls as a page, and
+  // without the fog its first section title
+  // (i18n:user.screens.timezoneSettings.language.title) showed through the
+  // transparent floating header. Parity with master-timezone (MasterShell
+  // FOG-1) and the same default tuning: the screen has no save button (it
+  // auto-saves) and its last row rests above the bottom fade (tab-bar
+  // clearance), so default tuning is enough.
+  'user-timezone',
 ]
 const isFogRoute = computed(() => FOG_ROUTES.includes(route.name as string))
 

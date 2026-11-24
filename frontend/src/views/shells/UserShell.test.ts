@@ -85,6 +85,8 @@ function buildRouter(): Router {
       { path: '/user/schools', name: 'user-schools', component: StubChild },
       // BE-139 item 12: the AI connections screen scrolls -- a fog route.
       { path: '/user/profile/ai-connections', name: 'user-ai-connections', component: StubChild },
+      // FE-261: the language + timezone screen scrolls as a page -- a fog route.
+      { path: '/user/profile/timezone', name: 'user-timezone', component: StubChild },
       {
         path: '/user/booking-confirmed/:practiceId',
         name: 'user-booking-confirmed',
@@ -412,6 +414,13 @@ describe('UserShell', () => {
 
     it('the AI connections screen is fogged -- its list no longer shows through the header (BE-139)', async () => {
       await mount('user-ai-connections')
+      await flush()
+
+      expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+    })
+
+    it('the language + timezone screen is fogged -- its first section no longer shows through the header (FE-261)', async () => {
+      await mount('user-timezone')
       await flush()
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
