@@ -16,7 +16,9 @@
  *   kind      'icon' | 'illustration' | 'component' | 'screen' | 'frame' (a guess; the agent decides)
  *   tree      nodes with geometry relative to the root, layout, fills, strokes,
  *             radius, effects, text props; `vars` = bound variable names per field
- *   variables every bound variable once: name, collection, value in the first mode
+ *   variables every bound variable once: name, collection, mode, value in the mode the root
+ *             shows (resolvedVariableModes; else the explicit mode of the nearest node up the
+ *             tree; else the collection default); since FE-234 the first mode of `velo` is core
  *   texts     every visible text: characters, font, size, line-height, style name
  *   instances every instance: main component name/key + component set + props
  *   colors    every raw (unbound) solid colour → count (hardcode suspects)
@@ -35,6 +37,18 @@ const F2C_INSPECT = async (nodeId, opts) => {
   // ---- variables ---------------------------------------------------------------
   const varCache = {};
   const variables = {};
+  // The mode the root shows: Figma's own answer (resolvedVariableModes: it also knows a mode an
+  // instance takes from its main component); else the explicit mode of the nearest node up the
+  // tree; else the collection default. Never the first mode by position.
+  function modeShown(col) {
+    const resolved = root.resolvedVariableModes && root.resolvedVariableModes[col.id];
+    if (resolved) return resolved;
+    for (let n = root; n; n = n.parent) {
+      const m = n.explicitVariableModes && n.explicitVariableModes[col.id];
+      if (m) return m;
+    }
+    return col.defaultModeId || col.modes[0].modeId;
+  }
   async function varName(id) {
     if (!id) return null;
     if (varCache[id] !== undefined) return varCache[id];
@@ -43,7 +57,8 @@ const F2C_INSPECT = async (nodeId, opts) => {
       const v = await figma.variables.getVariableByIdAsync(id);
       if (v) {
         const col = await figma.variables.getVariableCollectionByIdAsync(v.variableCollectionId);
-        const modeId = col ? col.modes[0].modeId : Object.keys(v.valuesByMode)[0];
+        const shown = col ? modeShown(col) : null;
+        const modeId = shown && shown in v.valuesByMode ? shown : Object.keys(v.valuesByMode)[0];
         let val = v.valuesByMode[modeId];
         // resolve one alias hop for the human-readable value
         if (val && val.type === 'VARIABLE_ALIAS') {
@@ -52,7 +67,8 @@ const F2C_INSPECT = async (nodeId, opts) => {
         }
         if (val && typeof val === 'object' && 'r' in val) val = hex(val) + (val.a !== undefined && val.a < 1 ? ' a=' + r2(val.a) : '');
         name = (col ? col.name + '/' : '') + v.name;
-        variables[name] = { name: v.name, collection: col && col.name, type: v.resolvedType, value: val, remote: v.remote };
+        const mode = col && col.modes.find((m) => m.modeId === modeId);
+        variables[name] = { name: v.name, collection: col && col.name, mode: mode ? mode.name : null, type: v.resolvedType, value: val, remote: v.remote };
       }
     } catch (e) { name = 'unresolved:' + id; }
     varCache[id] = name;

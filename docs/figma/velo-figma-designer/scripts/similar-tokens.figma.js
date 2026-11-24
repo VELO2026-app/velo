@@ -14,9 +14,13 @@
  *          `radius/`, the H-08 list of the protocol), not with font sizes or other floats.
  *   near   colour within `colorDistance` (max channel difference, 0..255, default 12) or
  *          a number within `numberDistance` px (default 2): offer it to the designer first
+ * Mode: values are read in the mode named `opts.mode` (default `gold`, the skin the screens are
+ * drawn in) and the result names it; a one-mode collection (legacy) gives its own mode. A
+ * collection with several modes and none of that name returns { error }: since FE-234 the first
+ * mode of `velo` is the neutral core, and reading it would offer the wrong tokens.
  */
 const SIMILAR_TOKENS = async (value, opts) => {
-  const o = Object.assign({ colorDistance: 12, numberDistance: 2, limit: 8 }, opts || {});
+  const o = Object.assign({ colorDistance: 12, numberDistance: 2, limit: 8, mode: 'gold' }, opts || {});
   const isColor = typeof value === 'string' && /^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(value.trim());
   const isNumber = typeof value === 'number' && isFinite(value);
   if (!isColor && !isNumber) return { error: 'value must be a #rrggbb or #rrggbbaa string, or a number of px' };
@@ -27,22 +31,35 @@ const SIMILAR_TOKENS = async (value, opts) => {
   const want = isColor ? rgb(value.trim().toLowerCase()) : null;
   const vars = await figma.variables.getLocalVariablesAsync(isColor ? 'COLOR' : 'FLOAT');
   const cols = {};
-  const colName = async (id) => {
-    if (!(id in cols)) { const c = await figma.variables.getVariableCollectionByIdAsync(id); cols[id] = c ? c.name : id; }
+  const colOf = async (id) => {
+    if (!(id in cols)) cols[id] = (await figma.variables.getVariableCollectionByIdAsync(id)) || null;
     return cols[id];
   };
-  const resolve = async (v, modeId, depth) => {
+  const colName = async (id) => { const c = await colOf(id); return c ? c.name : id; };
+  // The mode named o.mode; a one-mode collection (legacy) has only its own. A collection with
+  // several modes and none named o.mode is an error: silently reading another mode (the core)
+  // would offer the wrong tokens.
+  const missingMode = new Set();
+  const modeOf = async (v) => {
+    const c = await colOf(v.variableCollectionId);
+    const modes = (c && c.modes) || [];
+    const m = modes.find((x) => x.name === o.mode) || (modes.length === 1 ? modes[0] : null);
+    if (!m && modes.length > 1) { missingMode.add(c.name); return null; }
+    return m && m.modeId in v.valuesByMode ? m.modeId : Object.keys(v.valuesByMode)[0];
+  };
+  const resolve = async (v, depth) => {
+    const modeId = await modeOf(v);
+    if (modeId === null) return null;
     let val = v.valuesByMode[modeId];
     if (val && val.type === 'VARIABLE_ALIAS' && depth < 8) {
       const t = await figma.variables.getVariableByIdAsync(val.id);
-      return t ? resolve(t, Object.keys(t.valuesByMode)[0], depth + 1) : null;
+      return t ? resolve(t, depth + 1) : null;
     }
     return val;
   };
   const exact = [], near = [];
   for (const v of vars) {
-    const modeId = Object.keys(v.valuesByMode)[0];
-    const val = await resolve(v, modeId, 0);
+    const val = await resolve(v, 0);
     if (val == null) continue;
     const row = { name: v.name, collection: await colName(v.variableCollectionId) };
     if (isColor) {
@@ -60,7 +77,9 @@ const SIMILAR_TOKENS = async (value, opts) => {
     }
   }
   near.sort((a, b) => a.distance - b.distance);
+  if (missingMode.size > 0) return { error: 'no mode "' + o.mode + '" in ' + [...missingMode].join(', ') + ': pass { mode: \'<name>\' } (protocol §8.4)', mode: o.mode };
   return {
+    mode: o.mode,
     kind: isColor ? 'color' : 'number', value, exact: exact.slice(0, o.limit), near: near.slice(0, o.limit),
     advice: exact.length ? 'use-existing' : near.length ? 'offer-near-first' : 'no-similar',
   };

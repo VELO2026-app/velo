@@ -44,6 +44,12 @@ if [ "$CLIENT" = codex ]; then DEST="$HOME/.agents/skills/velo-figma-designer"; 
 mkdir -p "$DEST/scripts" "$DEST/references"
 cp "$HERE/SKILL.md" "$DEST/SKILL.md"
 cp "$HERE"/scripts/*.js "$DEST/scripts/"
+# The skill version (FE-234): the archive carries VERSION; a repo checkout reads it from the lib.
+if [ -f "$HERE/VERSION" ]; then
+  cp "$HERE/VERSION" "$DEST/VERSION"
+else
+  sed -n 's/^const DESIGNER_LIB_VERSION = \([0-9]*\);.*/\1/p' "$HERE/scripts/designer-lib.figma.js" > "$DEST/VERSION"
+fi
 if [ -f "$HERE/references/figma-protocol.md" ]; then
   cp "$HERE/references/figma-protocol.md" "$DEST/references/"
 elif [ -f "$HERE/../../figma-protocol.md" ]; then
@@ -52,7 +58,7 @@ else
   bad "не нашёл figma-protocol.md рядом с install.sh"
   exit 1
 fi
-ok "скопирован в $DEST"
+ok "скопирован в $DEST (версия $(cat "$DEST/VERSION"))"
 
 if [ "$CLIENT" = codex ]; then
   CONFIG="$HOME/.codex/config.toml"
