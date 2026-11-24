@@ -6,7 +6,7 @@
 
 | Проверка (точное имя) | Workflow | Что значит |
 | --- | --- | --- |
-| `CI — gate` | `.github/workflows/ci.yml`, джоб `gate` | Сводный джоб. Ждёт все остальные джобы `ci.yml`: `scope`, lint, format, typecheck, три шарда vitest и `test — merge + coverage ratchet`, `test — @velo/ui`, build с бюджетом бандла, `e2e — Playwright smoke`, `e2e-stack` (sweep на настоящем бэке), матрицу редакций, `image`, `generated.ts drift`. Зелёный, если `scope` прошёл, а каждый остальной джоб прошёл или пропущен по размеру PR. |
+| `CI — gate` | `.github/workflows/ci.yml`, джоб `gate` | Сводный джоб. Ждёт все остальные джобы `ci.yml`: `scope`, lint, format, typecheck, три шарда vitest и `test — merge + coverage ratchet`, `test — @velo/ui`, build с бюджетом бандла, `e2e — Playwright smoke`, `e2e-stack` (sweep на настоящем бэке), `e2e-a11y` (axe-core на настоящем бэке, ячейки gold и goodo), матрицу редакций, `image`, `generated.ts drift`. Зелёный, если `scope` прошёл, а каждый остальной джоб прошёл или пропущен по размеру PR. |
 | `bundle budget guard` | `.github/workflows/bundle-budget.yml` | Правило меток бюджета бандла: поднятый бюджет требует метку `bundle-growth`, поднятый потолок — `bundle-ceiling`. Сам размер проверяет build внутри гейта. |
 | `visual — verdict` | `.github/workflows/visual.yml`, джоб `visual-verdict` | Вид на gold и goodo: красный при расхождении 19 экранов без метки `visual-change` (FE-234). Запускается всегда, без `paths`-фильтра. |
 
