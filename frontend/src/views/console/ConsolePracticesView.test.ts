@@ -3,23 +3,26 @@
 // =============================================================================
 //
 // The list is a Pinia Colada query per (scope, page) over getAdminPractices;
-// the seam mocked here is @/api/admin. The screen mounts with a real router
-// (memory history: the scope and the page live in the URL), a real Pinia and
-// Colada, as in production. The clock is frozen so the relative day label of
-// a row never depends on the day the suite runs.
+// the seam mocked here is @/api/admin. `server` below is the backend: every
+// scope's practices NEWEST FIRST (as GET /admin/practices answers), sliced by
+// limit and offset. The screen mounts with a real router (memory history: the
+// scope and the page live in the URL), a real Pinia and Colada, as in
+// production. The clock is frozen so the relative day label of a row never
+// depends on the day the suite runs.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsolePracticesView from '@/views/console/ConsolePracticesView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
-import type { AdminPracticeListItem, PaginatedAdminPracticesResponse } from '@/api/types'
+import type { AdminPracticeListItem } from '@/api/types'
 
 vi.mock('@/api/admin')
 
@@ -28,10 +31,10 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
 }))
 
-// The window width classes (components/console/content/useConsoleWidth.ts):
-// happy-dom is 1024 px wide, so the test sets them. Default: the wide layout.
+// The window width classes (composables/useConsoleWidth.ts): happy-dom is
+// 1024 px wide, so the test sets them. Default: the wide layout.
 const width = vi.hoisted(() => ({ narrow: false, medium: false }))
-vi.mock('@/components/console/content/useConsoleWidth', async () => {
+vi.mock('@/composables/useConsoleWidth', async () => {
   const { ref } = await import('vue')
   return { useConsoleWidth: () => ({ narrow: ref(width.narrow), medium: ref(width.medium) }) }
 })
@@ -55,24 +58,22 @@ function practice(overrides: Partial<AdminPracticeListItem> = {}): AdminPractice
   }
 }
 
-/** `count` distinguishable practices, ids and titles numbered from `from`. */
-function items(count: number, from = 1): AdminPracticeListItem[] {
-  return Array.from({ length: count }, (_, i) =>
-    practice({ id: `p_${from + i}`, title: `Практика ${from + i}` }),
-  )
+/** `count` distinguishable practices, newest first (titles numbered from `count` down to 1). */
+function newestFirst(count: number): AdminPracticeListItem[] {
+  return Array.from({ length: count }, (_, i) => {
+    const n = count - i
+    return practice({ id: `p_${n}`, title: `Практика ${n}` })
+  })
 }
 
-function answer(
-  list: AdminPracticeListItem[],
-  total = list.length,
-  offset = 0,
-): PaginatedAdminPracticesResponse {
-  return { items: list, total, limit: 20, offset }
-}
+type Scope = 'all' | 'upcoming' | 'past'
+/** The backend: each scope's practices, newest first. */
+let server: Record<Scope, AdminPracticeListItem[]>
 
 let app: App | null = null
 let host: HTMLElement | null = null
 let router: Router
+let pinia: Pinia
 
 async function mount(url = '/console/practices'): Promise<HTMLElement> {
   router = createRouter({
@@ -90,7 +91,7 @@ async function mount(url = '/console/practices'): Promise<HTMLElement> {
   await router.isReady()
   host = document.createElement('div')
   document.body.appendChild(host)
-  const pinia = createPinia()
+  pinia = createPinia()
   setActivePinia(pinia)
   app = createApp(ConsolePracticesView)
     .use(createTestI18n())
@@ -123,15 +124,31 @@ function tab(label: string): HTMLButtonElement {
 function pageButton(n: number): HTMLButtonElement | undefined {
   return host?.querySelector<HTMLButtonElement>(`button[aria-label="Страница ${n}"]`) ?? undefined
 }
+function summary(): string | undefined {
+  return host?.querySelector('[data-testid="console-pager-summary"]')?.textContent ?? undefined
+}
+/** A background refetch of every list held, as a return to the app does. */
+async function refetchInBackground(): Promise<void> {
+  useQueryCache(pinia)
+    .invalidateQueries({ key: adminKeys.practicesAll() })
+    .catch(() => {})
+  await flush()
+}
 
 beforeEach(() => {
   width.narrow = false
   width.medium = false
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
+  server = { upcoming: newestFirst(2), past: newestFirst(2), all: newestFirst(2) }
   vi.mocked(adminApi.getAdminPractices)
     .mockReset()
-    .mockResolvedValue(answer(items(2)))
+    .mockImplementation(async (scope = 'all', limit = 20, offset = 0) => ({
+      items: server[scope].slice(offset, offset + limit),
+      total: server[scope].length,
+      limit,
+      offset,
+    }))
   toastError.mockReset()
 })
 
@@ -144,25 +161,24 @@ afterEach(() => {
 })
 
 describe('ConsolePracticesView', () => {
-  it('shows the first page of the upcoming practices: when, practice, master, seats', async () => {
-    vi.mocked(adminApi.getAdminPractices).mockResolvedValue(
-      answer([
-        practice({ id: 'p_a', title: 'Утренняя медитация', booked: 5, capacity: 10 }),
-        practice({
-          id: 'p_b',
-          title: 'Открытый круг',
-          direction: null,
-          master_name: 'Олег Ким',
-          booked: 3,
-          capacity: null,
-          duration_minutes: 45,
-        }),
-      ]),
-    )
+  it('shows the nearest upcoming practices first: when, practice, master, seats', async () => {
+    // The backend lists newest first: the far one comes before the near one.
+    server.upcoming = [
+      practice({
+        id: 'p_far',
+        title: 'Открытый круг',
+        direction: null,
+        master_name: 'Олег Ким',
+        booked: 3,
+        capacity: null,
+        duration_minutes: 45,
+        scheduled_at: '2026-12-28T07:00:00Z',
+      }),
+      practice({ id: 'p_near', title: 'Утренняя медитация', booked: 5, capacity: 10 }),
+    ]
     await mount()
 
-    expect(adminApi.getAdminPractices).toHaveBeenCalledWith('upcoming', 20, 0)
-    // One entry per cell; a cell's two lines are its spans.
+    // One cell per entry; a cell's two lines are its spans.
     const rows = Array.from(host?.querySelectorAll('[data-testid="console-table-row"]') ?? []).map(
       (row) =>
         Array.from(row.querySelectorAll('[role="cell"]')).map((cell) =>
@@ -178,12 +194,145 @@ describe('ConsolePracticesView', () => {
         ['АЛ', 'Анна Лебедева'],
         ['5 / 10'],
       ],
-      [['20 декабря, 10:00', '45 мин'], ['Открытый круг'], ['ОК', 'Олег Ким'], ['3 / ∞']],
+      [['28 декабря, 10:00', '45 мин'], ['Открытый круг'], ['ОК', 'Олег Ким'], ['3 / ∞']],
     ])
     // The active tab carries the answer's total; the others do not know theirs.
     expect(
       Array.from(host?.querySelectorAll('[role="tab"]') ?? []).map((el) => el.textContent?.trim()),
     ).toEqual(['Предстоящие · 2', 'Прошедшие', 'Все'])
+  })
+
+  it('pages the upcoming scope from the end: page 1 is the nearest, the last page the farthest', async () => {
+    server.upcoming = newestFirst(45)
+    await mount()
+
+    // Page 1 of 3: the 20 nearest, nearest first (the slice at offset 25 of the newest-first list).
+    expect(adminApi.getAdminPractices).toHaveBeenCalledWith('upcoming', 20, 25)
+    expect(rowTitles()[0]).toBe('Практика 1')
+    expect(rowTitles()).toHaveLength(20)
+    expect(rowTitles()[19]).toBe('Практика 20')
+    expect(summary()).toBe('Показано 1–20 из 45')
+
+    pageButton(3)?.click()
+    await flush()
+
+    expect(adminApi.getAdminPractices).toHaveBeenLastCalledWith('upcoming', 5, 0)
+    expect(rowTitles()).toEqual([
+      'Практика 41',
+      'Практика 42',
+      'Практика 43',
+      'Практика 44',
+      'Практика 45',
+    ])
+    expect(summary()).toBe('Показано 41–45 из 45')
+  })
+
+  it('pages the past scope as the API lists it: a page button loads its offset', async () => {
+    server.past = newestFirst(45)
+    await mount('/console/practices?scope=past')
+
+    expect(summary()).toBe('Показано 1–20 из 45')
+    expect(rowTitles()[0]).toBe('Практика 45')
+    expect(pageButton(3)).toBeDefined()
+    expect(pageButton(4)).toBeUndefined()
+
+    pageButton(2)?.click()
+    await flush()
+
+    expect(adminApi.getAdminPractices).toHaveBeenLastCalledWith('past', 20, 20)
+    expect(router.currentRoute.value.query).toEqual({ scope: 'past', page: '2' })
+    expect(rowTitles()[0]).toBe('Практика 25')
+    expect(summary()).toBe('Показано 21–40 из 45')
+    expect(pageButton(2)?.getAttribute('aria-current')).toBe('page')
+  })
+
+  it('a scope tab asks that scope from its first page; the old rows do not stand in', async () => {
+    await mount('/console/practices?scope=all&page=2')
+    server.all = newestFirst(45)
+
+    let resolvePast!: (value: Awaited<ReturnType<typeof adminApi.getAdminPractices>>) => void
+    vi.mocked(adminApi.getAdminPractices).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePast = resolve
+        }),
+    )
+    tab('Прошедшие').click()
+    await flush()
+
+    expect(adminApi.getAdminPractices).toHaveBeenLastCalledWith('past', 20, 0)
+    expect(router.currentRoute.value.query).toEqual({ scope: 'past' })
+    expect(rowTitles()).toEqual([])
+    expect(host?.querySelector('[data-testid="console-practices-loading"]')).not.toBeNull()
+
+    resolvePast({
+      items: [practice({ id: 'p_old', title: 'Прошлая практика', status: 'past' })],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    await flush()
+    expect(rowTitles()).toEqual(['Прошлая практика'])
+  })
+
+  it('one page of results: the summary, no page buttons', async () => {
+    await mount()
+
+    expect(summary()).toBe('Показано 1–2 из 2')
+    expect(host?.querySelector('.console-pager__pages')).toBeNull()
+  })
+
+  it('a scope or page the URL cannot mean falls back to the first page of the upcoming', async () => {
+    await mount('/console/practices?scope=archive&page=-3')
+
+    expect(adminApi.getAdminPractices).toHaveBeenCalledWith('upcoming', 2, 0)
+    expect(vi.mocked(adminApi.getAdminPractices).mock.calls.map(([scope]) => scope)).not.toContain(
+      'archive',
+    )
+  })
+
+  it.each([
+    // 45 rows are 3 pages: page 9 goes to the last, an empty list to the first.
+    {
+      url: '/console/practices?scope=past&page=9',
+      total: 45,
+      query: { scope: 'past', page: '3' },
+      shown: 'Показано 41–45 из 45',
+    },
+    {
+      url: '/console/practices?scope=past&page=2',
+      total: 0,
+      query: { scope: 'past' },
+      shown: undefined,
+    },
+  ])(
+    'a page past the end ($url, $total rows) goes to the last page',
+    async ({ url, total, query, shown }) => {
+      server.past = newestFirst(total)
+      await mount(url)
+
+      expect(router.currentRoute.value.query).toEqual(query)
+      expect(summary()).toBe(shown)
+    },
+  )
+
+  it('a row opens the practice', async () => {
+    await mount()
+
+    host?.querySelectorAll<HTMLElement>('[data-testid="console-table-row"]')[1]?.click()
+    await flush()
+
+    expect(router.currentRoute.value.name).toBe('console-practices-detail')
+    // Nearest first: the second row is the second nearest practice (p_2).
+    expect(router.currentRoute.value.params.id).toBe('p_2')
+  })
+
+  it('says so when there are no practices', async () => {
+    server.upcoming = []
+    await mount()
+
+    expect(host?.textContent).toContain('Практик здесь пока нет')
+    expect(summary()).toBeUndefined()
   })
 
   it('on a narrow screen the master column goes and the master moves under the title', async () => {
@@ -201,105 +350,86 @@ describe('ConsolePracticesView', () => {
     expect(host?.querySelector('.v-avatar')).toBeNull()
   })
 
-  it('a scope tab asks that scope from its first page; the old rows do not stand in', async () => {
-    await mount('/console/practices?scope=upcoming&page=2')
-    expect(adminApi.getAdminPractices).toHaveBeenLastCalledWith('upcoming', 20, 20)
+  describe('load failures', () => {
+    it('a failed first load shows the error and Retry recovers', async () => {
+      vi.mocked(adminApi.getAdminPractices).mockRejectedValueOnce(
+        new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
+      )
+      await mount()
 
-    let resolvePast!: (value: PaginatedAdminPracticesResponse) => void
-    vi.mocked(adminApi.getAdminPractices).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolvePast = resolve
-        }),
-    )
-    tab('Прошедшие').click()
-    await flush()
+      expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
+        'Не удалось загрузить практики',
+      )
+      expect(rowTitles()).toEqual([])
 
-    expect(adminApi.getAdminPractices).toHaveBeenLastCalledWith('past', 20, 0)
-    expect(router.currentRoute.value.query).toEqual({ scope: 'past' })
-    expect(rowTitles()).toEqual([])
-    expect(host?.querySelector('[data-testid="console-practices-loading"]')).not.toBeNull()
+      const retry = Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).find(
+        (b) => b.textContent?.trim() === 'Повторить',
+      )
+      retry?.click()
+      await flush()
 
-    resolvePast(answer([practice({ id: 'p_old', title: 'Прошлая практика', status: 'past' })]))
-    await flush()
-    expect(rowTitles()).toEqual(['Прошлая практика'])
+      expect(host?.querySelector('.v-empty__title')).toBeNull()
+      expect(rowTitles()).toEqual(['Практика 1', 'Практика 2'])
+    })
   })
 
-  it('pages: the summary and the buttons follow the total, a page button loads its offset', async () => {
-    vi.mocked(adminApi.getAdminPractices).mockImplementation(async (_scope, _limit, offset) =>
-      answer(items(20, (offset ?? 0) + 1), 45, offset ?? 0),
-    )
-    await mount()
+  describe('background refetch (a return to the app)', () => {
+    it('keeps the rows on screen while it runs, then shows the fresh answer', async () => {
+      await mount('/console/practices?scope=past')
+      expect(rowTitles()).toEqual(['Практика 2', 'Практика 1'])
 
-    expect(host?.querySelector('[data-testid="console-pager-summary"]')?.textContent).toBe(
-      'Показано 1–20 из 45',
-    )
-    expect(pageButton(3)).toBeDefined()
-    expect(pageButton(4)).toBeUndefined()
+      let resolveFresh!: (value: Awaited<ReturnType<typeof adminApi.getAdminPractices>>) => void
+      vi.mocked(adminApi.getAdminPractices).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveFresh = resolve
+          }),
+      )
+      await refetchInBackground()
 
-    pageButton(2)?.click()
-    await flush()
+      // No loader, the cached rows stay.
+      expect(host?.querySelector('[data-testid="console-practices-loading"]')).toBeNull()
+      expect(rowTitles()).toEqual(['Практика 2', 'Практика 1'])
 
-    expect(adminApi.getAdminPractices).toHaveBeenLastCalledWith('upcoming', 20, 20)
-    expect(router.currentRoute.value.query).toEqual({ scope: 'upcoming', page: '2' })
-    expect(rowTitles()[0]).toBe('Практика 21')
-    expect(host?.querySelector('[data-testid="console-pager-summary"]')?.textContent).toBe(
-      'Показано 21–40 из 45',
-    )
-    expect(pageButton(2)?.getAttribute('aria-current')).toBe('page')
-  })
+      resolveFresh({
+        items: [practice({ id: 'p_new', title: 'Новая практика' })],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      })
+      await flush()
+      expect(rowTitles()).toEqual(['Новая практика'])
+      expect(toastError).not.toHaveBeenCalled()
+    })
 
-  it('one page of results: the summary, no page buttons', async () => {
-    await mount()
+    it('failing again and again is told once, until an answer arrives; the rows stay', async () => {
+      await mount('/console/practices?scope=past')
+      vi.mocked(adminApi.getAdminPractices).mockImplementation(() =>
+        Promise.reject(new Error('down')),
+      )
 
-    expect(host?.querySelector('[data-testid="console-pager-summary"]')?.textContent).toBe(
-      'Показано 1–2 из 2',
-    )
-    expect(host?.querySelector('.console-pager__pages')).toBeNull()
-  })
+      await refetchInBackground()
+      await refetchInBackground()
 
-  it('a scope or page the URL cannot mean falls back to the first page of the upcoming', async () => {
-    await mount('/console/practices?scope=archive&page=-3')
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить практики')
+      expect(rowTitles()).toEqual(['Практика 2', 'Практика 1'])
+      expect(host?.querySelector('.v-empty__title')).toBeNull()
 
-    expect(adminApi.getAdminPractices).toHaveBeenCalledWith('upcoming', 20, 0)
-  })
+      // An answer arrives, then a new failure is told again.
+      vi.mocked(adminApi.getAdminPractices).mockImplementation(async (scope = 'all') => ({
+        items: server[scope],
+        total: server[scope].length,
+        limit: 20,
+        offset: 0,
+      }))
+      await refetchInBackground()
+      vi.mocked(adminApi.getAdminPractices).mockImplementation(() =>
+        Promise.reject(new Error('down again')),
+      )
+      await refetchInBackground()
 
-  it('a row opens the practice', async () => {
-    await mount()
-
-    host?.querySelectorAll<HTMLElement>('[data-testid="console-table-row"]')[1]?.click()
-    await flush()
-
-    expect(router.currentRoute.value.name).toBe('console-practices-detail')
-    expect(router.currentRoute.value.params.id).toBe('p_2')
-  })
-
-  it('says so when there are no practices', async () => {
-    vi.mocked(adminApi.getAdminPractices).mockResolvedValue(answer([]))
-    await mount()
-
-    expect(host?.textContent).toContain('Практик здесь пока нет')
-    expect(host?.querySelector('[data-testid="console-pager-summary"]')).toBeNull()
-  })
-
-  it('a failed first load shows the error and Retry recovers', async () => {
-    vi.mocked(adminApi.getAdminPractices).mockRejectedValueOnce(
-      new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
-    )
-    await mount()
-
-    expect(host?.querySelector('.v-empty__title')?.textContent).toBe(
-      'Не удалось загрузить практики',
-    )
-    expect(rowTitles()).toEqual([])
-
-    const retry = Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).find(
-      (b) => b.textContent?.trim() === 'Повторить',
-    )
-    retry?.click()
-    await flush()
-
-    expect(host?.querySelector('.v-empty__title')).toBeNull()
-    expect(rowTitles()).toEqual(['Практика 1', 'Практика 2'])
+      expect(toastError).toHaveBeenCalledTimes(2)
+    })
   })
 })

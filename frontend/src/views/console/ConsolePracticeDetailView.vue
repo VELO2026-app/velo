@@ -21,7 +21,7 @@
     testid="console-practice-detail"
   >
     <template v-if="practice" #title-extra>
-      <ConsoleStatusBadge :tone="isPast ? 'neutral' : 'info'" data-testid="practice-state">{{
+      <ConsoleStatusBadge :tone="isPast ? 'muted' : 'info'" data-testid="practice-state">{{
         isPast
           ? t('console.practices.detail.state.past')
           : t('console.practices.detail.state.upcoming')
@@ -41,9 +41,13 @@
       />
     </template>
 
-    <div v-if="loading" class="practice-detail__state" data-testid="practice-loading">
-      <VLoader size="lg" />
-    </div>
+    <ConsoleLoading v-if="loading" data-testid="practice-loading" />
+    <VEmptyState
+      v-else-if="notFound"
+      icon="warning"
+      :title="t('console.practices.detail.notFound')"
+      data-testid="practice-not-found"
+    />
     <VEmptyState
       v-else-if="failed"
       icon="warning"
@@ -108,13 +112,7 @@
 
         <template v-else>
           <!-- No answer and no failure yet: the loader, also in the tick before the request starts. -->
-          <div
-            v-if="!zoom && !zoomFailed"
-            class="practice-detail__state"
-            data-testid="zoom-loading"
-          >
-            <VLoader size="lg" />
-          </div>
+          <ConsoleLoading v-if="!zoom && !zoomFailed" data-testid="zoom-loading" />
           <ConsoleCard v-else-if="zoomFailed" :title="t('console.practices.detail.zoom.title')">
             <VEmptyState icon="warning" :title="t('console.practices.detail.zoom.loadFailed')">
               <VButton size="sm" variant="outline" @click="retryZoom">{{
@@ -138,7 +136,7 @@
                 <div class="practice-detail__fact">
                   <dt>{{ t('console.practices.detail.zoom.report') }}</dt>
                   <dd>
-                    <ConsoleStatusBadge :tone="zoom.report_ingested ? 'success' : 'neutral'">{{
+                    <ConsoleStatusBadge :tone="zoom.report_ingested ? 'success' : 'muted'">{{
                       zoom.report_ingested
                         ? t('console.practices.detail.zoom.reportReady')
                         : t('console.practices.detail.zoom.reportWaiting')
@@ -149,7 +147,7 @@
                   <dt>{{ t('console.practices.detail.zoom.unmatched') }}</dt>
                   <dd>
                     <ConsoleStatusBadge
-                      :tone="zoom.unmatched_count > 0 ? 'warning' : 'neutral'"
+                      :tone="zoom.unmatched_count > 0 ? 'warning' : 'muted'"
                       data-testid="zoom-unmatched-count"
                       >{{ zoom.unmatched_count }}</ConsoleStatusBadge
                     >
@@ -176,11 +174,7 @@
                   <BookingStatusBadge :status="row.status" />
                 </template>
                 <template #cell-zoom_minutes_present="{ row }">
-                  {{
-                    row.zoom_minutes_present === null
-                      ? '—'
-                      : t('console.practices.detail.zoom.minutes', { n: row.zoom_minutes_present })
-                  }}
+                  {{ row.zoom_minutes_present === null ? '—' : minutes(row.zoom_minutes_present) }}
                 </template>
                 <template #cell-attendance_decided_via="{ row }">
                   {{ decidedViaLabel(row.attendance_decided_via) }}
@@ -209,9 +203,7 @@
                   {{
                     row.duration_seconds === null
                       ? '—'
-                      : t('console.practices.detail.zoom.minutes', {
-                          n: Math.round(row.duration_seconds / 60),
-                        })
+                      : minutes(Math.round(row.duration_seconds / 60))
                   }}
                 </template>
               </ConsoleTable>
@@ -231,7 +223,7 @@
             </div>
             <div class="practice-detail__fact">
               <dt>{{ t('console.practices.detail.about.duration') }}</dt>
-              <dd>{{ t('console.practices.duration', { n: practice.duration_minutes }) }}</dd>
+              <dd>{{ minutes(practice.duration_minutes) }}</dd>
             </div>
             <div class="practice-detail__fact">
               <dt>{{ t('console.practices.detail.about.master') }}</dt>
@@ -258,16 +250,17 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
 import { routeParam } from '@/router/routeParam'
-import { VAvatar, VButton, VEmptyState, VLoader, VSegment } from '@/components/ui'
+import { VAvatar, VButton, VEmptyState, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import BookingStatusBadge from '@/components/console/content/BookingStatusBadge.vue'
 import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
+import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
 import ConsoleStat from '@/components/console/content/ConsoleStat.vue'
-import { formatCount, formatWhen } from '@/components/console/content/consoleDate'
-import { useConsoleWidth } from '@/components/console/content/useConsoleWidth'
+import { ApiResponseError } from '@/api/client'
+import { useConsoleWidth } from '@/composables/useConsoleWidth'
 import {
   adminPracticeAttendanceQuery,
   adminPracticeQuery,
@@ -276,7 +269,15 @@ import {
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { formatWhen } from '@/utils/console/date'
+import { labelOrRaw } from '@/utils/console/labelOrRaw'
+import type { ConsoleTone } from '@/utils/console/tone'
+import { formatCount } from '@/utils/format'
 import { directionLabel } from '@/utils/methodTaxonomy'
+import { ZOOM_MEETING_TONES, isZoomMeetingStatus } from '@/utils/zoomMeetingStatus'
+
+/** The practices list, with or without its query: where a way back may lead. */
+const LIST_PATH = /^\/console\/practices(\?|$)/
 
 const route = useRoute()
 const router = useRouter()
@@ -290,6 +291,14 @@ const practiceQuery = useQuery(() => adminPracticeQuery(practiceId))
 const practice = computed(() => practiceQuery.data.value ?? null)
 const { loading, failed } = screenQueryState(practiceQuery)
 const errorText = computed(() => extractApiError(practiceQuery.error.value, t('common.loadError')))
+// A 404 is "not found"; any other failure is a load error with Retry. Only a
+// first load that failed shows either: a refetch over a practice shown keeps it.
+const notFound = computed(
+  () =>
+    failed.value &&
+    practiceQuery.error.value instanceof ApiResponseError &&
+    practiceQuery.error.value.status === 404,
+)
 
 // The Zoom answer is loaded when its tab is opened and stays cached after.
 const attendanceQuery = useQuery(() => ({
@@ -304,11 +313,22 @@ onFailedRequest(practiceQuery, (e) => {
     toast.error(extractApiError(e, t('console.practices.detail.loadFailed')))
 })
 
+// A failed refetch over Zoom data shown (a return to the app) is told too.
+onFailedRequest(attendanceQuery, (e) => {
+  if (attendanceQuery.data.value !== undefined)
+    toast.error(extractApiError(e, t('console.practices.detail.zoom.loadFailed')))
+})
+
 function retry(): void {
   void practiceQuery.refetch()
 }
 function retryZoom(): void {
   void attendanceQuery.refetch()
+}
+
+/** A number of minutes with the shared unit word. */
+function minutes(n: number): string {
+  return `${n} ${t('common.duration.min')}`
 }
 
 const isPast = computed(() => practice.value?.status === 'past')
@@ -334,23 +354,16 @@ const rosterColumns = computed<ConsoleTableColumn[]>(() => [
   { key: 'status', label: t('console.practices.detail.participants.status'), width: 180 },
 ])
 
-const ZOOM_STATUS_TONES = {
-  active: 'success',
-  pending_creation: 'neutral',
-  create_failed: 'error',
-  deleted: 'neutral',
-} as const
-type ZoomStatus = keyof typeof ZOOM_STATUS_TONES
-
 // null: no ZoomMeeting row was ever made for the practice (backend router docstring).
-const meetingStatus = computed<{ label: string; tone: 'success' | 'error' | 'neutral' }>(() => {
+const meetingStatus = computed<{ label: string; tone: ConsoleTone }>(() => {
   const status = zoom.value?.zoom_meeting_status
   if (status == null)
-    return { label: t('console.practices.detail.zoom.status.none'), tone: 'neutral' }
-  if (!Object.hasOwn(ZOOM_STATUS_TONES, status)) return { label: status, tone: 'neutral' }
+    return { label: t('console.practices.detail.zoom.status.none'), tone: 'muted' }
   return {
-    label: t(`console.practices.detail.zoom.status.${status}`),
-    tone: ZOOM_STATUS_TONES[status as ZoomStatus],
+    label: labelOrRaw(status, isZoomMeetingStatus, (known) =>
+      t(`console.practices.detail.zoom.status.${known}`),
+    ),
+    tone: isZoomMeetingStatus(status) ? ZOOM_MEETING_TONES[status] : 'muted',
   }
 })
 
@@ -403,22 +416,30 @@ const unmatchedColumns = computed<ConsoleTableColumn[]>(() => [
   },
 ])
 
-const DECIDED_VIA = ['zoom_report', 'legacy_proxy'] as const
+type DecidedVia = 'zoom_report' | 'legacy_proxy'
+
+function isDecidedVia(via: string): via is DecidedVia {
+  return via === 'zoom_report' || via === 'legacy_proxy'
+}
 
 // Null: nothing decided the booking yet; an unknown mechanism is shown as it came.
 function decidedViaLabel(via: string | null): string {
   if (via === null) return '—'
-  return (DECIDED_VIA as readonly string[]).includes(via)
-    ? t(`console.practices.detail.zoom.via.${via}`)
-    : via
+  return labelOrRaw(via, isDecidedVia, (known) => t(`console.practices.detail.zoom.via.${known}`))
 }
 
 function whenOrDash(iso: string | null): string {
   return iso === null ? '—' : formatWhen(iso, practice.value?.timezone ?? 'UTC')
 }
 
-// Back to the tab the practice belongs to; also right after a deep link.
+// Back to the list the admin came from, with its tab and page; after a deep
+// link (no list before this screen) to the tab the practice belongs to.
 function backToList(): void {
+  const from = router.options.history.state.back
+  if (typeof from === 'string' && LIST_PATH.test(from)) {
+    router.back()
+    return
+  }
   void router.push({
     name: 'console-practices',
     query: { scope: isPast.value ? 'past' : 'upcoming' },
@@ -453,17 +474,12 @@ function backToList(): void {
   gap: var(--space-3);
 }
 
-/* The menu is folded below 1200 px: the practice data goes under the main column. */
+/* Below 1200 px (CONSOLE_NARROW_MAX, utils/console/layout.ts) the menu is
+   folded: the practice data goes under the main column. */
 @media (max-width: 1199px) {
   .practice-detail {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.practice-detail__state {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-8) 0;
 }
 
 .practice-detail__avatar :deep(.v-avatar__initials) {

@@ -29,26 +29,15 @@
       >
     </template>
 
-    <div v-if="adding" class="catalog-list__add" data-testid="direction-add-row">
-      <VInput
-        v-model="newLabel"
-        :label="t('console.catalog.newDirectionPlaceholder')"
-        hide-label
-        :placeholder="t('console.catalog.newDirectionPlaceholder')"
-        maxlength="100"
-        @keydown.enter.prevent="addDirection"
-        @keydown.esc="cancelAdd"
-      />
-      <VButton
-        size="sm"
-        :loading="creating"
-        :disabled="newLabel.trim() === ''"
-        data-testid="direction-add-confirm"
-        @click="addDirection"
-        >{{ t('ui.add') }}</VButton
-      >
-      <VButton variant="ghost" size="sm" @click="cancelAdd">{{ t('ui.cancel') }}</VButton>
-    </div>
+    <ConsoleAddRow
+      v-if="adding"
+      v-model="newLabel"
+      :placeholder="t('console.catalog.newDirectionPlaceholder')"
+      :loading="creating"
+      testid="direction-add"
+      @submit="addDirection"
+      @cancel="cancelAdd"
+    />
 
     <ul
       class="catalog-list__list"
@@ -86,9 +75,11 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { ref } from 'vue'
-import { VButton, VInput } from '@/components/ui'
+import { VButton } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
-import { newTaxonomySlug } from '@/components/console/content/taxonomySlug'
+import ConsoleAddRow from '@/components/console/content/ConsoleAddRow.vue'
+import { nextDisplayOrder } from '@/utils/console/displayOrder'
+import { newTaxonomySlug } from '@/utils/console/taxonomySlug'
 import { useTaxonomyMutation } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -98,7 +89,7 @@ import {
   type TaxonomyDirectionItem,
 } from '@/api/taxonomy'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** Every direction of the catalog, hidden ones included. */
     directions: readonly TaxonomyDirectionItem[]
@@ -137,7 +128,12 @@ async function addDirection(): Promise<void> {
   if (label === '' || creating.value) return
   creating.value = true
   try {
-    const created = await createDirection.mutateAsync({ value: newTaxonomySlug(), label })
+    // A new direction goes last (the API's default order, 0, would put it first).
+    const created = await createDirection.mutateAsync({
+      value: newTaxonomySlug(),
+      label,
+      display_order: nextDisplayOrder(props.directions.map((d) => d.display_order)),
+    })
     emit('select', created.id)
     adding.value = false
     toast.success(t('console.catalog.directionAdded'))
@@ -153,26 +149,6 @@ async function addDirection(): Promise<void> {
 /* In a scrolling column (ConsoleSplit) the card keeps its height, the column scrolls. */
 .catalog-list {
   flex: 0 0 auto;
-}
-
-.catalog-list__add {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* VInput keeps its attrs on the inner <input>: the flex rules go on its root. */
-.catalog-list__add > .v-input {
-  flex: 1;
-  min-width: 0;
-  margin-bottom: 0;
-}
-
-/* The kit's field is a white plate with no border (made for the photo
-   background): on a white card it gets a light border. */
-.catalog-list__add :deep(.v-input__field:not(:focus)) {
-  border-color: var(--velo-border-light);
-  font-size: var(--velo-fs-16);
 }
 
 .catalog-list__list {

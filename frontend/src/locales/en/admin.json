@@ -615,12 +615,12 @@
         "master": "Master",
         "booked": "Booked"
       },
-      "duration": "{n} min",
       "empty": "No practices here yet",
       "loadFailed": "Failed to load the practices",
       "detail": {
         "back": "To the practices",
         "loadFailed": "Failed to load the practice",
+        "notFound": "The practice was not found",
         "tabsLabel": "Practice sections",
         "tabs": {
           "participants": "Participants",
@@ -682,7 +682,6 @@
             "minutes": "In the meeting",
             "via": "Decided by"
           },
-          "minutes": "{n} min",
           "via": {
             "zoom_report": "Zoom report",
             "legacy_proxy": "Join and check-in"

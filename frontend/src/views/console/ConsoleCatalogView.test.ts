@@ -13,9 +13,10 @@
 import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsoleCatalogView from '@/views/console/ConsoleCatalogView.vue'
 import * as taxonomyApi from '@/api/taxonomy'
 import type { TaxonomyDirectionItem, TaxonomyStyleItem } from '@/api/taxonomy'
@@ -71,10 +72,10 @@ const DIR_B = direction({
 })
 const DIR_C = direction({ id: 'dir_c', label: 'Дыхание', styles: [] })
 
-// The window width classes (components/console/content/useConsoleWidth.ts):
+// The window width classes (composables/useConsoleWidth.ts):
 // happy-dom is 1024 px wide, so the test sets them. Default: the wide layout.
 const width = vi.hoisted(() => ({ narrow: false, medium: false }))
-vi.mock('@/components/console/content/useConsoleWidth', async () => {
+vi.mock('@/composables/useConsoleWidth', async () => {
   const { ref } = await import('vue')
   return { useConsoleWidth: () => ({ narrow: ref(width.narrow), medium: ref(width.medium) }) }
 })
@@ -87,11 +88,12 @@ let catalog: TaxonomyDirectionItem[]
 
 let app: App | null = null
 let host: HTMLElement | null = null
+let pinia: Pinia
 
 function mount(): void {
   host = document.createElement('div')
   document.body.appendChild(host)
-  const pinia = createPinia()
+  pinia = createPinia()
   setActivePinia(pinia)
   app = createApp(ConsoleCatalogView)
     .use(createTestI18n())
@@ -260,8 +262,65 @@ describe('ConsoleCatalogView', () => {
     })
   })
 
+  describe('background refetch (a return to the app)', () => {
+    /** A background refetch of the catalog, as a return to the app does. */
+    async function refetchInBackground(): Promise<void> {
+      useQueryCache(pinia)
+        .invalidateQueries({ key: adminKeys.taxonomy() })
+        .catch(() => {})
+      await flush()
+    }
+
+    it('keeps the tree on screen while it runs, then shows the fresh answer', async () => {
+      await mountAndLoad()
+
+      let resolveFresh!: (value: { directions: TaxonomyDirectionItem[] }) => void
+      vi.mocked(taxonomyApi.getFullTaxonomy).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveFresh = resolve
+          }),
+      )
+      await refetchInBackground()
+
+      expect(host?.querySelector('[data-testid="catalog-loading"]')).toBeNull()
+      expect(directionItems()).toHaveLength(3)
+
+      resolveFresh({ directions: [DIR_C] })
+      await flush()
+      expect(directionItems()).toEqual(['Дыхание | 0 стилей'])
+      expect(toastError).not.toHaveBeenCalled()
+    })
+
+    it('failing again and again is told once, until an answer arrives; the tree stays', async () => {
+      await mountAndLoad()
+      vi.mocked(taxonomyApi.getFullTaxonomy).mockImplementation(() =>
+        Promise.reject(new Error('down')),
+      )
+
+      await refetchInBackground()
+      await refetchInBackground()
+
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить каталог')
+      expect(directionItems()).toHaveLength(3)
+      expect(host?.querySelector('.v-empty__title')).toBeNull()
+
+      vi.mocked(taxonomyApi.getFullTaxonomy).mockImplementation(async () => ({
+        directions: catalog,
+      }))
+      await refetchInBackground()
+      vi.mocked(taxonomyApi.getFullTaxonomy).mockImplementation(() =>
+        Promise.reject(new Error('down again')),
+      )
+      await refetchInBackground()
+
+      expect(toastError).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('a direction', () => {
-    it('is added with a valid machine slug, selected, and the app taxonomy is refreshed', async () => {
+    it('is added last with a valid machine slug, selected, and the app taxonomy is refreshed', async () => {
       const created = direction({ id: 'dir_new', label: 'Звук', source: 'custom' })
       vi.mocked(taxonomyApi.createTaxonomyDirection).mockImplementation(async () => {
         catalog = [...catalog, created]
@@ -275,7 +334,8 @@ describe('ConsoleCatalogView', () => {
       await click(byTestId('direction-add-confirm'))
 
       const [body] = vi.mocked(taxonomyApi.createTaxonomyDirection).mock.calls[0] ?? []
-      expect(body).toEqual({ value: expect.stringMatching(SLUG), label: 'Звук' })
+      // Orders in use are 3, 0, 0: the new direction goes after the largest.
+      expect(body).toEqual({ value: expect.stringMatching(SLUG), label: 'Звук', display_order: 4 })
       // The list is the refetched catalog; the new direction is the open one.
       expect(directionItems()).toHaveLength(4)
       expect(selectedDirection()).toBe('Звук')
@@ -326,14 +386,17 @@ describe('ConsoleCatalogView', () => {
       expect(selectedDirection()).toBe('Звук')
     })
 
-    it('Add is off for a blank name', async () => {
+    it('Add is off for a blank name and on once a name is typed', async () => {
       await mountAndLoad()
 
       await click(byTestId('direction-add'))
       type(field('Название направления'), '   ')
       await flush()
-
       expect(byTestId('direction-add-confirm').disabled).toBe(true)
+
+      type(field('Название направления'), 'Звук')
+      await flush()
+      expect(byTestId('direction-add-confirm').disabled).toBe(false)
     })
 
     it('Save stays off until something changed, then sends only what changed', async () => {
@@ -413,13 +476,13 @@ describe('ConsoleCatalogView', () => {
   })
 
   describe('a style', () => {
-    it('is added to the open direction with a valid machine slug', async () => {
+    it('is added last in the open direction, with a valid machine slug', async () => {
       vi.mocked(taxonomyApi.createTaxonomyStyle).mockImplementation(async (_dirId, body) => {
         const added = style({
           id: 'st_new',
           direction_id: 'dir_a',
           label: body.label,
-          display_order: 0,
+          display_order: body.display_order ?? 0,
         })
         catalog = [{ ...DIR_A, styles: [...(DIR_A.styles ?? []), added] }, DIR_B, DIR_C]
         return added
@@ -433,8 +496,13 @@ describe('ConsoleCatalogView', () => {
 
       const [directionId, body] = vi.mocked(taxonomyApi.createTaxonomyStyle).mock.calls[0] ?? []
       expect(directionId).toBe('dir_a')
-      expect(body).toEqual({ value: expect.stringMatching(SLUG), label: 'Дзадзен' })
-      expect(styleRows()).toEqual(['Випассана #1 on', 'Метта #2 on', 'Дзадзен #0 on'])
+      // The styles in use are 1 and 2: the new one goes after them.
+      expect(body).toEqual({
+        value: expect.stringMatching(SLUG),
+        label: 'Дзадзен',
+        display_order: 3,
+      })
+      expect(styleRows()).toEqual(['Випассана #1 on', 'Метта #2 on', 'Дзадзен #3 on'])
       expect(toastSuccess).toHaveBeenCalledWith('Стиль добавлен')
     })
 

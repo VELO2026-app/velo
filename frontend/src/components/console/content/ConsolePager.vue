@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { pagerItems } from '@/components/console/content/pagerItems'
+import { pagerItems } from '@/utils/console/pagerItems'
 
 const props = defineProps<{
   /** Current page, 1-based. */

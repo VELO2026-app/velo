@@ -42,7 +42,6 @@ const fillPercent = computed(() =>
   flex-direction: column;
   gap: var(--space-1);
   width: 100%;
-  max-width: 140px;
 }
 
 .capacity-bar__text {
@@ -52,7 +51,7 @@ const fillPercent = computed(() =>
 
 .capacity-bar__track {
   display: block;
-  height: 6px;
+  height: var(--space-1);
   overflow: hidden;
   border-radius: var(--radius-full);
   background: var(--velo-border-light);

@@ -62,6 +62,7 @@ import { computed, ref } from 'vue'
 import { VButton, VInput, VSwitch } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import CatalogStyles from '@/components/console/content/CatalogStyles.vue'
+import { isWholeNumber } from '@/utils/console/displayOrder'
 import { useTaxonomyMutation } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -88,7 +89,7 @@ const draftOrder = ref(String(props.direction.display_order))
 
 const label = computed(() => draftLabel.value.trim())
 const order = computed(() => Number(draftOrder.value))
-const orderValid = computed(() => draftOrder.value.trim() !== '' && Number.isInteger(order.value))
+const orderValid = computed(() => isWholeNumber(draftOrder.value))
 const dirty = computed(
   () => label.value !== props.direction.label || order.value !== props.direction.display_order,
 )
@@ -147,18 +148,6 @@ async function setVisible(active: boolean): Promise<void> {
 .catalog-direction__fields {
   display: flex;
   gap: var(--space-4);
-}
-
-/* The kit's field is a white plate with no border (made for the photo
-   background): on a white card it gets a light border and a small label. */
-.catalog-direction__fields :deep(.v-input__label) {
-  font-size: var(--velo-fs-12);
-  color: var(--velo-text-secondary);
-}
-
-.catalog-direction__fields :deep(.v-input__field:not(:focus)) {
-  border-color: var(--velo-border-light);
-  font-size: var(--velo-fs-16);
 }
 
 /* VInput keeps its attrs on the inner <input>: the flex rules go on its root. */

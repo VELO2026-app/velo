@@ -24,9 +24,7 @@
     :fill="!narrow"
     testid="console-catalog"
   >
-    <div v-if="loading" class="console-catalog__state" data-testid="catalog-loading">
-      <VLoader size="lg" />
-    </div>
+    <ConsoleLoading v-if="loading" data-testid="catalog-loading" />
     <VEmptyState
       v-else-if="failed"
       icon="warning"
@@ -65,12 +63,13 @@
 import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { useQuery } from '@pinia/colada'
-import { VButton, VEmptyState, VLoader } from '@/components/ui'
+import { VButton, VEmptyState } from '@/components/ui'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleSplit from '@/components/console/ConsoleSplit.vue'
 import CatalogDirectionList from '@/components/console/content/CatalogDirectionList.vue'
 import CatalogDirectionPanel from '@/components/console/content/CatalogDirectionPanel.vue'
-import { useConsoleWidth } from '@/components/console/content/useConsoleWidth'
+import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
+import { useConsoleWidth } from '@/composables/useConsoleWidth'
 import { adminTaxonomyQuery, onFailedRequest } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useToast } from '@/composables/useToast'
@@ -101,12 +100,6 @@ const selected = computed(
 </script>
 
 <style scoped>
-.console-catalog__state {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-8) 0;
-}
-
 .console-catalog__stack {
   display: flex;
   flex-direction: column;

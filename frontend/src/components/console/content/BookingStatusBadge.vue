@@ -7,32 +7,37 @@
 
 <template>
   <ConsoleStatusBadge
-    :tone="known ? TONES[status as BookingStatus] : 'neutral'"
+    :tone="isBookingStatus(status) ? TONES[status] : 'muted'"
     data-testid="booking-status"
   >
-    {{ known ? t(`console.practices.detail.booking.${status}`) : status }}
+    {{
+      labelOrRaw(status, isBookingStatus, (known) => t(`console.practices.detail.booking.${known}`))
+    }}
   </ConsoleStatusBadge>
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed } from 'vue'
 import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
+import { labelOrRaw } from '@/utils/console/labelOrRaw'
+import type { ConsoleTone } from '@/utils/console/tone'
 
-/** A booking status the API sends for a live (not cancelled) booking. */
-type BookingStatus = 'confirmed' | 'attended' | 'no_show' | 'pending'
-
-const TONES: Record<BookingStatus, 'success' | 'warning' | 'error' | 'info'> = {
+const TONES = {
   confirmed: 'info',
   attended: 'success',
   no_show: 'error',
   pending: 'warning',
+} as const satisfies Record<string, ConsoleTone>
+
+/** A booking status the API sends for a live (not cancelled) booking. */
+type BookingStatus = keyof typeof TONES
+
+function isBookingStatus(status: string): status is BookingStatus {
+  return Object.hasOwn(TONES, status)
 }
 
-const props = defineProps<{
+defineProps<{
   /** Booking status as the API sends it. */
   status: string
 }>()
-
-const known = computed(() => Object.hasOwn(TONES, props.status))
 </script>

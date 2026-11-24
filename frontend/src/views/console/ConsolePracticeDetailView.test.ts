@@ -4,18 +4,19 @@
 //
 // Two Colada queries over @/api/admin (getAdminPracticeDetail, and
 // getAdminZoomAttendance once the Zoom tab is opened). The screen mounts with
-// a real router (memory history, the practice id is a route param), a real
-// Pinia and Colada. The clock is frozen: dates in the fixtures sit far from
+// a real router (web history: the way back reads `history.state.back`; the
+// practice id is a route param), a real Pinia and Colada. The clock is frozen: dates in the fixtures sit far from
 // "today", so no relative day label can appear.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
-import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createRouter, createWebHistory, type Router } from 'vue-router'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache, type EntryKey } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsolePracticeDetailView from '@/views/console/ConsolePracticeDetailView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
@@ -28,10 +29,10 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
 }))
 
-// The window width classes (components/console/content/useConsoleWidth.ts):
+// The window width classes (composables/useConsoleWidth.ts):
 // happy-dom is 1024 px wide, so the test sets them. Default: the wide layout.
 const width = vi.hoisted(() => ({ narrow: false, medium: false }))
-vi.mock('@/components/console/content/useConsoleWidth', async () => {
+vi.mock('@/composables/useConsoleWidth', async () => {
   const { ref } = await import('vue')
   return { useConsoleWidth: () => ({ narrow: ref(width.narrow), medium: ref(width.medium) }) }
 })
@@ -120,10 +121,13 @@ function zoomAnswer(
 let app: App | null = null
 let host: HTMLElement | null = null
 let router: Router
+let pinia: Pinia
 
-async function mount(): Promise<HTMLElement> {
+/** Open the practice; `from` is a list address visited before it (the way the admin came). */
+async function mount(from?: string): Promise<HTMLElement> {
+  window.history.replaceState(null, '', '/')
   router = createRouter({
-    history: createMemoryHistory(),
+    history: createWebHistory(),
     routes: [
       { path: '/console/practices', name: 'console-practices', component: { render: () => null } },
       {
@@ -133,11 +137,12 @@ async function mount(): Promise<HTMLElement> {
       },
     ],
   })
+  if (from !== undefined) await router.push(from)
   await router.push('/console/practices/p_1')
   await router.isReady()
   host = document.createElement('div')
   document.body.appendChild(host)
-  const pinia = createPinia()
+  pinia = createPinia()
   setActivePinia(pinia)
   app = createApp(ConsolePracticeDetailView)
     .use(createTestI18n())
@@ -181,6 +186,13 @@ function button(text: string): HTMLButtonElement | undefined {
 }
 async function openZoomTab(): Promise<void> {
   button('Посещаемость Zoom')?.click()
+  await flush()
+}
+/** A background refetch of what is held under a key prefix, as a return to the app does. */
+async function refetchInBackground(key: EntryKey): Promise<void> {
+  useQueryCache(pinia)
+    .invalidateQueries({ key })
+    .catch(() => {})
   await flush()
 }
 
@@ -262,7 +274,7 @@ describe('ConsolePracticeDetailView', () => {
 
   it('a failed load shows the error and Retry recovers', async () => {
     vi.mocked(adminApi.getAdminPracticeDetail).mockRejectedValueOnce(
-      new ApiResponseError(404, 'Практика не найдена', 'not_found'),
+      new ApiResponseError(500, 'Сервер недоступен', 'server_error'),
     )
     await mount()
 
@@ -278,14 +290,96 @@ describe('ConsolePracticeDetailView', () => {
     expect(tableRows('Участники практики')).toHaveLength(5)
   })
 
-  it('"Back" returns to the tab the practice belongs to', async () => {
+  it('a 404 is "not found", with no Retry', async () => {
+    vi.mocked(adminApi.getAdminPracticeDetail).mockRejectedValue(
+      new ApiResponseError(404, 'Практика не найдена', 'not_found'),
+    )
     await mount()
 
-    button('К практикам')?.click()
-    await flush()
+    expect(host?.querySelector('[data-testid="practice-not-found"]')).not.toBeNull()
+    expect(host?.querySelector('.v-empty__title')?.textContent).toBe('Практика не найдена')
+    expect(button('Повторить')).toBeUndefined()
+  })
 
-    expect(router.currentRoute.value.name).toBe('console-practices')
-    expect(router.currentRoute.value.query).toEqual({ scope: 'past' })
+  describe('background refetch (a return to the app)', () => {
+    it('keeps the practice on screen while it runs, then shows the fresh answer', async () => {
+      await mount()
+
+      let resolveFresh!: (value: AdminPracticeDetailResponse) => void
+      vi.mocked(adminApi.getAdminPracticeDetail).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveFresh = resolve
+          }),
+      )
+      await refetchInBackground(adminKeys.practiceAll())
+
+      expect(host?.querySelector('[data-testid="practice-loading"]')).toBeNull()
+      expect(statValues()).toEqual({ Записано: '5', Был: '1', 'Не пришёл': '1' })
+
+      resolveFresh(detail({ booked: 9, attended: 4, roster: ROSTER.slice(0, 2) }))
+      await flush()
+      expect(statValues()).toEqual({ Записано: '9', Был: '4', 'Не пришёл': '1' })
+      expect(toastError).not.toHaveBeenCalled()
+    })
+
+    it('failing again and again is told once, until an answer arrives; the practice stays', async () => {
+      await mount()
+      vi.mocked(adminApi.getAdminPracticeDetail).mockImplementation(() =>
+        Promise.reject(new Error('down')),
+      )
+
+      await refetchInBackground(adminKeys.practiceAll())
+      await refetchInBackground(adminKeys.practiceAll())
+
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить практику')
+      expect(tableRows('Участники практики')).toHaveLength(5)
+      expect(host?.querySelector('.v-empty__title')).toBeNull()
+
+      vi.mocked(adminApi.getAdminPracticeDetail).mockResolvedValue(detail())
+      await refetchInBackground(adminKeys.practiceAll())
+      vi.mocked(adminApi.getAdminPracticeDetail).mockImplementation(() =>
+        Promise.reject(new Error('down again')),
+      )
+      await refetchInBackground(adminKeys.practiceAll())
+
+      expect(toastError).toHaveBeenCalledTimes(2)
+    })
+
+    it('a failed refetch over a practice shown is not "not found"', async () => {
+      await mount()
+      vi.mocked(adminApi.getAdminPracticeDetail).mockRejectedValue(
+        new ApiResponseError(404, 'Практика не найдена', 'not_found'),
+      )
+
+      await refetchInBackground(adminKeys.practiceAll())
+
+      expect(host?.querySelector('[data-testid="practice-not-found"]')).toBeNull()
+      expect(tableRows('Участники практики')).toHaveLength(5)
+    })
+  })
+
+  describe('"Back"', () => {
+    it('returns to the list the admin came from, with its tab and page', async () => {
+      await mount('/console/practices?scope=all&page=3')
+
+      button('К практикам')?.click()
+      await flush()
+
+      expect(router.currentRoute.value.name).toBe('console-practices')
+      expect(router.currentRoute.value.query).toEqual({ scope: 'all', page: '3' })
+    })
+
+    it('after a deep link goes to the tab the practice belongs to', async () => {
+      await mount()
+
+      button('К практикам')?.click()
+      await flush()
+
+      expect(router.currentRoute.value.name).toBe('console-practices')
+      expect(router.currentRoute.value.query).toEqual({ scope: 'past' })
+    })
   })
 
   describe('Zoom attendance', () => {
@@ -353,6 +447,21 @@ describe('ConsolePracticeDetailView', () => {
       expect(host?.textContent).toContain('Нет записей для сверки')
       // No leftovers: no table for them.
       expect(host?.querySelector('[aria-label="Строки Zoom без участника"]')).toBeNull()
+    })
+
+    it('a failed refetch over Zoom data shown keeps it and is told once', async () => {
+      await mount()
+      await openZoomTab()
+      vi.mocked(adminApi.getAdminZoomAttendance).mockImplementation(() =>
+        Promise.reject(new Error('down')),
+      )
+
+      await refetchInBackground(adminKeys.practiceAll())
+      await refetchInBackground(adminKeys.practiceAll())
+
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(toastError).toHaveBeenCalledWith('Не удалось загрузить посещаемость Zoom')
+      expect(host?.querySelector('[data-testid="zoom-meeting-status"]')).not.toBeNull()
     })
 
     it('a failed read is an error with Retry, not "no Zoom data"; the participants stay', async () => {

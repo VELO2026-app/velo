@@ -8,8 +8,10 @@
   Data: `GET /admin/practices?scope=&limit=&offset=`, one Colada entry per
   scope and page (composables/queries/admin.ts). The scope and the page live
   in the URL (`?scope=past&page=2`), so a reload and the back button keep
-  them. The API has no search, filter by direction / master / date, format or
-  price: the table shows what the answer carries.
+  them. The API lists newest first, so the upcoming scope is paged from the
+  end to put the nearest practices on page 1 (loadPracticesPage). The API has
+  no search, filter by direction / master / date, format or price: the table
+  shows what the answer carries.
 -->
 
 <template>
@@ -29,9 +31,7 @@
     </template>
 
     <ConsoleCard flush>
-      <div v-if="loading" class="console-practices__state" data-testid="console-practices-loading">
-        <VLoader size="lg" />
-      </div>
+      <ConsoleLoading v-if="loading" data-testid="console-practices-loading" />
       <VEmptyState
         v-else-if="failed"
         icon="warning"
@@ -52,7 +52,7 @@
             <span class="console-practices__stack">
               <span>{{ formatWhen(row.scheduled_at, row.timezone) }}</span>
               <span class="console-practices__sub">{{
-                t('console.practices.duration', { n: row.duration_minutes })
+                `${row.duration_minutes} ${t('common.duration.min')}`
               }}</span>
             </span>
           </template>
@@ -85,18 +85,19 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
-import { VAvatar, VButton, VEmptyState, VLoader, VSegment } from '@/components/ui'
+import { VAvatar, VButton, VEmptyState, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import CapacityBar from '@/components/console/content/CapacityBar.vue'
+import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
 import ConsolePager from '@/components/console/content/ConsolePager.vue'
-import { formatCount, formatWhen } from '@/components/console/content/consoleDate'
-import { useConsoleWidth } from '@/components/console/content/useConsoleWidth'
+import { formatWhen } from '@/utils/console/date'
+import { useConsoleWidth } from '@/composables/useConsoleWidth'
 import type { AdminPracticeScope } from '@/api/admin'
 import {
   ADMIN_PRACTICES_PAGE_SIZE,
@@ -106,6 +107,7 @@ import {
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { formatCount } from '@/utils/format'
 import { directionLabel } from '@/utils/methodTaxonomy'
 
 const route = useRoute()
@@ -142,6 +144,18 @@ function setPage(next: number): void {
 const listQuery = useQuery(() => adminPracticesPageQuery({ scope: scope.value, page: page.value }))
 const { loading, failed } = screenQueryState(listQuery)
 const errorText = computed(() => extractApiError(listQuery.error.value, t('common.loadError')))
+
+// A page past the end (a kept link, a list that shrank) goes to the last page;
+// an empty list goes to the first. The answer's total says where the end is.
+watch(
+  () => listQuery.data.value,
+  (data) => {
+    if (data === undefined) return
+    const last = Math.max(1, Math.ceil(data.total / ADMIN_PRACTICES_PAGE_SIZE))
+    if (page.value > last) setPage(last)
+  },
+  { immediate: true },
+)
 
 // A failed refetch over a table shown (a return to the app) is told.
 onFailedRequest(listQuery, (e) => {
@@ -204,12 +218,6 @@ function openPractice(row: { id: string }): void {
 </script>
 
 <style scoped>
-.console-practices__state {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-8) 0;
-}
-
 .console-practices__stack {
   display: flex;
   flex-direction: column;

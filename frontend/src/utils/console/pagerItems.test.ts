@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pagerItems } from '@/components/console/content/pagerItems'
+import { pagerItems } from '@/utils/console/pagerItems'
 
 describe('pagerItems', () => {
   it.each([

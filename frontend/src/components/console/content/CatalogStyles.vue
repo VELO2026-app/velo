@@ -19,26 +19,15 @@
       }}</VButton>
     </header>
 
-    <div v-if="adding" class="catalog-styles__add" data-testid="style-add-row">
-      <VInput
-        v-model="newLabel"
-        :label="t('console.catalog.styles.newPlaceholder')"
-        hide-label
-        :placeholder="t('console.catalog.styles.newPlaceholder')"
-        maxlength="100"
-        @keydown.enter.prevent="addStyle"
-        @keydown.esc="cancelAdd"
-      />
-      <VButton
-        size="sm"
-        :loading="creating"
-        :disabled="newLabel.trim() === ''"
-        data-testid="style-add-confirm"
-        @click="addStyle"
-        >{{ t('ui.add') }}</VButton
-      >
-      <VButton variant="ghost" size="sm" @click="cancelAdd">{{ t('ui.cancel') }}</VButton>
-    </div>
+    <ConsoleAddRow
+      v-if="adding"
+      v-model="newLabel"
+      :placeholder="t('console.catalog.styles.newPlaceholder')"
+      :loading="creating"
+      testid="style-add"
+      @submit="addStyle"
+      @cancel="cancelAdd"
+    />
 
     <ConsoleTable :columns="columns" :rows="rows" :label="t('console.catalog.styles.label')">
       <template #cell-label="{ row }">
@@ -115,7 +104,9 @@ import { computed, ref } from 'vue'
 import { VButton, VInput, VSwitch } from '@/components/ui'
 import { IconCheck, IconClose, IconPen } from '@/components/icons'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
-import { newTaxonomySlug } from '@/components/console/content/taxonomySlug'
+import ConsoleAddRow from '@/components/console/content/ConsoleAddRow.vue'
+import { isWholeNumber, nextDisplayOrder } from '@/utils/console/displayOrder'
+import { newTaxonomySlug } from '@/utils/console/taxonomySlug'
 import { useTaxonomyMutation } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
@@ -173,7 +164,12 @@ async function addStyle(): Promise<void> {
   try {
     await createStyle.mutateAsync({
       directionId: props.direction.id,
-      body: { value: newTaxonomySlug(), label },
+      // A new style goes last (the API's default order, 0, would put it first).
+      body: {
+        value: newTaxonomySlug(),
+        label,
+        display_order: nextDisplayOrder(rows.value.map((r) => r.display_order)),
+      },
     })
     adding.value = false
     toast.success(t('console.catalog.styles.added'))
@@ -191,12 +187,7 @@ const draftOrder = ref('')
 // One write at a time per style: a switch and an edit of a row never overlap.
 const busyId = ref<string | null>(null)
 
-const editValid = computed(
-  () =>
-    draftLabel.value.trim() !== '' &&
-    Number.isInteger(Number(draftOrder.value)) &&
-    draftOrder.value.trim() !== '',
-)
+const editValid = computed(() => draftLabel.value.trim() !== '' && isWholeNumber(draftOrder.value))
 
 function startEdit(row: StyleRow): void {
   editingId.value = row.id
@@ -267,30 +258,10 @@ async function setVisible(row: StyleRow, active: boolean): Promise<void> {
   -webkit-text-stroke: var(--velo-text-stroke-strong);
 }
 
-.catalog-styles__add {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* VInput keeps its attrs on the inner <input>: the flex rules go on its root. */
-.catalog-styles__add > .v-input {
-  flex: 1;
-  min-width: 0;
-  margin-bottom: 0;
-}
-
 .catalog-styles :deep(.console-table__cell > .v-input) {
   flex: 1;
   min-width: 0;
   margin-bottom: 0;
-}
-
-/* The kit's field is a white plate with no border (made for the photo
-   background): on a white card it gets a light border. */
-.catalog-styles :deep(.v-input__field:not(:focus)) {
-  border-color: var(--velo-border-light);
-  font-size: var(--velo-fs-16);
 }
 
 .catalog-styles__off {

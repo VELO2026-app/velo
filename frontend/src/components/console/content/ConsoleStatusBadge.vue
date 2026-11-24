@@ -16,12 +16,14 @@
 </template>
 
 <script setup lang="ts">
+import type { ConsoleTone } from '@/utils/console/tone'
+
 withDefaults(
   defineProps<{
-    /** The status colour: a good state, a bad one, one to look at, a plain one, none. */
-    tone?: 'success' | 'error' | 'warning' | 'info' | 'neutral'
+    /** The status colour (a quiet one by default). */
+    tone?: ConsoleTone
   }>(),
-  { tone: 'neutral' },
+  { tone: 'muted' },
 )
 </script>
 
@@ -40,8 +42,8 @@ withDefaults(
 
 .console-status__dot {
   flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
+  width: var(--space-2);
+  height: var(--space-2);
   border-radius: var(--radius-full);
   background: var(--velo-text-muted);
 }

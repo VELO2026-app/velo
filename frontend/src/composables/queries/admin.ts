@@ -99,6 +99,7 @@ import type {
   AdminStatsResponse,
   CheckinMetricResponse,
   FeedbackMetricResponse,
+  PaginatedAdminPracticesResponse,
   PaginatedAdminSchoolsResponse,
   PaginatedMethodChangeRequestsResponse,
   PaginatedAdminWithdrawalsResponse,
@@ -108,6 +109,7 @@ import type {
   ReturnMetricResponse,
 } from '@/api/types'
 import { adminKeys } from '@/composables/queries/adminKeys'
+import { nearestFirstWindow } from '@/utils/console/nearestFirst'
 import { keys } from '@/composables/queries/keys'
 import { extractApiError } from '@/composables/useApiError'
 import { invalidateKeys } from '@/composables/queries/invalidation'
@@ -583,15 +585,40 @@ export const adminPracticesQuery = defineQueryOptions((scope: AdminPracticeScope
 export const ADMIN_PRACTICES_PAGE_SIZE = 20
 
 /**
- * Query options for one page (1-based) of the platform's practices in one
- * scope (`GET /admin/practices`), the web console's table. The page is part
- * of the key: a page switch is a cache entry of its own.
+ * One page (1-based) of the platform's practices in one scope, the way the
+ * web console's table shows it.
+ *
+ * @remarks
+ * The API lists every scope newest first. For `past` and `all` that is the
+ * order wanted. For `upcoming` it puts the nearest practices on the last
+ * page, so the console pages that scope from the end: one request for the
+ * total, one for the slice that page 1 (the nearest) is made of
+ * (utils/console/nearestFirst.ts), the rows turned around. When the backend
+ * can sort `upcoming` ascending this goes and the scope pages like the others.
+ */
+async function loadPracticesPage(
+  scope: AdminPracticeScope,
+  page: number,
+): Promise<PaginatedAdminPracticesResponse> {
+  const size = ADMIN_PRACTICES_PAGE_SIZE
+  const offset = (page - 1) * size
+  if (scope !== 'upcoming') return getAdminPractices(scope, size, offset)
+  const { total } = await getAdminPractices(scope, 1, 0)
+  const window = nearestFirstWindow(total, page, size)
+  if (window === null) return { items: [], total, limit: size, offset }
+  const slice = await getAdminPractices(scope, window.limit, window.offset)
+  return { items: [...slice.items].reverse(), total: slice.total, limit: size, offset }
+}
+
+/**
+ * Query options for one page of the platform's practices in one scope
+ * (`GET /admin/practices`), the web console's table. The page is part of
+ * the key: a page switch is a cache entry of its own.
  */
 export const adminPracticesPageQuery = defineQueryOptions(
   ({ scope, page }: { scope: AdminPracticeScope; page: number }) => ({
     key: adminKeys.practicesPage(scope, page),
-    query: () =>
-      getAdminPractices(scope, ADMIN_PRACTICES_PAGE_SIZE, (page - 1) * ADMIN_PRACTICES_PAGE_SIZE),
+    query: () => loadPracticesPage(scope, page),
     staleTime: 0,
   }),
 )
