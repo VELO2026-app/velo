@@ -349,12 +349,12 @@ import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { formatTime as formatClockTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
+import { createAttemptKeys } from '@/api/attemptKeys'
 import { ApiResponseError } from '@/api/client'
 import {
   SUPPORT_CLOSING_STATUSES,
   assignTicket,
   claimSupportThread,
-  createReplyKeys,
   releaseTicket,
   reopenTicket,
   retrySupportTranslation,
@@ -730,8 +730,9 @@ const claim = useAdminMutation('changeTicketTaker', () => claimSupportThread(tic
   waitForRefetch: false,
 })
 // One key per send attempt (FE-232): a retry of the same text is the same
-// reply; a landed reply frees the key (onSend).
-const replyKeys = createReplyKeys()
+// reply. A landed reply and a 4xx refusal free the key (onSend); a 5xx or a
+// lost connection keep it -- the backend may have taken the reply.
+const replyKeys = createAttemptKeys()
 const reply = useAdminMutation(
   'replySupport',
   (body: string) => sendAdminSupportReply(ticketId, body, replyKeys.keyFor(ticketId, body)),
@@ -990,7 +991,7 @@ async function onSend(): Promise<void> {
   sending.value = true
   try {
     const sent = await reply.mutateAsync(body)
-    replyKeys.settled()
+    replyKeys.release()
     // Shown at once as written; its translation for the person (BE-166) is
     // known only to the feed -- read it again, and poll if it is on its way.
     updateSupportFeed(queryCache, ticketId, (list) => [
@@ -1000,6 +1001,9 @@ async function onSend(): Promise<void> {
     draft.value = ''
     void rereadFeeds().then(restartPolling)
   } catch (e) {
+    // A 4xx is a refusal: nothing was processed, so the retry after the cause
+    // is fixed is a new reply, not the old key's.
+    if (e instanceof ApiResponseError && e.status >= 400 && e.status < 500) replyKeys.release()
     toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.replyFailed')))
   } finally {
     sending.value = false

@@ -32,7 +32,6 @@
 // =============================================================================
 
 import { api } from '@/api/client'
-import { newIdempotencyKey } from '@/api/chats'
 import { postIdempotent } from '@/api/idempotent'
 import type { StatusIn, TicketIn } from '@/api/generated'
 import { path, raw } from '@/api/path'
@@ -233,27 +232,6 @@ export function createTicket(
   )
 }
 
-/** ONE APPEAL, ONE KEY (owner ruling FE-104): a keeper that returns the
- *  Idempotency-Key for a (topic, body) -- the same key while neither changes,
- *  so a retry after a failed send is the same ticket; a fresh key once either
- *  changes, so an edited appeal is never answered with the old one (the
- *  backend would return the ticket and the message the key already names).
- *  One keeper per form instance. */
-export function createAppealKeys(
-  mint: () => string = newIdempotencyKey,
-): (topic: SupportTopicCode, body: string) => string {
-  let key: string | null = null
-  let appeal = ''
-  return (topic, body) => {
-    const next = JSON.stringify([topic, body])
-    if (key === null || next !== appeal) {
-      key = mint()
-      appeal = next
-    }
-    return key
-  }
-}
-
 // -- Admin --------------------------------------------------------------------
 
 /** The filters of the admin ticket list. `categories` is "any of these"
@@ -369,10 +347,17 @@ export function getAdminSupportMessages(
   )
 }
 
-/** Reply as this admin, in a ticket. `idempotencyKey` names the SEND ATTEMPT
- *  (createReplyKeys): a repeat of the same attempt -- a double tap, a retry
- *  after a lost answer -- is one reply. Throws ApiResponseError(403) -- via
- *  useApiError -- when the caller has not claimed it; comms' own refusal. */
+/**
+ * Reply as this admin, in a ticket.
+ *
+ * @remarks
+ * `idempotencyKey` names the SEND ATTEMPT (createAttemptKeys): a repeat of
+ * the same attempt -- a double tap, a retry after a lost answer -- is one
+ * reply.
+ *
+ * @throws ApiResponseError -- 403, via useApiError, when the caller has not
+ * claimed the ticket; comms' own refusal.
+ */
 export function sendAdminSupportReply(
   threadId: string,
   body: string,
@@ -383,33 +368,6 @@ export function sendAdminSupportReply(
     { body },
     idempotencyKey,
   )
-}
-
-/** ONE ATTEMPT, ONE KEY for the admin's reply: `keyFor` returns the same key
- *  while (thread, body) stay the same, so a retry of a failed or unanswered
- *  send is the same reply; `settled` drops it once the reply landed, so the
- *  same text sent again on purpose ("Ok" twice) is a new reply, not the old
- *  one returned. One keeper per screen instance. */
-export function createReplyKeys(mint: () => string = newIdempotencyKey): {
-  keyFor: (threadId: string, body: string) => string
-  settled: () => void
-} {
-  let key: string | null = null
-  let attempt = ''
-  return {
-    keyFor(threadId, body) {
-      const next = JSON.stringify([threadId, body])
-      if (key === null || next !== attempt) {
-        key = mint()
-        attempt = next
-      }
-      return key
-    },
-    settled() {
-      key = null
-      attempt = ''
-    },
-  }
 }
 
 /** Take a ticket -- the act that grants the right to reply. A repeat of your

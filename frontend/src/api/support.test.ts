@@ -9,8 +9,6 @@
 // Idempotency-Key header of the form's call, the absence of a status filter
 // on the admin list, the one-ticket read and the status change.
 //
-// createAppealKeys -- "one appeal, one key" (owner ruling FE-104) -- is pure
-// and tested directly with an injected key source.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -19,8 +17,6 @@ import {
   SUPPORT_SPAM_RETENTION_MS,
   assignTicket,
   claimSupportThread,
-  createAppealKeys,
-  createReplyKeys,
   createTicket,
   getAdminSupportMessages,
   getAdminTicket,
@@ -68,62 +64,6 @@ describe('createTicket -- the form appeal', () => {
       { topic: 'complaint_user', body: 'Текст' },
       { 'Idempotency-Key': 'key-abc' },
     )
-  })
-})
-
-describe('createAppealKeys -- one appeal, one key', () => {
-  function keeper() {
-    let n = 0
-    const mint = vi.fn(() => `k${++n}`)
-    return { keyFor: createAppealKeys(mint), mint }
-  }
-
-  it('the same (topic, body) asked again gets the SAME key -- a retry is one appeal', () => {
-    const { keyFor, mint } = keeper()
-
-    expect(keyFor('payment', 'Текст')).toBe('k1')
-    expect(keyFor('payment', 'Текст')).toBe('k1')
-    expect(mint).toHaveBeenCalledTimes(1)
-  })
-
-  it('a changed body gets a NEW key', () => {
-    const { keyFor } = keeper()
-
-    keyFor('payment', 'Текст')
-    expect(keyFor('payment', 'Текст, исправленный')).toBe('k2')
-  })
-
-  it('a changed topic gets a NEW key', () => {
-    const { keyFor } = keeper()
-
-    keyFor('payment', 'Текст')
-    expect(keyFor('technical', 'Текст')).toBe('k2')
-  })
-
-  it('going back to an earlier appeal is a new key too -- only the LAST appeal is kept', () => {
-    const { keyFor } = keeper()
-
-    keyFor('payment', 'А')
-    keyFor('payment', 'Б')
-    expect(keyFor('payment', 'А')).toBe('k3')
-  })
-
-  it('two keepers (two form instances) never share a key', () => {
-    let n = 0
-    const mint = () => `k${++n}`
-    const a = createAppealKeys(mint)
-    const b = createAppealKeys(mint)
-
-    expect(a('payment', 'Текст')).not.toBe(b('payment', 'Текст'))
-  })
-
-  it('the default key source yields a non-empty key', () => {
-    const keyFor = createAppealKeys()
-
-    const key = keyFor('payment', 'Текст')
-    expect(typeof key).toBe('string')
-    expect(key.length).toBeGreaterThan(0)
-    expect(keyFor('payment', 'Текст')).toBe(key)
   })
 })
 
@@ -322,34 +262,5 @@ describe('admin -- the period statistics (BE-162 delivery 3)', () => {
     const qs = new URLSearchParams(url.split('?')[1])
     expect(qs.get('created_from')).toBe('2026-10-01T00:00:00.000+02:00')
     expect(qs.get('created_to')).toBe('2026-11-01T00:00:00.000+02:00')
-  })
-})
-
-describe('createReplyKeys -- one attempt, one key', () => {
-  function keeper() {
-    let n = 0
-    return createReplyKeys(() => `k${++n}`)
-  }
-
-  it('returns the same key for a repeat of the same (thread, body)', () => {
-    const keys = keeper()
-
-    expect(keys.keyFor('t1', 'Ok')).toBe(keys.keyFor('t1', 'Ok'))
-  })
-
-  it('returns a new key when the body or the thread changes', () => {
-    const keys = keeper()
-    const first = keys.keyFor('t1', 'Ok')
-
-    expect(keys.keyFor('t1', 'Ok!')).not.toBe(first)
-    expect(keys.keyFor('t2', 'Ok!')).not.toBe(first)
-  })
-
-  it('returns a new key for the same text once the reply landed', () => {
-    const keys = keeper()
-    const first = keys.keyFor('t1', 'Ok')
-    keys.settled()
-
-    expect(keys.keyFor('t1', 'Ok')).not.toBe(first)
   })
 })

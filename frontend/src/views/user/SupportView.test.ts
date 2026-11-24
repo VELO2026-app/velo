@@ -10,7 +10,7 @@
 // under the appeal's Idempotency-Key).
 //
 // External boundaries: vue-router (router.back / router.push),
-// useKeyboardFieldScroll, @/api/support (createTicket mocked; createAppealKeys
+// useKeyboardFieldScroll, @/api/support (createTicket mocked; createAttemptKeys
 // is the REAL keeper -- its key source, newIdempotencyKey in @/api/chats, is
 // mocked to a counter so "same key" / "new key" are observable),
 // @/composables/useToast (the error path only -- success never toasts, it
@@ -41,10 +41,7 @@ vi.mock('@/composables/useKeyboardFieldScroll', () => ({
 }))
 
 const createTicket = vi.fn()
-vi.mock('@/api/support', async (importOriginal) => ({
-  // The real keeper: what the form promises about keys is the keeper's
-  // behaviour seen through the DOM, not this file's stub.
-  createAppealKeys: (await importOriginal<typeof import('@/api/support')>()).createAppealKeys,
+vi.mock('@/api/support', () => ({
   createTicket: (...args: Parameters<typeof createTicket>) => createTicket(...args),
 }))
 

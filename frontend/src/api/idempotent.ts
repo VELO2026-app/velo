@@ -9,9 +9,9 @@ import { api } from '@/api/client'
  * POST with an `Idempotency-Key`: the backend answers a repeat of the same
  * key with the first result, so one logical write can never land twice.
  *
- * @param path - The endpoint.
- * @param body - The JSON body.
- * @param idempotencyKey - One key per logical write; a retry of the same write passes it again.
+ * @param path - Where to POST; ids inside it go through the `path` tag.
+ * @param body - What the endpoint receives, as JSON.
+ * @param idempotencyKey - One key per logical write; a retry passes it again.
  */
 export function postIdempotent<T>(path: string, body: unknown, idempotencyKey: string): Promise<T> {
   return api.post<T>(path, body, { 'Idempotency-Key': idempotencyKey })

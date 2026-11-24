@@ -43,7 +43,6 @@ vi.mock('@/api/support', async (importOriginal) => {
     // REAL here too: the not-spam visibility math
     // (i18n:adminScreens.adminSupportDetail.menu.notSpam) is part of what is tested.
     spamWithinRetention: real.spamWithinRetention,
-    createReplyKeys: real.createReplyKeys,
     getAdminTicket: vi.fn(),
     getAdminSupportMessages: vi.fn(),
     sendAdminSupportReply: vi.fn(),
@@ -1216,9 +1215,33 @@ describe('AdminSupportDetailView', () => {
       await send() // retry of the same attempt
       await send() // the same text again, on purpose
 
+      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledTimes(3)
       const keys = vi.mocked(supportApi.sendAdminSupportReply).mock.calls.map((c) => c[2])
       expect(keys[1]).toBe(keys[0])
       expect(keys[2]).not.toBe(keys[1])
+    })
+
+    it('a 5xx keeps the key of the retry; a 4xx refusal gives the retry a new one', async () => {
+      vi.mocked(supportApi.sendAdminSupportReply)
+        .mockRejectedValueOnce(new ApiResponseError(503, 'Service unavailable'))
+        .mockRejectedValueOnce(new ApiResponseError(503, 'Service unavailable'))
+        .mockRejectedValueOnce(new ApiResponseError(403, 'Not your ticket'))
+        .mockRejectedValue(new Error('stop'))
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      for (let i = 0; i < 4; i++) {
+        setValue(draftField(), 'Ок')
+        await flush()
+        btnByText('Отправить')?.click()
+        await flush()
+      }
+
+      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledTimes(4)
+      const keys = vi.mocked(supportApi.sendAdminSupportReply).mock.calls.map((c) => c[2])
+      expect(keys[1]).toBe(keys[0]) // after a 503: same key
+      expect(keys[2]).toBe(keys[0]) // after a second 503: same key
+      expect(keys[3]).not.toBe(keys[2]) // after a 403: a new key
     })
 
     it('a double tap on «Отправить» sends the reply once', async () => {
