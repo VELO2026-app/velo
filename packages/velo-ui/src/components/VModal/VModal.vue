@@ -23,7 +23,8 @@
   - the ref-counted body-scroll lock is the kit's own
     (src/useBodyScrollLock.ts, landed in P5). Escape goes through the
     kit's Escape stack (src/escapeStack.ts, FE-215): only the top open
-    overlay closes on one press.
+    overlay closes on one press. Focus, the inert page and the backdrop
+    tap come from src/overlayA11y.ts (FE-233).
 
   Usage:
     <VModal :open="showModal" close-label="Close" @close="showModal = false">
@@ -39,14 +40,29 @@
          blur until the fade ends (it pops in). The dialog layer above it is
          transparent, so it can fade/scale freely. -->
     <Transition name="v-modal-scrim">
-      <div v-if="open" class="v-modal__scrim" aria-hidden="true" />
+      <div v-if="open" ref="scrimEl" class="v-modal__scrim" aria-hidden="true" />
     </Transition>
     <Transition name="v-modal">
       <!-- §7.2 attrs-root: caller attrs merge HERE, onto the teleported
            overlay -- inheritAttrs is false above, so nothing rides Vue's
            (Teleport-blind) fallthrough. -->
-      <div v-if="open" class="v-modal__overlay" v-bind="attrs" @click.self="onOverlayClick">
-        <div class="v-modal__container" role="dialog" aria-modal="true">
+      <div
+        v-if="open"
+        ref="overlayEl"
+        class="v-modal__overlay"
+        v-bind="attrs"
+        @pointerdown="backdrop.onPointerdown"
+        @pointerup="backdrop.onPointerup"
+        @pointercancel="backdrop.onPointercancel"
+        @click="backdrop.onClick"
+      >
+        <div
+          ref="containerEl"
+          class="v-modal__container"
+          role="dialog"
+          aria-modal="true"
+          tabindex="-1"
+        >
           <button
             v-if="showClose"
             class="v-modal__close"
@@ -65,9 +81,10 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, watch, onDeactivated, useAttrs } from 'vue'
+import { onUnmounted, ref, watch, onDeactivated, useAttrs } from 'vue'
 import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
 import { useEscapeLayer } from '../../escapeStack'
+import { useBackdropDismiss, useOverlayLayer } from '../../overlayA11y'
 import { IconClose } from '../../icons'
 
 defineOptions({ inheritAttrs: false })
@@ -100,11 +117,23 @@ onDeactivated(() => {
   if (props.open) emit('close')
 })
 
-function onOverlayClick(): void {
-  if (props.closeOnOverlay) {
-    emit('close')
-  }
-}
+const scrimEl = ref<HTMLElement | null>(null)
+const overlayEl = ref<HTMLElement | null>(null)
+const containerEl = ref<HTMLElement | null>(null)
+
+// A backdrop tap closes only if the press began on the backdrop too (FE-233):
+// selecting text and releasing outside the dialog must not dismiss it.
+const backdrop = useBackdropDismiss(() => {
+  if (props.closeOnOverlay) emit('close')
+})
+
+// Focus moves into the dialog and returns to the opener; the page under it
+// is inert while open (FE-233).
+useOverlayLayer(
+  () => props.open,
+  () => [scrimEl.value, overlayEl.value],
+  () => containerEl.value,
+)
 
 // Escape closes only the top open overlay, not every open one (FE-215).
 useEscapeLayer(
@@ -170,6 +199,8 @@ onUnmounted(() => {
 
 .v-modal__container {
   position: relative;
+  /* Takes programmatic focus on open (tabindex=-1); not a control, no ring. */
+  outline: none;
   width: 100%;
   max-width: 420px;
   max-height: 85vh;

@@ -38,6 +38,7 @@
 // =============================================================================
 
 import { api } from '@/api/client'
+import { postIdempotent } from '@/api/idempotent'
 import { path, raw } from '@/api/path'
 
 /** P-1 display block: the counterparty as velo knows them. `name` is
@@ -213,10 +214,10 @@ export function sendChatMessage(
   body: string,
   idempotencyKey: string = newIdempotencyKey(),
 ): Promise<ChatMessage> {
-  return api.post<ChatMessage>(
+  return postIdempotent<ChatMessage>(
     path`/api/v1/chats/${threadId}/messages`,
     { body },
-    { 'Idempotency-Key': idempotencyKey },
+    idempotencyKey,
   )
 }
 

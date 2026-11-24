@@ -28,7 +28,6 @@ describe('INSTANCE -- golden defaults (a passport-less build is the golden build
     for (const name of [
       'VITE_API_BASE_URL',
       'VITE_TELEGRAM_BOT_URL',
-      'VITE_BRAND',
       'VITE_DEFAULT_LOCALE',
       'VITE_LOCALES',
       'VITE_FEATURES',
@@ -39,7 +38,6 @@ describe('INSTANCE -- golden defaults (a passport-less build is the golden build
 
     expect(INSTANCE.apiBaseUrl).toBe('')
     expect(INSTANCE.telegramBotUrl).toBe('https://telegram.me/veloappbot')
-    expect(INSTANCE.brand).toBe('VELO')
     expect(INSTANCE.defaultLocale).toBe('ru')
     expect(INSTANCE.locales).toEqual(['ru'])
     expect(INSTANCE.features).toEqual({ all: true })
@@ -143,18 +141,6 @@ describe('INSTANCE -- runtime config.json (FE-129)', () => {
     expect(INSTANCE.telegramBotUrl).toBe('https://telegram.me/veloappbot')
     expect(INSTANCE.defaultLocale).toBe('ru')
     expect(INSTANCE.locales).toEqual(['ru'])
-  })
-
-  it('the brand is a skin property: a runtime config never sets it (owner 09.11)', async () => {
-    vi.stubEnv('VITE_BRAND', 'SKIN-BRAND')
-    const { INSTANCE, applyInstanceConfig } = await loadInstance()
-
-    // An old template could still ship the key -- it must be ignored.
-    applyInstanceConfig({ brand: 'RUNTIME-BRAND' } as unknown as Parameters<
-      typeof applyInstanceConfig
-    >[0])
-
-    expect(INSTANCE.brand).toBe('SKIN-BRAND')
   })
 })
 

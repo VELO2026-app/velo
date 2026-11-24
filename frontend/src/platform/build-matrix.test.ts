@@ -310,6 +310,38 @@ describe('brand/token grep helpers', () => {
     expect(bundleHas('const b="\\u041D\\u041E\\u0412\\u0410"', 'НОВА')).toBe(true)
     expect(bundleHas('const b="VELO"', 'НОВА')).toBe(false)
   })
+
+  it('bundleHas finds the name as a word inside a message, in any case', () => {
+    expect(bundleHas('{s:"Поддержка Goodo"}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"Откройте GOODO."}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"in Velo Pro: start"}', 'Velo Pro')).toBe(true)
+  })
+
+  it('bundleHas finds the name next to an escape and next to punctuation', () => {
+    expect(bundleHas(String.raw`{s:"Привет!\nGoodo"}`, 'Goodo')).toBe(true)
+    expect(bundleHas(String.raw`{s:"Goodo.\nНачните"}`, 'Goodo')).toBe(true)
+    expect(bundleHas(String.raw`{s:"\tGoodo"}`, 'Goodo')).toBe(true)
+    expect(bundleHas(String.raw`{s:"\x47oodo"}`, 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"««Goodo.»»"}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"(…Goodo.)"}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"<b>Goodo.</b>"}', 'Goodo')).toBe(true)
+    expect(bundleHas('{s:"...Goodo"}', 'Goodo')).toBe(true)
+  })
+
+  it('bundleHas does not take a part of a word for the name, in any script', () => {
+    expect(bundleHas('{s:"сНОВА"}', 'НОВА')).toBe(false)
+    expect(bundleHas('{s:"НОВАя"}', 'НОВА')).toBe(false)
+    expect(bundleHas('{s:"Goodos"}', 'Goodo')).toBe(false)
+  })
+
+  it('bundleHas does not take the core identifiers for the name', () => {
+    // --velo-* names, velo:* storage keys and log tags, an e-mail host.
+    expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'VELO')).toBe(false)
+    expect(bundleHas('const k="velo:diary:recent-searches"', 'VELO')).toBe(false)
+    expect(bundleHas('console.error(`[velo:${t.source}] ${t.name}`)', 'VELO')).toBe(false)
+    expect(bundleHas('href:"mailto:support@velo.app"', 'VELO')).toBe(false)
+    expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'Velo Pro')).toBe(false)
+  })
 })
 
 // FE-157 s1: CI fans the matrix out one runner per cell; invariant d spans
@@ -379,7 +411,7 @@ describe('real-brand cells (FE-234)', () => {
   const GOLD = { displayName: 'VELO' }
   const decls = ['--velo-primary:#334d6e', '--velo-dur-pulse:1800ms']
   const core = new Set(['--velo-dur-pulse:1800ms'])
-  const leak = (css: string, js = '', coreName = 'VELO') =>
+  const leak = (css: string, js = '', coreName = 'App') =>
     skinLeaks({
       label: 'velo-brand',
       brand: GOLD,
@@ -403,7 +435,8 @@ describe('real-brand cells (FE-234)', () => {
   })
 
   it('a brand named like the core is not told by its name; another name is', () => {
-    expect(leak(':root{}', 'const n="VELO"')).toEqual([])
+    expect(leak(':root{}', 'const n="VELO"', 'VELO')).toEqual([])
+    expect(leak(':root{}', 'const n="VELO"')).toEqual(['velo-brand displayName'])
     const named = skinLeaks({
       label: 'goodo-brand',
       brand: { displayName: 'Goodo' },

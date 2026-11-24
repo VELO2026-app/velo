@@ -10,10 +10,12 @@
 // Mini on purpose (FE-143): only what the kit's own residents need. The
 // event pair onDocumentEvent/offDocumentEvent is what the kit's Escape
 // stack (src/escapeStack.ts, used by VModal/VBottomSheet) and VMenu bind
-// for their document-level keydown; the
+// for their document-level keydown (the overlay a11y module,
+// src/overlayA11y.ts, binds a document pointerdown the same way); the
 // write pair setBodyOverflow/toggleRootClass is what the kit's ref-counted
 // body-scroll lock (src/useBodyScrollLock.ts, moved from the app in
-// FE-143) applies and releases. Anything a future resident needs grows
+// FE-143) applies and releases. The reads of the overlay a11y module
+// (FE-233) are focusedElement, bodyChildren and elementAtPoint. Anything a future resident needs grows
 // HERE, never as a bare global in a component.
 // =============================================================================
 
@@ -38,6 +40,27 @@ export function offDocumentEvent<K extends keyof DocumentEventMap>(
 /** document.activeElement -- the focused element (VMenu's focus return). */
 export function activeElement(): Element | null {
   return document.activeElement
+}
+
+/** The focused element when it is a real control, `null` for <body>/nothing
+ *  (where focus rests after the focused element is removed). */
+export function focusedElement(): HTMLElement | null {
+  const el = activeElement()
+  return el instanceof HTMLElement && el !== document.body ? el : null
+}
+
+/** document.elementFromPoint -- where a released touch actually ended (touch
+ *  pointers report the element they went down on, not the one under them). */
+export function elementAtPoint(x: number, y: number): Element | null {
+  return document.elementFromPoint(x, y)
+}
+
+/** The direct children of document.body -- the layer list the overlay
+ *  a11y module (src/overlayA11y.ts) walks to make the page inert. */
+export function bodyChildren(): HTMLElement[] {
+  return Array.from(document.body.children).filter(
+    (el): el is HTMLElement => el instanceof HTMLElement,
+  )
 }
 
 /** document.body.style.overflow = value (the body-scroll lock's on/off). */
