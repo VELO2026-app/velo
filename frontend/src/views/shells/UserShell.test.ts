@@ -106,6 +106,9 @@ function buildRouter(): Router {
       // (UserDashboardView.onBell); hides the dock (INBOX_ROUTES).
       { path: '/user/notifications', name: 'user-inbox', component: StubChild },
       { path: '/user/checkin/:practiceId', name: 'user-checkin', component: StubChild },
+      // FE-261: the other two FormShell screens (feedback, no-show reflection).
+      { path: '/user/feedback/:practiceId', name: 'user-feedback', component: StubChild },
+      { path: '/user/reflection/:practiceId', name: 'user-reflection', component: StubChild },
       { path: '/user/practice/:id', name: 'practice-detail', component: StubChild },
       // FE-93 (owner 2026-10-03): the participants / analytics / student
       // profile screens exist ONLY in the master zone -- their user-zone
@@ -425,6 +428,18 @@ describe('UserShell', () => {
 
       expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
     })
+
+    // The three FormShell screens (check-in, feedback, no-show reflection) share
+    // one shell but are listed one by one, so each can drop out on its own.
+    it.each(['user-checkin', 'user-feedback', 'user-reflection'])(
+      'the %s form screen is fogged -- its cards no longer show through the header (FE-261)',
+      async (name) => {
+        await mount(name, { practiceId: 'p1' })
+        await flush()
+
+        expect(mainEl().classList.contains('mobile-layout__main--fog')).toBe(true)
+      },
+    )
 
     it('an unlisted route does not', async () => {
       await mount('user-unlisted')

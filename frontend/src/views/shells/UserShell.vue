@@ -157,9 +157,10 @@ const isDetailRoute = computed(() => DETAIL_ROUTES.includes(route.name as string
 
 // Edge-to-edge fog mask: the long scrolling lists/feeds + the practice-detail
 // screen (operator 2026-06-09: dissolve its hero under the header and its CTA
-// over the tabbar instead of a hard collision). Forms and the profile still
-// opt out (their footers/actions must stay crisp). The diary owns its own fog
-// via fill mode, so it is not listed here.
+// over the tabbar instead of a hard collision). The profile hub still opts out;
+// the forms that opt in are listed below with the reason (the fog is top-only, so
+// their in-flow footers/actions stay crisp). The diary owns its own fog via fill
+// mode, so it is not listed here.
 // EXCEPTION (operator PE-2a, 2026-07-01): user-edit-profile opts IN for parity
 // with the master edit-profile variant (master-edit-profile is fogged via FOG-1) —
 // see the entry below.
@@ -213,6 +214,18 @@ const FOG_ROUTES = [
   // auto-saves) and its last row rests above the bottom fade (tab-bar
   // clearance), so default tuning is enough.
   'user-timezone',
+  // Check-in, feedback and the no-show reflection (FE-261, PM report): the three
+  // FormShell screens scroll (the keyboard opens over their comment field) and
+  // without the fog the practice card and the question card
+  // (i18n:user.screens.checkin.question.title) showed through the transparent
+  // floating header. The submit button (i18n:common.submitSend) and the skip
+  // link (i18n:common.skip) are in-flow at the bottom of the form and the fog
+  // mask is top-only (MobileLayout), so they stay crisp. With the tab bar hidden
+  // MobileLayout pads the bottom by the compact fade zone (48px, same as the
+  // master forms). Default tuning, like user-support above.
+  'user-checkin',
+  'user-feedback',
+  'user-reflection',
 ]
 const isFogRoute = computed(() => FOG_ROUTES.includes(route.name as string))
 
