@@ -23,6 +23,8 @@ const SCREENS: Partial<Record<ConsoleRouteName, Loader>> = {
   'console-practices': () => import('@/views/console/ConsolePracticesView.vue'),
   'console-practices-detail': () => import('@/views/console/ConsolePracticeDetailView.vue'),
   'console-catalog': () => import('@/views/console/ConsoleCatalogView.vue'),
+  'console-moderation': () => import('@/views/console/ConsoleModerationView.vue'),
+  'console-support': () => import('@/views/console/ConsoleSupportView.vue'),
 }
 
 const placeholder: Loader = () => import('@/views/console/ConsolePlaceholderView.vue')

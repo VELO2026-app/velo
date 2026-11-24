@@ -733,6 +733,72 @@
         "addFailed": "Failed to add the style"
       },
       "note": "A direction or a style is never deleted: hide it instead. Masters keep the methods they already chose."
+    },
+    "moderation": {
+      "tabs": {
+        "methods": "Method changes",
+        "decided": "Decided"
+      },
+      "about": "Complaint: {target}",
+      "submitted": "Filed {date} · No. {id}",
+      "reporter": "Reported by",
+      "target": "About",
+      "decision": "Decision",
+      "decisionHint": "The text is required for \"Take action\". When you dismiss, you can leave it empty.",
+      "resolve": "Take action",
+      "emptyPending": "No new complaints",
+      "emptyDecided": "No decided complaints yet",
+      "pickTitle": "No complaint selected",
+      "pickText": "Choose a complaint in the list.",
+      "methodsAsk": "{name} asks to change their methods",
+      "rejectWithReason": "Reject with a reason",
+      "backToList": "Back to complaints"
+    },
+    "support": {
+      "tabs": {
+        "open": "Open",
+        "mine": "Mine",
+        "closed": "Closed",
+        "stats": "Statistics"
+      },
+      "ticketMeta": "Ticket No. {id} · opened {date}",
+      "take": "Take it",
+      "close": "Close",
+      "closeTitle": "Close the ticket",
+      "replyPlaceholder": "Reply to the user…",
+      "emptyMine": "None of the loaded tickets are yours",
+      "pickTitle": "No ticket selected",
+      "pickText": "Choose a ticket in the list.",
+      "backToList": "Back to tickets",
+      "user": {
+        "title": "User",
+        "status": "Status",
+        "category": "Category",
+        "opened": "Opened",
+        "changed": "Changed",
+        "taker": "Assignee",
+        "resolvedBy": "Resolved by"
+      },
+      "stats": {
+        "total": "Tickets this month",
+        "rating": "Answer rating",
+        "share": "Share of 4–5 ratings",
+        "versusPrevious": "{delta} vs previous month",
+        "columns": {
+          "admin": "Admin",
+          "rated": "Ratings",
+          "average": "Average",
+          "share": "4–5 share"
+        }
+      },
+      "filters": {
+        "category": "Category",
+        "rating": "Rating",
+        "period": "Period",
+        "today": "Today",
+        "week": "7 days",
+        "month": "30 days"
+      }
     }
   }
 }
