@@ -211,6 +211,7 @@ import { useToast } from '@/composables/useToast'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDateShort } from '@/utils/format'
+import { ZOOM_MEETING_TONES } from '@/utils/zoomMeetingStatus'
 import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
 
 const route = useRoute()
@@ -281,16 +282,22 @@ const ZOOM_STATUS_BADGES: Record<
   string,
   { label: string; variant: 'success' | 'error' | 'muted' }
 > = {
-  active: { label: t('adminScreens.adminPracticeDetail.active'), variant: 'success' },
+  active: {
+    label: t('adminScreens.adminPracticeDetail.active'),
+    variant: ZOOM_MEETING_TONES.active,
+  },
   pending_creation: {
     label: t('adminScreens.adminPracticeDetail.awaitingCreation'),
-    variant: 'muted',
+    variant: ZOOM_MEETING_TONES.pending_creation,
   },
   create_failed: {
     label: t('adminScreens.adminPracticeDetail.creationError'),
-    variant: 'error',
+    variant: ZOOM_MEETING_TONES.create_failed,
   },
-  deleted: { label: t('adminScreens.adminPracticeDetail.deletedLabel'), variant: 'muted' },
+  deleted: {
+    label: t('adminScreens.adminPracticeDetail.deletedLabel'),
+    variant: ZOOM_MEETING_TONES.deleted,
+  },
 }
 const zoomStatusBadge = computed<{ label: string; variant: 'success' | 'error' | 'muted' }>(() => {
   const status = zoomAttendance.value?.zoom_meeting_status
