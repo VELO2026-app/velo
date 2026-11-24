@@ -35,6 +35,8 @@ export const adminKeys = {
   revenueAll: () => ['admin', 'metric', { kind: 'revenue' }] as const,
   /** `GET /admin/practices?scope=` -- the platform's practices, first page. */
   practices: (scope: string) => ['admin', 'practices', { scope }] as const,
+  /** `GET /admin/practices?scope=&limit=&offset=` -- one page of the platform's practices (the web console). */
+  practicesPage: (scope: string, page: number) => ['admin', 'practices', { scope, page }] as const,
   /** Prefix of every platform practices list. */
   practicesAll: () => ['admin', 'practices'] as const,
   /** `GET /admin/participants?filter=` -- the platform's users, every page loaded so far. */

@@ -24,7 +24,13 @@ const email = SKIN_SUPPORT_EMAIL
 </script>
 
 <style scoped>
+/* A tap target of its own (44px high, the layout sweep's floor): the line
+   is short text, so the box grows, not the type. */
 .support-email {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--velo-size-44);
   text-align: center;
   font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
