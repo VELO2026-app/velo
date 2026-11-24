@@ -13,7 +13,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { materializedSkinTokens, readSkin, skinBackgroundFormat } from './skin'
-import { FIXTURE_BRAND, png, writeSkinPackage, type FixturePatch } from './skin.test.fixture'
+import {
+  FIXTURE_BRAND,
+  moodIconFiles,
+  png,
+  writeSkinPackage,
+  type FixturePatch,
+} from './skin.test.fixture'
 
 const created: string[] = []
 afterEach(() => {
@@ -51,6 +57,7 @@ describe('readSkin (tz-whitelabel §3)', () => {
       hasLogo: true,
       supportEmail: null,
       supportMark: 'logo',
+      moodIcons: null,
     })
   })
 
@@ -59,6 +66,17 @@ describe('readSkin (tz-whitelabel §3)', () => {
     const dir = withPackage({ manifest: 'schema: 1\ncontract: "2.2"\n', brand })
     expect(readSkin(dir)?.supportMark).toBe('icon')
     expect(readSkin(withPackage({}))?.supportMark).toBe('logo')
+  })
+
+  it('a package with the mood icon set reads its five trees (contract 2.3, FE-273)', () => {
+    const dir = withPackage({ manifest: 'schema: 1\ncontract: "2.3"\n', extra: moodIconFiles() })
+    expect(Object.keys(readSkin(dir)?.moodIcons ?? {})).toEqual([
+      'bad',
+      'low',
+      'neutral',
+      'good',
+      'fire',
+    ])
   })
 
   it('a package without the logo set reads hasLogo: false (VeloLogo shows its icon)', () => {

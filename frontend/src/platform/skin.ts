@@ -27,11 +27,12 @@ import {
   shipsLogo,
   skinCss,
   type LoadedSkinPackage,
+  type MoodIconSet,
   type SkinFont,
   type SupportMark,
 } from '../../scripts/lib/skin-package.mjs'
 
-export type { SkinFont, SupportMark }
+export type { MoodIconSet, SkinFont, SupportMark }
 
 /** A skin package's brand identity, materialized into the build's derivatives. */
 export interface SkinPackage {
@@ -59,6 +60,10 @@ export interface SkinPackage {
    *  contract 2.2; FE-261): 'logo' keeps the logo set (the default), 'icon'
    *  draws the brand's favicon.svg. The other logo places ignore it. */
   supportMark: SupportMark
+  /** The package's mood icon set (assets/mood/, contract 2.3, FE-273): five
+   *  parsed SVG trees the mood places draw instead of the core faces. Null =
+   *  the package ships none (and the core build): the core faces draw. */
+  moodIcons: MoodIconSet | null
 }
 
 /** The no-skin build: the neutral core (FE-230). Colors mirror
@@ -74,6 +79,7 @@ export const CORE_SKIN: SkinPackage = {
   hasLogo: true,
   supportEmail: null,
   supportMark: 'logo',
+  moodIcons: null,
 }
 
 /** Loads public/skin/ with the engine; throws on the first problems. */
@@ -112,6 +118,7 @@ export function readSkin(publicDir: string): SkinPackage | null {
     hasLogo: shipsLogo(pkg.files),
     supportEmail,
     supportMark: brand.supportMark ?? 'logo',
+    moodIcons: pkg.moodIcons,
   }
 }
 

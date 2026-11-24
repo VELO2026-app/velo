@@ -133,7 +133,7 @@ function reviewCount(): number {
 }
 
 function pager(section: '.practice-analytics__pairs' | '.practice-analytics__reviews') {
-  return host?.querySelector(section)?.querySelector('button') ?? null
+  return host?.querySelector(section)?.querySelector<HTMLElement>('.v-show-more') ?? null
 }
 
 beforeEach(() => {
@@ -267,7 +267,7 @@ describe('PracticeReviewsView', () => {
     it('leader: a pair opens the student dossier', async () => {
       mount()
       await flush()
-      host!.querySelector<HTMLElement>('.practice-analytics__pair')!.click()
+      host?.querySelector<HTMLElement>('.practice-analytics__pair-row')?.click()
       await flush()
       expect(push).toHaveBeenCalledWith({ name: 'master-student-profile', params: { id: 'u0' } })
     })
@@ -278,7 +278,7 @@ describe('PracticeReviewsView', () => {
       )
       mount()
       await flush()
-      host!.querySelector<HTMLElement>('.practice-analytics__review')!.click()
+      host?.querySelector<HTMLElement>('.practice-analytics__review')?.click()
       await flush()
       expect(push).toHaveBeenCalledWith({
         name: 'master-school-student',
@@ -292,9 +292,9 @@ describe('PracticeReviewsView', () => {
       )
       mount()
       await flush()
-      host!.querySelector<HTMLElement>('.practice-analytics__pair')!.click()
+      host?.querySelector<HTMLElement>('.practice-analytics__pair-row')?.click()
       await flush()
-      const dm = host!.querySelector<HTMLElement>('.dm-stub')
+      const dm = host?.querySelector<HTMLElement>('.dm-stub')
       expect(dm?.dataset.id).toBe('u0')
       expect(dm?.textContent).toBe('Ученик 0')
       expect(push).not.toHaveBeenCalled()

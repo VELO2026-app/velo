@@ -154,15 +154,17 @@ export function getMastersList(
 // ============================================================================
 
 /**
- * List all users (any role). No server-side search — the screen filters the
- * fetched page client-side. Limit clamped to the backend cap (le=100).
+ * List all users (any role), optionally only the active or only the inactive
+ * ones. No server-side search — the screen filters the fetched page
+ * client-side. Limit clamped to the backend cap (le=100).
  */
 export function getUsersList(
   role?: 'user' | 'master' | 'admin',
   limit = 100,
   offset = 0,
+  isActive?: boolean,
 ): Promise<PaginatedUsersResponse> {
-  const query = buildQuery({ limit, offset, role })
+  const query = buildQuery({ limit, offset, role, is_active: isActive })
   return api.get<PaginatedUsersResponse>(`/api/v1/admin/users${query}`)
 }
 

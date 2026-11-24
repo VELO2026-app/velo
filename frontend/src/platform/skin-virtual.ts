@@ -19,6 +19,11 @@ export const SKIN_TOKENS_ID = 'virtual:skin-tokens.css'
  *  `SKIN_SUPPORT_MARK` (VeloLogo.vue) and `SKIN_SUPPORT_EMAIL`
  *  (components/shared/SupportEmailLink.vue). */
 export const SKIN_BRAND_ID = 'virtual:skin-brand'
+/** Import id of the skin's mood icon set (FE-273): `SKIN_MOOD_ICONS`, read by
+ *  utils/ratingIcons.ts. Its own module, not a line of `virtual:skin-brand`:
+ *  the five trees are about 160 KB for the Goodo set, and only the mood
+ *  places should carry them. */
+export const SKIN_MOOD_ID = 'virtual:skin-mood'
 
 /** Rollup convention: a `\0` prefix marks a resolved virtual id. */
 const RESOLVED_PREFIX = '\0'
@@ -44,8 +49,19 @@ export function skinBrandSource(skin: SkinPackage | null): string {
 }
 
 /**
- * Serves `virtual:skin-tokens.css` and `virtual:skin-brand` for the given
- * skin. The `.css` suffix of the tokens id keeps Vite's CSS pipeline on it.
+ * Source of the mood module: the package's five icon trees, or null when it
+ * ships none (the core build too) -- the mood places then draw the core faces.
+ *
+ * @param skin - The skin package, or null for the core build.
+ */
+export function skinMoodSource(skin: SkinPackage | null): string {
+  return `export const SKIN_MOOD_ICONS = ${JSON.stringify(skin?.moodIcons ?? null)}\n`
+}
+
+/**
+ * Serves `virtual:skin-tokens.css`, `virtual:skin-brand` and
+ * `virtual:skin-mood` for the given skin. The `.css` suffix of the tokens id
+ * keeps Vite's CSS pipeline on it.
  *
  * @param publicDir - The frontend/public directory (holds `skin/tokens.css`).
  * @param skin - The skin package, or null for the core build.
@@ -54,6 +70,7 @@ export function skinVirtualModules(publicDir: string, skin: SkinPackage | null):
   const sources: Record<string, () => string> = {
     [SKIN_TOKENS_ID]: () => materializedSkinTokens(publicDir, skin),
     [SKIN_BRAND_ID]: () => skinBrandSource(skin),
+    [SKIN_MOOD_ID]: () => skinMoodSource(skin),
   }
   return {
     name: 'velo-skin-virtual',

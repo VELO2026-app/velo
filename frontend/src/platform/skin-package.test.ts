@@ -489,7 +489,7 @@ describe('skin-to-dtcg: generation 1 -> package, no pixel changes', () => {
     // the brand record moved into the package's data carrier
     const brand = JSON.parse(readFileSync(join(out, 'tokens', 'brand.tokens.json'), 'utf8'))
     expect(brand.$extensions['velo-skin'].displayName).toBe('Contrast')
-    expect(readFileSync(join(out, 'primer-package.yaml'), 'utf8')).toContain('contract: "2.2"')
+    expect(readFileSync(join(out, 'primer-package.yaml'), 'utf8')).toContain('contract: "2.3"')
     expect(pkg.files).toContain('assets/bg/background.png')
   })
 

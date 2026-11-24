@@ -333,6 +333,12 @@ export const SWEEP: Record<string, SweepRow> = {
   // themselves in a laptop window (a11yViewport).
   'console-dashboard': { path: '/console/dashboard', roles: A, a11yViewport: CONSOLE_VIEWPORT },
   'console-masters': { path: '/console/masters', roles: A, a11yViewport: CONSOLE_VIEWPORT },
+  'console-masters-detail': {
+    path: '/console/masters/:id',
+    roles: A,
+    params: { id: 'masterUserId' },
+    a11yViewport: CONSOLE_VIEWPORT,
+  },
   'console-users': { path: '/console/users', roles: A, a11yViewport: CONSOLE_VIEWPORT },
   'console-schools': { path: '/console/schools', roles: A, a11yViewport: CONSOLE_VIEWPORT },
   'console-practices': { path: '/console/practices', roles: A, a11yViewport: CONSOLE_VIEWPORT },

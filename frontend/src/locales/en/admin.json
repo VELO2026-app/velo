@@ -734,6 +734,143 @@
       },
       "note": "A direction or a style is never deleted: hide it instead. Masters keep the methods they already chose."
     },
+    "moderation": {
+      "tabs": {
+        "methods": "Method changes",
+        "decided": "Decided"
+      },
+      "about": "Complaint: {target}",
+      "submitted": "Filed {date} · No. {id}",
+      "reporter": "Reported by",
+      "target": "About",
+      "decision": "Decision",
+      "decisionHint": "The text is required for \"Take action\". When you dismiss, you can leave it empty.",
+      "resolve": "Take action",
+      "emptyPending": "No new complaints",
+      "emptyDecided": "No decided complaints yet",
+      "pickTitle": "No complaint selected",
+      "pickText": "Choose a complaint in the list.",
+      "methodsAsk": "{name} asks to change their methods",
+      "rejectWithReason": "Reject with a reason",
+      "backToList": "Back to complaints"
+    },
+    "support": {
+      "tabs": {
+        "open": "Open",
+        "mine": "Mine",
+        "closed": "Closed",
+        "stats": "Statistics"
+      },
+      "ticketMeta": "Ticket No. {id} · opened {date}",
+      "take": "Take it",
+      "close": "Close",
+      "closeTitle": "Close the ticket",
+      "replyPlaceholder": "Reply to the user…",
+      "emptyMine": "None of the loaded tickets are yours",
+      "pickTitle": "No ticket selected",
+      "pickText": "Choose a ticket in the list.",
+      "backToList": "Back to tickets",
+      "user": {
+        "title": "User",
+        "status": "Status",
+        "category": "Category",
+        "opened": "Opened",
+        "changed": "Changed",
+        "taker": "Assignee",
+        "resolvedBy": "Resolved by"
+      },
+      "stats": {
+        "total": "Tickets this month",
+        "rating": "Answer rating",
+        "share": "Share of 4–5 ratings",
+        "versusPrevious": "{delta} vs previous month",
+        "columns": {
+          "admin": "Admin",
+          "rated": "Ratings",
+          "average": "Average",
+          "share": "4–5 share"
+        }
+      },
+      "filters": {
+        "category": "Category",
+        "rating": "Rating",
+        "period": "Period",
+        "today": "Today",
+        "week": "7 days",
+        "month": "30 days"
+      }
+    },
+    "telegramId": "ID: {id}",
+    "masters": {
+      "invite": "Invite a master",
+      "tabs": {
+        "all": "All",
+        "pending": "Under review",
+        "rejected": "Rejected"
+      },
+      "columns": {
+        "master": "Master",
+        "methods": "Methods",
+        "schools": "Schools",
+        "status": "Status"
+      },
+      "empty": {
+        "all": "No masters yet",
+        "pending": "No applications under review",
+        "rejected": "No rejected applications"
+      },
+      "detail": {
+        "back": "Back to list",
+        "profile": "Profile",
+        "review": "Application review",
+        "reviewText": "Approve the application or reject it with a reason. The master sees the reason.",
+        "rights": "Master rights",
+        "schoolRight": "Can create schools",
+        "schoolRightHint": "Revoking the right only closes new schools: existing ones stay.",
+        "revoke": "Revoke master status",
+        "revokeText": "The master becomes a regular user again and their schools freeze. Data is kept; access can be restored with \"Make a master\".",
+        "email": "Email",
+        "removeCertificate": "Remove certificate: {name}",
+        "quoted": "“{label}”"
+      },
+      "status": {
+        "pending": "Awaiting verification",
+        "verified": "Verified",
+        "rejected": "Rejected",
+        "suspended": "Revoked",
+        "cancelled_by_user": "Account deleted"
+      }
+    },
+    "users": {
+      "tabs": {
+        "all": "All",
+        "user": "Members",
+        "master": "Masters",
+        "admin": "Admins"
+      },
+      "columns": {
+        "user": "User",
+        "role": "Role",
+        "registered": "Registered",
+        "lastSeen": "Last seen"
+      },
+      "filter": {
+        "label": "Activity",
+        "all": "All",
+        "active": "Active",
+        "inactive": "Inactive"
+      }
+    },
+    "schools": {
+      "columns": {
+        "name": "Name",
+        "curator": "Curator",
+        "masters": "Masters",
+        "students": "Members",
+        "created": "Created",
+        "status": "Status"
+      }
+    },
     "period": {
       "label": "Period",
       "prev": "Previous period",
