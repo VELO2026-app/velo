@@ -125,7 +125,9 @@
           />
 
           <!-- Direction — options catalog-first (T2 stage 2), see CreatePracticeView. -->
+          <LoadErrorState v-if="methodsFailed" @retry="retryMethods" />
           <VSelect
+            v-else
             v-model="form.direction"
             :label="t('masterScreens.editPractice.fields.direction')"
             :options="directionOptions"
@@ -222,7 +224,10 @@
               :school-id="null"
               :groups="customGroups"
               :schools="[]"
+              :groups-failed="customGroupsFailed"
+              :groups-loading="customGroupsLoading"
               :error="errors.audience_group_ids"
+              @retry-groups="reloadCustomGroups"
             />
           </div>
 
@@ -368,6 +373,7 @@ import {
 } from '@/components/ui'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
+import LoadErrorState from '@/components/shared/LoadErrorState.vue'
 import PracticeSchedulePicker from '@/components/shared/PracticeSchedulePicker.vue'
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { useToast } from '@/composables/useToast'
@@ -409,7 +415,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const queryCache = useQueryCache()
-const { profile: masterProfile } = useMasterProfile()
+const { profile: masterProfile, failed: profileFailed, reload: reloadProfile } = useMasterProfile()
 
 const practiceId = routeParam(route, 'id')
 
@@ -463,6 +469,17 @@ const confirmDialog = reactive({
  */
 let baseline: PracticeFormValues | null = null
 
+// P5 port (PROMPT №606): this master's own custom groups, for the
+// specific-groups (i18n:practice.audience.groups) multi-select. Re-resolves
+// the name->id selection once they land, in case populateForm() already ran
+// against an empty list.
+const {
+  groups: customGroups,
+  loading: customGroupsLoading,
+  failed: customGroupsFailed,
+  reload: reloadCustomGroups,
+} = usePracticeCustomGroups(() => resolveAudienceGroupIds())
+
 // -- Form state (populated from the practice on load) and validation: the
 // shared practice-form model (usePracticeForm), the same rules as create.
 // The start must lie in the future only when the schedule itself changed:
@@ -471,13 +488,12 @@ let baseline: PracticeFormValues | null = null
 // that has already started stays editable in every other field.
 const { form, errors, validate } = usePracticeForm(emptyPracticeForm(), (v) => ({
   checkFuture: scheduleChanged(v, baseline),
+  // While the groups are unread (running or failed), the saved "groups" audience
+  // cannot be resolved to ids: that must not block saving an unrelated edit.
+  groupsUnread:
+    (customGroupsFailed.value || customGroupsLoading.value) &&
+    v.audience_kind === (practice.value?.audience_kind ?? 'public'),
 }))
-
-// P5 port (PROMPT №606): this master's own custom groups, for the
-// specific-groups (i18n:practice.audience.groups) multi-select. Re-resolves
-// the name->id selection once they land, in case populateForm() already ran
-// against an empty list.
-const customGroups = usePracticeCustomGroups(() => resolveAudienceGroupIds())
 
 // BE-74 + FE-92: a school practice's KIND is editable, but only within the
 // pair the backend accepts (SCHOOL_AUDIENCE_KINDS) -- the same pair the
@@ -520,6 +536,15 @@ const { directionOptions, styleOptions, onDirectionChange } = usePracticeTaxonom
       ? practice.value.master_methods
       : masterProfile.value?.methods,
 )
+
+// FE-256: the options stay closed until the caller's profile has answered
+// (usePracticeTaxonomyOptions), whichever methods they are filtered by; when
+// that read failed, the empty picker would read as "no direction allowed", so
+// the picker gives way to an error with Retry.
+const methodsFailed = computed(() => profileFailed.value)
+function retryMethods(): void {
+  void reloadProfile()
+}
 
 // -- Populate form from practice --
 function populateForm(p: PracticeResponse): void {

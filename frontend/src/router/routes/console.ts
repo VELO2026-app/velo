@@ -10,8 +10,9 @@
 // routes/user.ts.
 // =============================================================================
 
+import type { Component } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
-import { CONSOLE_MODULES, consoleRouteName } from '@/utils/console/modules'
+import { CONSOLE_MODULES, consoleRouteName, type ConsoleModuleKey } from '@/utils/console/modules'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -21,6 +22,12 @@ declare module 'vue-router' {
 }
 
 const placeholder = () => import('@/views/console/ConsolePlaceholderView.vue')
+
+/** The module screens that have replaced the placeholder (by module key). */
+const SCREENS: Partial<Record<ConsoleModuleKey, () => Promise<Component>>> = {
+  practices: () => import('@/views/console/ConsolePracticesView.vue'),
+  catalog: () => import('@/views/console/ConsoleCatalogView.vue'),
+}
 
 /** The /console zone: ConsoleShell and one screen per module. */
 export function consoleRoutes(): RouteRecordRaw[] {
@@ -34,8 +41,15 @@ export function consoleRoutes(): RouteRecordRaw[] {
           path: module.key,
           name: consoleRouteName(module.key),
           meta: module.option === undefined ? {} : { option: module.option },
-          component: placeholder,
+          component: SCREENS[module.key] ?? placeholder,
         })),
+        // A screen inside a module is named console-<module>-<what>, so the
+        // menu keeps the module lit (consoleModuleOf).
+        {
+          path: 'practices/:id',
+          name: 'console-practices-detail',
+          component: () => import('@/views/console/ConsolePracticeDetailView.vue'),
+        },
         {
           path: '',
           redirect: { name: consoleRouteName('dashboard') },

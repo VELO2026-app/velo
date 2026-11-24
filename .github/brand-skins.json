@@ -3,8 +3,8 @@
   "brands": {
     "velo-brand": {
       "repo": "VELO2026-app/velo-brand",
-      "tag": "v0.1.1",
-      "sha": "4ad725b55ec67440f19b822d25ead7060ed417da",
+      "tag": "v0.2.0",
+      "sha": "deb5ca9ea1fb59602c927d72f0d9a6d773c5f432",
       "dir": "skin"
     },
     "goodo-brand": {

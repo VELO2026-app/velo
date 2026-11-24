@@ -97,9 +97,24 @@
            only IN a school, for a master of that school (BE-102). No school
            -> the caller owns the practice and this section does not render.
            ================================================================ -->
-        <div v-if="delegatedMaster || masterOptions.length > 1" class="create-practice__section">
+        <div
+          v-if="
+            delegatedMaster ||
+            masterOptions.length > 1 ||
+            schoolMastersFailed ||
+            schoolMastersLoading
+          "
+          class="create-practice__section"
+        >
           <h2 class="velo-section-title">{{ t('masterScreens.createPractice.fields.master') }}</h2>
-          <div>
+          <!-- The school's masters could not be read: the section would otherwise
+               vanish as if the school had none (FE-256). The practice stays the
+               caller's own meanwhile. -->
+          <LoadErrorState v-if="schoolMastersFailed" @retry="retrySchoolMasters" />
+          <div v-else-if="schoolMastersLoading" class="create-practice__masters-loading">
+            <VLoader size="sm" />
+          </div>
+          <div v-else>
             <VCard class="create-practice__repeat" padding="none">
               <div v-if="delegatedMaster" class="create-practice__repeat-title">
                 {{ delegatedMaster.name }}
@@ -123,7 +138,13 @@
           <h2 class="velo-section-title">{{ t('masterScreens.createPractice.useTemplate') }}</h2>
           <!-- Full-width block: no required-seal of its own, so it spans the
              whole rail like every field (owner 2026-10-01 seal canon). -->
-          <UseTemplateBlock :practices="templatePractices" @select="applyTemplate" />
+          <UseTemplateBlock
+            :practices="templatePractices"
+            :loading="templatesLoading"
+            :failed="templatesFailed"
+            @select="applyTemplate"
+            @retry="retryTemplates"
+          />
         </div>
 
         <!-- ================================================================
@@ -145,7 +166,16 @@
           <!-- Direction = discipline (meditation/yoga/…). The field label is
              the in-field placeholder.
              Options catalog-first (T2 stage 2) -- see directionOptions. -->
+          <!-- The confirmed methods could not be read (the master's own profile, or
+               the target master's): an empty picker would read as "no direction
+               allowed" (FE-256). -->
+          <template v-if="methodsFailed">
+            <LoadErrorState @retry="retryMethods" />
+            <!-- Submit stays refused without a direction; say so where the picker was. -->
+            <VFieldError id="err-direction" :message="errors.direction" />
+          </template>
           <VSelect
+            v-else
             v-model="form.direction"
             :placeholder="t('masterScreens.createPractice.fields.direction')"
             :options="directionOptions"
@@ -335,9 +365,15 @@
                 v-model:school-id="form.audience_school_id"
                 :groups="customGroups"
                 :schools="audienceSchools"
+                :groups-failed="customGroupsFailed"
+                :groups-loading="customGroupsLoading"
+                :schools-failed="eligibleSchoolsFailed && !targetsForeignMaster"
+                :schools-loading="eligibleSchoolsRetrying && !targetsForeignMaster"
                 :allowed-kinds="contextSchoolId ? SCHOOL_AUDIENCE_KINDS : undefined"
                 :error="errors.audience_group_ids"
                 :students-label="t('masterScreens.createPractice.audience.allMyStudents')"
+                @retry-groups="reloadCustomGroups"
+                @retry-schools="retryEligibleSchools"
               />
             </VCard>
           </div>
@@ -427,7 +463,15 @@
       </Banner>
 
       <!-- Submit -->
-      <VButton v-else variant="primary" block size="lg" :loading="submitting" @click="submit">
+      <VButton
+        v-else
+        variant="primary"
+        block
+        size="lg"
+        :loading="submitting"
+        :disabled="schoolMastersUnread"
+        @click="submit"
+      >
         {{ t('masterScreens.createPractice.submit') }}
       </VButton>
     </div>
@@ -448,6 +492,7 @@ import {
   VSelect,
   VCard,
   VCheckbox,
+  VLoader,
   VRadioGroup,
   VDayPicker,
   inputKindAttrs,
@@ -465,6 +510,7 @@ import PracticeSchedulePicker from '@/components/shared/PracticeSchedulePicker.v
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import UseTemplateBlock from '@/components/shared/UseTemplateBlock.vue'
 import Banner from '@/components/shared/Banner.vue'
+import LoadErrorState from '@/components/shared/LoadErrorState.vue'
 import { DURATION_OPTIONS } from '@/utils/practiceOptions'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useFormDraft } from '@/composables/useFormDraft'
@@ -497,9 +543,19 @@ const queryCache = useQueryCache()
 // list or the dashboard loaded them).
 const upcomingPractices = useMyPractices('upcoming')
 const pastPractices = useMyPractices('past')
+// FE-256: a failed read of either list must not read as "no practices yet";
+// the block shows an error with Retry, and a loader while the retry runs.
+const templatesFailed = computed(() => upcomingPractices.failed.value || pastPractices.failed.value)
+const templatesLoading = computed(
+  () => upcomingPractices.loading.value || pastPractices.loading.value,
+)
+function retryTemplates(): void {
+  if (upcomingPractices.failed.value) void upcomingPractices.refetch()
+  if (pastPractices.failed.value) void pastPractices.refetch()
+}
 // T21-6 (PROMPT №546): the direction/style pickers filter by this master's
 // OWN confirmed methods (one answer per session; loaded by the guard).
-const { profile: masterProfile } = useMasterProfile()
+const { profile: masterProfile, failed: profileFailed, reload: reloadProfile } = useMasterProfile()
 
 // -- Form state, validation, request body: the shared practice-form model
 // (usePracticeForm). The timezone is the master's profile zone (the field
@@ -532,6 +588,16 @@ const { form, errors, validate } = usePracticeForm(
 const contextSchoolId = computed(() => queryParam('schoolId'))
 const delegatedMaster = ref<{ id: string; name: string } | null>(null)
 const schoolMasterOptions = ref<{ label: string; value: string }[]>([])
+/** The school's masters could not be read (FE-256): the Master section says so with Retry. */
+const schoolMastersFailed = ref(false)
+/** The school's masters are being read (first read or a Retry): the Master section holds a loader. */
+const schoolMastersLoading = ref(false)
+/**
+ * Whose practice this is stays unknown until the school's masters are read: a
+ * submit then would give the practice to the author, whichever master they meant
+ * to create it for. The submit button waits (FE-256).
+ */
+const schoolMastersUnread = computed(() => schoolMastersFailed.value || schoolMastersLoading.value)
 const selectedMasterId = ref('')
 
 // The TARGET master's confirmed methods (BE-102): the direction/style pickers
@@ -546,6 +612,8 @@ const selectedMasterId = ref('')
 // catalogue: the same posture as a not-yet-loaded own profile.
 const delegatedMethods = ref<string[] | null>(null)
 const delegatedMethodsLoadId = ref(0)
+/** The target master's methods could not be read (FE-256): the direction picker says so with Retry. */
+const delegatedMethodsFailed = ref(false)
 
 const targetMasterId = computed(() => delegatedMaster.value?.id ?? (selectedMasterId.value || null))
 const targetsForeignMaster = computed(
@@ -587,43 +655,62 @@ async function loadPracticeMasterContext(): Promise<void> {
   // Master section (i18n:masterScreens.createPractice.fields.master),
   // the practice is the caller's own.
   if (masterId && schoolId) {
-    try {
-      const profile = await getPublicMaster(masterId)
-      delegatedMaster.value = {
-        id: masterId,
-        name: profile.display_name ?? t('masterScreens.createPractice.fields.master'),
-      }
-      // The same lookup feeds the pickers: without it they would filter by
-      // the CALLER's confirmed set while the backend validates the master's.
-      delegatedMethods.value = profile.methods ?? null
-    } catch {
-      // Keep the id: the backend re-validates the delegation on submit, so
-      // a cosmetic name lookup failure must not silently drop the target.
-      delegatedMaster.value = {
-        id: masterId,
-        name: t('masterScreens.createPractice.fields.master'),
-      }
-      // The methods half is not cosmetic: without it the direction picker
-      // stays empty (fail-closed), so say why instead of a silent dead form.
-      toast.error(t('masterScreens.createPractice.error.loadMethods'))
-    }
+    await lookupDelegatedMaster(masterId)
     return
   }
-  if (schoolId) {
-    try {
-      const page = await getSchoolMembers(schoolId, { kind: 'master' })
-      schoolMasterOptions.value = page.items
-        .filter((m: SchoolMemberItem) => m.is_visible && m.user_id !== authStore.user?.id)
-        .map((m: SchoolMemberItem) => ({
-          label: m.name,
-          value: m.user_id,
-        }))
-    } catch {
-      // Picker falls back to the self option alone -- the caller can still
-      // create.
-      schoolMasterOptions.value = []
+  if (schoolId) await loadSchoolMasters(schoolId)
+}
+
+/** The fixed delegation (?masterId + ?schoolId): the master's name and methods. */
+async function lookupDelegatedMaster(masterId: string): Promise<void> {
+  delegatedMethodsFailed.value = false
+  try {
+    const profile = await getPublicMaster(masterId)
+    delegatedMaster.value = {
+      id: masterId,
+      name: profile.display_name ?? t('masterScreens.createPractice.fields.master'),
     }
+    // The same lookup feeds the pickers: without it they would filter by
+    // the CALLER's confirmed set while the backend validates the master's.
+    delegatedMethods.value = profile.methods ?? null
+  } catch {
+    // Keep the id: the backend re-validates the delegation on submit, so
+    // a cosmetic name lookup failure must not silently drop the target.
+    delegatedMaster.value = {
+      id: masterId,
+      name: t('masterScreens.createPractice.fields.master'),
+    }
+    // The methods half is not cosmetic: without it the direction picker
+    // stays empty (fail-closed), so say why instead of a silent dead form.
+    delegatedMethodsFailed.value = true
+    toast.error(t('masterScreens.createPractice.error.loadMethods'))
   }
+}
+
+/** The school-picker flow (?schoolId only): the visible masters of the school. */
+async function loadSchoolMasters(schoolId: string): Promise<void> {
+  schoolMastersLoading.value = true
+  schoolMastersFailed.value = false
+  try {
+    const page = await getSchoolMembers(schoolId, { kind: 'master' })
+    schoolMasterOptions.value = page.items
+      .filter((m: SchoolMemberItem) => m.is_visible && m.user_id !== authStore.user?.id)
+      .map((m: SchoolMemberItem) => ({
+        label: m.name,
+        value: m.user_id,
+      }))
+  } catch {
+    // The Master section must say the list is unknown rather than vanish as "no
+    // masters", and the submit waits for the list (FE-256).
+    schoolMasterOptions.value = []
+    schoolMastersFailed.value = true
+  } finally {
+    schoolMastersLoading.value = false
+  }
+}
+
+function retrySchoolMasters(): void {
+  void loadSchoolMasters(queryParam('schoolId'))
 }
 
 // The school-picker flow: a foreign master's methods arrive when he is
@@ -632,12 +719,14 @@ async function loadPracticeMasterContext(): Promise<void> {
 // selected master (the same race discipline as the screen's list fetches).
 async function loadDelegatedMethods(masterId: string): Promise<void> {
   const loadId = ++delegatedMethodsLoadId.value
+  delegatedMethodsFailed.value = false
   try {
     const profile = await getPublicMaster(masterId)
     if (loadId === delegatedMethodsLoadId.value) delegatedMethods.value = profile.methods ?? null
   } catch {
     if (loadId === delegatedMethodsLoadId.value) {
       delegatedMethods.value = null
+      delegatedMethodsFailed.value = true
       // Fail-closed: the direction picker stays empty until a re-pick
       // reloads it.
       toast.error(t('masterScreens.createPractice.error.loadMethods'))
@@ -647,9 +736,22 @@ async function loadDelegatedMethods(masterId: string): Promise<void> {
 
 watch(selectedMasterId, (id) => {
   delegatedMethods.value = null
+  delegatedMethodsFailed.value = false
   if (id) void loadDelegatedMethods(id)
   else delegatedMethodsLoadId.value += 1 // drop any in-flight reply
 })
+
+// FE-256: whose methods the pickers wait for -- the caller's own profile, or the
+// targeted master's -- and the read that retries that exact source.
+const methodsFailed = computed(
+  () => profileFailed.value || (targetsForeignMaster.value && delegatedMethodsFailed.value),
+)
+function retryMethods(): void {
+  if (profileFailed.value) void reloadProfile()
+  if (!targetsForeignMaster.value || !delegatedMethodsFailed.value) return
+  if (selectedMasterId.value) void loadDelegatedMethods(selectedMasterId.value)
+  else if (delegatedMaster.value) void lookupDelegatedMaster(delegatedMaster.value.id)
+}
 
 // T21-6 (PROMPT №546) / FE-92: the pickers offer the confirmed methods of
 // WHOEVER the practice is for -- the caller's own profile methods, or, while
@@ -694,29 +796,52 @@ function onBack(): void {
 
 // P5 (PROMPT №594): the master's own custom groups, for the specific-groups
 // (i18n:practice.audience.groups) multi-select.
-const customGroups = usePracticeCustomGroups()
+const {
+  groups: customGroups,
+  loading: customGroupsLoading,
+  failed: customGroupsFailed,
+  reload: reloadCustomGroups,
+} = usePracticeCustomGroups()
 // FE-24 (GT P5): schools this master may target (relation curator or master
 // -- the two the backend validates school_id against). Loaded from
 // /schools/mine; empty for a master in no school, which simply keeps
 // the fourth audience option out of the radio.
 const eligibleSchools = ref<AudienceSchoolOption[]>([])
+/** The schools read failed (FE-256): the audience block says so with Retry. */
+const eligibleSchoolsFailed = ref(false)
+
+async function loadEligibleSchools(): Promise<void> {
+  eligibleSchoolsFailed.value = false
+  try {
+    const res = await getMySchools()
+    eligibleSchools.value = res.items
+      .filter((g) => g.relation === 'curator' || g.relation === 'master')
+      .map((g) => ({ id: g.id, name: g.name }))
+  } catch {
+    // The fourth option stays hidden, but the audience block says the list is
+    // unknown instead of passing for "this master has no schools".
+    eligibleSchools.value = []
+    eligibleSchoolsFailed.value = true
+  }
+}
+
+/** The Retry of the schools read: a loader stands under the audience radio while it runs. */
+const eligibleSchoolsRetrying = ref(false)
+async function retryEligibleSchools(): Promise<void> {
+  eligibleSchoolsRetrying.value = true
+  try {
+    await loadEligibleSchools()
+  } finally {
+    eligibleSchoolsRetrying.value = false
+  }
+}
+
 onMounted(() => {
   void loadPracticeMasterContext()
-  // FE-24 (GT P5): the eligible schools. A failure here degrades to "no
-  // schools" (the fourth option stays hidden) -- quieter than the groups
-  // failure: there is no screen to point at from a practice form, and the
-  // toast would claim a list the user never opened. FE-151: with the
-  // schools option off there is no probe -- the option stays hidden.
+  // FE-24 (GT P5): the eligible schools. FE-151: with the schools option off
+  // there is no probe -- the option stays hidden.
   if (!isOptionEnabled('schools')) return
-  void getMySchools()
-    .then((res) => {
-      eligibleSchools.value = res.items
-        .filter((g) => g.relation === 'curator' || g.relation === 'master')
-        .map((g) => ({ id: g.id, name: g.name }))
-    })
-    .catch(() => {
-      eligibleSchools.value = []
-    })
+  void loadEligibleSchools()
 })
 
 const submitting = ref(false)
@@ -1122,6 +1247,12 @@ html.is-keyboard-open .create-practice {
 }
 
 /* -- Draft-restore banner (B2) -- */
+.create-practice__masters-loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-3) 0;
+}
+
 .create-practice__draft-text {
   margin: 0;
   font-size: var(--velo-fs-14);
