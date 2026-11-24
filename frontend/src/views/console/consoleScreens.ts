@@ -29,6 +29,7 @@ const SCREENS: Partial<Record<ConsoleRouteName, Loader>> = {
   'console-catalog': () => import('@/views/console/ConsoleCatalogView.vue'),
   'console-moderation': () => import('@/views/console/ConsoleModerationView.vue'),
   'console-support': () => import('@/views/console/ConsoleSupportView.vue'),
+  'console-finance': () => import('@/views/console/ConsoleFinanceView.vue'),
 }
 
 const placeholder: Loader = () => import('@/views/console/ConsolePlaceholderView.vue')

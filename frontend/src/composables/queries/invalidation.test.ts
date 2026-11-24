@@ -41,6 +41,8 @@ const SAMPLE = {
   adminStats: adminKeys.stats() as EntryKey,
   adminTaxonomy: adminKeys.taxonomy() as EntryKey,
   adminPromos: adminKeys.promos('master') as EntryKey,
+  // The web console's promo table: one entry per (tab, page), FE-267.
+  adminPromosPage: adminKeys.promosPage('company', 2) as EntryKey,
   adminSchools: adminKeys.schools() as EntryKey,
   adminUsers: adminKeys.users() as EntryKey,
   adminMasters: adminKeys.masters() as EntryKey,
@@ -59,6 +61,8 @@ const SAMPLE = {
   adminReports: adminKeys.reports('pending') as EntryKey,
   adminReport: adminKeys.report('r1') as EntryKey,
   adminWithdrawals: adminKeys.withdrawals() as EntryKey,
+  // The web console's payout table (one entry per status and page), FE-267.
+  adminWithdrawalsPage: adminKeys.withdrawalsPage('approved', 3) as EntryKey,
   adminPendingWithdrawals: adminKeys.withdrawalsPending() as EntryKey,
   adminOpenTickets: adminKeys.openTickets() as EntryKey,
   adminSupportTickets: adminKeys.supportTickets({ status: 'open' }) as EntryKey,
@@ -128,7 +132,8 @@ describe('INVALIDATES', () => {
 /** Expected stale domains per admin row (ADMIN_INVALIDATES, ./admin.ts), written out by hand. */
 const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
   changeTaxonomy: ['adminTaxonomy'],
-  deactivatePromo: ['adminPromos'],
+  createPromo: ['adminPromos', 'adminPromosPage'],
+  deactivatePromo: ['adminPromos', 'adminPromosPage'],
   inviteMaster: [],
   makeMaster: [
     'adminUsers',
@@ -184,6 +189,7 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
   decideReport: ['adminReports', 'adminReport', 'adminStats'],
   decideWithdrawal: [
     'adminWithdrawals',
+    'adminWithdrawalsPage',
     'adminPendingWithdrawals',
     'adminMasters',
     'adminMaster',

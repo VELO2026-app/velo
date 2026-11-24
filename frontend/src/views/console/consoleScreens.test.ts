@@ -20,7 +20,7 @@ describe('loadConsoleScreen', () => {
   })
 
   it('loads the placeholder for a module that has no screen yet', async () => {
-    expect((await loadConsoleScreen('console-finance')).default).toBe(Placeholder)
+    expect((await loadConsoleScreen('console-settings')).default).toBe(Placeholder)
   })
 })
 

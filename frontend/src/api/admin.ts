@@ -59,6 +59,7 @@ import type {
   MasterSchoolRightResponse,
   RevokeMasterAdvisory,
   PromoResponse,
+  CreateCompanyPromoRequest,
 } from '@/api/types'
 // T5: AdminPromoResponse/AdminPaginatedPromosResponse are natively in
 // generated.ts as of the b56944d regen -- imported directly from there
@@ -502,7 +503,8 @@ export function getAdminRevenue(
 
 // ============================================================================
 // Promos (T5) -- admin sees + deactivates every master's promos, plus its own
-// company-wide ones. Company creation (POST) stays out of this batch's scope.
+// company-wide ones. Creating a company promo (POST) is the web console's
+// (FE-267); the mobile admin never calls it.
 // ============================================================================
 
 /** Every promo (company-wide and master) for the admin oversight list, paginated. */
@@ -519,6 +521,11 @@ export function getAdminPromos(
 /** Deactivate a promo from the admin oversight list. */
 export function deactivateAdminPromo(promoId: string): Promise<PromoResponse> {
   return api.patch<PromoResponse>(path`/api/v1/admin/promos/${promoId}/deactivate`)
+}
+
+/** Create a company-wide promo (platform-paid discount; the code is uppercased by the server). */
+export function createCompanyPromo(body: CreateCompanyPromoRequest): Promise<PromoResponse> {
+  return api.post<PromoResponse>('/api/v1/admin/promos', body)
 }
 
 // ============================================================================
