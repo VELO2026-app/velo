@@ -49,6 +49,7 @@ vi.mock('@/components/shared/ChatThreadScreen.vue', () => ({
           'data-thread-id': props.threadId,
           'data-support': String(props.support),
           'data-fallback': props.peerFallback,
+          'data-peer-name': (props.peer as { name?: string } | null)?.name ?? '',
         })
     },
   }),
@@ -154,6 +155,19 @@ describe('MasterChatView -- which row a route id opens', () => {
     expect(notFound()).toBe(false)
     expect(stub()?.dataset.threadId).toBe('dm_1')
     expect(stub()?.dataset.support).toBe('false')
+    // The resolved peer is what titles the thread (the counterpart of the failed-lookup test).
+    expect(stub()?.dataset.peerName).toBe('Анна')
+  })
+
+  it('a failed row lookup only costs the header name: the thread still opens, titled by the role fallback (FE-259)', async () => {
+    listChats.mockRejectedValue(new Error('Failed to fetch'))
+    mount('dm_1')
+    await flush()
+
+    expect(notFound()).toBe(false)
+    expect(stub()?.dataset.threadId).toBe('dm_1')
+    expect(stub()?.dataset.peerName).toBe('')
+    expect(stub()?.dataset.fallback).toBe('Ученик')
   })
 
   it('an id in no row id and no thread_ids -> «not found»', async () => {

@@ -131,6 +131,16 @@ function membersOf(kind: 'master' | 'student', ids: string[]): SchoolMemberItem[
   return ids.map((id) => member(id, { kind }))
 }
 
+/** Type a value into a field the test must find on screen. */
+function typeInto(
+  el: HTMLInputElement | HTMLTextAreaElement | null | undefined,
+  value: string,
+): void {
+  if (!el) throw new Error('the field is not on screen')
+  el.value = value
+  el.dispatchEvent(new Event('input'))
+}
+
 function inputEl(): HTMLInputElement | null {
   return host?.querySelector<HTMLInputElement>('.school-members__search input') ?? null
 }
@@ -140,6 +150,14 @@ function showMore(): HTMLElement | null {
     (Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
       b.textContent?.includes('Показать ещё'),
     ) as HTMLElement | undefined) ?? null
+  )
+}
+
+function retryButton(): HTMLButtonElement | null {
+  return (
+    Array.from(host?.querySelectorAll<HTMLButtonElement>('button') ?? []).find((b) =>
+      b.textContent?.includes('Повторить'),
+    ) ?? null
   )
 }
 
@@ -222,8 +240,7 @@ describe('SchoolMembersView', () => {
       await vi.advanceTimersByTimeAsync(0) // initial load
 
       const input = inputEl()
-      input!.value = 'анна'
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, 'анна')
       await vi.advanceTimersByTimeAsync(300)
       expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenLastCalledWith(
         'g1',
@@ -278,8 +295,7 @@ describe('SchoolMembersView', () => {
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page([]))
     vi.useFakeTimers()
     const input = inputEl()
-    input!.value = 'гриб'
-    input!.dispatchEvent(new Event('input'))
+    typeInto(input, 'гриб')
     await vi.advanceTimersByTimeAsync(300)
     vi.useRealTimers()
     await flush()
@@ -294,8 +310,7 @@ describe('SchoolMembersView', () => {
       await vi.advanceTimersByTimeAsync(0) // initial load
 
       const input = inputEl()
-      input!.value = '  анна  '
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, '  анна  ')
       await vi.advanceTimersByTimeAsync(300)
 
       expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenLastCalledWith('g1', {
@@ -350,6 +365,46 @@ describe('SchoolMembersView', () => {
     expect(push).toHaveBeenCalledWith({ name: 'master-school', params: { id: 'g1' } })
   })
 
+  it('a first-page failure that is not a 404 is an error with Retry, not an empty roster or «unavailable»; Retry recovers (FE-259)', async () => {
+    vi.mocked(cgApi.getSchoolMembers)
+      .mockRejectedValueOnce(new ApiResponseError(500, 'boom', 'internal'))
+      .mockResolvedValueOnce(page(membersOf('master', ['m1'])))
+    mountWith()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+    expect(text()).toContain('Не удалось загрузить мастеров')
+    expect(text()).not.toContain('В школе пока нет мастеров')
+    expect(text()).not.toContain('Школа недоступна')
+    // The school is fine: the switcher stays (the 404 rung hides it).
+    expect(rosterTab('Ученики')).not.toBeNull()
+
+    retryButton()?.click()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+    expect(text()).toContain('Участник m1')
+  })
+
+  it('a failed school read (the viewer relation) is the same error with Retry; Retry then loads the roster (FE-259)', async () => {
+    vi.mocked(cgApi.getSchoolPage).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['m1'])))
+    mountWith()
+    await flush()
+
+    // No relation means no roster request: the screen must say so, not spin or claim "empty".
+    expect(cgApi.getSchoolMembers).not.toHaveBeenCalled()
+    expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+    expect(text()).not.toContain('В школе пока нет мастеров')
+    expect(text()).not.toContain('Школа недоступна')
+
+    retryButton()?.click()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+    expect(text()).toContain('Участник m1')
+  })
+
   it("router reuse: another school's roster is asked, the previous school's rows never stay", async () => {
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['a1'])))
     mountWith()
@@ -373,8 +428,7 @@ describe('SchoolMembersView', () => {
       mountWith({ kind: 'master' })
       await vi.advanceTimersByTimeAsync(0)
       const input = inputEl()
-      input!.value = 'анна'
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, 'анна')
       await vi.advanceTimersByTimeAsync(300)
       vi.mocked(cgApi.getSchoolMembers).mockClear()
 
@@ -401,7 +455,7 @@ describe('SchoolMembersView', () => {
     mountWith({ kind: 'student' })
     await flush()
 
-    const rows = Array.from(host!.querySelectorAll<HTMLButtonElement>('.v-list-row'))
+    const rows = Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-list-row') ?? [])
     rows[0]?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({
@@ -416,7 +470,7 @@ describe('SchoolMembersView', () => {
     mountWith()
     await flush()
 
-    const rows = Array.from(host!.querySelectorAll<HTMLButtonElement>('.v-list-row'))
+    const rows = Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-list-row') ?? [])
     rows[0]?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({
@@ -502,7 +556,7 @@ describe('SchoolMembersView', () => {
     const blockTab = rosterTab('Удалённые')
     expect(blockTab?.querySelector('svg')).not.toBeNull()
     const rosterCalls = vi.mocked(cgApi.getSchoolMembers).mock.calls.length
-    blockTab!.click()
+    blockTab?.click()
     await flush()
 
     expect(cgApi.getSchoolBlocks).toHaveBeenCalledWith('g1', { limit: 20, offset: 0 })
@@ -531,7 +585,7 @@ describe('SchoolMembersView', () => {
     mountWith({ kind: 'blocked' })
     await flush()
 
-    unblockButtons()[0]!.click()
+    unblockButtons()[0]?.click()
     await flush()
 
     expect(cgApi.unblockSchoolMember).toHaveBeenCalledWith('g1', 'b1')
@@ -549,7 +603,7 @@ describe('SchoolMembersView', () => {
     rosterTab('Удалённые')?.click()
     await flush()
 
-    unblockButtons()[0]!.click()
+    unblockButtons()[0]?.click()
     await flush()
     vi.mocked(cgApi.getSchoolMembers).mockReturnValue(new Promise(() => {}))
     rosterTab('Мастера')?.click()
@@ -569,7 +623,7 @@ describe('SchoolMembersView', () => {
     mountWith({ kind: 'blocked' })
     await flush()
 
-    unblockButtons()[0]!.click()
+    unblockButtons()[0]?.click()
     await flush()
 
     expect(cgApi.getSchoolBlocks).toHaveBeenCalledTimes(2)
@@ -583,7 +637,7 @@ describe('SchoolMembersView', () => {
     mountWith({ kind: 'blocked' })
     await flush()
 
-    unblockButtons()[0]!.click()
+    unblockButtons()[0]?.click()
     await flush()
 
     expect(toastError).toHaveBeenCalled()
@@ -596,7 +650,7 @@ describe('SchoolMembersView', () => {
     expect(vi.mocked(cgApi.getSchoolMembers)).not.toHaveBeenCalled()
 
     vi.mocked(cgApi.getSchoolMembers).mockResolvedValue(page(membersOf('master', ['m1'])))
-    rosterTab('Мастера')!.click()
+    rosterTab('Мастера')?.click()
     await flush()
 
     expect(vi.mocked(cgApi.getSchoolMembers)).toHaveBeenCalledWith('g1', {
@@ -695,14 +749,12 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     mountWith({ kind: 'student' })
     await flush()
 
-    host!.querySelector<HTMLButtonElement>('.v-list-row')?.click()
+    host?.querySelector<HTMLButtonElement>('.v-list-row')?.click()
     await flush()
     expect(push).not.toHaveBeenCalled()
     expect(document.body.querySelector('.send-msg__name')?.textContent).toContain('Пётр Сидоров')
 
-    const area = document.body.querySelector<HTMLTextAreaElement>('.send-msg textarea')!
-    area.value = 'Здравствуйте'
-    area.dispatchEvent(new Event('input'))
+    typeInto(document.body.querySelector<HTMLTextAreaElement>('.send-msg textarea'), 'Здравствуйте')
     await flush()
     const send = Array.from(document.body.querySelectorAll('button')).find(
       (b) => b.textContent?.trim() === 'Отправить',
@@ -723,7 +775,7 @@ describe('SchoolMembersView -- a master of the school (BE-76)', () => {
     mountWith()
     await flush()
 
-    host!.querySelector<HTMLButtonElement>('.v-list-row')?.click()
+    host?.querySelector<HTMLButtonElement>('.v-list-row')?.click()
     await flush()
     expect(push).toHaveBeenCalledWith({
       name: 'user-master-public',

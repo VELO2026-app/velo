@@ -527,7 +527,7 @@ describe('FeedbackView', () => {
       await flush()
       getPracticeMock.mockClear()
 
-      button('Повторить')!.click()
+      button('Повторить')?.click()
       await flush()
 
       expect(getPracticeMock).toHaveBeenCalledWith('p1')
@@ -621,7 +621,7 @@ describe('FeedbackView', () => {
 
       // No await: the list says true, the DOM is stale, the button is still clickable.
       setBookingsList([booking({ has_feedback: true })])
-      btn!.click()
+      btn?.click()
       await flush()
 
       expect(upsertFeedbackMock).not.toHaveBeenCalled()
@@ -800,8 +800,11 @@ describe('FeedbackView', () => {
     it('a FAILED bookings refresh does not fail the feedback either', async () => {
       // The bookings refetch (invalidateAfter, never awaited by the submit) runs
       // AFTER submitted flips. A rejection here must not unwind the success
-      // screen for a write that already landed.
-      getMyBookingsMock.mockRejectedValue(new ApiResponseError(500, 'Бронирования недоступны'))
+      // screen for a write that already landed. The mount read must answer (a list
+      // that failed at mount is a load error, not a form -- FE-259); the refetch fails.
+      getMyBookingsMock
+        .mockResolvedValueOnce(bookingsPage())
+        .mockRejectedValue(new ApiResponseError(500, 'Бронирования недоступны'))
       mount()
       await flush()
 
@@ -1175,6 +1178,36 @@ describe('FeedbackView', () => {
       expect(text()).not.toContain('Как прошла практика?')
       expect(text()).not.toContain('когда Zoom подтвердит участие')
       expect(text()).not.toContain('Отзыв недоступен')
+    })
+
+    it('a FAILED list is a load error with «Повторить», not the form; a retry waits, then decides (FE-259)', async () => {
+      // No list means no verdict (waiting / no_show / cancelled) and no has_feedback
+      // guard: the form here could overwrite an earlier review, or fail on the server.
+      getMyBookingsMock.mockRejectedValueOnce(new TypeError('boom'))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+      expect(text()).toContain('Ошибка загрузки')
+      expect(text()).not.toContain('Как прошла практика?')
+      expect(submitBtn()).toBeUndefined()
+
+      // The retry is slow: neither the error nor the form shows while it runs.
+      let answer!: (page: ReturnType<typeof bookingsPage>) => void
+      getMyBookingsMock.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+      button('Повторить')?.click()
+      await flush()
+
+      expect(host?.querySelector('.feedback-gate__loader')).not.toBeNull()
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+      expect(text()).not.toContain('Как прошла практика?')
+
+      // The list answers: the booking's own verdict decides, as after a first load.
+      answer(bookingsPage([booking({ status: 'confirmed' })]))
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+      expect(text()).toContain('когда Zoom подтвердит участие')
     })
   })
 })
