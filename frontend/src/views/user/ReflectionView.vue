@@ -81,6 +81,7 @@ import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { usePracticesStore } from '@/stores/practices'
 import { useDiaryStore } from '@/stores/diary'
 import { useToast } from '@/composables/useToast'
@@ -96,7 +97,7 @@ const practicesStore = usePracticesStore()
 const diaryStore = useDiaryStore()
 const toast = useToast()
 
-const practiceId = route.params.practiceId as string
+const practiceId = routeParam(route, 'practiceId')
 
 // Stable per-booking copy — same booking always renders the same variant
 // (no flicker on the dashboard's 60s re-eval; PROMPT №269 F5=A).

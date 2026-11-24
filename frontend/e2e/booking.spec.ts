@@ -6,6 +6,7 @@ import { expect, test } from './support/test'
 import { mockApi } from './support/api'
 import {
   freezeClock,
+  makeBooking,
   makePractice,
   makeUser,
   mockSignedIn,
@@ -20,39 +21,14 @@ test('student books a free practice from the calendar', async ({ page }) => {
 
   const practice = makePractice()
   const id = practice.id as string
-  const booking = {
-    id: '00000000-0000-4000-8000-0000000000c1',
-    practice_id: id,
-    user_id: user.id,
-    status: 'confirmed',
-    purchase_id: null,
-    cancelled_at: null,
-    cancellation_reason: null,
-    joined_at: null,
-    left_at: null,
-    checkin_skipped: false,
-    created_at: '2026-11-10T08:00:00Z',
-    updated_at: null,
-  }
+  const booking = makeBooking(practice, { user_id: user.id })
   let booked = false
   api.on('GET', '/api/v1/practices', () => ({ body: paged([practice]) }))
   api.on('GET', `/api/v1/practices/${id}`, () => ({
     body: { ...practice, is_booked: booked, current_participants: booked ? 4 : 3 },
   }))
   api.on('GET', '/api/v1/bookings/me', () => ({
-    body: paged(
-      booked
-        ? [
-            {
-              ...booking,
-              has_feedback: false,
-              has_checkin: false,
-              has_reflection: false,
-              practice,
-            },
-          ]
-        : [],
-    ),
+    body: paged(booked ? [booking] : []),
   }))
   api.on('POST', `/api/v1/practices/${id}/purchase`, () => {
     booked = true

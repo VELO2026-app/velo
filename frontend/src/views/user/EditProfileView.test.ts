@@ -554,6 +554,33 @@ describe('EditProfileView', () => {
 
   // ===========================================================================
   describe('master: methods block', () => {
+    it('a failed profile read shows an error with Retry instead of an empty editable form, languages included (FE-242)', async () => {
+      vi.mocked(mastersApi.getMyMasterProfile).mockRejectedValueOnce(new Error('500'))
+      useAuthStore().user = user({ role: 'master' })
+      mount()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+      expect(methodsSubmitBtn()).toBeUndefined()
+      // "Save languages" would overwrite the real languages with an empty set.
+      expect(languagesSaveBtn()).toBeUndefined()
+      expect(host?.querySelector('.edit-profile__methods-chips')).toBeNull()
+
+      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(
+        masterProfile({
+          methods: ['Медитация'],
+          languages: ['Русский'],
+          method_change_request: null,
+        }),
+      )
+      buttonByText('Повторить')!.click()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+      expect(methodsSubmitBtn()).toBeDefined()
+      expect(languagesSaveBtn()).toBeDefined()
+    })
+
     it('pending: shows the readonly picker + badge, NO submit button, and does not treat it as editable', async () => {
       vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(
         masterProfile({ method_change_request: methodChangeRequest() }),

@@ -125,9 +125,11 @@ const schoolId = defineModel<string | null>('schoolId', { required: true })
 
 const options = computed(() => {
   const all = audienceOptions(props.schools.length > 0)
-  const base = props.allowedKinds ? all.filter((o) => props.allowedKinds!.includes(o.value)) : all
-  if (!props.studentsLabel) return base
-  return base.map((o) => (o.value === 'students' ? { ...o, label: props.studentsLabel! } : o))
+  const allowedKinds = props.allowedKinds
+  const studentsLabel = props.studentsLabel
+  const base = allowedKinds ? all.filter((o) => allowedKinds.includes(o.value)) : all
+  if (!studentsLabel) return base
+  return base.map((o) => (o.value === 'students' ? { ...o, label: studentsLabel } : o))
 })
 
 function toggleGroup(id: string): void {

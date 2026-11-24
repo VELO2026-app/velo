@@ -70,16 +70,12 @@ body {
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* [FE-36 follow-up] THE COLUMN MUST NEVER BE CONTENT-SIZED. Measured live
-     (Chromium probe): in some sessions html computes to display:flex (source
-     untraced -- not our CSS/JS, not the Telegram SDK, not @tma.js; flaky, but
-     it happened) and body then becomes a flex ITEM with auto basis -- it
-     sizes to the CONTENT's max-content instead of filling the viewport. A
-     short results list (one narrow city row) shrank the whole app column to
-     348 of 390px, with an empty gap on the right -- the owner-visible
-     "narrowed view, huge right padding". width:100% pins body to the
-     containing block under EITHER display: inert while html is block,
-     a fill-guarantee if anything ever flexes html again. */
+  /* [FE-36 follow-up] The column must never be content-sized: if html turns
+     display:flex, body becomes a flex item with an auto basis and shrinks to
+     its content (a short list once narrowed the app to 348 of 390px). The
+     flex came from a scoped keyboard rule that leaked onto <html> (FE-261,
+     guarded by scoped-global.test.ts). width:100% pins body to the containing
+     block under either display and stays as a cheap fill-guarantee. */
   width: 100%;
   height: 100vh;
   height: 100lvh;
@@ -387,6 +383,15 @@ ol {
    materializedSkinTokens). Also read by the two onboarding overlays. */
 :root {
   --velo-app-bg-image: none;
+  /* The bottom clearance of the home indicator (FE-240): the one name for
+     env(safe-area-inset-bottom) that tab bars, composers and bottom paddings
+     add to their own offset. Outside Telegram it is the system's inset (the
+     installed app draws edge to edge with viewport-fit=cover,
+     platform/launch.ts). Inside Telegram the viewport tag has no
+     viewport-fit, so iOS may report 0 here. Whether it should follow
+     Telegram's own --tg-viewport-safe-area-inset-bottom instead waits for a
+     measurement on a device (owner, 24.11: env() until then). */
+  --velo-safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* `#app-bg` is a STATIC element in index.html (first child of <body>, before
@@ -612,4 +617,13 @@ html.is-keyboard-open .mobile-layout__main--fog {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* === Listbox keyboard highlight ===
+   The option an arrow key has moved to in a search field with a suggestion
+   list (useListboxNav adds the class). A ring, so it never reads as the
+   selected option's fill. */
+.velo-listbox-active {
+  outline: 2px solid var(--velo-border-input-focus);
+  outline-offset: -2px;
 }

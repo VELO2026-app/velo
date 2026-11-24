@@ -11,7 +11,7 @@ import { DateTime } from 'luxon'
 
 /** Number of days in the month (month is 1..12). */
 export function daysInMonth(year: number, month: number): number {
-  return DateTime.fromObject({ year, month }, { zone: 'utc' }).daysInMonth!
+  return DateTime.fromObject({ year, month }, { zone: 'utc' }).daysInMonth ?? Number.NaN
 }
 
 /** Weekday of the 1st of the month: 0 = Monday .. 6 = Sunday (Monday-first grid). */

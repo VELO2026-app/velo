@@ -62,6 +62,7 @@
         <div class="groups__search-field">
           <VInput
             v-model="search"
+            kind="search"
             :placeholder="t('masterScreens.masterGroups.search.placeholder')"
             :aria-label="t('masterScreens.masterGroups.search.aria')"
             @focus="onFieldFocus"

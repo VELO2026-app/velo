@@ -44,6 +44,7 @@
           <div class="students__search-field">
             <VInput
               v-model="query"
+              kind="search"
               :placeholder="t('masterScreens.masterStudents.search.placeholder')"
               :aria-label="t('masterScreens.masterStudents.search.aria')"
               @focus="onFieldFocus"

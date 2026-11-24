@@ -202,6 +202,8 @@ export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from '@velo/ui'
 // a host layer that closes on Escape (DiarySearchBar) registers through it so
 // a kit overlay opened over it takes the key first.
 export { useEscapeLayer } from '@velo/ui'
+export { inputKindAttrs } from '@velo/ui'
+export type { InputKind } from '@velo/ui'
 
 // Types re-exported for barrel consumers (verbatimModuleSyntax-aware).
 export type { SegmentOption } from '@velo/ui'

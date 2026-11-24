@@ -218,6 +218,12 @@
             @click="goToPractice"
           />
         </div>
+        <!-- A failed list is not "nothing planned" (FE-242): say so, offer Retry. -->
+        <VEmptyState v-else-if="upcomingFailed" icon="warning" :title="t('common.loadError')">
+          <VButton size="sm" variant="secondary" @click="upcomingQuery.refetch()">{{
+            t('common.retry')
+          }}</VButton>
+        </VEmptyState>
         <p v-else class="master-public__note">
           {{ t('user.screens.masterPublic.sections.nonePlanned') }}
         </p>
@@ -339,6 +345,7 @@ import { useQuery } from '@pinia/colada'
 import { masterUpcomingQuery, publicMasterQuery } from '@/composables/queries/publicMaster'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import {
   VLoader,
   VEmptyState,
@@ -371,7 +378,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const masterId = computed(() => String(route.params.id))
+const masterId = computed(() => optionalRouteParam(route, 'id') ?? '')
 // The roster's master rows navigate here with ?schoolId= -- the curator's
 // school context (see the school-context actions below).
 const schoolId = computed(() => String(route.query.schoolId ?? ''))
@@ -422,6 +429,8 @@ const upcomingLoading = computed(
     upcomingQuery.data.value === undefined &&
     (upcomingQuery.status.value === 'pending' || upcomingQuery.asyncStatus.value === 'loading'),
 )
+
+const upcomingFailed = screenQueryState(upcomingQuery).failed
 
 function retry(): void {
   void masterQuery.refetch()
@@ -747,7 +756,7 @@ function goCreatePractice(): void {
   position: fixed;
   left: var(--velo-rail-pad-x);
   right: var(--velo-rail-pad-x);
-  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-8) + var(--velo-safe-bottom));
   z-index: var(--z-sticky);
 }
 

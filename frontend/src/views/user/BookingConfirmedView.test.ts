@@ -195,6 +195,8 @@ function type(value: string): void {
   el.dispatchEvent(new Event('input'))
 }
 
+let minted = 0
+
 beforeEach(() => {
   pinia = createPinia()
   setActivePinia(pinia)
@@ -203,6 +205,10 @@ beforeEach(() => {
   toastError.mockReset()
   vi.mocked(chatsApi.openChat).mockReset()
   vi.mocked(chatsApi.sendChatMessage).mockReset()
+  minted = 0
+  vi.mocked(chatsApi.newIdempotencyKey)
+    .mockReset()
+    .mockImplementation(() => `key-${++minted}`)
   push.mockReset()
   back.mockReset()
   replace.mockReset()
@@ -448,6 +454,7 @@ describe('BookingConfirmedView', () => {
       expect(chatsApi.sendChatMessage).toHaveBeenCalledWith(
         'thread-7',
         'Практика: Утренняя медитация, 20 июля в 10:00\n\nБолит колено',
+        'key-1',
       )
       // [FE-1] Scenario: normal flow -- toast + step BACK into practice-detail
       // (i18n:user.screens.practiceDetail.titleBooked); no new history entry,
@@ -517,6 +524,7 @@ describe('BookingConfirmedView', () => {
       expect(chatsApi.sendChatMessage).toHaveBeenCalledWith(
         'thread-7',
         'Практика: Утренняя медитация, 20 июля в 13:00\n\nВопрос',
+        'key-1',
       )
     })
 
@@ -582,6 +590,31 @@ describe('BookingConfirmedView', () => {
       expect(replace).not.toHaveBeenCalled()
       expect(back).not.toHaveBeenCalled()
       expect(textarea()?.value).toBe('Болит колено')
+    })
+
+    it('a failed send is retried with the SAME key (one logical write), and a new key after an edit (FE-242)', async () => {
+      getPracticeMock.mockResolvedValue(practice())
+      vi.mocked(chatsApi.openChat).mockResolvedValue(THREAD)
+      vi.mocked(chatsApi.sendChatMessage)
+        .mockRejectedValueOnce(new ApiResponseError(500, 'lost', 'internal_error'))
+        .mockRejectedValueOnce(new ApiResponseError(500, 'lost', 'internal_error'))
+        .mockResolvedValueOnce(SENT)
+      mount()
+      await flush()
+
+      type('Болит колено')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+      sendBtn()?.click()
+      await flush()
+      type('Болит колено сильно')
+      await nextTick()
+      sendBtn()?.click()
+      await flush()
+
+      const keys = vi.mocked(chatsApi.sendChatMessage).mock.calls.map((c) => c[2])
+      expect(keys).toEqual(['key-1', 'key-1', 'key-2'])
     })
 
     it('a non-ApiResponseError falls back to the screen`s own copy, not a raw exception message', async () => {

@@ -115,6 +115,26 @@ describe('TopupSuccessView', () => {
     expect(host?.querySelector('.topup-result__balance .v-loader')).toBeNull()
   })
 
+  it('a failed refresh shows a load error, not the pre-topup balance; Retry recovers (FE-242)', async () => {
+    authState.user = { balance_cents: 500 }
+    fetchMe.mockResolvedValueOnce(false)
+    mount()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+    expect(text()).not.toContain('5,00')
+
+    fetchMe.mockImplementation(async () => {
+      authState.user = { balance_cents: 2500 }
+      return true
+    })
+    button('Повторить')!.click()
+    await flush()
+
+    expect(text()).toContain('25,00')
+    expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+  })
+
   it('a zero balance renders as money, not «Бесплатно»', async () => {
     // stores/balance.ts:34-36 passes allowZero=true; formatMoney's default
     // would print the free label (i18n:common.free) for 0 (utils/format.ts:33).

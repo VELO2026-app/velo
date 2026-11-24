@@ -99,12 +99,14 @@ import { t } from '@/locales'
 import { isOptionEnabled } from '@/platform/instance'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { usePracticesStore } from '@/stores/practices'
 import { useToast } from '@/composables/useToast'
 import { VLoader, VEmptyState, VButton, VTextarea, VCard } from '@/components/ui'
 import Banner from '@/components/shared/Banner.vue'
 import { IconSuccess, IconSupport } from '@/components/icons'
 import { openChat, sendChatMessage } from '@/api/chats'
+import { createAttemptKeys } from '@/api/attemptKeys'
 import { extractApiError } from '@/composables/useApiError'
 import { formatDate, cleanPracticeTitle } from '@/utils/format'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
@@ -114,7 +116,7 @@ const router = useRouter()
 const store = usePracticesStore()
 const toast = useToast()
 
-const practiceId = route.params.practiceId as string
+const practiceId = routeParam(route, 'practiceId')
 
 // usePracticesStore is a session-lifetime singleton: store.selected can still
 // hold a DIFFERENT practice left over from an earlier screen while this
@@ -148,6 +150,9 @@ function composeRequest(body: string): string {
   })
 }
 
+// One key per send attempt (FE-242): a repeat after a lost answer is the same write.
+const sendKeys = createAttemptKeys()
+
 async function onSendRequest(): Promise<void> {
   // Two calls, in order: open-or-get the thread, then post the text into it.
   // Both are guarded by ONE in-flight flag (same shape as MasterPublicView's
@@ -160,7 +165,9 @@ async function onSendRequest(): Promise<void> {
   sending.value = true
   try {
     const thread = await openChat(masterId)
-    await sendChatMessage(thread.id, composeRequest(body))
+    const text = composeRequest(body)
+    await sendChatMessage(thread.id, text, sendKeys.keyFor(thread.id, text))
+    sendKeys.settle()
     masterRequest.value = ''
     toast.success(t('user.screens.bookingConfirmed.request.sent'))
     // [FE-1] Requirement: post-send navigation (capability: user-booking)
@@ -193,6 +200,7 @@ async function onSendRequest(): Promise<void> {
       await router.replace({ name: 'practice-detail', params: { id: practiceId } })
     }
   } catch (e) {
+    sendKeys.settle(e)
     toast.error(extractApiError(e, t('user.screens.bookingConfirmed.request.sendFailed')))
   } finally {
     sending.value = false

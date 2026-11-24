@@ -45,6 +45,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import {
   getPracticeAnalytics,
   getPracticeAnalyticsPairs,
@@ -69,7 +70,7 @@ const PAGE = 20
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const practiceId = computed(() => route.params.id as string)
+const practiceId = computed(() => routeParam(route, 'id'))
 
 const summary = ref<PracticeAnalyticsResponse | null>(null)
 const pairs = ref<PracticeAnalyticsPair[]>([])

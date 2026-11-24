@@ -214,7 +214,11 @@ export function useDiaryCardModel(
         // One owner artwork for every activity type -- the label carries the
         // type (dictionary label or the custom name).
         return EXTERNAL_ACTIVITY_ICON
-      default:
+      case 'booking_confirmed':
+      case 'booking_cancelled_by_user':
+      case 'practice_rescheduled':
+      case 'practice_cancelled_by_master':
+      case 'practice_outcome':
         return IconPen
     }
   })
