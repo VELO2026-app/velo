@@ -8,6 +8,10 @@
       <p>Hidden content here</p>
     </VAccordion>
 
+  The header button is named after the title plus the action ("Details,
+  expand"): the visible title has to be inside the accessible name (WCAG 2.5.3);
+  the action word alone hid it from assistive technology.
+
   Optional slots (additive, backward-compatible — default render unchanged):
     #icon    — leading icon before the title (e.g. <IconClock />).
     #chevron — override the default «›» chevron; receives { open } so the
@@ -23,7 +27,7 @@
   >
     <button
       class="v-accordion__header"
-      :aria-label="open ? t('ui.collapse') : t('ui.expand')"
+      :aria-label="`${title}, ${open ? t('ui.collapse') : t('ui.expand')}`"
       :aria-expanded="open"
       @click="open = !open"
     >

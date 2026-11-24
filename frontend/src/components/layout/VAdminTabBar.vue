@@ -28,7 +28,7 @@
       :key="item.to"
       class="v-admin-tabbar__item"
       :class="{ 'v-admin-tabbar__item--active': active === item.to }"
-      :aria-label="item.label"
+      :aria-label="nameOf(item)"
       :aria-current="active === item.to ? 'page' : undefined"
       type="button"
       @click="$emit('navigate', item.to)"
@@ -49,6 +49,15 @@ defineProps<{
   items: TabItem[]
   active?: string | undefined
 }>()
+
+/**
+ * Accessible name of a pill: the label, then the count the badge shows. The
+ * badge is visible text, so the name has to contain it (WCAG 2.5.3, axe
+ * `label-content-name-mismatch`); without a badge the name is the label alone.
+ */
+function nameOf(item: TabItem): string {
+  return item.badge ? `${item.label}, ${item.badge}` : item.label
+}
 
 defineEmits<{
   navigate: [to: string]

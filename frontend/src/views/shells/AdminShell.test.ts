@@ -116,16 +116,20 @@ function mainEl(): HTMLElement {
   return el
 }
 
+/** The pill's label: its accessible name without the ", <count>" a badge adds. */
+function labelOf(b: HTMLButtonElement): string {
+  const name = b.getAttribute('aria-label') ?? ''
+  const count = b.querySelector('.v-admin-tabbar__badge')?.textContent?.trim()
+  return count ? name.replace(new RegExp(`, ${count}$`), '') : name
+}
+
 function tabButton(label: string): HTMLButtonElement | undefined {
-  return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-admin-tabbar__item') ?? []).find(
-    (b) => b.getAttribute('aria-label') === label,
-  )
+  return tabButtons().find((b) => labelOf(b) === label)
 }
 
 function activeTabLabel(): string | undefined {
-  return tabButtons()
-    .find((b) => b.getAttribute('aria-current') === 'page')
-    ?.getAttribute('aria-label') as string | undefined
+  const active = tabButtons().find((b) => b.getAttribute('aria-current') === 'page')
+  return active ? labelOf(active) : undefined
 }
 
 function tabButtons(): HTMLButtonElement[] {
@@ -179,6 +183,17 @@ describe('AdminShell', () => {
       expect(badgeOn('Мастера')).toBe('3')
       expect(badgeOn('Модерация')).toBe('7')
       expect(badgeOn('Дашборд')).toBeNull() // never carries a badge
+    })
+
+    it('a badge count is part of the tab accessible name (FE-247, label in name)', async () => {
+      vi.mocked(adminApi.getAdminStats).mockResolvedValue(stats({ pending_verifications: 3 }))
+      vi.mocked(adminApi.getReports).mockResolvedValue(reports(7))
+      await mount('admin-dashboard')
+      await flush()
+
+      expect(tabButton('Модерация')?.getAttribute('aria-label')).toBe('Модерация, 7')
+      expect(tabButton('Мастера')?.getAttribute('aria-label')).toBe('Мастера, 3')
+      expect(tabButton('Дашборд')?.getAttribute('aria-label')).toBe('Дашборд') // no badge: label alone
     })
 
     it('zero counts render NO badge at all on either tab', async () => {

@@ -18,7 +18,6 @@ const REASON = {
   GOLD_PRIMARY:
     'The gold primary color #627a9c is 4.39:1 against white text and the tints of its family; the color belongs to the velo-brand package.',
   HEADING_ORDER: 'The heading level jumps by more than one.',
-  LABEL_IN_NAME: 'The accessible name does not contain the visible text (WCAG 2.5.3).',
   MARKUP:
     'Markup: a nested control, a list item with a button role, or a scroll area without focus.',
 } as const
@@ -237,44 +236,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
     target: 'section > h3',
     reason: REASON.HEADING_ORDER,
     task: 'FE-246',
-  },
-  {
-    rule: 'label-content-name-mismatch',
-    routes: ['user-diary'],
-    target: '.tcard',
-    reason: REASON.LABEL_IN_NAME,
-    task: 'FE-247',
-  },
-  {
-    rule: 'label-content-name-mismatch',
-    routes: ['practice-detail', 'user-ai-connections', 'user-master-public'],
-    target: '.v-accordion__header',
-    reason: REASON.LABEL_IN_NAME,
-    task: 'FE-247',
-  },
-  {
-    rule: 'label-content-name-mismatch',
-    routes: ['admin-report-detail', 'admin-reports'],
-    target: '.v-admin-tabbar__item--active',
-    reason: REASON.LABEL_IN_NAME,
-    task: 'FE-247',
-  },
-  {
-    rule: 'label-content-name-mismatch',
-    routes: [
-      'admin-dashboard',
-      'admin-master-invite',
-      'admin-masters',
-      'admin-method-requests',
-      'admin-schools',
-      'admin-support-detail',
-      'admin-support-stats',
-      'admin-users',
-      'root',
-    ],
-    target: 'button[aria-label="Moderation"]',
-    reason: REASON.LABEL_IN_NAME,
-    task: 'FE-247',
   },
   {
     rule: 'list',
