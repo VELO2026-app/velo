@@ -188,7 +188,7 @@ function statValue(label: string): string {
   return card.querySelector('.v-stat__value')?.textContent?.trim() ?? ''
 }
 
-/** The DOM node immediately after a section's own <h3>, i.e. that section's
+/** The DOM node immediately after a section's own heading, i.e. that section's
  *  OWN items-list-or-empty-card -- not a page-wide text() search, so a
  *  present/absent string swap actually fails the test targeting it. */
 function sectionAfterHeading(headingPrefix: string): HTMLElement {
@@ -549,9 +549,11 @@ describe('AdminPracticeDetailView', () => {
       vi.mocked(adminApi.getAdminZoomAttendance).mockResolvedValue(
         zoomAttendance({ zoom_meeting_status: 'active' }),
       )
-      Array.from(host!.querySelectorAll('[data-testid="screen-error"] button'))
-        .find((b) => b.textContent?.includes('Повторить'))!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      const retry = Array.from(
+        host?.querySelectorAll('[data-testid="screen-error"] button') ?? [],
+      ).find((b) => b.textContent?.includes('Повторить'))
+      if (!retry) throw new Error('no retry button on the zoom error card')
+      retry.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flush()
 
       expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
