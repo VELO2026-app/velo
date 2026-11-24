@@ -34,6 +34,18 @@ import { SKIN_BRAND } from 'virtual:skin-brand'
 
 vi.mock('@/api/chats')
 
+// FE-261: the support mark follows the skin's `supportMark` setting; the test
+// build ships the core skin ('logo'), so a test flips it here.
+const skin = vi.hoisted(() => ({ supportMark: 'logo' as 'logo' | 'icon' }))
+vi.mock('virtual:skin-brand', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('virtual:skin-brand')>()),
+  get SKIN_SUPPORT_MARK() {
+    return skin.supportMark
+  },
+}))
+const LOGO_SET = ['/icons/mandala-blue.png', '/icons/velo-word-blue.svg']
+const BRAND_ICON = ['/icons/favicon.svg']
+
 const back = vi.fn()
 const push = vi.fn()
 vi.mock('vue-router', () => ({
@@ -57,7 +69,7 @@ function thread(overrides: Partial<ChatThread> = {}): ChatThread {
 }
 
 function supportThread(overrides: Partial<ChatThread> = {}): ChatThread {
-  // BE-163: a support row has peer: null -- the VELO logo + the support
+  // BE-163: a support row has peer: null -- the brand icon + the support
   // title (i18n:chat.supportTitle) stand in for both.
   const result = thread({
     id: 'support-1',
@@ -99,6 +111,7 @@ function row(i: number): HTMLElement {
 }
 
 beforeEach(() => {
+  skin.supportMark = 'logo'
   push.mockReset()
   back.mockReset()
   vi.mocked(chatsApi.listChats).mockReset()
@@ -146,9 +159,10 @@ describe('UserMessagesView', () => {
   })
 
   // FE-103 / BE-163: the caller's own support conversation rides the same
-  // list -- the brand logo instead of the avatar, the support title instead of
-  // the role fallback, and the newest-message line with its time.
-  it('a support row renders the brand logo, «Поддержка <brand>» and the last message, not «Мастер»', async () => {
+  // list -- the support mark instead of the avatar (FE-261: the logo set or
+  // the brand icon, by the skin's `supportMark` setting), the support title
+  // instead of the role fallback, and the newest-message line with its time.
+  it('a support row renders the support mark, «Поддержка <brand>» and the last message, not «Мастер»', async () => {
     vi.mocked(chatsApi.listChats).mockResolvedValue({
       threads: [
         supportThread({
@@ -170,10 +184,31 @@ describe('UserMessagesView', () => {
     expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe(
       `Поддержка ${SKIN_BRAND}`,
     )
-    expect(row(0).querySelector('.chat-row__logo')).not.toBeNull()
+    const mark = Array.from(row(0).querySelectorAll('.chat-row__brand-mark img')).map((img) =>
+      img.getAttribute('src'),
+    )
+    // The default skin setting is 'logo': the logo set, as before FE-261.
+    expect(mark).toEqual(LOGO_SET)
     expect(row(0).querySelector('.v-avatar')).toBeNull()
     expect(row(0).querySelector('.chat-row__preview')?.textContent?.trim()).toBe('Ответ поддержки')
     expect(row(0).querySelector('.chat-row__time')).not.toBeNull()
+  })
+
+  // FE-261 (Goodo): a skin whose brand record says `supportMark: "icon"` shows
+  // the brand's app icon on the support row instead of the logo set.
+  it("a skin with supportMark 'icon' draws the brand icon on the support row", async () => {
+    skin.supportMark = 'icon'
+    vi.mocked(chatsApi.listChats).mockResolvedValue({
+      threads: [supportThread()],
+      next_cursor: null,
+    })
+    mount()
+    await flush()
+
+    const mark = Array.from(row(0).querySelectorAll('.chat-row__brand-mark img')).map((img) =>
+      img.getAttribute('src'),
+    )
+    expect(mark).toEqual(BRAND_ICON)
   })
 
   it('a support row whose last message is still translating previews «Переводится…», never the original', async () => {

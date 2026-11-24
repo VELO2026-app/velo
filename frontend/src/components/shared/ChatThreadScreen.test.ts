@@ -36,6 +36,18 @@ import type { UserResponse } from '@/api/types'
 
 vi.mock('@/api/chats')
 
+// FE-261: the support mark follows the skin's `supportMark` setting; the test
+// build ships the core skin ('logo'), so a test flips it here.
+const skin = vi.hoisted(() => ({ supportMark: 'logo' as 'logo' | 'icon' }))
+vi.mock('virtual:skin-brand', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('virtual:skin-brand')>()),
+  get SKIN_SUPPORT_MARK() {
+    return skin.supportMark
+  },
+}))
+const LOGO_SET = ['/icons/mandala-blue.png', '/icons/velo-word-blue.svg']
+const BRAND_ICON = ['/icons/favicon.svg']
+
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
@@ -139,6 +151,7 @@ async function type(text: string): Promise<void> {
 }
 
 beforeEach(() => {
+  skin.supportMark = 'logo'
   pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().user = me()
@@ -702,14 +715,18 @@ describe('ChatThreadScreen', () => {
     return host
   }
 
-  it('a support thread: VELO logo in the header, «Поддержка» caption on peer bubbles only', async () => {
+  it('a support thread: support mark in the header, «Поддержка» caption on peer bubbles only', async () => {
     vi.mocked(chatsApi.listChatMessages).mockResolvedValue(
       feed([msg(), msg({ id: 'm-2', sender: MY_ID, body: 'мой вопрос' })]),
     )
     mountSupport()
     await flush()
 
-    expect(host?.querySelector('.v-header__logo')).not.toBeNull()
+    // The default skin setting is 'logo': the logo set, as before FE-261.
+    const mark = Array.from(host?.querySelectorAll('.v-header__brand-mark img') ?? []).map((img) =>
+      img.getAttribute('src'),
+    )
+    expect(mark).toEqual(LOGO_SET)
     expect(host?.textContent).toContain('Поддержка VELO')
     // The caption is the SERVICE -- never an admin's name, never on own words.
     const senders = Array.from(host?.querySelectorAll('[data-testid="bubble-sender"]') ?? []).map(
@@ -718,12 +735,26 @@ describe('ChatThreadScreen', () => {
     expect(senders).toEqual(['Поддержка'])
   })
 
-  it('a person-to-person thread renders no captions and no logo (default)', async () => {
+  // FE-261 (Goodo): a skin whose brand record says `supportMark: "icon"` shows
+  // the brand's app icon here instead of the logo set.
+  it("a skin with supportMark 'icon' draws the brand icon in the support header", async () => {
+    skin.supportMark = 'icon'
+    vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([msg()]))
+    mountSupport()
+    await flush()
+
+    const mark = Array.from(host?.querySelectorAll('.v-header__brand-mark img') ?? []).map((img) =>
+      img.getAttribute('src'),
+    )
+    expect(mark).toEqual(BRAND_ICON)
+  })
+
+  it('a person-to-person thread renders no captions and no brand mark (default)', async () => {
     vi.mocked(chatsApi.listChatMessages).mockResolvedValue(feed([msg()]))
     mount()
     await flush()
 
-    expect(host?.querySelector('.v-header__logo')).toBeNull()
+    expect(host?.querySelector('.v-header__brand-mark')).toBeNull()
     expect(host?.querySelector('[data-testid="bubble-sender"]')).toBeNull()
   })
 

@@ -30,7 +30,11 @@
 //                                (validate-skin warns instead of failing);
 //                                since contract "2.2", supportEmail?: the
 //                                brand's support address (the support
-//                                screens' mailto; absent = no such line)
+//                                screens' mailto; absent = no such line) --
+//                                and, since contract "2.2" (FE-261),
+//                                supportMark?: "logo" (default) | "icon" --
+//                                what the support conversation's mark shows
+//                                (the logo set, or the brand's favicon.svg)
 //   assets/<name>.svg|png        the fixed generation-1 asset names: the
 //                                app icons always; the logo set (mandala
 //                                rings, wordmarks, logo-white) whole or not
@@ -75,7 +79,8 @@ import { join, resolve } from 'node:path'
 export const SKIN_CONTRACT_MAJOR = 2
 /** The contract a package written by this product's tools declares.
  *  2.1 (FE-230): the brand record may carry contrastExceptions.
- *  2.2 (FE-251): the brand record may carry supportEmail. */
+ *  2.2 (FE-251): the brand record may carry supportEmail.
+ *      2.2 (FE-261): ... and supportMark (one minor, two fields). */
 export const SKIN_CONTRACT = '2.2'
 /** Optional brand-record fields and the first minor of contract 2 that
  *  knows each: a reader of an older minor refuses the field as unknown, so
@@ -83,7 +88,10 @@ export const SKIN_CONTRACT = '2.2'
 const BRAND_FIELD_MINORS = [
   { field: 'contrastExceptions', minor: 1 }, // FE-230
   { field: 'supportEmail', minor: 2 }, // FE-251
+  { field: 'supportMark', minor: 2 }, // FE-261
 ]
+/** supportMark values: the logo set (the default) or the brand's app icon. */
+export const SUPPORT_MARKS = ['logo', 'icon']
 /** A support address: a plain local part, a domain with a dot. A closed
  *  alphabet: it lands in a mailto: href, so no `?` or `%` (a query or an
  *  escape), no spaces, quotes or markup. 254 is the SMTP path limit. */
@@ -491,9 +499,12 @@ function checkBrand(record, files, problems) {
     'fontUrl',
     'contrastExceptions',
     'supportEmail',
+    'supportMark',
   ])
   for (const key of Object.keys(record))
     if (!known.has(key)) problems.push(`${where}.${key}: unknown field`)
+  if (record.supportMark !== undefined && !SUPPORT_MARKS.includes(record.supportMark))
+    problems.push(`${where}.supportMark: ${SUPPORT_MARKS.map((m) => `"${m}"`).join(' or ')}`)
   const fonts = []
   if (record.fonts !== undefined) {
     if (!Array.isArray(record.fonts) || record.fonts.length === 0)
@@ -527,6 +538,9 @@ function checkBrand(record, files, problems) {
     fonts,
     contrastExceptions: checkContrastExceptions(record.contrastExceptions, where, problems),
     supportEmail: checkSupportEmail(record.supportEmail, where, problems),
+    // Absent = null (like supportEmail): BRAND_FIELD_MINORS reads a carried
+    // field as `!== null`, so a 2.0/2.1 package without it must stay null.
+    supportMark: SUPPORT_MARKS.includes(record.supportMark) ? record.supportMark : null,
   }
 }
 

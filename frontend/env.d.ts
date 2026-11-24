@@ -125,10 +125,13 @@ interface Window {
 declare module 'virtual:skin-tokens.css'
 /** The skin brand facts: the text (the package's displayName, or the neutral
  *  core word without a package, FE-231) and whether the build has a logo
- *  set (false: the package left it out, FE-230). */
+ *  set (false: the package left it out, FE-230) and what the support
+ *  conversation's mark shows ('logo' = the logo set, 'icon' = the brand's
+ *  app icon; the brand record's supportMark, FE-261). */
 declare module 'virtual:skin-brand' {
   export const SKIN_BRAND: string
   export const SKIN_HAS_LOGO: boolean
   /** The brand's support address; null = no address line (FE-251). */
   export const SKIN_SUPPORT_EMAIL: string | null
+  export const SKIN_SUPPORT_MARK: 'logo' | 'icon'
 }

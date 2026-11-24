@@ -51,6 +51,18 @@ withDefaults(
   padding: var(--space-2);
 }
 
+/* The kit's field is a white plate with no border (made for the photo
+   background): on a white card it gets a light border and a small label. */
+.console-card :deep(.v-input__label) {
+  font-size: var(--velo-fs-12);
+  color: var(--velo-text-secondary);
+}
+
+.console-card :deep(.v-input__field:not(:focus)) {
+  border-color: var(--velo-border-light);
+  font-size: var(--velo-fs-16);
+}
+
 .console-card__head {
   display: flex;
   align-items: center;
