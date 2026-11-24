@@ -60,7 +60,7 @@
       <div v-else class="bookings__content">
         <!-- Upcoming -->
         <section v-if="upcoming.length" class="bookings__section">
-          <h3 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.upcoming') }}</h3>
+          <h2 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.upcoming') }}</h2>
           <div class="bookings__list">
             <BookingCard
               v-for="booking in upcoming"
@@ -74,7 +74,7 @@
 
         <!-- Past -->
         <section v-if="past.length" class="bookings__section">
-          <h3 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.past') }}</h3>
+          <h2 class="bookings__section-title">{{ t('user.screens.myBookings.tabs.past') }}</h2>
           <div class="bookings__list">
             <BookingCard
               v-for="booking in past"

@@ -77,7 +77,7 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
 import EditPracticeView from '@/views/master/EditPracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
@@ -126,11 +126,13 @@ vi.mock('@/composables/useToast', () => ({
 // A4 V3 (PROMPT №571): profile/profileLoaded added -- directionOptions/
 // styleOptionsForForm now filter to the master's own confirmed methods,
 // same as CreatePracticeView.test.ts's masterState.
-const masterState: {
+const masterState = reactive<{
   practices: PracticeResponse[]
   profile: MasterProfileResponse | null
   profileLoaded: boolean
-} = { practices: [], profile: null, profileLoaded: true }
+  profileFailed: boolean
+}>({ practices: [], profile: null, profileLoaded: true, profileFailed: false })
+const reloadProfile = vi.fn()
 // The master's queries (composables/queries/master.ts), getters over the
 // same object: the profile (its confirmed methods; whether it has answered --
 // usePracticeTaxonomyOptions), the practice lists as a warm cache
@@ -148,6 +150,12 @@ vi.mock('@/composables/queries/master', () => ({
         return masterState.profileLoaded
       },
     },
+    failed: {
+      get value() {
+        return masterState.profileFailed
+      },
+    },
+    reload: () => reloadProfile(),
   }),
   cachedMyPractice: (_queryCache: unknown, id: string) =>
     masterState.practices.find((p) => p.id === id),
@@ -336,6 +344,8 @@ beforeEach(() => {
   // specifically exercise the filter/rejection override this per-test.
   masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
   masterState.profileLoaded = true
+  masterState.profileFailed = false
+  reloadProfile.mockReset()
   routeParams.id = 'p1'
   vi.mocked(ensureTaxonomyCatalog).mockReset().mockResolvedValue(null)
   vi.mocked(practicesApi.getPractice).mockReset().mockResolvedValue(practice())
@@ -590,6 +600,51 @@ describe('EditPracticeView', () => {
       expect(opts).not.toContain('Йога')
       expect(opts).not.toContain('Медитация')
       expect(opts).toHaveLength(0)
+    })
+
+    it('a failed profile read is an error with «Повторить» in place of the direction picker, not an empty one; Retry asks the profile again (FE-256)', async () => {
+      masterState.profile = null
+      masterState.profileLoaded = false
+      masterState.profileFailed = true
+      mountCached(practice())
+      await flush()
+
+      expect(selectByLabel('Направление')).toBeUndefined()
+      expect(text()).toContain('Ошибка загрузки')
+
+      // The retry brings the profile: the picker is back with the master's methods.
+      reloadProfile.mockImplementation(() => {
+        masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
+        masterState.profileLoaded = true
+        masterState.profileFailed = false
+      })
+      button('Повторить')?.click()
+      await flush()
+
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(
+        Array.from(selectByLabel('Направление')?.options ?? []).map((o) => o.textContent?.trim()),
+      ).toContain('Йога')
+    })
+
+    it("a failed profile read is the error even when the practice carries its owner's methods: the options wait for the profile either way (FE-256)", async () => {
+      masterState.profile = null
+      masterState.profileLoaded = false
+      masterState.profileFailed = true
+      mountCached(practice({ master_methods: ['Йога', 'Йога — Хатха-йога'] }))
+      await flush()
+
+      expect(selectByLabel('Направление')).toBeUndefined()
+      expect(text()).toContain('Ошибка загрузки')
+    })
+
+    it('a profile with NO confirmed methods is an empty picker, not an error (FE-256)', async () => {
+      masterState.profile = { methods: [] } as unknown as MasterProfileResponse
+      mountCached(practice())
+      await flush()
+
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(selectByLabel('Направление')).toBeDefined()
     })
 
     it("narrows Направление to the master's own confirmed methods, not the whole catalogue", async () => {
@@ -1551,12 +1606,70 @@ describe('EditPracticeView', () => {
       expect([...(sentBody().group_ids ?? [])].sort()).toEqual(['g1', 'g2'])
     })
 
-    it('a failed groups request surfaces a toast instead of an unhandled rejection', async () => {
-      vi.mocked(groupsApi.getGroups).mockRejectedValue(new Error('boom'))
-      mountCached(practice({}))
+    it('a failed groups request is a toast and an error with «Повторить» in the groups area, not «no groups»; Retry brings the groups and re-resolves the saved selection (FE-256)', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValueOnce(new Error('boom'))
+      mountCached(practice({ audience_kind: 'groups', audience_group_names: ['Утро'] }))
       await flush()
 
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить группы')
+      expect(text()).toContain('Ошибка загрузки')
+      expect(text()).not.toContain('Пока нет ни одной группы')
+
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [
+          { id: 'g1', kind: 'custom', name: 'VIP', members_count: 3, description: null },
+          { id: 'g2', kind: 'custom', name: 'Утро', members_count: 1, description: null },
+        ],
+      })
+      button('Повторить')?.click()
+      await flush()
+
+      expect(text()).not.toContain('Ошибка загрузки')
+      const chip = (name: string): HTMLElement | undefined =>
+        Array.from(host?.querySelectorAll<HTMLElement>('.v-chip') ?? []).find((c) =>
+          c.textContent?.includes(name),
+        )
+      // The saved group is pre-selected once the retry lands: the ids are resolved
+      // again, not left empty from the failed first read.
+      expect(chip('Утро')?.classList.contains('v-chip--active')).toBe(true)
+      expect(chip('VIP')?.classList.contains('v-chip--active')).toBe(false)
+    })
+
+    it('an EMPTY groups answer for a groups practice is «no groups», not an error (FE-256)', async () => {
+      mountCached(practice({ audience_kind: 'groups', audience_group_names: ['Утро'] }))
+      await flush()
+
+      expect(text()).toContain('Пока нет ни одной группы')
+      expect(text()).not.toContain('Ошибка загрузки')
+    })
+
+    it('a failed groups read does not block saving an unrelated edit of a groups practice; the PATCH carries no audience (FE-256)', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValue(new Error('boom'))
+      mountCached(practice({ audience_kind: 'groups', audience_group_names: ['Утро'] }))
+      await flush()
+
+      await editTitle('Новое имя')
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(text()).not.toContain('Выберите хотя бы одну группу')
+      expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+      expect(sentBody()).toEqual({ title: 'Новое имя' })
+    })
+
+    it('a failed groups read still refuses a switch TO «Конкретные группы»: nothing can be picked (FE-256)', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValue(new Error('boom'))
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Конкретные группы')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(text()).toContain('Выберите хотя бы одну группу')
     })
 
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {
@@ -1620,9 +1733,7 @@ describe('EditPracticeView', () => {
       mountCached(practice({ audience_kind: 'public' }))
       await flush()
 
-      const titleInput = host?.querySelector<HTMLInputElement>('input')
-      titleInput!.value = 'Новое название'
-      titleInput!.dispatchEvent(new Event('input'))
+      typeInto(host?.querySelector<HTMLInputElement>('input') ?? null, 'Новое название')
       button('Сохранить')?.click()
       await flush()
 
@@ -1645,6 +1756,27 @@ describe('EditPracticeView', () => {
         group_ids: [],
       })
       expect(document.body.querySelector('.v-confirm__actions')).toBeNull()
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+    })
+
+    it('a FAILED audience check says so and saves nothing; the form stays editable and a second Save asks again (FE-259)', async () => {
+      vi.mocked(practicesApi.previewAudienceChange).mockRejectedValueOnce(new Error('boom'))
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Все ученики')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось проверить аудиторию')
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(document.body.querySelector('.v-confirm__actions')).toBeNull()
+
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.previewAudienceChange).toHaveBeenCalledTimes(2)
       expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
     })
 

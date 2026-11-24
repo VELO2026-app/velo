@@ -96,7 +96,15 @@
            STATS (2 cards; the period toggle lives in the top row above)
            ================================================================ -->
       <!-- Income card removed from the dashboard (operator tester-fix 2026-06-17). -->
-      <div class="master-dashboard__stats-grid">
+      <!-- A failed read must not pass for a stat row of dashes: "—" reads as "still
+           loading" (FE-257). -->
+      <LoadErrorState
+        v-if="statsFailed"
+        :title="t('common.loadFailed')"
+        :description="statsErrorText"
+        @retry="loadStats"
+      />
+      <div v-else class="master-dashboard__stats-grid">
         <VStatCard
           :value="practicesStat"
           :label="t('masterScreens.masterDashboard.statPractices')"
@@ -135,7 +143,7 @@
       <!-- ================================================================
            NEAREST PRACTICES (up to 2)
            ================================================================ -->
-      <h2 class="velo-section-title">
+      <h2 v-if="!pastUnsettled" class="velo-section-title">
         {{
           nearestPractices.length > 1
             ? t('masterScreens.masterDashboard.nearest')
@@ -260,6 +268,18 @@
         </div>
       </template>
 
+      <!-- "New master" says "no practice EVER", which only the past list can tell:
+           until it answers, or when it failed, that is not known (FE-257). -->
+      <div v-else-if="past.loading.value" class="master-dashboard__loading-row">
+        <VLoader size="sm" />
+      </div>
+      <LoadErrorState
+        v-else-if="pastRetryable"
+        :title="t('common.loadFailed')"
+        :description="pastErrorText"
+        @retry="retryPast"
+      />
+
       <template v-else>
         <VCard>
           <p class="master-dashboard__empty-text">
@@ -323,6 +343,7 @@ import { useQueryCache } from '@pinia/colada'
 import { useAuthStore } from '@/stores/auth'
 import { useSafeArea } from '@/composables/useSafeArea'
 import MasterOnboardingView from '@/views/master/MasterOnboardingView.vue'
+import LoadErrorState from '@/components/shared/LoadErrorState.vue'
 import { isMasterOnboardingCompleted, shouldShowMasterOnboarding } from '@/utils/masterOnboarding'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -364,9 +385,9 @@ const toast = useToast()
 
 // -- Period toggle. Drives the period-scoped stats row (E7). `quarter` went
 //    live with the backend's third calendar period (BE-28; FE-66 unblocked the
-//    segment -- before that the endpoint would 422 it, and a failed refetch
-//    would silently keep the WEEK figures under a quarter label
-//    (i18n:masterScreens.masterDashboard.period.quarter)). --
+//    segment -- before that the endpoint would 422 it). A failed read of any
+//    period is the stats error state, never the previous period's figures under
+//    the new label (i18n:masterScreens.masterDashboard.period.quarter). --
 const period = ref<'week' | 'month' | 'quarter'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label: string }> = [
   { value: 'week', label: t('common.periodWeek') },
@@ -378,10 +399,10 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label
 // are the one section whose numbers move by ANOTHER actor's hand (a
 // student's booking bumps current_participants, their PRE check-in bumps
 // checkin_count) and no push exists, so the upcoming list is asked again on
-// EVERY mount -- the same per-mount contract loadStats() / loadUnreadCount()
-// follow, with the same failure disposition: a failed refetch keeps the
-// cards already on screen. Past only feeds the zero state's total: the
-// staleness window is enough there.
+// EVERY mount, as loadStats() and loadUnreadCount() are. A failed refetch of
+// this list keeps the cards already on screen (Colada keeps the data on error);
+// a failed stats read, by contrast, is the error state (FE-257). Past only
+// feeds the zero state's total: the staleness window is enough there.
 const queryCache = useQueryCache()
 const upcoming = useMyPractices('upcoming', { refetchOnMount: 'always' })
 const past = useMyPractices('past')
@@ -395,6 +416,12 @@ function retryUpcoming(): void {
   void upcoming.refetch()
 }
 
+const pastErrorText = computed(() => extractApiError(past.error.value, t('common.checkConnection')))
+const pastRetryable = computed(() => past.failed.value && !isForbidden(past.error.value))
+function retryPast(): void {
+  void past.refetch()
+}
+
 // True for a brand-new master with no practices at all (zero state).
 const isNewMaster = computed((): boolean => upcoming.total.value + past.total.value === 0)
 
@@ -403,12 +430,30 @@ const isNewMaster = computed((): boolean => upcoming.total.value + past.total.va
 // (i18n:masterScreens.masterDashboard.statPractices) and the members stat
 // (i18n:masterScreens.masterDashboard.statMembers)
 // are period-scoped (D1); the toggle refetches. income_cents is returned but
-// rendered on Finance/Analytics, not here (D2). "—" until the fetch resolves.
+// rendered on Finance/Analytics, not here (D2). "—" until the fetch resolves;
+// a failed fetch is the error state with Retry (FE-257), never a row of dashes.
 // =========================================================================
 const stats = ref<MasterStatsResponse | null>(null)
+const statsFailed = ref(false)
+const statsErrorText = ref('')
+// Only the newest request may write: an older reply landing late must neither
+// show a period's figures under another period's label nor raise a stale error.
+let statsRequestId = 0
 
 async function loadStats(): Promise<void> {
-  stats.value = await getMasterStats(period.value)
+  const requestId = ++statsRequestId
+  statsFailed.value = false
+  // The figures on hand belong to the period the master just left.
+  stats.value = null
+  try {
+    const loaded = await getMasterStats(period.value)
+    if (requestId === statsRequestId) stats.value = loaded
+  } catch (e) {
+    if (requestId === statsRequestId) {
+      statsErrorText.value = extractApiError(e, t('common.checkConnection'))
+      statsFailed.value = true
+    }
+  }
 }
 
 const practicesStat = computed((): string =>
@@ -453,9 +498,7 @@ const participantsDeltaTone = computed(() => deltaTone(stats.value?.participants
 
 // Refetch the stats row when the period toggle changes.
 watch(period, () => {
-  void loadStats().catch(() => {
-    /* keep the previous values on a transient refetch error */
-  })
+  void loadStats()
 })
 
 // T-26 (PROMPT №704): a real count, fetched alongside the stats row
@@ -491,6 +534,19 @@ const nearestPractices = computed((): PracticeResponse[] =>
       (p) => (p.status === 'scheduled' || p.status === 'live') && !practiceHasEnded(p, now.value),
     )
     .slice(0, 2),
+)
+
+/**
+ * The zero-state card waits for the PAST list (FE-257). Its loader or error is
+ * not about the nearest practices, so it stands without the "Nearest practice"
+ * heading: under that heading it would read as a failure of the upcoming list.
+ */
+const pastUnsettled = computed(
+  () =>
+    !upcoming.loading.value &&
+    !upcomingRetryable.value &&
+    nearestPractices.value.length === 0 &&
+    (past.loading.value || pastRetryable.value),
 )
 
 // t('masterScreens.masterDashboard.nextSession.example') — rendered in the practice's own timezone (the master
@@ -626,11 +682,9 @@ async function persistMasterOnboarding(): Promise<void> {
 // -- Load data on mount --
 onMounted(() => {
   // Period-scoped stats row (E7); independent of the practices list fetch.
-  void loadStats().catch(() => {
-    /* leave cards at "—" if the stats fetch fails */
-  })
-  // Bell badge (T-26, PROMPT №704); same fire-and-forget disposition as
-  // loadStats above -- a failed fetch leaves the badge at 0 rather than
+  void loadStats()
+  // Bell badge (T-26, PROMPT №704); fire-and-forget, unlike loadStats above
+  // (whose failure is shown) -- a failed fetch leaves the badge at 0 rather than
   // blocking the dashboard on a courtesy count.
   void loadUnreadCount().catch(() => {
     /* leave the badge at 0 if the fetch fails */
