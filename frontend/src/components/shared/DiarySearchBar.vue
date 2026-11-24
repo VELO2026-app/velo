@@ -44,10 +44,10 @@
         class="diary-search__input"
         type="text"
         :placeholder="t('diary.search.placeholder')"
-        enterkeyhint="search"
+        v-bind="{ ...inputKindAttrs('search'), ...nav.comboboxAttrs.value }"
         :aria-label="t('diary.search.aria')"
         @input="onUserInput"
-        @keydown.enter.prevent="commit"
+        @keydown="onKeydown"
       />
       <!-- The SMALL x lives INSIDE the field and clears the TEXT (and, like
            backspacing to empty, debounces a live('') that drops the filter)
@@ -73,31 +73,36 @@
       <!-- Recent searches: a glass panel under the field, only while the
            field is empty -- typing anything dismisses it. -->
       <section v-if="recentsVisible" class="diary-search__recents">
-        <h3 class="diary-search__recent-label">{{ t('diary.search.recent') }}</h3>
-        <button
-          v-for="term in recents"
-          :key="term"
-          type="button"
-          class="diary-search__recent-item"
-          @click="applyRecent(term)"
-        >
-          <span class="diary-search__recent-text">{{ term }}</span>
-          <svg
-            class="diary-search__recent-arrow"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
+        <h3 :id="recentLabelId" class="diary-search__recent-label">
+          {{ t('diary.search.recent') }}
+        </h3>
+        <div class="diary-search__recent-list" v-bind="nav.listAttrs(recentLabelId)">
+          <button
+            v-for="(term, i) in recents"
+            :key="term"
+            type="button"
+            class="diary-search__recent-item"
+            v-bind="nav.optionAttrs(i)"
+            @click="applyRecent(term)"
           >
-            <path
-              d="M7 17L17 7M17 7H9M17 7v8"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
+            <span class="diary-search__recent-text">{{ term }}</span>
+            <svg
+              class="diary-search__recent-arrow"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <path
+                d="M7 17L17 7M17 7H9M17 7v8"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
       </section>
     </div>
 
@@ -127,8 +132,9 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { useEscapeLayer } from '@/components/ui'
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { useEscapeLayer, inputKindAttrs } from '@/components/ui'
+import { useListboxNav } from '@/composables/useListboxNav'
+import { ref, computed, watch, onBeforeUnmount, useId } from 'vue'
 
 const props = defineProps<{
   /** The ACTIVE search, to prefill/sync the field ('' = none). */
@@ -192,6 +198,27 @@ function recordRecent(t: string): void {
 }
 
 loadRecents()
+
+// Arrow keys walk the recents while the field is empty; Enter on a highlighted
+// one applies it (aria-activedescendant, focus stays in the field).
+const recentLabelId = `${useId()}-recent-label`
+const nav = useListboxNav({
+  count: () => (recentsVisible.value ? recents.value.length : 0),
+  expanded: () => recentsVisible.value,
+  resetOn: recentsVisible,
+  onSelect: (i) => {
+    const term = recents.value[i]
+    if (term !== undefined) applyRecent(term)
+  },
+})
+
+function onKeydown(event: KeyboardEvent): void {
+  if (nav.onKeydown(event)) return
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    commit()
+  }
+}
 
 // Sync the field from the active search: initial mount and external resets
 // (e.g. the contextual back clearing the filter while the bar is up).
@@ -422,6 +449,12 @@ defineExpose({ focus })
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   box-sizing: border-box;
+}
+
+.diary-search__recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .diary-search__recent-label {

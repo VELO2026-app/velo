@@ -51,7 +51,7 @@
         :disabled="disabled"
         :aria-invalid="!!error || undefined"
         :aria-describedby="error ? errorId : undefined"
-        v-bind="$attrs"
+        v-bind="{ ...kindAttrs, ...$attrs }"
         @focus="onFieldFocus"
         @input="onInput"
       />
@@ -87,10 +87,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, useId } from 'vue'
+import { computed, ref, watch, onMounted, nextTick, useId } from 'vue'
 import { IconRequired, IconRequiredDone } from '../../icons'
 import VFieldError from '../VFieldError'
 import { useKeyboardFieldScroll } from '../../keyboardFieldScroll'
+import { inputKindAttrs, type InputKind } from '../../inputKind'
 
 // inheritAttrs:false — forward native attrs (maxlength/inputmode/…) onto the
 // inner <textarea>, not the wrapper div. Parity with VInput/VSelect.
@@ -140,6 +141,9 @@ const props = withDefaults(
      *  in its place. Autogrow measuring pauses for the span and re-runs when
      *  it ends. Default OFF. */
     takeover?: boolean
+    /** Soft-keyboard preset (enterkeyhint/autocapitalize/autocomplete). A native
+     *  attribute the caller passes still wins. Default: none. */
+    kind?: InputKind
   }>(),
   {
     modelValue: '',
@@ -155,6 +159,8 @@ const props = withDefaults(
     takeover: false,
   },
 )
+
+const kindAttrs = computed(() => inputKindAttrs(props.kind))
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
