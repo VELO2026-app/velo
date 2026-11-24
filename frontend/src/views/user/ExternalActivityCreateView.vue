@@ -681,11 +681,14 @@ async function onSubmit(): Promise<void> {
 }
 
 /* [FE-261] KEYBOARD OPEN: the overlay pill would cover the focused field.
-   While typing, `.app-frame` (AppFrame.vue) shrinks to the visible area: the
-   rule `html.is-keyboard-open .app-frame` in styles/global.css (FE-7) sets
-   its height to --velo-vvh, the live visual-viewport height published by
-   useViewportGeometry. `.ea` fills the frame, so it shrinks with it and the
-   pill hangs at its bottom -- directly above the keyboard -- but the scroll
+   While typing, `.app-frame` (src/components/layout/AppFrame.vue) shrinks to
+   the visible area. The rule is `html.is-keyboard-open .app-frame` in
+   src/styles/global.css (tagged FE-7): it sets `height: var(--velo-vvh, ...)`
+   and `min-height: 0`. --velo-vvh is the live visual-viewport height, and the
+   `is-keyboard-open` class on <html> comes with it: useViewportGeometry
+   (src/composables/useViewportGeometry.ts) publishes both. `.ea` fills the
+   frame (`height: 100%`, see .ea above), so it shrinks with it and the pill
+   hangs at its bottom -- directly above the keyboard -- but the scroll
    region still reaches under it. The "scroll the focused field into view"
    step (useKeyboardFieldScroll, nearest edge) then parks the field's lower
    edge AT the region's bottom, i.e. under the pill: the field and the text
