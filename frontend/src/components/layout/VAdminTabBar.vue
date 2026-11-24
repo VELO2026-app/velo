@@ -28,7 +28,7 @@
       :key="item.to"
       class="v-admin-tabbar__item"
       :class="{ 'v-admin-tabbar__item--active': active === item.to }"
-      :aria-label="item.label"
+      :aria-label="nameOf(item)"
       :aria-current="active === item.to ? 'page' : undefined"
       type="button"
       @click="$emit('navigate', item.to)"
@@ -43,12 +43,23 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import type { TabItem } from '@/router/tabs'
 
 defineProps<{
   items: TabItem[]
   active?: string | undefined
 }>()
+
+/**
+ * Accessible name of a pill: the label, with the badge count when one shows
+ * (i18n:tabs.withBadge). The badge is visible text, so the name has to contain
+ * it (WCAG 2.5.3, axe `label-content-name-mismatch`); the key keeps the word
+ * order translatable.
+ */
+function nameOf(item: TabItem): string {
+  return item.badge ? t('tabs.withBadge', { label: item.label, count: item.badge }) : item.label
+}
 
 defineEmits<{
   navigate: [to: string]

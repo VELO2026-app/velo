@@ -696,7 +696,7 @@ jobs:
         id: plan
         run: |
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email --mood-icons
           echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS)" >> "$GITHUB_OUTPUT"
 
   matrix:
@@ -741,7 +741,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/facts"
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email --mood-icons
           pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
 
       - uses: actions/upload-artifact@v7
@@ -792,7 +792,7 @@ jobs:
           i=0
           for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email --mood-icons
           node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS
 
   # FE-159: the image the machine runs. The stand fell three times (05-07.11)
