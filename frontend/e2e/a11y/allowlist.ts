@@ -373,6 +373,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
       'master-student-profile',
       'master-timezone',
       'not-found',
+      'practice-detail',
       'root',
       'school-join',
       'school-master-offer',
