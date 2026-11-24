@@ -209,9 +209,9 @@ describe('MasterStudentsView', () => {
       await flush()
 
       const input = host?.querySelector<HTMLInputElement>('input')
-      expect(input).not.toBeNull()
-      input!.value = 'анн'
-      input!.dispatchEvent(new Event('input'))
+      if (!input) throw new Error('no search input')
+      input.value = 'анн'
+      input.dispatchEvent(new Event('input'))
       await flush()
 
       expect(text()).toContain('Анна')
@@ -228,8 +228,9 @@ describe('MasterStudentsView', () => {
       await flush()
 
       const input = host?.querySelector<HTMLInputElement>('input')
-      input!.value = 'zzz'
-      input!.dispatchEvent(new Event('input'))
+      if (!input) throw new Error('no search input')
+      input.value = 'zzz'
+      input.dispatchEvent(new Event('input'))
       await flush()
 
       expect(text()).toContain('Никого не найдено')
@@ -245,7 +246,7 @@ describe('MasterStudentsView', () => {
       mount()
       await flush()
 
-      rows()[0]?.click()
+      host?.querySelector<HTMLElement>('.students__open')?.click()
       await flush()
 
       expect(push).toHaveBeenCalledWith({
@@ -255,7 +256,18 @@ describe('MasterStudentsView', () => {
       })
     })
 
-    it('the message button does NOT navigate (@click.stop)', async () => {
+    it('a row holds two sibling buttons, never one inside the other (FE-248, nested-interactive)', async () => {
+      vi.mocked(mastersApi.getStudents).mockResolvedValue(page([student('s1', { name: 'Анна' })]))
+      mount()
+      await flush()
+
+      const row = rows()[0]
+      expect(row?.hasAttribute('role')).toBe(false)
+      expect(row?.querySelectorAll(':scope > button')).toHaveLength(2)
+      expect(row?.querySelectorAll('button button')).toHaveLength(0)
+    })
+
+    it('the message button does not navigate to the profile', async () => {
       vi.mocked(mastersApi.getStudents).mockResolvedValue(page([student('s1', { name: 'Анна' })]))
       mount()
       await flush()

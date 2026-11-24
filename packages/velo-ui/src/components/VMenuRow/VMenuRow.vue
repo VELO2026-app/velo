@@ -3,6 +3,8 @@
 
   Settings/profile list row: white plate, optional leading icon, label, optional
   trailing arrow. Variants: default | primary (accent text) | danger.
+  The root is a <button type="button">: the row is keyboard-focusable and
+  activates on Enter and Space (it was a click-only <div>).
 
   Usage:
     <VMenuRow label="Edit profile" @click="onEdit">
@@ -17,7 +19,8 @@
 -->
 
 <template>
-  <div
+  <button
+    type="button"
     class="v-menu-row"
     :class="{
       'v-menu-row--primary': variant === 'primary',
@@ -35,7 +38,7 @@
     <span v-if="dot" class="v-menu-row__dot" aria-hidden="true" />
     <span v-if="badge != null && badge !== ''" class="v-menu-row__badge">{{ badge }}</span>
     <span v-if="showArrow" class="v-menu-row__arrow"><IconArrowRight :size="16" /></span>
-  </div>
+  </button>
 </template>
 
 <script setup lang="ts">
@@ -64,6 +67,14 @@ defineEmits<{
 
 <style scoped>
 .v-menu-row {
+  /* A real button, so the row takes keyboard focus and Enter/Space. The first
+     block undoes what a button paints by default, to keep the look of the
+     plain row it replaced. */
+  width: 100%;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: var(--space-3);
