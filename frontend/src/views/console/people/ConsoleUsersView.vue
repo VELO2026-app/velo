@@ -2,16 +2,17 @@
   VELO Frontend -- ConsoleUsersView (FE-262, slice 1)
 
   The users module of the web console: a table of every user in four tabs
-  (all, members, masters, admins) with the count of each on its label. A
-  member row carries the "Make a master" button: confirm, then
+  (all, members, masters, admins) with the total of each on its label, and an
+  activity filter (every user, the active, the inactive: the server's
+  `is_active`). A member row carries the "Make a master" button: confirm, then
   POST /admin/users/{id}/make-master (a verified master profile and the role
   flip). The button is only on role=user rows, so an admin cannot be demoted
-  to master by accident. The tab and the page live in the URL.
+  to master by accident. The tab, the filter and the page live in the URL.
 
-  DATA IS REAL: GET /admin/users?role= one page at a time; the counts are
-  one-row requests of the same endpoint. Not on the backend yet, so not
-  here: search, the activity and registration-date filters, export, and the
-  practice count column.
+  DATA IS REAL: GET /admin/users?role=&is_active= one page at a time; the
+  totals are one-row requests of the same endpoint. Not on the backend yet,
+  so not here: search, the registration-date filter, export, and the practice
+  count column.
 -->
 
 <template>
@@ -27,59 +28,57 @@
         compact
         @update:model-value="(value) => setTab(value as ConsoleUsersTab)"
       />
+      <div class="users-filter">
+        <VSelect
+          :model-value="activity"
+          :options="activityOptions"
+          :aria-label="t('console.users.filter.label')"
+          @update:model-value="(value) => setActivity(value as ConsoleUsersActivity)"
+        />
+      </div>
     </template>
 
-    <ConsoleCard flush>
-      <div v-if="loading" class="people-state"><VLoader size="lg" /></div>
-      <VEmptyState
-        v-else-if="failed"
-        icon="warning"
-        :title="t('adminScreens.adminUsers.usersLoadFailed')"
-        :description="t('common.checkConnection')"
-      >
-        <template #action
-          ><VButton variant="primary" @click="query.refetch()">{{
-            t('common.retry')
-          }}</VButton></template
-        >
-      </VEmptyState>
-      <template v-else>
-        <ConsoleTable :columns="columns" :rows="rows" :label="t('console.modules.users')">
-          <template #cell-user="{ row }">
-            <PersonCell
-              :name="nameOf(row.user)"
-              :url="row.user.avatar_url"
-              :sub="telegramLine(row.user.telegram_id)"
-            />
-          </template>
-          <template #cell-role="{ row }">
-            <PeoplePill :tone="roleTone(row.user.role)">{{ roleLabel(row.user.role) }}</PeoplePill>
-          </template>
-          <template #cell-registered="{ row }">{{ formatDay(row.user.created_at) }}</template>
-          <template #cell-lastSeen="{ row }">
-            {{ row.user.last_login_at ? formatRelative(row.user.last_login_at) : DASH }}
-          </template>
-          <template #cell-action="{ row }">
-            <VButton
-              v-if="row.user.role === 'user'"
-              variant="secondary"
-              size="sm"
-              @click="askMakeMaster(row.user)"
-            >
-              {{ t('adminScreens.adminUsers.makeMaster') }}
-            </VButton>
-          </template>
-          <template #empty>{{ t('adminScreens.adminUsers.empty.title') }}</template>
-        </ConsoleTable>
-        <PeoplePager
-          :page="page"
-          :page-size="CONSOLE_PAGE_SIZE"
-          :total="total"
-          :shown="rows.length"
-          @update:page="setPage"
-        />
-      </template>
-    </ConsoleCard>
+    <PeopleListCard
+      :loading="loading"
+      :failed="failed"
+      :error-title="t('adminScreens.adminUsers.usersLoadFailed')"
+      @retry="query.refetch()"
+    >
+      <ConsoleTable :columns="columns" :rows="rows" :label="t('console.modules.users')">
+        <template #cell-user="{ row }">
+          <PersonCell
+            :name="nameOf(row.user)"
+            :url="row.user.avatar_url"
+            :sub="telegramLine(row.user.telegram_id)"
+          />
+        </template>
+        <template #cell-role="{ row }">
+          <PeoplePill :tone="roleTone(row.user.role)">{{ roleLabel(row.user.role) }}</PeoplePill>
+        </template>
+        <template #cell-registered="{ row }">{{ formatDay(row.user.created_at) }}</template>
+        <template #cell-lastSeen="{ row }">
+          {{ row.user.last_login_at ? formatRelative(row.user.last_login_at) : DASH }}
+        </template>
+        <template #cell-action="{ row }">
+          <VButton
+            v-if="row.user.role === 'user'"
+            variant="secondary"
+            size="sm"
+            @click="askMakeMaster(row.user)"
+          >
+            {{ t('adminScreens.adminUsers.makeMaster') }}
+          </VButton>
+        </template>
+        <template #empty>{{ t('adminScreens.adminUsers.empty.title') }}</template>
+      </ConsoleTable>
+      <PeoplePager
+        :page="page"
+        :page-size="CONSOLE_PAGE_SIZE"
+        :total="total"
+        :shown="rows.length"
+        @update:page="setPage"
+      />
+    </PeopleListCard>
 
     <VConfirmDialog
       :open="target !== null"
@@ -95,16 +94,21 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useQuery } from '@pinia/colada'
-import { VButton, VConfirmDialog, VEmptyState, VLoader, VSegment } from '@/components/ui'
-import type { SegmentOption } from '@/components/ui'
-import ConsoleCard from '@/components/console/ConsoleCard.vue'
+import { VButton, VConfirmDialog, VSegment, VSelect } from '@/components/ui'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
+import PeopleListCard from '@/components/console/people/PeopleListCard.vue'
 import PeoplePager from '@/components/console/people/PeoplePager.vue'
 import PeoplePill from '@/components/console/people/PeoplePill.vue'
 import PersonCell from '@/components/console/people/PersonCell.vue'
-import { formatDay, roleTone } from '@/components/console/people/peopleTable'
+import {
+  DASH,
+  formatDay,
+  roleTone,
+  tabOptions as tabOptionsOf,
+} from '@/components/console/people/peopleTable'
 import { makeMaster } from '@/api/admin'
 import type { UserResponse } from '@/api/admin'
 import {
@@ -113,23 +117,41 @@ import {
   consoleUsersPageQuery,
   onFailedRequest,
   useAdminMutation,
+  type ConsoleUsersActivity,
   type ConsoleUsersTab,
 } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
-import { useRouteListState } from '@/composables/console/useRouteListState'
+import { lastPageOf, useRouteListState } from '@/composables/console/useRouteListState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { formatRelative } from '@/utils/adminHelpers'
 
-const DASH = '—'
-
+const route = useRoute()
 const toast = useToast()
 
 const TABS = ['all', 'user', 'master', 'admin'] as const satisfies readonly ConsoleUsersTab[]
-const { tab, page, setTab, setPage } = useRouteListState<ConsoleUsersTab>(TABS)
+const ACTIVITIES = ['all', 'active', 'inactive'] as const satisfies readonly ConsoleUsersActivity[]
+/** The activity filter's mark in the URL (`?active=1`); none -- every user. */
+const ACTIVITY_MARK = { all: undefined, active: '1', inactive: '0' } as const
 
-const query = useQuery(() => consoleUsersPageQuery({ tab: tab.value, page: page.value }))
+const { tab, page, setTab, setPage, setQuery, clampTo } = useRouteListState<ConsoleUsersTab>(TABS)
+
+const activity = computed<ConsoleUsersActivity>(() =>
+  route.query.active === '1' ? 'active' : route.query.active === '0' ? 'inactive' : 'all',
+)
+const activityOptions = computed(() =>
+  ACTIVITIES.map((value) => ({ value, label: t(`console.users.filter.${value}`) })),
+)
+
+function setActivity(value: ConsoleUsersActivity): void {
+  setQuery({ active: ACTIVITY_MARK[value] })
+}
+
+const query = useQuery(() =>
+  consoleUsersPageQuery({ tab: tab.value, activity: activity.value, page: page.value }),
+)
 const { loading, failed } = screenQueryState(query)
+clampTo(() => lastPageOf(query.data.value?.total, CONSOLE_PAGE_SIZE))
 onFailedRequest(query, (e) =>
   toast.error(extractApiError(e, t('adminScreens.adminUsers.usersLoadError'))),
 )
@@ -138,19 +160,20 @@ onFailedRequest(query, (e) =>
 const rows = computed(() => (query.data.value?.items ?? []).map((u) => ({ id: u.id, user: u })))
 const total = computed(() => query.data.value?.total ?? 0)
 
-// A tab's count is its own one-row request; the label shows it once it is there.
+// A tab's total is its own one-row request (under the same filter); the label
+// shows it once it is there.
 const counts = {
-  all: useQuery(() => consoleUsersCountQuery('all')),
-  user: useQuery(() => consoleUsersCountQuery('user')),
-  master: useQuery(() => consoleUsersCountQuery('master')),
-  admin: useQuery(() => consoleUsersCountQuery('admin')),
+  all: useQuery(() => consoleUsersCountQuery({ tab: 'all', activity: activity.value })),
+  user: useQuery(() => consoleUsersCountQuery({ tab: 'user', activity: activity.value })),
+  master: useQuery(() => consoleUsersCountQuery({ tab: 'master', activity: activity.value })),
+  admin: useQuery(() => consoleUsersCountQuery({ tab: 'admin', activity: activity.value })),
 } as const
-const tabOptions = computed<SegmentOption[]>(() =>
-  TABS.map((value) => {
-    const name = t(`console.users.tabs.${value}`)
-    const n = counts[value].data.value
-    return { value, label: n === undefined ? name : `${name} · ${n}` }
-  }),
+const tabOptions = computed(() =>
+  tabOptionsOf(
+    TABS,
+    (value) => t(`console.users.tabs.${value}`),
+    (value) => counts[value].data.value,
+  ),
 )
 
 const columns = computed<ConsoleTableColumn[]>(() => [
@@ -190,7 +213,7 @@ function closeConfirm(): void {
 }
 
 // The invalidation of the mutation row refetches the page on screen and the
-// counts (the role leaves one tab and joins another); the spinner of the
+// totals (the role leaves one tab and joins another); the spinner of the
 // confirm covers it.
 const promote = useAdminMutation('makeMaster', (userId: string) => makeMaster(userId))
 
@@ -210,9 +233,7 @@ async function doMakeMaster(): Promise<void> {
 </script>
 
 <style scoped>
-.people-state {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-10) 0;
+.users-filter {
+  width: 200px;
 }
 </style>

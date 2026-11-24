@@ -895,21 +895,46 @@ export const consoleMastersCountQuery = defineQueryOptions((tab: ConsoleMastersT
   staleTime: 0,
 }))
 
+/** The activity filter of the console users table: every user, or only the active or the inactive. */
+export type ConsoleUsersActivity = 'all' | 'active' | 'inactive'
+
+/** The `is_active` value the server takes for an activity filter (none -- every user). */
+function activityParam(activity: ConsoleUsersActivity): boolean | undefined {
+  return activity === 'all' ? undefined : activity === 'active'
+}
+
 /** Query options for one page of one tab of the console users table (`GET /admin/users`). */
 export const consoleUsersPageQuery = defineQueryOptions(
-  ({ tab, page }: { tab: ConsoleUsersTab; page: number }) => ({
-    key: adminKeys.usersPage(tab, page),
-    query: () => getUsersList(tab === 'all' ? undefined : tab, CONSOLE_PAGE_SIZE, pageOffset(page)),
+  ({
+    tab,
+    activity,
+    page,
+  }: {
+    tab: ConsoleUsersTab
+    activity: ConsoleUsersActivity
+    page: number
+  }) => ({
+    key: adminKeys.usersPage(tab, activity, page),
+    query: () =>
+      getUsersList(
+        tab === 'all' ? undefined : tab,
+        CONSOLE_PAGE_SIZE,
+        pageOffset(page),
+        activityParam(activity),
+      ),
     staleTime: 0,
   }),
 )
 
 /** Query options for the total of one tab of the console users table. */
-export const consoleUsersCountQuery = defineQueryOptions((tab: ConsoleUsersTab) => ({
-  key: adminKeys.usersCount(tab),
-  query: async () => (await getUsersList(tab === 'all' ? undefined : tab, 1, 0)).total,
-  staleTime: 0,
-}))
+export const consoleUsersCountQuery = defineQueryOptions(
+  ({ tab, activity }: { tab: ConsoleUsersTab; activity: ConsoleUsersActivity }) => ({
+    key: adminKeys.usersCount(tab, activity),
+    query: async () =>
+      (await getUsersList(tab === 'all' ? undefined : tab, 1, 0, activityParam(activity))).total,
+    staleTime: 0,
+  }),
+)
 
 /** Query options for one page of the console schools table (`GET /admin/schools`). */
 export const consoleSchoolsPageQuery = defineQueryOptions((page: number) => ({

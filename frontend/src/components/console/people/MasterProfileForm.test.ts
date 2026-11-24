@@ -212,7 +212,7 @@ describe('MasterProfileForm', () => {
     )
   })
 
-  it('closes an editor on Cancel without a request, and opens the next one alone', async () => {
+  it('closes an editor on Cancel without a request', async () => {
     mount()
 
     pen('Телефон')

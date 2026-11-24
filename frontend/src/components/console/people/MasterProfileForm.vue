@@ -10,6 +10,11 @@
   A save writes the answer into the held detail at once (patchAdminMaster)
   and the mutation row refetches the lists that name the master. The mobile
   twin is the field editor of AdminMasterReviewView.
+
+  DEBT (FE-272): the field editor is a copy of the one in AdminMasterReviewView
+  (startField, cancelField, saveField, the methods editor) and its patch rules
+  are masterProfilePatch.ts, a copy of the old buildPatch. Both live until the
+  mobile /admin is removed; then the copy here is the only one.
 -->
 
 <template>
@@ -75,7 +80,7 @@
       </ConsoleFieldRow>
 
       <ConsoleFieldRow
-        label="Email"
+        :label="t('console.masters.detail.email')"
         :edit-label="t('adminScreens.adminMasterReview.edit.email')"
         :error="fieldError"
         v-bind="rowBind('email')"
@@ -201,9 +206,11 @@
               :key="`${c}-${i}`"
               size="md"
               clickable
+              :aria-label="t('console.masters.detail.removeCertificate', { name: c })"
               @click="draftCerts.splice(i, 1)"
             >
-              {{ c }} ✕
+              {{ c }}
+              <IconClose :size="12" aria-hidden="true" />
             </VChip>
           </div>
           <div class="profile-form__cert-add">
@@ -231,9 +238,11 @@ import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { useQueryCache } from '@pinia/colada'
 import { VButton, VChip, VInput, VTextarea } from '@/components/ui'
+import { IconClose } from '@/components/icons'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleFieldRow from '@/components/console/people/ConsoleFieldRow.vue'
 import PeoplePill from '@/components/console/people/PeoplePill.vue'
+import { DASH } from '@/components/console/people/peopleTable'
 import {
   buildProfilePatch,
   type PatchProblem,
@@ -248,8 +257,6 @@ import { useToast } from '@/composables/useToast'
 import { masterDisplayName } from '@/utils/adminHelpers'
 import { LANGUAGES } from '@/utils/languages'
 import { flattenMethods, parseMethods } from '@/utils/methodTaxonomy'
-
-const DASH = '—'
 
 const props = defineProps<{
   /** The master as the detail endpoint answered. */

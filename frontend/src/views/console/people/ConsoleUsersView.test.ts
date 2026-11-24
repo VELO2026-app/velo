@@ -11,8 +11,9 @@ import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, type App } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import ConsoleUsersView from '@/views/console/people/ConsoleUsersView.vue'
 import * as adminApi from '@/api/admin'
@@ -61,6 +62,27 @@ const ALL = [MEMBER, MASTER, ADMIN]
 let app: App | null = null
 let root: HTMLElement | null = null
 let router: Router
+let pinia: Pinia
+
+/** The server: every user, or one role, or only the active; and the one-row total request. */
+async function serve(role?: string, limit?: number, _offset?: number, isActive?: boolean) {
+  const items = ALL.filter(
+    (u) => (role === undefined || u.role === role) && (isActive === undefined || isActive),
+  )
+  return {
+    items: limit === 1 ? [] : items,
+    total: items.length,
+    limit: limit ?? 100,
+    offset: 0,
+  }
+}
+
+/** Colada asks the stale lists again on focus and visibilitychange; the entries are asked the same way here. */
+async function askAgain(): Promise<void> {
+  await useQueryCache(pinia)
+    .invalidateQueries({ key: adminKeys.users() })
+    .catch(() => {})
+}
 
 async function mount(url = '/console/users', expectRows = true): Promise<HTMLElement> {
   router = createRouter({
@@ -68,7 +90,7 @@ async function mount(url = '/console/users', expectRows = true): Promise<HTMLEle
     routes: [{ path: '/console/users', name: 'console-users', component: ConsoleUsersView }],
   })
   await router.push(url)
-  const pinia = createPinia()
+  pinia = createPinia()
   setActivePinia(pinia)
   root = document.createElement('div')
   document.body.appendChild(root)
@@ -101,17 +123,7 @@ function dialogButton(text: string): HTMLButtonElement | undefined {
 beforeEach(() => {
   toastError.mockReset()
   toastSuccess.mockReset()
-  vi.mocked(adminApi.getUsersList)
-    .mockReset()
-    .mockImplementation(async (role, limit) => {
-      const items = role === undefined ? ALL : ALL.filter((u) => u.role === role)
-      return {
-        items: limit === 1 ? [] : items,
-        total: items.length,
-        limit: limit ?? 100,
-        offset: 0,
-      }
-    })
+  vi.mocked(adminApi.getUsersList).mockReset().mockImplementation(serve)
   vi.mocked(adminApi.makeMaster).mockReset()
 })
 
@@ -124,6 +136,56 @@ afterEach(() => {
 })
 
 describe('ConsoleUsersView', () => {
+  describe('background refetch', () => {
+    it('keeps the table on screen while a refetch runs, then shows what it brings', async () => {
+      await mount()
+      let release: (page: Awaited<ReturnType<typeof serve>>) => void = () => {}
+      vi.mocked(adminApi.getUsersList).mockImplementation((role, limit, offset, isActive) =>
+        limit === 1
+          ? serve(role, limit, offset, isActive)
+          : new Promise((resolve) => {
+              release = resolve
+            }),
+      )
+
+      vi.mocked(adminApi.getUsersList).mockClear()
+      const refetch = askAgain()
+      await vi.waitFor(() =>
+        expect(adminApi.getUsersList).toHaveBeenCalledWith(undefined, 20, 0, undefined),
+      )
+
+      expect(rows()).toHaveLength(3)
+      expect(root?.querySelector('[data-testid="people-loading"]')).toBeNull()
+
+      release({ items: [MEMBER], total: 1, limit: 20, offset: 0 })
+      await refetch
+      await vi.waitFor(() => expect(rows()).toHaveLength(1))
+    })
+
+    it('failing again and again is told once, until an answer arrives', async () => {
+      await mount()
+      const fail = () =>
+        vi
+          .mocked(adminApi.getUsersList)
+          .mockImplementation((role, limit, offset, isActive) =>
+            limit === 1 ? serve(role, limit, offset, isActive) : Promise.reject(new Error('down')),
+          )
+      fail()
+
+      await askAgain()
+      await askAgain()
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(rows()).toHaveLength(3)
+
+      vi.mocked(adminApi.getUsersList).mockImplementation(serve)
+      await askAgain()
+      fail()
+      await askAgain()
+
+      expect(toastError).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('tells a failed load with an error state, and Retry asks again', async () => {
     vi.mocked(adminApi.getUsersList).mockRejectedValue(new Error('down'))
     await mount('/console/users', false)
@@ -132,12 +194,7 @@ describe('ConsoleUsersView', () => {
     )
     expect(toastError).toHaveBeenCalled()
 
-    vi.mocked(adminApi.getUsersList).mockImplementation(async () => ({
-      items: ALL,
-      total: ALL.length,
-      limit: 20,
-      offset: 0,
-    }))
+    vi.mocked(adminApi.getUsersList).mockImplementation(serve)
     root?.querySelector<HTMLButtonElement>('[data-testid="screen-error"] button')?.click()
 
     await vi.waitFor(() => expect(rows().length).toBe(3))
@@ -150,9 +207,32 @@ describe('ConsoleUsersView', () => {
 
     await vi.waitFor(() => expect(rows().length).toBe(1))
     expect(rows()[0]?.textContent).toContain('Anna Lebedeva')
-    expect(adminApi.getUsersList).toHaveBeenCalledWith('master', 20, 0)
+    expect(adminApi.getUsersList).toHaveBeenCalledWith('master', 20, 0, undefined)
     expect(router.currentRoute.value.query).toEqual({ tab: 'master' })
   })
+
+  it.each([
+    ['Активные', '1', true],
+    ['Неактивные', '0', false],
+  ])(
+    'asks the server for the %s only and keeps the filter in the URL',
+    async (label, mark, flag) => {
+      await mount()
+
+      const select = root?.querySelector<HTMLSelectElement>('.users-filter select')
+      if (!select) throw new Error('no activity filter')
+      select.value =
+        Array.from(select.options).find((o) => o.textContent?.trim() === label)?.value ?? ''
+      select.dispatchEvent(new Event('change'))
+
+      await vi.waitFor(() =>
+        expect(adminApi.getUsersList).toHaveBeenCalledWith(undefined, 20, 0, flag),
+      )
+      // The tab totals ask under the same filter.
+      expect(adminApi.getUsersList).toHaveBeenCalledWith('master', 1, 0, flag)
+      expect(router.currentRoute.value.query).toEqual({ active: mark })
+    },
+  )
 
   it('offers "Make a master" on a member row only', async () => {
     await mount()

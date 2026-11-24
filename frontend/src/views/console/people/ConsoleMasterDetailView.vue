@@ -68,7 +68,6 @@
             />
             <div class="master-summary__who">
               <span class="master-summary__name">{{ masterDisplayName(master) }}</span>
-              <span class="master-summary__email">{{ master.email || DASH }}</span>
             </div>
           </div>
           <div class="master-summary__chips">
@@ -110,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { t, getLocale } from '@/locales'
+import { t } from '@/locales'
 import { host } from '@/platform/host'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -122,17 +121,21 @@ import MasterProfileForm from '@/components/console/people/MasterProfileForm.vue
 import MasterReviewCard from '@/components/console/people/MasterReviewCard.vue'
 import MasterRightsCard from '@/components/console/people/MasterRightsCard.vue'
 import PeoplePill from '@/components/console/people/PeoplePill.vue'
-import { masterStatusTone, methodChips } from '@/components/console/people/peopleTable'
+import {
+  DASH,
+  countText,
+  masterStatusLabel,
+  masterStatusTone,
+  methodChips,
+  payoutText,
+} from '@/components/console/people/peopleTable'
 import { ApiResponseError } from '@/api/client'
 import { adminMasterQuery, onFailedRequest } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { routeParam } from '@/router/routeParam'
-import { masterDisplayName, masterStatusLabel } from '@/utils/adminHelpers'
-import { formatMoney } from '@/utils/format'
-
-const DASH = '—'
+import { masterDisplayName } from '@/utils/adminHelpers'
 
 const route = useRoute()
 const router = useRouter()
@@ -165,29 +168,32 @@ const isPending = computed(() => master.value?.master_status === 'pending')
 const isVerified = computed(() => master.value?.master_status === 'verified')
 const chips = computed(() => (master.value ? methodChips(master.value) : []))
 
+// The summary: how to reach the master, then the counters the list carries.
 const stats = computed(() => {
   const m = master.value
   if (!m) return []
-  const count = (n: number | null | undefined) => (n === null || n === undefined ? DASH : String(n))
   return [
-    { key: 'schools', label: t('console.masters.columns.schools'), value: count(m.schools_count) },
+    { key: 'phone', label: t('adminScreens.adminMasterReview.phone'), value: m.phone || DASH },
+    { key: 'email', label: t('console.masters.detail.email'), value: m.email || DASH },
+    {
+      key: 'schools',
+      label: t('console.masters.columns.schools'),
+      value: countText(m.schools_count),
+    },
     {
       key: 'practices',
       label: t('adminScreens.adminMasters.practicesStat'),
-      value: count(m.practices_count),
+      value: countText(m.practices_count),
     },
     {
       key: 'students',
       label: t('adminScreens.adminMasters.studentsStat'),
-      value: count(m.students_count),
+      value: countText(m.students_count),
     },
     {
       key: 'payout',
       label: t('adminScreens.adminMasters.toWithdrawStat'),
-      value:
-        m.available_cents === null || m.available_cents === undefined
-          ? DASH
-          : formatMoney(m.available_cents, 'EUR', getLocale(), true),
+      value: payoutText(m.available_cents),
     },
   ]
 })
@@ -250,7 +256,6 @@ function toQueue(): void {
   overflow-wrap: anywhere;
 }
 
-.master-summary__email,
 .master-summary__muted {
   font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
@@ -294,8 +299,9 @@ function toQueue(): void {
   color: var(--velo-text-secondary);
 }
 
-/* The menu folds to icons at the same breakpoint: the summary goes on top of
-   the cards instead of squeezing them into half a tablet. */
+/* Below 1200 px the menu is folded to icons (the breakpoint of ConsoleSidebar.vue,
+   which every console screen keeps in step with): the summary goes on top of the
+   cards instead of squeezing them into half a tablet. */
 @media (max-width: 1199px) {
   .master-detail {
     flex-direction: column;
@@ -306,10 +312,10 @@ function toQueue(): void {
     flex: 0 0 auto;
   }
 
-  /* The counters in one row instead of four. */
+  /* The summary rows in a grid, three to a line, instead of a tall list. */
   .master-summary__stats {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-3);
   }
 
@@ -317,6 +323,7 @@ function toQueue(): void {
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-1);
+    overflow-wrap: anywhere;
   }
 }
 </style>

@@ -5,10 +5,12 @@
 // A console list is a tab strip plus numbered pages. Both live in the route
 // query (`?tab=pending&page=2`) so a reload, a link and the Back button from a
 // detail screen land on the same slice of the list. A change replaces the
-// history entry: flipping through tabs and pages is not navigation.
+// history entry: flipping through tabs and pages is not navigation. A filter
+// of the screen rides in the same query (`setQuery`); a tab, a page or a
+// filter change keeps the others' marks.
 // =============================================================================
 
-import { computed, type ComputedRef } from 'vue'
+import { computed, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 /** The tab and the page of a console table, and how to change them. */
@@ -21,6 +23,24 @@ export interface RouteListState<Tab extends string> {
   setTab: (tab: Tab) => void
   /** Go to a page. */
   setPage: (page: number) => void
+  /**
+   * Set or clear (undefined) other marks of the query -- a filter of the
+   * screen; the page goes back to the first.
+   */
+  setQuery: (marks: Record<string, string | undefined>) => void
+  /**
+   * Keep the page inside the list: `lastPage` is the last page the list has,
+   * once it is known (undefined while no answer has come). A URL that names a
+   * page past it -- the last row of the last page left, a stale link -- is
+   * replaced by the last page. Called once the screen has its query, which
+   * is what knows the total.
+   */
+  clampTo: (lastPage: MaybeRefOrGetter<number | undefined>) => void
+}
+
+/** The last page of a list of `total` rows (the first while it is empty), or undefined while the total is unknown. */
+export function lastPageOf(total: number | undefined, pageSize: number): number | undefined {
+  return total === undefined ? undefined : Math.max(1, Math.ceil(total / pageSize))
 }
 
 /**
@@ -46,12 +66,16 @@ export function useRouteListState<Tab extends string>(
     return Number.isInteger(value) && value >= 1 ? value : 1
   })
 
-  function write(nextTab: Tab, nextPage: number): void {
+  function write(nextTab: Tab, nextPage: number, marks: Record<string, string | undefined> = {}) {
     const query = { ...route.query }
     if (nextTab === first) delete query.tab
     else query.tab = nextTab
     if (nextPage === 1) delete query.page
     else query.page = String(nextPage)
+    for (const [name, value] of Object.entries(marks)) {
+      if (value === undefined) delete query[name]
+      else query[name] = value
+    }
     void router.replace({ query })
   }
 
@@ -60,5 +84,14 @@ export function useRouteListState<Tab extends string>(
     page,
     setTab: (next) => write(next, 1),
     setPage: (next) => write(tab.value, next),
+    setQuery: (marks) => write(tab.value, 1, marks),
+    clampTo: (lastPage) =>
+      watch(
+        () => [page.value, toValue(lastPage)] as const,
+        ([current, last]) => {
+          if (last !== undefined && current > last) write(tab.value, last)
+        },
+        { immediate: true },
+      ),
   }
 }

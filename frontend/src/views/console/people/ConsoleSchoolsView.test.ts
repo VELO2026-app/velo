@@ -12,8 +12,9 @@ import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, type App } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import ConsoleSchoolsView from '@/views/console/people/ConsoleSchoolsView.vue'
 import * as schoolsApi from '@/api/schools'
@@ -54,6 +55,14 @@ const FROZEN = school({
 let app: App | null = null
 let root: HTMLElement | null = null
 let router: Router
+let pinia: Pinia
+
+/** Colada asks the stale list again on focus and visibilitychange; the entry is asked the same way here. */
+async function askAgain(): Promise<void> {
+  await useQueryCache(pinia)
+    .invalidateQueries({ key: adminKeys.schools() })
+    .catch(() => {})
+}
 
 async function mount(url = '/console/schools', expectRows = true): Promise<HTMLElement> {
   router = createRouter({
@@ -68,7 +77,7 @@ async function mount(url = '/console/schools', expectRows = true): Promise<HTMLE
     ],
   })
   await router.push(url)
-  const pinia = createPinia()
+  pinia = createPinia()
   setActivePinia(pinia)
   root = document.createElement('div')
   document.body.appendChild(root)
@@ -128,6 +137,54 @@ describe('ConsoleSchoolsView', () => {
     root?.querySelector<HTMLButtonElement>('[data-testid="screen-error"] button')?.click()
 
     await vi.waitFor(() => expect(rows().length).toBe(1))
+  })
+
+  describe('background refetch', () => {
+    it('keeps the table on screen while a refetch runs, then shows what it brings', async () => {
+      await mount()
+      let release: (page: Awaited<ReturnType<typeof schoolsApi.getAdminSchools>>) => void = () => {}
+      vi.mocked(schoolsApi.getAdminSchools).mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve
+        }),
+      )
+
+      const refetch = askAgain()
+      await vi.waitFor(() => expect(schoolsApi.getAdminSchools).toHaveBeenCalledTimes(2))
+
+      expect(rows()).toHaveLength(2)
+      expect(root?.querySelector('[data-testid="people-loading"]')).toBeNull()
+
+      release({ items: [FROZEN], total: 1, limit: 20, offset: 0 })
+      await refetch
+      await vi.waitFor(() => expect(rows()).toHaveLength(1))
+    })
+
+    it('failing again and again is told once, until an answer arrives', async () => {
+      await mount()
+      const fail = () =>
+        vi
+          .mocked(schoolsApi.getAdminSchools)
+          .mockImplementation(() => Promise.reject(new Error('down')))
+      fail()
+
+      await askAgain()
+      await askAgain()
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(rows()).toHaveLength(2)
+
+      vi.mocked(schoolsApi.getAdminSchools).mockResolvedValue({
+        items: [ACTIVE, FROZEN],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      })
+      await askAgain()
+      fail()
+      await askAgain()
+
+      expect(toastError).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('asks for the page named by the URL', async () => {

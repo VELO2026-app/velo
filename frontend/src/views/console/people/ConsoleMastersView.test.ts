@@ -12,8 +12,9 @@ import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, type App } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import ConsoleMastersView from '@/views/console/people/ConsoleMastersView.vue'
 import * as adminApi from '@/api/admin'
@@ -76,6 +77,25 @@ const BY_STATUS: Record<string, AdminMasterListItem[]> = {
 let app: App | null = null
 let root: HTMLElement | null = null
 let router: Router
+let pinia: Pinia
+
+/** The server: every tab's masters, and the one-row total request of a tab. */
+async function serve(status?: string, limit?: number) {
+  const items = BY_STATUS[status ?? 'all'] ?? []
+  return {
+    items: limit === 1 ? [] : items,
+    total: items.length,
+    limit: limit ?? 100,
+    offset: 0,
+  }
+}
+
+/** Colada asks the stale lists again on focus and visibilitychange; the entries are asked the same way here. */
+async function askAgain(): Promise<void> {
+  await useQueryCache(pinia)
+    .invalidateQueries({ key: adminKeys.masters() })
+    .catch(() => {})
+}
 
 async function mount(url = '/console/masters', expectRows = true): Promise<HTMLElement> {
   router = createRouter({
@@ -90,7 +110,7 @@ async function mount(url = '/console/masters', expectRows = true): Promise<HTMLE
     ],
   })
   await router.push(url)
-  const pinia = createPinia()
+  pinia = createPinia()
   setActivePinia(pinia)
   root = document.createElement('div')
   document.body.appendChild(root)
@@ -123,17 +143,7 @@ function button(text: string): HTMLButtonElement | undefined {
 beforeEach(() => {
   toastError.mockReset()
   toastSuccess.mockReset()
-  vi.mocked(adminApi.getMastersList)
-    .mockReset()
-    .mockImplementation(async (status, limit) => {
-      const items = BY_STATUS[status ?? 'all'] ?? []
-      return {
-        items: limit === 1 ? [] : items,
-        total: items.length,
-        limit: limit ?? 100,
-        offset: 0,
-      }
-    })
+  vi.mocked(adminApi.getMastersList).mockReset().mockImplementation(serve)
   vi.mocked(adminApi.inviteMaster).mockReset()
 })
 
@@ -157,6 +167,16 @@ describe('ConsoleMastersView', () => {
     await vi.waitFor(() =>
       expect(tabLabels()).toEqual(['Все · 3', 'На проверке · 1', 'Отклонённые · 1']),
     )
+  })
+
+  it('words each status the same way every console screen does', async () => {
+    await mount()
+
+    expect(rows().map((r) => r.querySelector('.people-pill')?.textContent?.trim())).toEqual([
+      'Верифицирован',
+      'Ожидает верификации',
+      'Отклонён',
+    ])
   })
 
   it('asks the server for the status of the tab and keeps the tab in the URL', async () => {
@@ -220,6 +240,54 @@ describe('ConsoleMastersView', () => {
         'https://t.me/bot?start=abc',
       ),
     )
+  })
+
+  describe('background refetch', () => {
+    it('keeps the table on screen while a refetch runs, then shows what it brings', async () => {
+      await mount()
+      let release: (page: Awaited<ReturnType<typeof serve>>) => void = () => {}
+      vi.mocked(adminApi.getMastersList).mockImplementation((status, limit) =>
+        limit === 1
+          ? serve(status, limit)
+          : new Promise((resolve) => {
+              release = resolve
+            }),
+      )
+
+      vi.mocked(adminApi.getMastersList).mockClear()
+      const refetch = askAgain()
+      await vi.waitFor(() => expect(adminApi.getMastersList).toHaveBeenCalledWith(undefined, 20, 0))
+
+      expect(rows()).toHaveLength(3)
+      expect(root?.querySelector('[data-testid="people-loading"]')).toBeNull()
+
+      release({ items: [PENDING], total: 1, limit: 20, offset: 0 })
+      await refetch
+      await vi.waitFor(() => expect(rows()).toHaveLength(1))
+    })
+
+    it('failing again and again is told once, until an answer arrives', async () => {
+      await mount()
+      const fail = () =>
+        vi
+          .mocked(adminApi.getMastersList)
+          .mockImplementation((status, limit) =>
+            limit === 1 ? serve(status, limit) : Promise.reject(new Error('down')),
+          )
+      fail()
+
+      await askAgain()
+      await askAgain()
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(rows()).toHaveLength(3)
+
+      vi.mocked(adminApi.getMastersList).mockImplementation(serve)
+      await askAgain()
+      fail()
+      await askAgain()
+
+      expect(toastError).toHaveBeenCalledTimes(2)
+    })
   })
 
   describe('the invite dialog', () => {

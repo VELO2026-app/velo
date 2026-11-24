@@ -63,10 +63,12 @@ export const adminKeys = {
   promos: (filter: string) => ['admin', 'promos', { filter }] as const,
   /** `GET /admin/users` -- every user of the platform (any role), every page loaded so far. */
   users: () => ['admin', 'users'] as const,
-  /** `GET /admin/users?role=` -- one page of one tab of the web console's users table. Under the users prefix. */
-  usersPage: (tab: string, page: number) => ['admin', 'users', { tab, page }] as const,
+  /** `GET /admin/users?role=&is_active=` -- one page of one tab of the web console's users table. Under the users prefix. */
+  usersPage: (tab: string, active: string, page: number) =>
+    ['admin', 'users', { tab, active, page }] as const,
   /** The total of one tab of the web console's users table (a one-row request). Under the users prefix. */
-  usersCount: (tab: string) => ['admin', 'users', { tab, count: true }] as const,
+  usersCount: (tab: string, active: string) =>
+    ['admin', 'users', { tab, active, count: true }] as const,
   /** `GET /admin/masters/list` -- every master with its status, counts and methods. */
   masters: () => ['admin', 'masters'] as const,
   /** `GET /admin/masters/list?status=` -- one page of one tab of the web console's masters table. Under the masters prefix. */

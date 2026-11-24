@@ -8,8 +8,54 @@
 
 import type { PillTone } from '@/components/console/people/PeoplePill.vue'
 import type { AdminMasterListItem } from '@/api/admin'
-import { getLocale } from '@/locales'
+import { getLocale, t } from '@/locales'
+import { formatMoney } from '@/utils/format'
 import { directionLabel, parseMethods, resolveStyleLabel } from '@/utils/methodTaxonomy'
+
+/** What a cell shows for a value the server does not have. */
+export const DASH = '—'
+
+/** A counter as a cell shows it: the number, or a dash when the server has none. */
+export function countText(n: number | null | undefined): string {
+  return n === null || n === undefined ? DASH : String(n)
+}
+
+/** A payout balance in euro cents as a cell shows it, or a dash when the server has none. */
+export function payoutText(cents: number | null | undefined): string {
+  return cents === null || cents === undefined ? DASH : formatMoney(cents, 'EUR', getLocale(), true)
+}
+
+/** One tab of a VSegment strip. */
+export interface TabOption {
+  value: string
+  label: string
+}
+
+/**
+ * The options of a tab strip: each tab's name, with its total after it once
+ * that is known (`Under review · 2`).
+ */
+export function tabOptions<Tab extends string>(
+  tabs: readonly Tab[],
+  name: (tab: Tab) => string,
+  total: (tab: Tab) => number | undefined,
+): TabOption[] {
+  return tabs.map((value) => {
+    const n = total(value)
+    return { value, label: n === undefined ? name(value) : `${name(value)} · ${n}` }
+  })
+}
+
+const MASTER_STATUSES = ['pending', 'verified', 'rejected', 'suspended', 'cancelled_by_user']
+
+/**
+ * A master's verification status as every console screen words it. `suspended`
+ * is a revoked master, not a blocked account. A status the console does not
+ * know is shown as the server sent it.
+ */
+export function masterStatusLabel(status: string): string {
+  return MASTER_STATUSES.includes(status) ? t(`console.masters.status.${status}`) : status
+}
 
 /** One slot of the pager: a page number or a gap (an ellipsis). */
 export type PagerItem = number | 'gap'

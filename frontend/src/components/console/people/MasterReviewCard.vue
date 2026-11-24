@@ -14,6 +14,10 @@
 
   After a verdict the card emits `decided`; the screen leaves for the list,
   which the verdict has invalidated.
+
+  DEBT (FE-272): onVerify, doVerify, the promote pause and onReject are a copy
+  of AdminMasterReviewView's. The copy lives until the mobile /admin is
+  removed; then it is the only one.
 -->
 
 <template>
@@ -155,7 +159,7 @@ const promoteMessage = computed((): string => {
     return t('adminScreens.adminCommon.methodSingle', { label: labels[0] ?? '' })
   }
   return t('adminScreens.adminCommon.methodPlural', {
-    labels: labels.map((l) => `«${l}»`).join(', '),
+    labels: labels.map((label) => t('console.masters.detail.quoted', { label })).join(', '),
   })
 })
 

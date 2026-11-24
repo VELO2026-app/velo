@@ -20,55 +20,45 @@
     :crumbs="t('console.groups.people')"
     testid="console-schools"
   >
-    <ConsoleCard flush>
-      <div v-if="loading" class="people-state"><VLoader size="lg" /></div>
-      <VEmptyState
-        v-else-if="failed"
-        icon="warning"
-        :title="t('school.loadFailed')"
-        :description="t('common.checkConnection')"
+    <PeopleListCard
+      :loading="loading"
+      :failed="failed"
+      :error-title="t('school.loadFailed')"
+      @retry="query.refetch()"
+    >
+      <ConsoleTable
+        :columns="columns"
+        :rows="rows"
+        :label="t('console.modules.schools')"
+        clickable
+        @row-click="(row) => open(row.school)"
       >
-        <template #action
-          ><VButton variant="primary" @click="query.refetch()">{{
-            t('common.retry')
-          }}</VButton></template
-        >
-      </VEmptyState>
-      <template v-else>
-        <ConsoleTable
-          :columns="columns"
-          :rows="rows"
-          :label="t('console.modules.schools')"
-          clickable
-          @row-click="(row) => open(row.school)"
-        >
-          <template #cell-name="{ row }">{{ row.school.name }}</template>
-          <template #cell-curator="{ row }">
-            <PersonCell :name="row.school.curator.display_name || DASH" />
-          </template>
-          <template #cell-masters="{ row }">{{ row.school.masters_count }}</template>
-          <template #cell-students="{ row }">{{ row.school.students_count }}</template>
-          <template #cell-created="{ row }">{{ formatDay(row.school.created_at) }}</template>
-          <template #cell-status="{ row }">
-            <PeoplePill :tone="row.school.is_active ? 'success' : 'neutral'">
-              {{
-                row.school.is_active
-                  ? t('adminScreens.adminSchools.active')
-                  : t('adminScreens.adminSchools.frozen')
-              }}
-            </PeoplePill>
-          </template>
-          <template #empty>{{ t('adminScreens.adminSchools.emptyNote') }}</template>
-        </ConsoleTable>
-        <PeoplePager
-          :page="page"
-          :page-size="CONSOLE_PAGE_SIZE"
-          :total="total"
-          :shown="rows.length"
-          @update:page="setPage"
-        />
-      </template>
-    </ConsoleCard>
+        <template #cell-name="{ row }">{{ row.school.name }}</template>
+        <template #cell-curator="{ row }">
+          <PersonCell :name="row.school.curator.display_name || DASH" />
+        </template>
+        <template #cell-masters="{ row }">{{ row.school.masters_count }}</template>
+        <template #cell-students="{ row }">{{ row.school.students_count }}</template>
+        <template #cell-created="{ row }">{{ formatDay(row.school.created_at) }}</template>
+        <template #cell-status="{ row }">
+          <PeoplePill :tone="row.school.is_active ? 'success' : 'neutral'">
+            {{
+              row.school.is_active
+                ? t('adminScreens.adminSchools.active')
+                : t('adminScreens.adminSchools.frozen')
+            }}
+          </PeoplePill>
+        </template>
+        <template #empty>{{ t('adminScreens.adminSchools.emptyNote') }}</template>
+      </ConsoleTable>
+      <PeoplePager
+        :page="page"
+        :page-size="CONSOLE_PAGE_SIZE"
+        :total="total"
+        :shown="rows.length"
+        @update:page="setPage"
+      />
+    </PeopleListCard>
   </ConsolePage>
 </template>
 
@@ -77,14 +67,13 @@ import { t } from '@/locales'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
-import { VButton, VEmptyState, VLoader } from '@/components/ui'
-import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
+import PeopleListCard from '@/components/console/people/PeopleListCard.vue'
 import PeoplePager from '@/components/console/people/PeoplePager.vue'
 import PeoplePill from '@/components/console/people/PeoplePill.vue'
 import PersonCell from '@/components/console/people/PersonCell.vue'
-import { formatDay } from '@/components/console/people/peopleTable'
+import { DASH, formatDay } from '@/components/console/people/peopleTable'
 import type { AdminSchoolListItem } from '@/api/types'
 import {
   CONSOLE_PAGE_SIZE,
@@ -92,19 +81,18 @@ import {
   onFailedRequest,
 } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
-import { useRouteListState } from '@/composables/console/useRouteListState'
+import { lastPageOf, useRouteListState } from '@/composables/console/useRouteListState'
 import { useToast } from '@/composables/useToast'
-
-const DASH = '—'
 
 const router = useRouter()
 const toast = useToast()
 
 // No tabs: the one tab keeps the page in the URL like the other tables.
-const { page, setPage } = useRouteListState(['all'])
+const { page, setPage, clampTo } = useRouteListState(['all'])
 
 const query = useQuery(() => consoleSchoolsPageQuery(page.value))
 const { loading, failed } = screenQueryState(query)
+clampTo(() => lastPageOf(query.data.value?.total, CONSOLE_PAGE_SIZE))
 onFailedRequest(query, () => toast.error(t('school.loadFailed')))
 
 // One row per school: ConsoleTable wants a plain record, the cells read the school.
@@ -136,11 +124,3 @@ function open(school: AdminSchoolListItem): void {
   void router.push({ name: 'console-masters-detail', params: { id: school.curator.user_id } })
 }
 </script>
-
-<style scoped>
-.people-state {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-10) 0;
-}
-</style>

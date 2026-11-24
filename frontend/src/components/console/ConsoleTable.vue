@@ -167,7 +167,7 @@ function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined 
   text-align: right;
 }
 
-/* The menu folds to icons at the same breakpoint (ConsoleShell). */
+/* The breakpoint where the menu folds to icons (ConsoleSidebar.vue). */
 @media (max-width: 1199px) {
   .console-table__cell--secondary {
     display: none;

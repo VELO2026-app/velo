@@ -16,8 +16,9 @@ import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, type App } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { createPinia, setActivePinia } from 'pinia'
-import { PiniaColada } from '@pinia/colada'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
+import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import ConsoleMasterDetailView from '@/views/console/people/ConsoleMasterDetailView.vue'
 import * as adminApi from '@/api/admin'
@@ -80,6 +81,7 @@ function advisory(overrides: Partial<RevokeMasterAdvisory> = {}): RevokeMasterAd
 let app: App | null = null
 let root: HTMLElement | null = null
 let router: Router
+let pinia: Pinia
 
 // The server's copy of the master: a write changes it, and the refetch after
 // the write reads it back (as in production), so a test that only mocked the
@@ -108,7 +110,7 @@ async function mount(expectCard = true): Promise<HTMLElement> {
     ],
   })
   await router.push('/console/masters/m1')
-  const pinia = createPinia()
+  pinia = createPinia()
   setActivePinia(pinia)
   root = document.createElement('div')
   document.body.appendChild(root)
@@ -118,7 +120,7 @@ async function mount(expectCard = true): Promise<HTMLElement> {
     .use(PiniaColada, coladaOptions)
     .use(router)
   app.mount(root)
-  if (expectCard) await vi.waitFor(() => expect(row('Email')).toBeDefined())
+  if (expectCard) await vi.waitFor(() => expect(row('Почта')).toBeDefined())
   return root
 }
 
@@ -380,7 +382,7 @@ describe('ConsoleMasterDetailView: a verified master', () => {
     await vi.waitFor(() =>
       expect(root?.querySelector('[data-testid="master-rights-card"]')).toBeNull(),
     )
-    expect(root?.textContent).toContain('Заблокирован')
+    expect(root?.textContent).toContain('Отозван')
   })
 
   it('tells a failed school-right change and leaves the switch where it was', async () => {
@@ -449,16 +451,16 @@ describe('ConsoleMasterDetailView: the profile editor', () => {
     })
     await mount()
 
-    row('Email')?.querySelector<HTMLButtonElement>('.field-row__pen')?.click()
-    await vi.waitFor(() => expect(row('Email')?.querySelector('input')).not.toBeNull())
-    setValue(row('Email')?.querySelector('input'), 'new@example.com')
-    inside(row('Email'), 'Сохранить')?.click()
+    row('Почта')?.querySelector<HTMLButtonElement>('.field-row__pen')?.click()
+    await vi.waitFor(() => expect(row('Почта')?.querySelector('input')).not.toBeNull())
+    setValue(row('Почта')?.querySelector('input'), 'new@example.com')
+    inside(row('Почта'), 'Сохранить')?.click()
 
     await vi.waitFor(() =>
       expect(adminApi.editMasterProfile).toHaveBeenCalledWith('m1', { email: 'new@example.com' }),
     )
-    await vi.waitFor(() => expect(row('Email')?.textContent).toContain('new@example.com'))
-    expect(row('Email')?.querySelector('input')).toBeNull()
+    await vi.waitFor(() => expect(row('Почта')?.textContent).toContain('new@example.com'))
+    expect(row('Почта')?.querySelector('input')).toBeNull()
   })
 
   it('refuses an experience outside 0-50 without a request, and accepts one inside', async () => {
@@ -496,29 +498,17 @@ describe('ConsoleMasterDetailView: the profile editor', () => {
   it('opens one editor at a time', async () => {
     await mount()
 
-    row('Email')?.querySelector<HTMLButtonElement>('.field-row__pen')?.click()
-    await vi.waitFor(() => expect(row('Email')?.querySelector('input')).not.toBeNull())
+    row('Почта')?.querySelector<HTMLButtonElement>('.field-row__pen')?.click()
+    await vi.waitFor(() => expect(row('Почта')?.querySelector('input')).not.toBeNull())
     row('Телефон')?.querySelector<HTMLButtonElement>('.field-row__pen')?.click()
 
     await vi.waitFor(() => expect(row('Телефон')?.querySelector('input')).not.toBeNull())
-    expect(row('Email')?.querySelector('input')).toBeNull()
+    expect(row('Почта')?.querySelector('input')).toBeNull()
   })
 
-  it('saves the directions through their own endpoint', async () => {
-    vi.mocked(adminApi.editMasterMethods).mockResolvedValue({ user_id: 'm1', status: 'ok' })
-    await mount()
-
-    row('Направления практик')?.querySelector<HTMLButtonElement>('.field-row__pen')?.click()
-    await vi.waitFor(() => expect(inside(row('Направления практик'), 'Сохранить')).toBeDefined())
-    inside(row('Направления практик'), 'Сохранить')?.click()
-
-    await vi.waitFor(() =>
-      expect(adminApi.editMasterMethods).toHaveBeenCalledWith('m1', ['Медитация']),
-    )
-  })
-
-  it('needs at least one direction', async () => {
+  it('needs at least one direction, and saves the chosen one through its own endpoint', async () => {
     serve(master({ methods: [] }))
+    vi.mocked(adminApi.editMasterMethods).mockResolvedValue({ user_id: 'm1', status: 'ok' })
     await mount()
 
     row('Направления практик')?.querySelector<HTMLButtonElement>('.field-row__pen')?.click()
@@ -529,6 +519,85 @@ describe('ConsoleMasterDetailView: the profile editor', () => {
       expect(row('Направления практик')?.textContent).toContain('хотя бы одно направление'),
     )
     expect(adminApi.editMasterMethods).not.toHaveBeenCalled()
+
+    Array.from(row('Направления практик')?.querySelectorAll<HTMLElement>('.v-chip') ?? [])
+      .find((c) => c.textContent?.trim() === 'Медитация')
+      ?.click()
+    inside(row('Направления практик'), 'Сохранить')?.click()
+
+    await vi.waitFor(() =>
+      expect(adminApi.editMasterMethods).toHaveBeenCalledWith('m1', ['Медитация']),
+    )
+  })
+})
+
+describe('ConsoleMasterDetailView: the summary', () => {
+  const stat = (label: string) =>
+    Array.from(root?.querySelectorAll('.master-summary__stat') ?? [])
+      .find((el) => el.querySelector('dt')?.textContent?.trim() === label)
+      ?.querySelector('dd')
+      ?.textContent?.trim()
+
+  it('names how to reach the master: the phone and the email', async () => {
+    await mount()
+
+    expect(stat('Телефон')).toBe('+491512345678')
+    expect(stat('Почта')).toBe('anna@example.com')
+  })
+
+  it('shows a dash for a contact the master has not given', async () => {
+    serve(master({ phone: null, email: null }))
+    await mount(false)
+
+    await vi.waitFor(() => expect(stat('Телефон')).toBe('—'))
+    expect(stat('Почта')).toBe('—')
+  })
+})
+
+describe('ConsoleMasterDetailView: background refetch', () => {
+  /** Colada asks the stale card again on focus and visibilitychange; the entry is asked the same way here. */
+  const askAgain = () =>
+    useQueryCache(pinia)
+      .invalidateQueries({ key: adminKeys.master('m1') })
+      .catch(() => {})
+
+  it('keeps the card on screen while a refetch runs, then shows what it brings', async () => {
+    await mount()
+    let release: (m: AdminMasterDetail) => void = () => {}
+    vi.mocked(adminApi.getMasterById).mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve
+      }),
+    )
+
+    const refetch = askAgain()
+    await vi.waitFor(() => expect(adminApi.getMasterById).toHaveBeenCalledTimes(2))
+
+    expect(root?.querySelector('[data-testid="master-profile-form"]')).not.toBeNull()
+    expect(root?.querySelector('.master-detail__state')).toBeNull()
+
+    release(master({ display_name: 'Anna Changed' }))
+    await refetch
+    await vi.waitFor(() => expect(row('Имя-визитка')?.textContent).toContain('Anna Changed'))
+  })
+
+  it('failing again and again is told once, until an answer arrives', async () => {
+    await mount()
+    const fail = () =>
+      vi.mocked(adminApi.getMasterById).mockImplementation(() => Promise.reject(new Error('down')))
+    fail()
+
+    await askAgain()
+    await askAgain()
+    expect(toastError).toHaveBeenCalledTimes(1)
+    expect(root?.querySelector('[data-testid="master-profile-form"]')).not.toBeNull()
+
+    serve(master())
+    await askAgain()
+    fail()
+    await askAgain()
+
+    expect(toastError).toHaveBeenCalledTimes(2)
   })
 })
 

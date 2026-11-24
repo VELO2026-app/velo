@@ -629,7 +629,17 @@
         "schoolRight": "Can create schools",
         "schoolRightHint": "Revoking the right only closes new schools: existing ones stay.",
         "revoke": "Revoke master status",
-        "revokeText": "The master becomes a regular user again and their schools freeze. Data is kept; access can be restored with \"Make a master\"."
+        "revokeText": "The master becomes a regular user again and their schools freeze. Data is kept; access can be restored with \"Make a master\".",
+        "email": "Email",
+        "removeCertificate": "Remove certificate: {name}",
+        "quoted": "“{label}”"
+      },
+      "status": {
+        "pending": "Awaiting verification",
+        "verified": "Verified",
+        "rejected": "Rejected",
+        "suspended": "Revoked",
+        "cancelled_by_user": "Account deleted"
       }
     },
     "users": {
@@ -644,6 +654,12 @@
         "role": "Role",
         "registered": "Registered",
         "lastSeen": "Last seen"
+      },
+      "filter": {
+        "label": "Activity",
+        "all": "All",
+        "active": "Active",
+        "inactive": "Inactive"
       }
     },
     "schools": {
