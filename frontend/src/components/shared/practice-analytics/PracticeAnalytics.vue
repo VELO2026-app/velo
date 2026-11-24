@@ -342,7 +342,6 @@ const showPairsPager = computed(
   list-style: none;
 }
 .practice-analytics__pair {
-  padding: var(--space-4) 0;
   border-bottom: 1px solid var(--velo-border);
 }
 .practice-analytics__pair-row {
@@ -352,6 +351,8 @@ const showPairsPager = computed(
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
+  /* The row's own padding is the tap area when it is a button (44 px minimum). */
+  padding: var(--space-4) 0;
   width: 100%;
   /* The row is a button when the reader may open the person: undo the
      button's own font, spacing and centred text. */
