@@ -176,10 +176,16 @@ function toUserMode(): void {
 }
 
 .console-sidebar__brand-sub,
-.console-sidebar__me-role,
 .console-sidebar__caption {
   font-size: var(--velo-fs-12);
   color: var(--velo-text-muted);
+}
+
+/* On the white card the muted color is under 4.5:1; secondary is the
+   skin's declared pair for text on a card. */
+.console-sidebar__me-role {
+  font-size: var(--velo-fs-12);
+  color: var(--velo-text-secondary);
 }
 
 .console-sidebar__nav {
