@@ -49,6 +49,27 @@ describe('conformOverlay', () => {
   })
 })
 
+describe('conformOverlay on a build: the base catalogs are compiled messages', () => {
+  const compiled = { common: { save: { t: 0, b: { t: 2, s: 'Save' } } } }
+
+  it('keeps an overlay string over a compiled base message', () => {
+    expect(conformOverlay({ common: { save: 'Ok' } }, compiled)).toEqual({ common: { save: 'Ok' } })
+  })
+
+  it('drops an overlay node that has the shape of a compiled message', () => {
+    const overlay = { common: { save: { t: 0, b: { t: 2, s: 'Ok' } } } }
+    expect(conformOverlay(overlay, compiled)).toEqual({ common: {} })
+  })
+
+  it('cuts that node like any group where the base has no such key: no forbidden key gets through', () => {
+    const raw = JSON.parse(
+      '{"common":{"fresh":{"t":0,"b":{"constructor":"c","s":"x"}}}}',
+    ) as Record<string, unknown>
+    const { fresh } = conformOverlay(raw, compiled).common as { fresh: { b: object } }
+    expect(Object.keys(fresh.b)).toEqual(['s'])
+  })
+})
+
 describe('applyInstanceOverrides keeps the catalogs whole', () => {
   it('a group replaced by a string in an overlay does not erase the group', async () => {
     await setLocale('ru')

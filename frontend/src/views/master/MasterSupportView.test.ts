@@ -428,5 +428,5 @@ describe('MasterSupportView', () => {
 // - Attachment upload/storage: does not exist yet (no storage backend per the
 //   SFC's own banner) -- nothing to test beyond the local capture already
 //   covered above.
-// - mailto:support@velo.app: a plain href, not product logic.
+// - The support address line: SupportEmailLink.test.ts (FE-251).
 // =============================================================================

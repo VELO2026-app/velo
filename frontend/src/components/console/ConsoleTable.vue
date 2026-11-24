@@ -125,7 +125,6 @@ function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined 
   border-radius: var(--velo-radius-10);
   background: var(--velo-bg-subtle);
   font-size: var(--velo-fs-12);
-  /* Primary, not secondary: the secondary text is 2.99:1 on this tint on gold. */
   color: var(--velo-text-primary);
 }
 
@@ -160,6 +159,6 @@ function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined 
 .console-table__empty {
   padding: var(--space-5) var(--space-4);
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-secondary);
+  color: var(--velo-text-muted);
 }
 </style>

@@ -20,7 +20,7 @@
 
 import { ApiResponseError } from '@/api/client'
 import i18n from '@/locales'
-import { hasErrorMessage } from '@/api/errorMessages'
+import { knownErrorMessage } from '@/api/errorMessages'
 
 export { errorMessage } from '@/api/errorMessages'
 
@@ -54,8 +54,7 @@ function withTrace(message: string, e: ApiResponseError): string {
  */
 export function extractApiError(e: unknown, fallback: string): string {
   if (e instanceof ApiResponseError) {
-    const key = `errors.${e.code}`
-    return withTrace(hasErrorMessage(e.code) ? i18n.global.t(key) : fallback, e)
+    return withTrace(knownErrorMessage(e.code) ?? fallback, e)
   }
   return fallback
 }

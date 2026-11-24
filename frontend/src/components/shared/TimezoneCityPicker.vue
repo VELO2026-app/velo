@@ -196,20 +196,11 @@ function select(iana: string): void {
    step (the 1-match collapse was breathing the layout) nor visibly clamp a
    stale scroll offset. The rest of the matches stay reachable by scrolling
    the one-row window; the watch in the script re-tops it on every keystroke.
-   (+2px = the list's own 1px top/bottom borders.) */
-:global(html.is-keyboard-open) .tz-picker__list {
+   (+2px = the list's own 1px top/bottom borders.) No `:global()` here:
+   scoped-global.test.ts forbids it with a descendant in a scoped style. */
+html.is-keyboard-open .tz-picker__list {
   height: calc(var(--tz-row-h) + 2px);
   max-height: none;
-}
-
-/* The empty hint occupies the same box as the one-row list, so the 0 <-> 1
-   match boundary doesn't jump either. */
-:global(html.is-keyboard-open) .tz-picker__empty {
-  margin: var(--space-2) 0 0;
-  height: calc(var(--tz-row-h) + 2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .tz-picker__row {
@@ -283,5 +274,16 @@ function select(iana: string): void {
   font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   text-align: center;
+}
+
+/* The empty hint occupies the same box as the one-row list (keyboard rule
+   above), so the 0 <-> 1 match boundary doesn't jump either. Declared after
+   the base rule it overrides (stylelint no-descending-specificity). */
+html.is-keyboard-open .tz-picker__empty {
+  margin: var(--space-2) 0 0;
+  height: calc(var(--tz-row-h) + 2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
