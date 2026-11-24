@@ -71,7 +71,7 @@ withDefaults(
 
 .console-card__note {
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .console-card__right {
