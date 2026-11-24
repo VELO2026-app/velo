@@ -673,14 +673,15 @@ onBeforeUnmount(() => {
    keyboard-ONLY. This screen copied the diary formula verbatim (B39), so it
    inherited the same staleness defect -- a missed close-resize left the chat
    capped at the keyboard-open height. The class gate makes the at-rest
-   height structural (100% of the frozen ancestor). */
-:global(html.is-keyboard-open) .chat-thread {
+   height structural (100% of the frozen ancestor). No `:global()` here:
+   scoped-global.test.ts forbids it with a descendant in a scoped style. */
+html.is-keyboard-open .chat-thread {
   height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
 }
 
 /* [FE-44] Close expands at the keyboard's own speed (twin of the global.css
    rule + DiaryFeedView's own). */
-:global(html.is-keyboard-closing) .chat-thread {
+html.is-keyboard-closing .chat-thread {
   height: calc(var(--velo-frozen-vh, 100%) - var(--velo-content-safe-top, 0px));
   transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }

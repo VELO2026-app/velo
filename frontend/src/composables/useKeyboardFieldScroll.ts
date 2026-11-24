@@ -29,7 +29,7 @@
 //
 // Reads the existing window.visualViewport signal only. It writes none of the
 // shared keyboard state (--velo-vvh / is-keyboard-open stay owned by
-// useBackgroundStabilizer / keyboardViewportState) — no new global machinery.
+// useViewportGeometry / keyboardViewportState) — no new global machinery.
 // Desktop / no visualViewport → a single deferred scroll (unchanged fallback).
 //
 // [FE-143] INVERSION: the implementation stays here (it reads the app's
