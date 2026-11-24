@@ -53,30 +53,29 @@
           <span class="students__search-btn" aria-hidden="true"><IconSearch :size="20" /></span>
         </div>
 
-        <!-- List -->
-        <div
-          v-for="student in visibleStudents"
-          :key="student.id"
-          class="students__row"
-          role="button"
-          tabindex="0"
-          @click="openProfile(student)"
-          @keydown.enter.space.prevent="openProfile(student)"
-        >
-          <VAvatar :name="student.name" size="md" />
-          <div class="students__body">
-            <div class="students__name">{{ student.name }}</div>
-            <div class="students__meta">
-              {{ t('masterScreens.masterCommon.practicesCount', { n: student.practices_count }) }}
-            </div>
-            <span v-if="student.needs_attention" class="students__attn">
-              <IconWarning :size="14" />{{ t('masterScreens.masterStudents.needsAttention') }}
+        <!-- List. A row is two sibling buttons: a button must not hold another
+             interactive control. The open button's ::after covers the whole
+             row, so a tap anywhere on it opens the profile; the message button
+             sits above that layer. A button holds phrasing content only, hence
+             the spans. -->
+        <div v-for="student in visibleStudents" :key="student.id" class="students__row">
+          <button type="button" class="students__open velo-btn-reset" @click="openProfile(student)">
+            <VAvatar :name="student.name" size="md" />
+            <span class="students__body">
+              <span class="students__name">{{ student.name }}</span>
+              <span class="students__meta">
+                {{ t('masterScreens.masterCommon.practicesCount', { n: student.practices_count }) }}
+              </span>
+              <span v-if="student.needs_attention" class="students__attn">
+                <IconWarning :size="14" />{{ t('masterScreens.masterStudents.needsAttention') }}
+              </span>
             </span>
-          </div>
+          </button>
           <button
+            type="button"
             class="students__msg"
             :aria-label="t('common.writeMessage')"
-            @click.stop="openMessage(student.id, student.name)"
+            @click="openMessage(student.id, student.name)"
           >
             <IconMessages :size="22" />
           </button>
@@ -260,6 +259,8 @@ function openMessage(id: string, name: string): void {
 
 /* -- Student row -- */
 .students__row {
+  /* Positioning context of the open button's ::after. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -275,18 +276,50 @@ function openMessage(id: string, name: string): void {
   opacity: 0.85;
 }
 
+/* The open button is the row's content (avatar + text). Its ::after covers the
+   whole row, so a tap anywhere on the row opens the profile. */
+.students__open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.students__open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+/* The keyboard ring goes round the whole row, not only the avatar and text.
+   Without :has() support the button keeps its own ring. */
+@supports selector(:has(*)) {
+  .students__open:focus-visible {
+    outline: none;
+  }
+
+  .students__row:has(.students__open:focus-visible) {
+    outline: 2px solid var(--velo-border-input-focus);
+  }
+}
+
 .students__body {
+  display: block;
   flex: 1;
   min-width: 0;
 }
 
 .students__name {
+  display: block;
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
 }
 
 .students__meta {
+  display: block;
   font-family: var(--font-body);
   font-size: var(--velo-fs-14);
   color: var(--velo-text-secondary);
@@ -310,6 +343,8 @@ function openMessage(id: string, name: string): void {
 }
 
 .students__msg {
+  /* Stacks above the open button's ::after, which covers the row. */
+  position: relative;
   width: var(--velo-size-46);
   height: var(--velo-size-46);
   flex-shrink: 0;
