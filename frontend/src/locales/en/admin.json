@@ -733,6 +733,115 @@
         "addFailed": "Failed to add the style"
       },
       "note": "A direction or a style is never deleted: hide it instead. Masters keep the methods they already chose."
+    },
+    "period": {
+      "label": "Period",
+      "prev": "Previous period",
+      "next": "Next period"
+    },
+    "delta": {
+      "vsPrevious": "vs previous period",
+      "points": "{value} pp",
+      "none": "nothing to compare with"
+    },
+    "metrics": {
+      "checkin": "Practices with check-in",
+      "feedback": "Practices with feedback",
+      "return": "Returning participants"
+    },
+    "dashboard": {
+      "attention": {
+        "title": "Needs attention",
+        "note": "queues waiting for your action",
+        "loadFailed": "Failed to load the queues",
+        "queuesLabel": "Queues waiting for action",
+        "unknown": "no data",
+        "queues": {
+          "verifications": "Masters to review",
+          "complaints": "Complaints",
+          "methods": "Method changes",
+          "tickets": "Open tickets",
+          "payouts": "Payouts"
+        }
+      },
+      "figures": {
+        "title": "Figures",
+        "loadFailed": "Failed to load the figures",
+        "revenue": "Revenue",
+        "practices": "Practices",
+        "newUsers": "New users",
+        "newMasters": "New masters"
+      },
+      "engagement": {
+        "title": "Engagement"
+      },
+      "today": {
+        "title": "Today",
+        "remaining": "{n} practice left | {n} practices left",
+        "all": "All practices",
+        "loadFailed": "Failed to load practices",
+        "empty": "No more practices today",
+        "tableLabel": "Practices today",
+        "columns": {
+          "time": "Time",
+          "practice": "Practice",
+          "booked": "Booked"
+        }
+      }
+    },
+    "analytics": {
+      "metricsLabel": "Engagement",
+      "loadFailed": "Failed to load the metric",
+      "empty": "No data for this period",
+      "checkin": {
+        "records": "Total records",
+        "done": "Checked in",
+        "trend": "Check-in trend, %",
+        "lowTitle": "Practices with low check-in",
+        "lowRow": "{pct}% · {total} records"
+      },
+      "feedback": {
+        "visited": "Visited",
+        "left": "Left feedback",
+        "distribution": "Rating distribution"
+      },
+      "return": {
+        "users": "Participants in the period",
+        "returning": "Attended before",
+        "top": "Most frequent participants",
+        "practices": "{n} practice | {n} practices"
+      }
+    },
+    "mail": {
+      "newTitle": "New announcement",
+      "audience": {
+        "label": "To",
+        "all": "All participants",
+        "masters": "Masters"
+      },
+      "titleLabel": "Title",
+      "bodyLabel": "Text",
+      "counter": "{count} of {max}",
+      "send": "Send",
+      "errors": {
+        "titleRequired": "Enter a title",
+        "bodyRequired": "Enter the text"
+      },
+      "confirm": {
+        "title": "Send the announcement?",
+        "all": "Every participant of the platform will receive the announcement. It cannot be recalled once sent.",
+        "masters": "Every master of the platform will receive the announcement. It cannot be recalled once sent.",
+        "confirm": "Send",
+        "cancel": "Do not send"
+      },
+      "sent": "Announcement sent",
+      "sendFailed": "Failed to send the announcement",
+      "history": {
+        "title": "Sent",
+        "emptyTitle": "History will appear later",
+        "emptyBody": "The server does not keep sent announcements yet, so there is no list to show."
+      },
+      "sendUnknown": "The server did not answer; the announcement may have gone out. Do not send it again until you are sure."
     }
   }
 }

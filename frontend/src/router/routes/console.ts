@@ -25,8 +25,11 @@ const placeholder = () => import('@/views/console/ConsolePlaceholderView.vue')
 
 /** The module screens that have replaced the placeholder (by module key). */
 const SCREENS: Partial<Record<ConsoleModuleKey, () => Promise<Component>>> = {
+  dashboard: () => import('@/views/console/ConsoleDashboardView.vue'),
   practices: () => import('@/views/console/ConsolePracticesView.vue'),
   catalog: () => import('@/views/console/ConsoleCatalogView.vue'),
+  analytics: () => import('@/views/console/ConsoleAnalyticsView.vue'),
+  mail: () => import('@/views/console/ConsoleMailView.vue'),
 }
 
 /** The /console zone: ConsoleShell and one screen per module. */

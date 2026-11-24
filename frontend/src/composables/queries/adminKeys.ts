@@ -90,6 +90,18 @@ export const adminKeys = {
   report: (reportId: string) => ['admin', 'report', reportId] as const,
   /** `GET /admin/withdrawals` -- every payout request, every page loaded so far. */
   withdrawals: () => ['admin', 'withdrawals'] as const,
+  /**
+   * `GET /admin/withdrawals?status=pending&limit=1` -- how many payout
+   * requests wait (the dashboard's queue). Under the payouts prefix, so a
+   * decision on a request makes it stale with the list.
+   */
+  withdrawalsPending: () => ['admin', 'withdrawals', 'pending'] as const,
+  /**
+   * `GET /support/tickets?status=open` -- how many support tickets are open
+   * (the dashboard's queue). A key of its own, not under the ticket lists:
+   * taking a ticket does not move the count.
+   */
+  openTickets: () => ['admin', 'support', 'openTickets'] as const,
   /** `GET /admin/users?role=admin` -- the admins a support ticket can be handed to. */
   admins: () => ['admin', 'admins'] as const,
   /** Prefix of every support ticket list. */

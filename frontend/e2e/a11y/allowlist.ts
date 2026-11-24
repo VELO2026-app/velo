@@ -310,11 +310,8 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
     routes: [
       'admin-profile',
       'admin-users',
-      'console-analytics',
       'console-catalog',
-      'console-dashboard',
       'console-finance',
-      'console-mail',
       'console-masters',
       'console-moderation',
       'console-schools',

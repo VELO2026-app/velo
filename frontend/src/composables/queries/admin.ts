@@ -9,8 +9,10 @@
 //   - the shell and the dashboard: the counters (`GET /admin/stats` + the
 //     count of reports awaiting moderation: the tab badges, the banners,
 //     the lists' "all" badges -- one entry, so the shell and the screens
-//     read the same answer) and the period window (the overview cards and
-//     the four engagement / revenue figures, one entry per (period, offset));
+//     read the same answer), the counts of the dashboard's other queues
+//     (open tickets, pending payouts) and the period window (the overview
+//     cards and the four engagement / revenue figures, one entry per
+//     (period, offset));
 //   - the platform's practices and participants lists;
 //   - the catalogs: the method catalog editor, the schools, the promo
 //     oversight list, one practice's oversight detail.
@@ -342,7 +344,11 @@ export const ADMIN_INVALIDATES = {
    * (its status) and the support stats (they count statuses, spam and who
    * resolved). Not the ticket itself: the screen writes the answer into it.
    */
-  changeTicketStatus: [adminKeys.supportTicketsAll(), adminKeys.supportStatsAll()],
+  changeTicketStatus: [
+    adminKeys.supportTicketsAll(),
+    adminKeys.supportStatsAll(),
+    adminKeys.openTickets(),
+  ],
   /**
    * A support ticket taken, handed over or released: every ticket list (its
    * taker). Not the stats (a taker is not counted) nor the ticket itself
@@ -363,6 +369,11 @@ export const ADMIN_INVALIDATES = {
    * prepared and its polling picks up the result.
    */
   retryTranslation: [],
+  /**
+   * `POST /admin/announcements`: handed to comms -- the server stores no row
+   * of it (the history needs BE-256), so no held list or counter goes stale.
+   */
+  sendAnnouncement: [],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of an admin mutation that has a row in `ADMIN_INVALIDATES`. */
@@ -570,6 +581,47 @@ export function adminFigures<T>(
     retry: () => void query.refetch(),
   }
 }
+
+/** Tickets read to count the open ones: the API's page cap. */
+export const ADMIN_OPEN_TICKETS_LIMIT = 100
+
+/** How many support tickets are open; `more` -- there are more than were counted. */
+export interface OpenTicketsCount {
+  count: number
+  more: boolean
+}
+
+/**
+ * Query options for the count of open support tickets (`GET /support/tickets?status=open`).
+ *
+ * @remarks
+ * The ticket list answers with a page and a cursor, never a total, so the
+ * dashboard counts one full page: past it the count reads "100+" (`more`).
+ * It counts OPEN tickets; whether a person is still waiting for a first
+ * answer is not in the API (BE-259).
+ */
+export const adminOpenTicketsQuery = defineQueryOptions(() => ({
+  key: adminKeys.openTickets(),
+  query: async (): Promise<OpenTicketsCount> => {
+    const page = await listAdminTickets({ status: 'open', limit: ADMIN_OPEN_TICKETS_LIMIT })
+    return { count: page.tickets.length, more: page.next_cursor !== null }
+  },
+  staleTime: 0,
+}))
+
+/**
+ * Query options for how many payout requests are pending
+ * (`GET /admin/withdrawals?status=pending`, the answer's total).
+ *
+ * @param enabled - Off on an instance without the payments option: there is
+ *   no payout queue to count.
+ */
+export const adminPendingWithdrawalsQuery = defineQueryOptions((enabled: boolean) => ({
+  key: adminKeys.withdrawalsPending(),
+  query: async (): Promise<number> => (await getAdminWithdrawals('pending', 1, 0)).total,
+  staleTime: 0,
+  enabled,
+}))
 
 /** Practices the platform list asks for (one page, no "show more"). */
 export const ADMIN_PRACTICES_LIMIT = 100
