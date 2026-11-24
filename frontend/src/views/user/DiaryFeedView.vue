@@ -1182,15 +1182,16 @@ onBeforeUnmount(() => {
    navigation, or the focusout recheck useViewportGeometry now runs), full
    height returns even if no closing resize event ever fires. No masking
    white blocks anywhere -- the background layer regains the full viewport
-   on the same class removal. */
-:global(html.is-keyboard-open) .diary-feed {
+   on the same class removal. No `:global()` here: scoped-global.test.ts
+   forbids it with a descendant in a scoped style. */
+html.is-keyboard-open .diary-feed {
   height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
 }
 
 /* [FE-44] The close expands at the keyboard's own speed (see the twin rule
    in global.css): while the closing class holds, the height transition
    interpolates from the capped value above to the at-rest px calc below. */
-:global(html.is-keyboard-closing) .diary-feed {
+html.is-keyboard-closing .diary-feed {
   height: calc(var(--velo-frozen-vh, 100%) - var(--velo-content-safe-top, 0px));
   transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }
@@ -1481,7 +1482,7 @@ onBeforeUnmount(() => {
   position: absolute;
   left: var(--velo-rail-pad-x);
   right: var(--velo-rail-pad-x);
-  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(110px + var(--velo-safe-bottom));
   z-index: var(--z-sticky);
   display: flex;
   align-items: center;
@@ -1546,7 +1547,7 @@ onBeforeUnmount(() => {
   right: var(--diary-overlay-rail);
   /* Owner pass: 12px sat TOO tight against the screen edge -- restored the
      pre-spec clearance (16 + 20 + safe-area), where the pill rode before. */
-  bottom: calc(var(--space-4) + 20px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-4) + 20px + var(--velo-safe-bottom));
   z-index: 20;
 }
 
@@ -1556,7 +1557,7 @@ onBeforeUnmount(() => {
    NO transition on bottom (the static-glass rule: nothing animates while
    content scrolls; the state flips once with the keyboard). */
 .diary-feed--composing .diary-feed__composer {
-  bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-4) + var(--velo-safe-bottom));
 }
 
 /* While writing (keyboard up) drop the composer's extra bottom offset so the

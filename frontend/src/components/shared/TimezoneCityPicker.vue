@@ -25,18 +25,22 @@
     <VInput
       v-model="query"
       :placeholder="placeholder ?? t('timezone.placeholder')"
+      kind="search"
+      v-bind="nav.comboboxAttrs.value"
       @focus="onFieldFocus"
+      @keydown="nav.onKeydown"
     >
       <template #suffix><IconSearch :size="18" /></template>
     </VInput>
 
-    <div v-if="filtered.length" ref="listEl" class="tz-picker__list">
+    <div v-if="filtered.length" ref="listEl" class="tz-picker__list" v-bind="nav.listAttrs()">
       <button
-        v-for="c in filtered"
+        v-for="(c, i) in filtered"
         :key="c.iana + c.city"
         type="button"
         class="tz-picker__row"
         :class="{ 'tz-picker__row--active': c.iana === modelValue }"
+        v-bind="nav.optionAttrs(i, c.iana === modelValue)"
         @click="select(c.iana)"
       >
         <span class="tz-picker__main">
@@ -65,6 +69,7 @@ import { timezoneRows } from '@/utils/timezoneCities'
 import { useTimezoneCatalog } from '@/composables/useTimezoneCatalog'
 import { formatUtcOffset } from '@/utils/practiceOptions'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import { useListboxNav } from '@/composables/useListboxNav'
 
 // tz-i18n 2.2a: the empty hint and the placeholder are keys; the SEARCH
 // itself stays data-driven (city names + latin aliases are the data, §3.1).
@@ -123,6 +128,19 @@ watch([query, () => props.modelValue], () => {
   if (listEl.value) listEl.value.scrollTop = 0
 })
 
+// Arrow keys move a virtual highlight through the rows and Enter picks one,
+// while DOM focus stays in the search field (aria-activedescendant).
+const nav = useListboxNav({
+  count: () => filtered.value.length,
+  // The rows also change when the backend catalog arrives or the selection
+  // reorders them: a stale highlight would then sit on another city.
+  resetOn: filtered,
+  onSelect: (i) => {
+    const row = filtered.value[i]
+    if (row) select(row.iana)
+  },
+})
+
 /** Current local time in the given zone ("14:35"), live + DST-aware. */
 function timeAt(iana: string): string {
   try {
@@ -178,20 +196,11 @@ function select(iana: string): void {
    step (the 1-match collapse was breathing the layout) nor visibly clamp a
    stale scroll offset. The rest of the matches stay reachable by scrolling
    the one-row window; the watch in the script re-tops it on every keystroke.
-   (+2px = the list's own 1px top/bottom borders.) */
-:global(html.is-keyboard-open) .tz-picker__list {
+   (+2px = the list's own 1px top/bottom borders.) No `:global()` here:
+   scoped-global.test.ts forbids it with a descendant in a scoped style. */
+html.is-keyboard-open .tz-picker__list {
   height: calc(var(--tz-row-h) + 2px);
   max-height: none;
-}
-
-/* The empty hint occupies the same box as the one-row list, so the 0 <-> 1
-   match boundary doesn't jump either. */
-:global(html.is-keyboard-open) .tz-picker__empty {
-  margin: var(--space-2) 0 0;
-  height: calc(var(--tz-row-h) + 2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .tz-picker__row {
@@ -265,5 +274,16 @@ function select(iana: string): void {
   font-size: var(--velo-fs-16);
   color: var(--velo-text-muted);
   text-align: center;
+}
+
+/* The empty hint occupies the same box as the one-row list (keyboard rule
+   above), so the 0 <-> 1 match boundary doesn't jump either. Declared after
+   the base rule it overrides (stylelint no-descending-specificity). */
+html.is-keyboard-open .tz-picker__empty {
+  margin: var(--space-2) 0 0;
+  height: calc(var(--tz-row-h) + 2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

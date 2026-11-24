@@ -68,6 +68,7 @@ describe('usePracticesStore', () => {
       await store.fetchPractice('missing')
 
       expect(store.selectedError).toBe('Запрошенный ресурс не найден')
+      expect(store.selectedGone).toBe(true)
       expect(store.selected).toBeNull()
       expect(store.selectedLoading).toBe(false)
     })
@@ -79,6 +80,8 @@ describe('usePracticesStore', () => {
       await store.fetchPractice('p1')
 
       expect(store.selectedError).toBe('Не удалось загрузить практику')
+      // A transient failure is retryable: not "gone".
+      expect(store.selectedGone).toBe(false)
     })
 
     describe('F-01 race guard', () => {

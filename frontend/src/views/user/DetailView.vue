@@ -84,6 +84,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { VLoader, VEmptyState, VButton, VBackButton, VCard } from '@/components/ui'
 import PracticeListCard from '@/components/shared/PracticeListCard.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -103,7 +104,7 @@ const tz = computed(() => authStore.user?.timezone ?? 'UTC')
 const detailType = computed<'checkin' | 'feedback'>(() =>
   route.params.type === 'feedback' ? 'feedback' : 'checkin',
 )
-const detailId = computed(() => String(route.params.id))
+const detailId = computed(() => routeParam(route, 'id'))
 
 // -- loaded row + practice header --------------------------------------------
 

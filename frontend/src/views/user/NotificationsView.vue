@@ -50,6 +50,11 @@
     <VHeader :title="t('user.screens.notifications.title')" show-back @back="router.back()" />
 
     <div class="notifications__content">
+      <!-- The settings could not be read: the rows below are defaults, switched off
+           and inert; say so and offer Retry (FE-242). -->
+      <VEmptyState v-if="loadFailed" icon="warning" :title="t('common.loadError')">
+        <VButton size="sm" @click="loadPrefs">{{ t('common.retry') }}</VButton>
+      </VEmptyState>
       <div class="notifications__row">
         <div class="notifications__text">
           <span class="notifications__label">{{ MASTER_LABEL }}</span>
@@ -87,7 +92,7 @@ import { t } from '@/locales'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VSwitch } from '@/components/ui'
+import { VSwitch, VEmptyState, VButton } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { getNotificationPrefs, updateNotificationPrefs } from '@/api/notifications'
 

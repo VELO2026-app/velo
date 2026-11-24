@@ -14,9 +14,13 @@
     <p class="topup-result__text">{{ t('user.screens.topupSuccess.balanceLabel') }}</p>
     <div class="topup-result__balance">
       <VLoader v-if="loading" size="sm" />
+      <span v-else-if="refreshFailed" data-testid="screen-error">{{ t('common.loadError') }}</span>
       <span v-else>{{ balanceStore.formattedBalance }}</span>
     </div>
     <div class="topup-result__actions">
+      <VButton v-if="refreshFailed" variant="secondary" size="lg" block @click="refreshBalance">
+        {{ t('common.retry') }}
+      </VButton>
       <VButton variant="primary" size="lg" block @click="router.push({ name: 'user-dashboard' })">
         {{ t('common.backHome') }}
       </VButton>
@@ -38,12 +42,18 @@ import { useBalanceStore } from '@/stores/balance'
 const router = useRouter()
 const balanceStore = useBalanceStore()
 const loading = ref(true)
+/** The refresh failed: the shown balance is the pre-topup one, so it is not shown (FE-242). */
+const refreshFailed = ref(false)
 
-onMounted(async () => {
+async function refreshBalance(): Promise<void> {
+  loading.value = true
+  refreshFailed.value = false
   // Refresh balance from API to show actual amount after topup.
-  await balanceStore.refresh()
+  refreshFailed.value = !(await balanceStore.refresh())
   loading.value = false
-})
+}
+
+onMounted(refreshBalance)
 </script>
 
 <style scoped>

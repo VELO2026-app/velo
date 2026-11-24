@@ -17,6 +17,12 @@
   to --velo-screen-width and centred, so on wide viewports the white never
   spills into the photo gutters outside the centred app frame.
 
+  Fog mask: this layer is a DOM descendant of the scrolling <main> of
+  MobileLayout, and a fog screen's top mask would clip it too (the strip again).
+  MobileLayout drops the mask while a `.result-screen` is inside
+  (`.mobile-layout__main--fog:has(.result-screen)`), so keep the root class
+  name in sync with that rule.
+
   Slots:
     #icon    -- the illustration / glyph (SVG or emoji).
     #actions -- the buttons / links row.

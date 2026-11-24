@@ -66,6 +66,7 @@
       </div>
       <VInput
         v-model="form.limit"
+        kind="numeric"
         :label="t('masterScreens.masterNewPromocode.fields.usageLimit')"
         type="number"
         min="1"

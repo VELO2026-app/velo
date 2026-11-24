@@ -70,6 +70,7 @@
         <h2 class="support__title">{{ t('user.screens.support.message.label') }}</h2>
         <VTextarea
           v-model="message"
+          kind="message"
           :rows="5"
           maxlength="4000"
           :placeholder="t('user.screens.support.message.placeholder')"
@@ -124,17 +125,17 @@ interface SupportTopic {
   priority: SupportPriority
 }
 // The user form's topics, as codes; labels from the one table (supportTopics).
-const TOPICS: SupportTopic[] = [
+const TOPICS = [
   { value: 'payment', priority: 'P1' },
   { value: 'complaint_master', priority: 'P0' },
   { value: 'practice', priority: 'P1' },
   { value: 'technical', priority: 'P2' },
   { value: 'other', priority: 'P2' },
-]
+] as const satisfies readonly SupportTopic[]
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: supportTopicLabel(t.value) }))
 
-const topic = ref<SupportTopicCode>(TOPICS[0]!.value)
+const topic = ref<SupportTopicCode>(TOPICS[0].value)
 const message = ref('')
 const appealKeys = createAttemptKeys()
 

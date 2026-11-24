@@ -17,7 +17,11 @@ import { createPinia } from 'pinia'
 import WaitlistConfirmView from '@/views/user/WaitlistConfirmView.vue'
 import * as waitlistApi from '@/api/waitlist'
 import { ApiResponseError } from '@/api/client'
-import type { PaginatedWaitlistResponse, WaitlistWithPracticeResponse } from '@/api/types'
+import type {
+  PaginatedWaitlistResponse,
+  WaitlistStatus,
+  WaitlistWithPracticeResponse,
+} from '@/api/types'
 
 vi.mock('@/api/waitlist')
 
@@ -137,7 +141,7 @@ describe('WaitlistConfirmView', () => {
 
     expect(text()).toContain('Утренняя медитация')
     expect(text()).toContain('Подтвердите участие до')
-    buttonWith('Подтвердить место')!.click()
+    buttonWith('Подтвердить место')?.click()
     await flush()
 
     expect(waitlistApi.confirmWaitlist).toHaveBeenCalledWith('w1')
@@ -155,7 +159,7 @@ describe('WaitlistConfirmView', () => {
 
     expect(text()).toContain('Срок подтверждения истёк')
     expect(buttonWith('Подтвердить место')).toBeUndefined()
-    buttonWith('Открыть практику')!.click()
+    buttonWith('Открыть практику')?.click()
     expect(push).toHaveBeenCalledWith({ name: 'practice-detail', params: { id: 'p1' } })
   })
 
@@ -173,6 +177,17 @@ describe('WaitlistConfirmView', () => {
     expect(buttonWith('Открыть практику')).toBeDefined()
   })
 
+  it('a status the screen does not know -> the unavailable text, no confirm', async () => {
+    // A newer backend may add a status; the paragraph must not come out empty.
+    const unknown = 'archived' as unknown as WaitlistStatus
+    vi.mocked(waitlistApi.getMyWaitlist).mockResolvedValue(page([entry({ status: unknown })]))
+    mount()
+    await flush()
+
+    expect(text()).toContain('Запись больше недоступна.')
+    expect(buttonWith('Подтвердить место')).toBeUndefined()
+  })
+
   it('no such entry -> «Запись не найдена», no confirm', async () => {
     vi.mocked(waitlistApi.getMyWaitlist).mockResolvedValue(page([entry({ id: 'other' })]))
     mount()
@@ -180,6 +195,22 @@ describe('WaitlistConfirmView', () => {
 
     expect(text()).toContain('Запись не найдена')
     expect(buttonWith('Подтвердить место')).toBeUndefined()
+  })
+
+  it('load failing -> a load error with Retry, not «Запись не найдена»; Retry recovers (FE-242)', async () => {
+    vi.mocked(waitlistApi.getMyWaitlist)
+      .mockRejectedValueOnce(new TypeError('net'))
+      .mockResolvedValueOnce(page([entry()]))
+    mount()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+    expect(text()).not.toContain('Запись не найдена')
+    buttonWith('Повторить')!.click()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+    expect(buttonWith('Подтвердить место')).toBeDefined()
   })
 
   it('confirm 400 -> the entry is re-read and shows what happened (here: expired)', async () => {
@@ -191,7 +222,7 @@ describe('WaitlistConfirmView', () => {
     )
     mount()
     await flush()
-    buttonWith('Подтвердить место')!.click()
+    buttonWith('Подтвердить место')?.click()
     await flush()
 
     expect(waitlistApi.getMyWaitlist).toHaveBeenCalledTimes(2)
@@ -204,7 +235,7 @@ describe('WaitlistConfirmView', () => {
     vi.mocked(waitlistApi.confirmWaitlist).mockRejectedValueOnce(new TypeError('net'))
     mount()
     await flush()
-    buttonWith('Подтвердить место')!.click()
+    buttonWith('Подтвердить место')?.click()
     await flush()
 
     expect(toastError).toHaveBeenCalled()

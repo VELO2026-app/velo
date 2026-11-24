@@ -13,7 +13,10 @@
     - The save control (i18n:ui.save) is a FLOATING GLASS PILL -- the diary
       composer's Liquid
       Glass recipe hovering over the scrolling body (the body reserves the
-      bottom clearance), not an in-flow footer bar;
+      bottom clearance), not an in-flow footer bar. While the soft keyboard
+      is open the pill steps into the column as its last row (FE-261), so
+      the scroll region ends above it and a focused field is revealed
+      clear of the pill instead of under it;
     - required seals hug their field's right edge (FE-80 product correction,
       supersedes the 2026-09-10 screen-edge hang): 22px marker + --space-1
       gap into the 33px layout padding, clear of the screen edge; fields
@@ -182,6 +185,7 @@
               :aria-invalid="!!errors.custom || undefined"
               :aria-describedby="errors.custom ? 'err-custom' : undefined"
               :disabled="!!customChip"
+              @focus="onFieldFocus"
               @input="onCustomInput"
               @keydown.enter.prevent="commitCustom"
             />
@@ -299,6 +303,7 @@ import MoodSlider from '@/components/shared/MoodSlider.vue'
 import VoiceTextarea from '@/components/shared/VoiceTextarea.vue'
 import { getExternalActivityCustomNames } from '@/api/diary'
 import { useDiaryStore, type ExternalActivityFieldErrors } from '@/stores/diary'
+import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { EXTERNAL_ACTIVITY_MOOD_HIDDEN, TEXTAREA_VOICE_INPUT } from '@/utils/constants'
@@ -310,6 +315,9 @@ const router = useRouter()
 const diaryStore = useDiaryStore()
 const toast = useToast()
 const timezone = useViewerTimezone()
+// Keyboard-aware reveal of the custom-variant input. The thoughts field
+// (VoiceTextarea -> the kit's VTextarea) binds the same seam on its own.
+const { onFieldFocus } = useKeyboardFieldScroll()
 
 // -- Closed option sets --------------------------------------------------------
 // The values ARE the backend enum (generated ExternalActivityType), so the
@@ -655,9 +663,10 @@ async function onSubmit(): Promise<void> {
      below the fog, scrolled content dissolves into it (MobileLayout's fog
      mask recipe, applied to OUR scroll body -- the shell's fog class is
      fill-incompatible). The bottom step clears the glass pill (50px + one
-     gap): the overlay hovers OVER the scroll, the last field stays
-     reachable. */
-  padding: var(--ea-fog-top) var(--space-8) calc(var(--velo-size-50) + var(--space-5));
+     gap) and the home indicator under it (FE-240): the overlay hovers OVER
+     the scroll, the last field stays reachable. */
+  padding: var(--ea-fog-top) var(--space-8)
+    calc(var(--velo-size-50) + var(--space-5) + var(--velo-safe-bottom));
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
@@ -670,6 +679,27 @@ async function onSubmit(): Promise<void> {
     transparent var(--ea-fog-hard),
     var(--velo-fog-color) var(--ea-fog-top)
   );
+}
+
+/* [FE-261] KEYBOARD OPEN: the overlay pill would cover the focused field.
+   While typing, `.app-frame` (src/components/layout/AppFrame.vue) shrinks to
+   the visible area. The rule is `html.is-keyboard-open .app-frame` in
+   src/styles/global.css (tagged FE-7): it sets `height: var(--velo-vvh, ...)`
+   and `min-height: 0`. --velo-vvh is the live visual-viewport height, and the
+   `is-keyboard-open` class on <html> comes with it: useViewportGeometry
+   (src/composables/useViewportGeometry.ts) publishes both. `.ea` fills the
+   frame (`height: 100%`, see .ea above), so it shrinks with it and the pill
+   hangs at its bottom -- directly above the keyboard -- but the scroll
+   region still reaches under it. The "scroll the focused field into view"
+   step (useKeyboardFieldScroll, nearest edge) then parks the field's lower
+   edge AT the region's bottom, i.e. under the pill: the field and the text
+   being typed stay hidden. So the pill steps into the column as its last
+   row: the region (and with it the reveal) now ends above the pill (rule on
+   .ea__save-wrap below), and the region's own bottom clearance shrinks to a
+   plain gap because the pill no longer overlays it. Inert at rest: the
+   class is absent. */
+html.is-keyboard-open .ea__body {
+  padding-bottom: var(--space-5);
 }
 
 /* Required-fields legend: CreatePracticeView's DS plate (pink glass, rose
@@ -987,8 +1017,20 @@ async function onSubmit(): Promise<void> {
   z-index: 2; /* above the masked body, like the header */
   display: flex;
   justify-content: center;
-  padding: 0 var(--space-8) var(--space-4);
+  /* FE-240: clear the home indicator (--velo-safe-bottom, global.css); the
+     body's bottom padding (.ea__body) grows by the same amount. */
+  padding: 0 var(--space-8) calc(var(--space-4) + var(--velo-safe-bottom));
   pointer-events: none;
+}
+
+/* [FE-261] Keyboard open: the wrap joins the column as its last row (see the
+   .ea__body note above). Its top padding keeps a field revealed flush with
+   the scroll region's end off the pill's edge; the pill keeps its look and
+   its spot above the keyboard. */
+html.is-keyboard-open .ea__save-wrap {
+  position: static;
+  flex: none;
+  padding-top: var(--space-2);
 }
 
 .ea__save {

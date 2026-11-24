@@ -70,7 +70,19 @@
 
     <!-- Error / not found -->
     <div v-else-if="!practice" class="edit-practice__content">
-      <VEmptyState icon="warning" :title="t('masterScreens.editPractice.notFound')">
+      <!-- 404/403: gone, Back only; any other failure is retryable (FE-242). -->
+      <VEmptyState
+        v-if="loadGone"
+        icon="notfound"
+        :title="t('masterScreens.editPractice.notFound')"
+        data-testid="not-found"
+      >
+        <VButton size="sm" variant="outline" @click="router.push({ name: 'master-practices' })">
+          {{ t('ui.back') }}
+        </VButton>
+      </VEmptyState>
+      <VEmptyState v-else icon="warning" :title="t('common.loadError')">
+        <VButton size="sm" @click="loadPractice">{{ t('common.retry') }}</VButton>
         <VButton size="sm" variant="outline" @click="router.push({ name: 'master-practices' })">
           {{ t('ui.back') }}
         </VButton>
@@ -342,6 +354,7 @@ import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { VHeader } from '@/components/layout'
 import {
   VButton,
@@ -372,6 +385,7 @@ import {
   previewAudienceChange,
 } from '@/api/practices'
 import { masterPracticeBadge } from '@/utils/practiceStatus'
+import { ApiResponseError } from '@/api/client'
 import { extractApiError } from '@/composables/useApiError'
 import { DURATION_OPTIONS } from '@/utils/practiceOptions'
 import { usePracticeTaxonomyOptions } from '@/composables/usePracticeTaxonomyOptions'
@@ -397,7 +411,7 @@ const toast = useToast()
 const queryCache = useQueryCache()
 const { profile: masterProfile } = useMasterProfile()
 
-const practiceId = route.params.id as string
+const practiceId = routeParam(route, 'id')
 
 // Back to the practice screen. Deep-link-safe: if there's history, pop to the
 // detail entry that pushed us here (avoids the edit<->detail back-loop); else
@@ -540,7 +554,11 @@ function resolveAudienceGroupIds(): void {
 }
 
 // -- Load practice --
-onMounted(async () => {
+/** The load failed with 404/403: the practice is gone, a retry cannot help. */
+const loadGone = ref(false)
+
+async function loadPractice(): Promise<void> {
+  loadGone.value = false
   // The form is always filled from the server (`getPractice`): the list cache
   // may be stale (another editor, a status change) and a PATCH built from it
   // would write old values back. The cached row is only a placeholder that
@@ -560,12 +578,15 @@ onMounted(async () => {
     // A failed refresh keeps the placeholder visible but unsaveable would be
     // a trap: drop it so the master sees the error state, not stale data.
     practice.value = null
+    loadGone.value = e instanceof ApiResponseError && (e.status === 404 || e.status === 403)
     toast.error(extractApiError(e, t('practice.loadFailed')))
   } finally {
     loading.value = false
     refreshing.value = false
   }
-})
+}
+
+onMounted(loadPractice)
 
 /**
  * Replace the placeholder with the server record. Fields the master already

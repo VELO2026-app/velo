@@ -101,3 +101,9 @@ export function prefersReducedMotion(): boolean {
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
 }
+
+/** True when `el` opts out of browser touch gestures (`touch-action: none`),
+ *  i.e. it runs its own drag (a slider stage, the sheet grab zone). */
+export function hasOwnTouchGesture(el: Element): boolean {
+  return getComputedStyle(el).touchAction === 'none'
+}

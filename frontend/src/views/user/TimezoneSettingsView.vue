@@ -80,7 +80,11 @@
         <h2 class="tz-settings__section-title">
           {{ t('user.screens.timezoneSettings.dateFormat.label') }}
         </h2>
-        <VSelect v-model="selectedDateFormat" :options="DATE_FORMAT_OPTIONS" />
+        <VSelect
+          v-model="selectedDateFormat"
+          :aria-label="t('user.screens.timezoneSettings.dateFormat.label')"
+          :options="DATE_FORMAT_OPTIONS"
+        />
       </section>
     </div>
   </div>

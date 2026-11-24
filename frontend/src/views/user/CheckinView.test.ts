@@ -116,6 +116,7 @@ import { upsertCheckin, listDiaryFeed } from '@/api/diary'
 import { getMyBookings, skipCheckin } from '@/api/bookings'
 import { getPractice } from '@/api/practices'
 import { useAuthStore } from '@/stores/auth'
+import { CHECKIN_WINDOW_H } from '@/utils/constants'
 import type { BookingWithPracticeResponse, PracticeResponse, UserResponse } from '@/api/types'
 
 // -- seams: the api wrappers the three real stores import (velo-idiom §4).
@@ -623,6 +624,30 @@ describe('CheckinView', () => {
       expect(text()).not.toContain('Как вы себя чувствуете?')
     })
 
+    it('a FAILED bookings list shows the error rung, not a form that could overwrite a check-in (FE-242)', async () => {
+      getMyBookingsMock.mockRejectedValueOnce(new ApiResponseError(500, 'boom'))
+      mount()
+      await flush()
+
+      expect(text()).toContain('Ошибка загрузки')
+      expect(submitBtn()).toBeUndefined()
+
+      getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ has_checkin: false })]))
+      button('Повторить')!.click()
+      await flush()
+
+      expect(submitBtn()).toBeDefined()
+    })
+
+    it('submit is held while the bookings list is in flight: has_checkin is unknown (FE-242)', async () => {
+      getMyBookingsMock.mockReturnValue(new Promise(() => {}))
+      mount()
+      await flush()
+
+      expect(submitBtn()?.disabled).toBe(true)
+      expect(disabledHint()).toBe('')
+    })
+
     it('a check-in on a DIFFERENT practice does not lock this one', async () => {
       // `alreadyCheckedIn` keys on practice_id (.vue:129). Matching on the wrong
       // field would lock a user out of every later check-in after their first.
@@ -906,10 +931,11 @@ describe('CheckinView', () => {
       it.each([
         [404, 'no_active_booking', 'У вас нет подтверждённой брони на эту практику'],
         [400, 'checkin_window_closed', 'Check-in закрыт — практика уже началась'],
+        // The number is the frontend mirror of the backend window, not a literal.
         [
           400,
           'checkin_window_not_open',
-          'Check-in ещё не открыт — он откроется ближе к началу практики',
+          `Check-in на практику откроется за ${CHECKIN_WINDOW_H} ч до старта`,
         ],
       ])('%s %s shows its own phrase', async (status, code, phrase) => {
         upsertCheckinMock.mockRejectedValue(new ApiResponseError(status, 'English detail', code))

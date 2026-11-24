@@ -65,6 +65,7 @@ design, mirroring MasterInviteClaimView's own state machine exactly:
 import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { joinGroup } from '@/api/groups'
 import { ApiResponseError } from '@/api/client'
 import { useToast } from '@/composables/useToast'
@@ -80,10 +81,10 @@ const errorTitle = ref('')
 const errorDescription = ref('')
 
 async function join(): Promise<void> {
+  const token = routeParam(route, 'token')
   joining.value = true
   transientError.value = false
   errorTitle.value = ''
-  const token = String(route.params.token ?? '')
   try {
     const res = await joinGroup(token)
     toast.success(t('masterScreens.groupJoin.addedToast', { name: res.group_name }))
@@ -125,8 +126,9 @@ onMounted(join)
   align-items: center;
   justify-content: center;
   /* Standalone route (outside MobileLayout) — apply the screen rail directly
-     so content matches the app's 24px rail (WS-1). */
-  padding: var(--space-8) var(--velo-rail-pad-x) var(--space-5);
+     so content matches the app's 24px rail (WS-1); clear the home indicator
+     (--velo-safe-bottom, global.css; FE-240). */
+  padding: var(--space-8) var(--velo-rail-pad-x) calc(var(--space-5) + var(--velo-safe-bottom));
   gap: var(--space-4);
 }
 

@@ -32,7 +32,11 @@
       <span class="admin-users__count">{{ headerCount }}</span>
     </header>
 
-    <VInput v-model="search" :placeholder="t('adminScreens.adminUsers.searchPlaceholder')" />
+    <VInput
+      v-model="search"
+      kind="search"
+      :placeholder="t('adminScreens.adminUsers.searchPlaceholder')"
+    />
 
     <!-- Loading -->
     <div v-if="loading" class="admin-users__loader"><VLoader size="lg" /></div>

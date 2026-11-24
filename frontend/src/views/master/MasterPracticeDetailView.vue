@@ -293,7 +293,7 @@
           :duration="durationLabel"
           :direction="practice.direction"
         >
-          <template v-if="hasRating" #extra>
+          <template v-if="ratingPcts" #extra>
             <VRatingBadges size="lg" :pcts="ratingPcts" />
           </template>
         </PracticeHeroCard>
@@ -357,6 +357,12 @@
               <VButton variant="ghost" @click="loadMoreReviews">{{ t('common.showMore') }}</VButton>
             </div>
           </template>
+          <!-- A failed read is not "no reviews yet" (FE-242). -->
+          <VEmptyState v-else-if="reviewsFailed" icon="warning" :title="t('common.loadError')">
+            <VButton size="sm" variant="outline" @click="loadReviews">{{
+              t('common.retry')
+            }}</VButton>
+          </VEmptyState>
           <VEmptyState
             v-else
             variant="note"
@@ -399,6 +405,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { usePracticeInsights } from '@/composables/queries/diary'
 import { cachedMyPractice, myPracticesChanged } from '@/composables/queries/master'
 import { useQueryCache } from '@pinia/colada'
@@ -446,7 +453,7 @@ const router = useRouter()
 const toast = useToast()
 const queryCache = useQueryCache()
 
-const practiceId = route.params.id as string
+const practiceId = routeParam(route, 'id')
 
 // -- Data --
 const practice = ref<PracticeResponse | null>(null)
@@ -582,11 +589,11 @@ const totalFeedbacks = computed((): number => {
   const f = insights.value?.feedbacks
   return f ? zoneTotal(f) : 0
 })
-const hasRating = computed((): boolean => insights.value != null && totalFeedbacks.value > 0)
-// Rendered only under hasRating, so the insights are loaded there.
-const ratingPcts = computed((): Record<MoodScaleKey, number> =>
-  zonePercents(insights.value!.feedbacks),
-)
+// The badges' data, or null while there is no feedback to show.
+const ratingPcts = computed((): Record<MoodScaleKey, number> | null => {
+  const data = insights.value
+  return data && totalFeedbacks.value > 0 ? zonePercents(data.feedbacks) : null
+})
 
 // -- Past: stats (REAL via getAttendance; "—" until loaded) --
 const attendedValue = computed((): string | number =>
@@ -604,6 +611,7 @@ const REVIEWS_PREVIEW = 10
 const reviews = ref<ReviewItem[]>([])
 const reviewsTotal = ref(0)
 const reviewsLoading = ref(false)
+const reviewsFailed = ref(false)
 const hasMoreReviews = computed((): boolean => reviews.value.length < reviewsTotal.value)
 
 // First 10 + the show-more expander
@@ -621,12 +629,14 @@ function expandReviews(): void {
 
 async function loadReviews(): Promise<void> {
   reviewsLoading.value = true
+  reviewsFailed.value = false
   try {
     const res = await getPracticeReviews(practiceId, REVIEWS_PAGE, 0)
     reviews.value = res.items
     reviewsTotal.value = res.total
   } catch {
-    // Non-fatal: the rest of the detail view stays usable; the section shows empty.
+    // Non-fatal: the rest of the detail view stays usable; the section shows an error with Retry.
+    reviewsFailed.value = true
   } finally {
     reviewsLoading.value = false
   }
