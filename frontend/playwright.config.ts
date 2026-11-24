@@ -20,6 +20,9 @@
 //           (its /api proxy goes to :8000), http://localhost:5173 for the
 //           velo-dev stand. E2E_API_URL is the backend for the setup's own
 //           calls (default http://127.0.0.1:8000).
+//   sweep-layout -- the same screens launched as Telegram fullscreen on an
+//           iPhone (safe-area insets), judged by the layout detector at
+//           three screen sizes as well (FE-240, docs/agents/e2e.md).
 //   sweep-webkit -- the same on WebKit (Telegram on iOS); nightly, or on demand.
 //
 // Every test of every project runs under the crash detector (e2e/support/test.ts).
@@ -78,6 +81,15 @@ export default defineConfig({
       name: 'sweep',
       testMatch: 'sweep/*.spec.ts',
       dependencies: ['sweep-setup'],
+    },
+    {
+      // FE-240: the sweep as Telegram on an iPhone in fullscreen opens it
+      // (safe-area insets), plus the layout detector at three screen sizes
+      // (e2e/sweep/layout-host.ts). Chromium: its safe-area override is CDP.
+      name: 'sweep-layout',
+      testMatch: 'sweep/sweep.spec.ts',
+      dependencies: ['sweep-setup'],
+      use: { viewport: { width: 390, height: 844 } },
     },
     {
       // FE-162: the key screens from recorded API answers, no backend. Run

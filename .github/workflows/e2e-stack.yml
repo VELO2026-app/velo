@@ -6,14 +6,16 @@
 # backend seeded with the `e2e` profile, under the crash detector
 # (frontend/e2e/, docs/agents/e2e.md). Two entry points:
 #
-#   workflow_call  -- from ci.yml on every PR and push (Chromium only).
+#   workflow_call  -- from ci.yml on every PR and push (Chromium only): the
+#                     sweep and sweep-layout (FE-240: Telegram fullscreen on
+#                     an iPhone, the layout detector at three screen sizes).
 #                     Blocking (FE-222): a red sweep fails this job and the
 #                     gate of ci.yml. There is no advisory switch; a screen
 #                     that fails for a known reason is quarantined in
 #                     frontend/e2e/sweep/routes.ts (docs/testing.md).
 #   schedule       -- nightly on the default branch (deploy-machine):
-#                     Chromium (Telegram on Android) and WebKit (Telegram on
-#                     iOS).
+#                     Chromium (Telegram on Android), sweep-layout and WebKit
+#                     (Telegram on iOS).
 #   workflow_dispatch -- by hand, either set.
 #
 # The stack: Postgres 16 and Redis 7 as job services (the majors and images of
@@ -41,16 +43,37 @@ on:
     inputs:
       projects:
         type: string
-        default: sweep sweep-webkit
+        default: sweep sweep-layout sweep-webkit
 
 permissions:
   contents: read
 
 jobs:
+  # FE-240: one job per Playwright project, in parallel, each with its own
+  # stack. Together in one job sweep + sweep-layout took more than twice the
+  # sweep alone; apart, the wall time stays that of the longest project.
+  plan:
+    name: e2e-stack — plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      projects: ${{ steps.split.outputs.projects }}
+    steps:
+      - id: split
+        env:
+          # The schedule has no inputs: both engines and the layout sweep.
+          PROJECTS: ${{ inputs.projects || 'sweep sweep-layout sweep-webkit' }}
+        run: echo "projects=$(jq -cn --arg p "$PROJECTS" '$p | split(" ") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
+
   sweep:
-    name: e2e-stack — sweep on a real backend
+    name: e2e-stack — ${{ matrix.project }} on a real backend
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.plan.outputs.projects) }}
     services:
       postgres:
         image: postgres:16.15-trixie@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
@@ -89,8 +112,8 @@ jobs:
       ZOOM_RETRY_ENABLED: 'false'
       ZOOM_REPORT_ENABLED: 'false'
       E2E_LOG_DIR: ${{ github.workspace }}/stack-logs
-      # The schedule has no inputs: both engines.
-      PROJECTS: ${{ inputs.projects || 'sweep sweep-webkit' }}
+      # This job's one project (the plan job splits the list).
+      PROJECTS: ${{ matrix.project }}
     steps:
       - uses: actions/checkout@v7
 
@@ -169,7 +192,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: e2e-sweep-${{ github.run_attempt }}
+          name: e2e-${{ matrix.project }}-${{ github.run_attempt }}
           path: |
             frontend/test-results
             stack-logs

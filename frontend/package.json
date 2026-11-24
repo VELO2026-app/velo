@@ -26,7 +26,7 @@
     "test:shard": "VITEST_SHARD=1 vitest run --coverage --reporter=blob --reporter=default",
     "coverage:budget": "node scripts/coverage-budget.mjs",
     "e2e:smoke": "playwright test --project=smoke",
-    "e2e:sweep": "playwright test --project=sweep",
+    "e2e:sweep": "playwright test --project=sweep --project=sweep-layout",
     "visual:record": "playwright test --project=visual-record",
     "e2e:sweep:ci": "playwright test --reporter=github,./e2e/support/crash-reporter.ts"
   },
