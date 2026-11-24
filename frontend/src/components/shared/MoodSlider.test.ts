@@ -124,16 +124,18 @@ describe('MoodSlider -- the five-emotion strip', () => {
     expect(range().getAttribute('aria-valuetext')).toBe('5 из 10 — Нормально')
   })
 
-  it('stacks the deck active -> neighbors -> far cards: the active card is on top', () => {
+  it('stacks the deck with the active card on top; the far cards stay above the nearest', () => {
     mountSlider(5)
 
     // The neighbors lie 14 px under the active card on purpose; a skin whose
     // face art runs out of its box (the glow of a skin icon) must not be cut
-    // by them -- the active card paints last.
+    // by them -- the active card paints last. A far card keeps its cropped
+    // outer part as a tap target, so it stays above the nearest cards (the
+    // layout detector reads a far card under a neighbor as covered).
     const [far1, near1, active, near2, far2] = cards().map((c) => Number(c.style.zIndex))
-    expect(active).toBeGreaterThan(near1 ?? 0)
+    expect(active).toBeGreaterThan(far1 ?? 0)
+    expect(far1).toBeGreaterThan(near1 ?? 0)
     expect(near1).toBe(near2)
-    expect(near1).toBeGreaterThan(far1 ?? 0)
     expect(far1).toBe(far2)
   })
 
