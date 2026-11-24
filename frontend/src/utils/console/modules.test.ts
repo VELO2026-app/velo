@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { consoleModuleOf, consoleNavGroups } from '@/views/console/consoleNav'
+import { consoleModuleOf, groupHasCaption } from '@/utils/console/modules'
+import { consoleNavGroups } from '@/utils/console/nav'
 
 describe('consoleNavGroups', () => {
   it('lists every module in menu groups when every instance option is on', () => {
@@ -35,5 +36,12 @@ describe('consoleModuleOf', () => {
     [undefined, null],
   ])('maps route %s to module %s', (name, key) => {
     expect(consoleModuleOf(name)).toBe(key)
+  })
+})
+
+describe('groupHasCaption', () => {
+  it('gives every group a caption except the overview', () => {
+    expect(groupHasCaption('overview')).toBe(false)
+    expect(groupHasCaption('people')).toBe(true)
   })
 })

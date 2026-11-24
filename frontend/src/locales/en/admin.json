@@ -587,13 +587,14 @@
       "open": "Open in the mobile admin"
     },
     "stub": {
-      "title": "The admin opens on a computer",
-      "telegram": "The admin does not open in Telegram. Open the link in a browser on a computer.",
-      "narrow": "The window is too narrow for the admin. Open it on a computer or make the window wider.",
+      "title": "The admin opens on a computer or a tablet",
+      "telegram": "The admin does not open in Telegram. Open the link in a browser on a computer or a tablet.",
+      "narrow": "The screen is too small for the admin. Open it on a computer or a tablet.",
       "openBrowser": "Open in browser",
       "copy": "Copy link",
       "copied": "Link copied",
-      "userMode": "Go to user mode"
+      "userMode": "Go to user mode",
+      "copyFailed": "Could not copy"
     },
     "moderation": {
       "tabs": {

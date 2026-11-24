@@ -2,17 +2,23 @@
   VELO Frontend -- ConsoleSidebar (FE-262)
 
   The web console's left menu: the instance mark, the module groups
-  (views/console/consoleNav.ts -- only the modules this instance has), and
-  at the bottom the way back to the user mode, the mobile admin (until the
-  console replaces it) and who is signed in. A module's live counter shows
-  as a pill next to it. Colours and sizes are skin tokens only.
+  (utils/console/nav.ts -- only the modules this instance has), and at the
+  bottom the way back to the user mode, the mobile admin (until the console
+  replaces it) and who is signed in. Masters and Moderation carry the live
+  counters of the admin stats, the query the mobile AdminShell reads; a
+  failed load says so once per run of failures.
+
+  Below 1200px (a tablet, a small laptop) the menu folds to an icon rail:
+  captions and labels hide, the name stays as the item's tooltip and
+  accessible name, a counter sits on the icon. Colours and sizes are skin
+  tokens only.
 -->
 
 <template>
   <aside class="console-sidebar" data-testid="console-sidebar">
     <div class="console-sidebar__brand">
       <VeloLogo :size="36" />
-      <div class="console-sidebar__brand-text">
+      <div class="console-sidebar__brand-text console-sidebar__wide-only">
         <span class="console-sidebar__brand-name">{{ t('common.brandName') }}</span>
         <span class="console-sidebar__brand-sub">{{ t('console.brand') }}</span>
       </div>
@@ -20,7 +26,10 @@
 
     <nav class="console-sidebar__nav" :aria-label="t('console.navLabel')">
       <div v-for="group in groups" :key="group.key" class="console-sidebar__group">
-        <p v-if="group.key !== 'overview'" class="console-sidebar__caption">
+        <p
+          v-if="groupHasCaption(group.key)"
+          class="console-sidebar__caption console-sidebar__wide-only"
+        >
           {{ t(`console.groups.${group.key}`) }}
         </p>
         <RouterLink
@@ -30,11 +39,16 @@
           class="console-sidebar__item"
           :class="{ 'console-sidebar__item--active': module.key === active }"
           :aria-current="module.key === active ? 'page' : undefined"
+          :title="t(`console.modules.${module.key}`)"
           :data-testid="`console-nav-${module.key}`"
         >
           <component :is="module.icon" class="console-sidebar__icon" aria-hidden="true" />
           <span class="console-sidebar__label">{{ t(`console.modules.${module.key}`) }}</span>
-          <span v-if="module.badge && badges[module.badge] > 0" class="console-sidebar__count">
+          <span
+            v-if="module.badge && badges[module.badge] > 0"
+            class="console-sidebar__count"
+            data-testid="console-nav-count"
+          >
             {{ badges[module.badge] }}
           </span>
         </RouterLink>
@@ -42,23 +56,27 @@
     </nav>
 
     <div class="console-sidebar__footer">
-      <RouterLink
-        :to="{ name: 'user-dashboard' }"
+      <button
+        type="button"
         class="console-sidebar__item console-sidebar__item--quiet"
+        :title="t('console.userMode')"
+        data-testid="console-user-mode"
+        @click="toUserMode"
       >
         <IconUserMode class="console-sidebar__icon" aria-hidden="true" />
         <span class="console-sidebar__label">{{ t('console.userMode') }}</span>
-      </RouterLink>
+      </button>
       <RouterLink
         :to="{ name: 'admin-dashboard' }"
         class="console-sidebar__item console-sidebar__item--quiet"
+        :title="t('console.mobileAdmin')"
       >
         <IconHome class="console-sidebar__icon" aria-hidden="true" />
         <span class="console-sidebar__label">{{ t('console.mobileAdmin') }}</span>
       </RouterLink>
-      <div class="console-sidebar__me">
+      <div class="console-sidebar__me" :title="meName">
         <VAvatar :name="meName" :url="meAvatar" size="sm" />
-        <div class="console-sidebar__me-text">
+        <div class="console-sidebar__me-text console-sidebar__wide-only">
           <span class="console-sidebar__me-name">{{ meName }}</span>
           <span class="console-sidebar__me-role">{{ t('console.role') }}</span>
         </div>
@@ -70,41 +88,65 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { VAvatar, VeloLogo } from '@/components/ui'
 import { IconHome, IconUserMode } from '@/components/icons'
+import { onFailedRequest, useAdminStats } from '@/composables/queries/admin'
+import { extractApiError } from '@/composables/useApiError'
+import { useToast } from '@/composables/useToast'
+import { isOptionEnabled } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
+import { useUiStore } from '@/stores/ui'
 import {
+  consoleModuleOf,
   consoleRouteName,
+  groupHasCaption,
   type ConsoleBadgeSource,
-  type ConsoleModuleKey,
-  type ConsoleNavGroup,
-} from '@/views/console/consoleNav'
+} from '@/utils/console/modules'
+import { consoleNavGroups } from '@/utils/console/nav'
 
-defineProps<{
-  /** The menu groups to show (already filtered for this instance). */
-  groups: readonly ConsoleNavGroup[]
-  /** The module of the current screen, highlighted in the menu. */
-  active: ConsoleModuleKey | null
-  /** Live counters by source; 0 shows nothing. */
-  badges: Record<ConsoleBadgeSource, number>
-}>()
-
+const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
+const uiStore = useUiStore()
+const toast = useToast()
+
+const groups = consoleNavGroups(isOptionEnabled)
+const active = computed(() => consoleModuleOf(route.name))
+
+const adminStats = useAdminStats()
+const { pendingVerifications, pendingModeration } = adminStats
+const badges = computed<Record<ConsoleBadgeSource, number>>(() => ({
+  pendingVerifications: pendingVerifications.value,
+  pendingModeration: pendingModeration.value,
+}))
+onFailedRequest(adminStats.query, (error) =>
+  toast.error(extractApiError(error, t('storeErrors.admin.dashboard'))),
+)
+
 const meName = computed(() => {
   const user = auth.user
   const name = [user?.first_name, user?.last_name].filter(Boolean).join(' ')
   return name || t('console.role')
 })
 const meAvatar = computed(() => auth.user?.avatar_url ?? undefined)
+
+// The router sends an admin on a user screen back to the admin zone unless
+// the UI mode is «user» (zoneHomeGuard) -- the same switch AdminProfileView
+// makes.
+function toUserMode(): void {
+  uiStore.setUiMode('user')
+  void router.push({ name: 'user-dashboard' })
+}
 </script>
 
 <style scoped>
 .console-sidebar {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: var(--space-2);
   width: 248px;
-  flex: 0 0 auto;
   height: 100%;
   box-sizing: border-box;
   padding: var(--space-5) var(--space-4) var(--space-4);
@@ -161,15 +203,23 @@ const meAvatar = computed(() => auth.user?.avatar_url ?? undefined)
 }
 
 .console-sidebar__item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  width: 100%;
   min-height: 36px;
+  box-sizing: border-box;
   padding: 0 var(--space-3);
+  border: 0;
   border-radius: var(--velo-radius-12);
+  background: transparent;
+  font: inherit;
   font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
   transition: background var(--velo-dur-fast) var(--velo-ease-out);
 }
 
@@ -193,9 +243,9 @@ const meAvatar = computed(() => auth.user?.avatar_url ?? undefined)
 }
 
 .console-sidebar__icon {
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  flex: 0 0 auto;
 }
 
 .console-sidebar__label {
@@ -205,12 +255,12 @@ const meAvatar = computed(() => auth.user?.avatar_url ?? undefined)
 
 .console-sidebar__count {
   min-width: 20px;
-  padding: 0 var(--space-1);
   box-sizing: border-box;
+  padding: 0 var(--space-1);
   border-radius: var(--velo-radius-pill);
   background: var(--velo-pink-300);
-  color: var(--velo-on-accent);
   font-size: var(--velo-fs-12);
+  color: var(--velo-on-accent);
   text-align: center;
 }
 
@@ -243,5 +293,57 @@ const meAvatar = computed(() => auth.user?.avatar_url ?? undefined)
   color: var(--velo-text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A tablet or a small laptop: the icon rail. */
+@media (max-width: 1199px) {
+  .console-sidebar {
+    width: 72px;
+    padding: var(--space-4) var(--space-2);
+  }
+
+  .console-sidebar__brand {
+    justify-content: center;
+    padding: 0 0 var(--space-3);
+  }
+
+  .console-sidebar__wide-only,
+  .console-sidebar__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .console-sidebar__group + .console-sidebar__group {
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--velo-border-light);
+  }
+
+  .console-sidebar__item {
+    justify-content: center;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  .console-sidebar__icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .console-sidebar__count {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 16px;
+    font-size: var(--velo-fs-10);
+  }
+
+  .console-sidebar__me {
+    justify-content: center;
+    padding: var(--space-2) 0;
+  }
 }
 </style>

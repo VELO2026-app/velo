@@ -10,7 +10,7 @@
 -->
 
 <template>
-  <section class="console-page" :data-testid="testid">
+  <section class="console-page" :class="{ 'console-page--fill': fill }" :data-testid="testid">
     <header class="console-page__top">
       <div class="console-page__heading">
         <p v-if="crumbs" class="console-page__crumbs">{{ crumbs }}</p>
@@ -41,8 +41,11 @@ withDefaults(
     crumbs?: string | undefined
     /** data-testid of the page root. */
     testid?: string | undefined
+    /** The content fills the page height and scrolls inside (ConsoleSplit)
+     *  instead of the whole page scrolling. */
+    fill?: boolean
   }>(),
-  { crumbs: undefined, testid: 'console-page' },
+  { crumbs: undefined, testid: 'console-page', fill: false },
 )
 </script>
 
@@ -104,5 +107,21 @@ withDefaults(
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.console-page--fill {
+  overflow: hidden;
+}
+
+.console-page--fill .console-page__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* A tablet or a small laptop: tighter side padding. */
+@media (max-width: 1199px) {
+  .console-page {
+    padding: var(--space-4) var(--space-5) var(--space-8);
+  }
 }
 </style>
