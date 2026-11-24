@@ -11,6 +11,8 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { installRouteEvents } from '@/router/routeEvents'
 import {
   isKeyboardOpenFrom,
   restBaselineDelta,
@@ -382,6 +384,34 @@ describe('useViewportGeometry() integration', () => {
     await flush()
     expect(root.classList.contains('is-keyboard-open')).toBe(true)
     expect(root.style.getPropertyValue('--velo-vvh')).toBe('500px')
+    field.remove()
+  })
+  it('a finished navigation blurs the focused field and closes the keyboard state', async () => {
+    const Blank = defineComponent({ render: () => h('div') })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/a', component: Blank },
+        { path: '/b', component: Blank },
+      ],
+    })
+    installRouteEvents(router)
+    await router.push('/a')
+
+    setBrowserViewport(828, 500, 0)
+    mount()
+    await flush()
+    const field = document.createElement('input')
+    document.body.append(field)
+    field.focus()
+    expect(document.activeElement).toBe(field)
+    expect(keyboardOpen.value).toBe(true)
+
+    await router.push('/b')
+
+    expect(document.activeElement).not.toBe(field)
+    expect(keyboardOpen.value).toBe(false)
+    expect(document.documentElement.classList.contains('is-keyboard-open')).toBe(false)
     field.remove()
   })
 })

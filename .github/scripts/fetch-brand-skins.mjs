@@ -3,9 +3,11 @@
 // VELO CI -- fetch the brand skin packages at their pinned tags (FE-234)
 //
 // Reads .github/brand-skins.json (repo, tag, commit, package dir per brand),
-// clones each repository at its tag into <out-dir>/<brand>, checks that the
-// tag still points at the pinned commit, and prints one line for
-// $GITHUB_ENV:  BRAND_SKIN_ARGS=--skin <out-dir>/<brand>/<dir> ...
+// clones each repository at its tag into <out-dir>/<brand> through the shared
+// clone module (FE-239: frontend/scripts/lib/brand-git.mjs -- the Figma
+// variables sync clones the same packages the same way), checks that the tag
+// still points at the pinned commit, and prints one line for $GITHUB_ENV:
+//   BRAND_SKIN_ARGS=--skin <out-dir>/<brand>/<dir> ...
 // (the form scripts/build-matrix.mjs takes).
 //
 // A private brand repository needs a read key: set BRAND_REPO_TOKEN (the
@@ -15,92 +17,20 @@
 //
 // Usage: node .github/scripts/fetch-brand-skins.mjs <out-dir> [--config <brand-skins.json>]
 //        --config  another pin file (the Visual job reads the base's own pins)
-// Node stdlib only. planBrands(), cloneUrl(), cloneEnv(), gitEnv() and cloneFailure() are exported for the test.
+// Node stdlib only. planBrands() is exported for the test; the
+// clone machinery's own test runs with the frontend suite (brand-git.test.mjs).
 // =============================================================================
-import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { cloneAtTag } from '../../frontend/scripts/lib/brand-git.mjs'
 
 const CONFIG = join(dirname(fileURLToPath(import.meta.url)), '..', 'brand-skins.json')
 
-/** The https URL of a repository. The token never goes in it: a URL with a
- *  token lands in .git/config and in git's messages. */
-export function cloneUrl(repo) {
-  return `https://github.com/${repo}.git`
-}
-
-/** The variables that pin git to ONE repository (`git rev-parse
- *  --local-env-vars`). A hook (pre-push, pre-commit) exports some of them;
- *  git run with them aims at the hook's repository, not at the clone. */
-const LOCAL_ENV_FALLBACK = [
-  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
-  'GIT_CONFIG',
-  'GIT_CONFIG_PARAMETERS',
-  'GIT_CONFIG_COUNT',
-  'GIT_OBJECT_DIRECTORY',
-  'GIT_DIR',
-  'GIT_WORK_TREE',
-  'GIT_IMPLICIT_WORK_TREE',
-  'GIT_GRAFT_FILE',
-  'GIT_INDEX_FILE',
-  'GIT_NO_REPLACE_OBJECTS',
-  'GIT_REPLACE_REF_BASE',
-  'GIT_PREFIX',
-  'GIT_SHALLOW_FILE',
-  'GIT_COMMON_DIR',
-]
-
-/** The local-repository variables, asked of git itself (the list grows with
- *  git); the fixed list is the fallback. GIT_ASKPASS, GIT_SSH_COMMAND and the
- *  like are not in it: they are the user's way to reach a remote. */
-export function localEnvVars() {
-  const asked = spawnSync('git', ['rev-parse', '--local-env-vars'], {
-    encoding: 'utf8',
-    env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k !== 'GIT_DIR')),
-  })
-  const names = asked.status === 0 ? asked.stdout.split('\n').filter(Boolean) : []
-  return [...new Set([...LOCAL_ENV_FALLBACK, ...names])]
-}
-
-/** The environment for any git call here: the base without the
- *  local-repository variables (see localEnvVars). */
-export function gitEnv(base = process.env) {
-  const env = { ...base }
-  for (const name of localEnvVars()) delete env[name]
-  return env
-}
-
-/** The git environment of a clone: no prompt for a password (a private
- *  repository without a key must fail, not hang) and, with a token, an
- *  Authorization header for github.com only, passed through the environment
- *  (GIT_CONFIG_*), so .git/config of the clone never holds it. */
-export function cloneEnv(token = '', base = process.env) {
-  // The token header is set AFTER the strip: GIT_CONFIG_COUNT is itself one
-  // of the stripped variables.
-  const env = { ...gitEnv(base), GIT_TERMINAL_PROMPT: '0' }
-  if (token) {
-    const basic = Buffer.from(`x-access-token:${token}`).toString('base64')
-    env.GIT_CONFIG_COUNT = '1'
-    env.GIT_CONFIG_KEY_0 = 'http.https://github.com/.extraheader'
-    env.GIT_CONFIG_VALUE_0 = `AUTHORIZATION: basic ${basic}`
-  }
-  return env
-}
-
-/** The error text of a failed clone: what to do, never the token (nor its
- *  header form), whatever git printed. */
-export function cloneFailure(brand, stderr, token = '') {
-  let detail = String(stderr).trim()
-  if (token) {
-    const basic = Buffer.from(`x-access-token:${token}`).toString('base64')
-    detail = detail.split(token).join('***').split(basic).join('***')
-  }
-  const hint = token
-    ? 'the tag may be missing, or BRAND_REPO_TOKEN cannot read the repository'
-    : 'the repository may be private: set the BRAND_REPO_TOKEN secret (read access), or the tag is missing. Secrets are not passed to pull requests from forks'
-  return `${brand.name}: cannot clone ${brand.repo} at ${brand.tag} -- ${hint}\n${detail}`
-}
+/** What a failed clone without a key says in a workflow: the secret exists
+ *  here, but a pull request from a fork does not get it. */
+const FORK_HINT =
+  'the repository may be private: set the BRAND_REPO_TOKEN secret (read access), or the tag is missing. Secrets are not passed to pull requests from forks'
 
 /** The brands of the config as { name, repo, tag, sha, target, skinDir }; a
  *  malformed entry throws, so a typo cannot silently drop a brand. */
@@ -131,29 +61,13 @@ function main() {
   const token = process.env.BRAND_REPO_TOKEN ?? ''
   const brands = planBrands(JSON.parse(readFileSync(config, 'utf8')), outDir)
   for (const b of brands) {
-    const clone = spawnSync(
-      'git',
-      [
-        '-c',
-        'advice.detachedHead=false',
-        'clone',
-        '--quiet',
-        '--depth',
-        '1',
-        '--branch',
-        b.tag,
-        cloneUrl(b.repo),
-        b.target,
-      ],
-      { env: cloneEnv(token), encoding: 'utf8' },
-    )
-    if (clone.status !== 0) throw new Error(cloneFailure(b, clone.stderr ?? '', token))
-    const head = execFileSync('git', ['-C', b.target, 'rev-parse', 'HEAD'], {
-      encoding: 'utf8',
-      env: gitEnv(),
-    }).trim()
-    if (head !== b.sha)
-      throw new Error(`${b.name} ${b.tag} is ${head}, the pin says ${b.sha} -- the tag moved`)
+    cloneAtTag(b, b.target, {
+      token,
+      anonymousHint: FORK_HINT,
+      expectSha: b.sha,
+      movedMessage: (head) =>
+        `${b.name} ${b.tag} is ${head}, the pin says ${b.sha} -- the tag moved`,
+    })
     if (!existsSync(join(b.skinDir, 'primer-package.yaml')))
       throw new Error(`${b.name} ${b.tag}: no package at ${b.skinDir}`)
   }
