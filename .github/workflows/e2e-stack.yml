@@ -7,22 +7,25 @@
 # (frontend/e2e/, docs/agents/e2e.md). Two entry points:
 #
 #   workflow_call  -- from ci.yml on every PR and push (Chromium only): the
-#                     sweep and sweep-layout (FE-240: Telegram fullscreen on
-#                     an iPhone, the layout detector at three screen sizes).
+#                     sweep and a part of the layout grid (FE-240: Telegram
+#                     fullscreen on an iPhone, the layout detector; the cells
+#                     are listed in ci.yml).
 #                     Blocking (FE-222): a red sweep fails this job and the
 #                     gate of ci.yml. There is no advisory switch; a screen
 #                     that fails for a known reason is quarantined in
 #                     frontend/e2e/sweep/routes.ts (docs/testing.md).
 #   schedule       -- nightly on the default branch (deploy-machine):
-#                     Chromium (Telegram on Android), sweep-layout and WebKit
+#                     Chromium (Telegram on Android), the whole layout grid
+#                     (every screen size on every brand skin) and WebKit
 #                     (Telegram on iOS).
 #   workflow_dispatch -- by hand, either set.
 #
 # The stack: Postgres 16 and Redis 7 as job services (the majors and images of
 # docker-compose.yml), the backend installed with pip (not the app image: its
 # build is slower than the whole sweep), the comms stub, uvicorn on :8000, the
-# build with the synthetic skin package (make-test-skin.mjs) under `vite
-# preview` (its /api proxy goes to :8000).
+# build under `vite preview` (its /api proxy goes to :8000) -- with the
+# synthetic skin package (make-test-skin.mjs) for the sweep, with the brand
+# package of the cell for the layout sweep.
 # Telegram: a fake bot token and the comms stub; Stripe: the stub of SERVER_ROLE=test;
 # Zoom: no stub since BE-192, so a meeting create at seed time fails against zoom.us
 # with the invented keys of ci.env (the practice is seeded without a link) -- the
@@ -36,6 +39,10 @@ on:
       projects:
         type: string
         default: sweep
+    secrets:
+      # The read key of a private brand skin repository (FE-240, as visual.yml).
+      BRAND_REPO_TOKEN:
+        required: false
   schedule:
     # 02:30 UTC, after the day's merges.
     - cron: '30 2 * * *'
@@ -57,7 +64,8 @@ jobs:
   # whole layout grid: every screen size (LAYOUT_SIZES of
   # frontend/e2e/support/layout-sizes.ts -- a width missing there fails its
   # job with "project not found") on every brand skin. PRs run a part of the
-  # grid (ci.yml), the nightly run all of it.
+  # grid (ci.yml), the nightly run all of it. The widths and the brands are
+  # read from those two files, so a new size or brand joins the grid.
   plan:
     name: e2e-stack — plan
     runs-on: ubuntu-latest
@@ -65,13 +73,22 @@ jobs:
     outputs:
       cells: ${{ steps.split.outputs.cells }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            frontend/e2e/support/layout-sizes.ts
+            .github/brand-skins.json
+          sparse-checkout-cone-mode: false
+
       - id: split
         env:
           # The schedule has no inputs: both engines and the layout sweep.
           PROJECTS: ${{ inputs.projects || 'sweep sweep-layout sweep-webkit' }}
-          LAYOUT_WIDTHS: '390 320 430'
-          BRAND_SKINS: 'velo-brand goodo-brand'
         run: |
+          # The `width: <n>` entries of LAYOUT_SIZES; the brands of the pins.
+          LAYOUT_WIDTHS=$(grep -oE 'width: [0-9]+' frontend/e2e/support/layout-sizes.ts | awk '{print $2}' | tr '\n' ' ')
+          BRAND_SKINS=$(jq -r '.brands | keys_unsorted | join(" ")' .github/brand-skins.json)
+          [ -n "$LAYOUT_WIDTHS" ] && [ -n "$BRAND_SKINS" ] || { echo "no layout widths or brand skins found" >&2; exit 1; }
           cells=$(jq -cn --arg p "$PROJECTS" --arg w "$LAYOUT_WIDTHS" --arg s "$BRAND_SKINS" '
             def words: split(" ") | map(select(length > 0));
             [ $p | words[] as $word
@@ -132,6 +149,9 @@ jobs:
       E2E_LOG_DIR: ${{ github.workspace }}/stack-logs
       # This job's one project (the plan job splits the list).
       PROJECTS: ${{ matrix.project }}
+      # The brand skin of the cell, for allowlist entries scoped to a skin
+      # (frontend/e2e/support/layout-allowance.ts).
+      E2E_SKIN: ${{ matrix.skin }}
     steps:
       - uses: actions/checkout@v7
 

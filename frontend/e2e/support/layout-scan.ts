@@ -291,8 +291,12 @@ export function scanLayout({ bands, targetPx }: ScanArgs): ScanFinding[] {
   const texts: Array<{ el: Element; rects: Box[] }> = []
   /** Where an element's own text is drawn, even past its box (FE-173). */
   const ink = new Map<Element, Box>()
-  /** The same text before any box clipped it (to tell text cut off). */
-  const rawInk = new Map<Element, Box>()
+  /**
+   * Lines cut off at a side: a line the clipping box shows (most of its
+   * height) but not to its end. A line the box hides whole (a line clamp,
+   * a collapsed block) is not cut at a side.
+   */
+  const cutLines = new Map<Element, { drawn: Box; shown: Box }>()
   for (const el of all) {
     if (el.closest('svg, style, script, noscript, template')) continue
     const rects: Box[] = []
@@ -307,10 +311,17 @@ export function scanLayout({ bands, targetPx }: ScanArgs): ScanFinding[] {
       }
     }
     if (rects.length === 0) continue
-    rawInk.set(el, rects.reduce(unite))
     // Text runs on past a box that is too narrow; only a clipping box (the
     // element's own overflow, or an ancestor's) hides it.
     const clip = clipOf(el, true, 'layout')
+    for (const r of rects) {
+      const shownH = Math.min(r.bottom, clip.bottom) - Math.max(r.top, clip.top)
+      if (shownH < height(r) / 2) continue
+      if (r.right > clip.right + EPS || r.left < clip.left - EPS) {
+        cutLines.set(el, { drawn: r, shown: intersect(r, clip) })
+        break
+      }
+    }
     const shown = rects.map((r) => intersect(r, clip)).filter((r) => !srOnly(r))
     if (shown.length === 0) continue
     ink.set(el, shown.reduce(unite))
@@ -354,8 +365,8 @@ export function scanLayout({ bands, targetPx }: ScanArgs): ScanFinding[] {
       }
       // Text cut off by a box that hides its overflow, with no ellipsis to
       // say so.
-      const raw = rawInk.get(el)
-      if (raw && text && (raw.right > text.right + EPS || raw.left < text.left - EPS)) {
+      const cut = cutLines.get(el)
+      if (cut) {
         let ellipsis = false
         for (let e: Element | null = el; e && e !== document.body; e = e.parentElement) {
           if (style(e).textOverflow === 'ellipsis') ellipsis = true
@@ -365,7 +376,7 @@ export function scanLayout({ bands, targetPx }: ScanArgs): ScanFinding[] {
           out.push({
             rule: 'overflow',
             element: describe(el),
-            detail: `text cut off: drawn x ${round(raw.left)}..${round(raw.right)}, shown ${round(text.left)}..${round(text.right)}`,
+            detail: `text cut off: drawn x ${round(cut.drawn.left)}..${round(cut.drawn.right)}, shown ${round(cut.shown.left)}..${round(cut.shown.right)}`,
           })
           continue
         }

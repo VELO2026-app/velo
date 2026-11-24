@@ -14,10 +14,11 @@
 import type { Page } from '@playwright/test'
 import type { CrashSignal, Crashes } from './crashes'
 import { IPHONE_FULLSCREEN } from './fixtures'
-import type { LayoutAllowance, LayoutRule } from './layout-allowance'
+import type { AllowlistUse, LayoutAllowance, LayoutRule } from './layout-allowance'
 import { LAYOUT_ALLOWLIST } from './layout-allowlist'
 import { scanLayout, type SafeBands, type ScanFinding } from './layout-scan'
 import { sizeLabel } from './layout-sizes'
+import { test } from './test'
 
 export type { LayoutAllowance, LayoutRule, SafeBands }
 export { LAYOUT_SIZES, type LayoutSize } from './layout-sizes'
@@ -48,23 +49,44 @@ export interface LayoutFinding extends ScanFinding {
   size: string
 }
 
-/** Whether one of `allowances` accepts `finding` on route `route`. */
-export function isLayoutAllowed(
+/** The brand skin of the run (the CI job sets it); undefined -- not named. */
+export const RUN_SKIN: string | undefined = process.env.E2E_SKIN || undefined
+
+/**
+ * The index of the entry of `allowances` that accepts `finding` on route
+ * `route` under skin `skin`, or -1.
+ */
+export function allowanceFor(
   finding: LayoutFinding,
   route: string,
   allowances: readonly LayoutAllowance[],
-): boolean {
+  skin: string | undefined = RUN_SKIN,
+): number {
   const width = Number(finding.size.split('x')[0])
   const side = finding.measured ? Math.min(finding.measured.width, finding.measured.height) : null
-  return allowances.some(
+  return allowances.findIndex(
     (a) =>
       a.rules.includes(finding.rule) &&
       (!a.routes || a.routes.includes(route)) &&
       (!a.element || a.element.test(finding.element)) &&
       (!a.widths || a.widths.includes(width)) &&
+      (!a.skins || (skin !== undefined && a.skins.includes(skin))) &&
       (a.minSide === undefined || (side !== null && side >= a.minSide)),
   )
 }
+
+/** Whether one of `allowances` accepts `finding` on route `route`. */
+export function isLayoutAllowed(
+  finding: LayoutFinding,
+  route: string,
+  allowances: readonly LayoutAllowance[],
+  skin: string | undefined = RUN_SKIN,
+): boolean {
+  return allowanceFor(finding, route, allowances, skin) >= 0
+}
+
+/** The test attachment that carries an AllowlistUse (read by layout-reporter.ts). */
+export const ALLOWLIST_ATTACHMENT = 'layout-allowlist.json'
 
 /**
  * Findings per rule shown before "and N more" (LAYOUT_MAX raises it: every
@@ -102,10 +124,25 @@ export function layoutSignals(
  */
 export async function checkLayout(page: Page, crashes: Crashes, route: string): Promise<void> {
   const path = new URL(page.url()).pathname
-  const findings = (await inspectLayout(page, TELEGRAM_BANDS)).filter(
-    (f) => !isLayoutAllowed(f, route, LAYOUT_ALLOWLIST),
-  )
+  const all = await inspectLayout(page, TELEGRAM_BANDS)
+  const used = new Set<number>()
+  const findings = all.filter((f) => {
+    const entry = allowanceFor(f, route, LAYOUT_ALLOWLIST)
+    if (entry >= 0) used.add(entry)
+    return entry < 0
+  })
   for (const signal of layoutSignals(findings, path)) crashes.record(signal)
+  // For the dead-entry report: which entries this screen needed.
+  const use: AllowlistUse = {
+    route,
+    width: page.viewportSize()?.width ?? 0,
+    skin: RUN_SKIN,
+    used: [...used],
+  }
+  await test.info().attach(ALLOWLIST_ATTACHMENT, {
+    body: JSON.stringify(use),
+    contentType: 'application/json',
+  })
 }
 
 /** Scan the page at its current size, once its fonts and geometry settled. */

@@ -51,6 +51,7 @@ export default defineConfig({
   reporter: [
     CI ? ['github'] : ['list'],
     ['./e2e/support/crash-reporter.ts'],
+    ['./e2e/support/layout-reporter.ts'],
     ...(CI ? [] : [['html', { open: 'never' }] as const]),
   ],
   timeout: 30_000,

@@ -40,6 +40,7 @@ export const LAYOUT_ALLOWLIST: LayoutAllowance[] = [
     rules: ['overflow'],
     routes: ['user-checkin', 'user-feedback', 'user-diary-activity-new'],
     element: /^span\.mood-slider__label(\.|\s|$)/,
+    widths: [320],
   },
   {
     task: 'FE-250',

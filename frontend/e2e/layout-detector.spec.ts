@@ -42,7 +42,7 @@ import {
   type LayoutRule,
   type LayoutSize,
 } from './support/layout'
-import { checkAllowances } from './support/layout-allowance'
+import { checkAllowances, deadAllowances } from './support/layout-allowance'
 import { LAYOUT_ALLOWLIST } from './support/layout-allowlist'
 import { sizeLabel } from './support/layout-sizes'
 import { settle, trackApi } from './support/settle'
@@ -178,7 +178,6 @@ const MUTATIONS: Mutation[] = [
       if (last.getBoundingClientRect().top < window.innerHeight) {
         throw new Error('the last control is not below the fold')
       }
-      last.dataset.veiled = 'yes'
       last.parentElement!.style.position = 'relative'
       const veil = document.createElement('div')
       veil.style.cssText = 'position:absolute;inset:0;z-index:5'
@@ -267,6 +266,19 @@ test('a link in a sentence may be small; the same link alone may not', async ({ 
   expect(rules(await scan(page, `<p>${link}</p>`))).toContain('small-target')
 })
 
+test('text cut off at a side is reported; lines a clamp hides are not', async ({ page }) => {
+  const box = (css: string): string =>
+    `<div style="width:120px;overflow:hidden;${css}">` +
+    'A long line of words that does not fit its box</div>'
+
+  expect(rules(await scan(page, box('white-space:nowrap')))).toContain('overflow')
+  expect(
+    rules(
+      await scan(page, box('display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1')),
+    ),
+  ).not.toContain('overflow')
+})
+
 test('a hit area grown by ::after counts; one that ignores the pointer does not', async ({
   page,
 }) => {
@@ -308,10 +320,28 @@ test('an allowance accepts only its route, element, width and sizes', () => {
   expect(isLayoutAllowed(small('button.chip "A"', 10), 'user-dashboard', [ENTRY])).toBe(false)
 })
 
-test('an allowance needs a task key and a reason', () => {
+test('an allowance needs a task key, a reason, and a smallest side for small targets', () => {
+  const { minSide: _, ...noSide } = ENTRY
+
   expect(() => checkAllowances([ENTRY])).not.toThrow()
+  expect(() => checkAllowances([{ ...noSide, rules: ['overflow'] }])).not.toThrow()
   expect(() => checkAllowances([{ ...ENTRY, task: 'later' }])).toThrow(/not a task key/)
   expect(() => checkAllowances([{ ...ENTRY, reason: ' ' }])).toThrow(/no reason/)
+  expect(() => checkAllowances([noSide])).toThrow(/without minSide/)
+})
+
+test('an entry is dead when the screens it covers ran and none needed it', () => {
+  const at = (width: number, used: number[]) => ({
+    route: 'user-dashboard',
+    width,
+    skin: undefined,
+    used,
+  })
+
+  // In scope (390) and used there; in scope and unused; out of scope (320).
+  expect(deadAllowances([ENTRY], [at(390, [0]), at(390, [])])).toEqual([])
+  expect(deadAllowances([ENTRY], [at(390, [])])).toEqual([0])
+  expect(deadAllowances([ENTRY], [at(320, [])])).toEqual([])
 })
 
 test('signals stop at the limit per rule and count the rest', () => {
