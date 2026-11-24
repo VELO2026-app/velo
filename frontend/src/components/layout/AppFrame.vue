@@ -31,6 +31,7 @@
 <template>
   <div
     class="app-frame"
+    :class="{ 'app-frame--wide': wide }"
     :style="{ paddingTop: contentSafeTopCss, '--velo-content-safe-top': contentSafeTopCss }"
   >
     <slot />
@@ -39,6 +40,15 @@
 
 <script setup lang="ts">
 import { useSafeArea } from '@/composables/useSafeArea'
+
+withDefaults(
+  defineProps<{
+    /** A full-width web screen (route meta.web, the /console zone): no
+     *  402px phone column. */
+    wide?: boolean
+  }>(),
+  { wide: false },
+)
 
 const { contentSafeTopCss } = useSafeArea()
 </script>
@@ -77,6 +87,11 @@ const { contentSafeTopCss } = useSafeArea()
      Every screen mounted here owns its OWN internal .velo-kbd-scroll
      container for overflow; the frame itself never scrolls. */
   overflow: hidden;
+}
+
+/* FE-262: the web console spans the whole browser window. */
+.app-frame--wide {
+  max-width: none;
 }
 
 /* The single child (one of the gated screens) fills the remaining height. */

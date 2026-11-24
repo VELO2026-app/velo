@@ -401,7 +401,13 @@ if (registryKeys.length === 0) {
 // the listed exports only.
 const ZONE_FOLDERS = {
   master: ['src/views/master/'],
-  admin: ['src/views/admin/', 'src/components/admin/'],
+  // FE-262: the web console (/console) reads the same admin catalog.
+  admin: [
+    'src/views/admin/',
+    'src/components/admin/',
+    'src/views/console/',
+    'src/components/console/',
+  ],
 }
 const ZONE_READER_EXCEPTIONS = {
   // The status / category labels read adminScreens.adminSupport.*; the user
