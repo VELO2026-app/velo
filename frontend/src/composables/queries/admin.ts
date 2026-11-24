@@ -76,6 +76,7 @@ import {
   getReportById,
   type AdminMasterDetail,
   type AdminWithdrawalResponse,
+  type WithdrawalStatus,
   type ReportStatusFilter,
   type AdminPaginatedPromosResponse,
   type AdminPracticeScope,
@@ -218,8 +219,14 @@ export const ADMIN_INVALIDATES = {
    * an item added, renamed, switched off or on -- the catalog editor's tree.
    */
   changeTaxonomy: [adminKeys.taxonomy()],
-  /** `PATCH /admin/promos/{id}/deactivate`: the promo turns inactive -- every tab of the promo list. */
-  deactivatePromo: [adminKeys.promosAll()],
+  /**
+   * `POST /admin/promos`: a company promo is born -- every tab of the promo
+   * list, in the mobile admin (every page loaded so far) and in the web
+   * console (one page per entry).
+   */
+  createPromo: [adminKeys.promosAll(), adminKeys.promoPagesAll()],
+  /** `PATCH /admin/promos/{id}/deactivate`: the promo turns inactive -- every tab of the promo list, in both admins. */
+  deactivatePromo: [adminKeys.promosAll(), adminKeys.promoPagesAll()],
   /**
    * `POST /admin/masters/invite`: a one-time invite link, answered to the
    * caller only -- no list shows invites, nothing goes stale.
@@ -705,6 +712,30 @@ export const adminPromosQuery = defineInfiniteQueryOptions((filter: AdminPromoFi
   staleTime: 0,
 }))
 
+/** A tab of the web console's promo table: no "inactive" tab -- a deactivated promo shows under "all" with its status. */
+export type ConsolePromoFilter = Exclude<AdminPromoFilter, 'inactive'>
+
+/**
+ * Query options for one page (1-based) of one tab of the promo table
+ * (`GET /admin/promos`), the web console. The page is part of the key: a
+ * page switch is a cache entry of its own.
+ */
+export const adminPromosPageQuery = defineQueryOptions(
+  ({ filter, page }: { filter: ConsolePromoFilter; page: number }) => ({
+    key: adminKeys.promosPage(filter, page),
+    query: () => {
+      const { type, isActive } = promoParams(filter)
+      return getAdminPromos(
+        type,
+        isActive,
+        ADMIN_PROMOS_PAGE_SIZE,
+        (page - 1) * ADMIN_PROMOS_PAGE_SIZE,
+      )
+    },
+    staleTime: 0,
+  }),
+)
+
 /** Query options for one practice with its roster (`GET /admin/practices/{id}`). */
 export const adminPracticeQuery = defineQueryOptions((practiceId: string) => ({
   key: adminKeys.practice(practiceId),
@@ -976,6 +1007,38 @@ export function setWithdrawal(queryCache: QueryCache, decided: AdminWithdrawalRe
     }),
   )
 }
+
+/**
+ * Query options for one page (1-based) of one status of the payout queue
+ * (`GET /admin/withdrawals?status=`), the web console's table. The page is
+ * part of the key; every page sits under `adminKeys.withdrawals()`, so a
+ * verdict (ADMIN_INVALIDATES.decideWithdrawal) makes them all stale.
+ */
+export const adminWithdrawalsPageQuery = defineQueryOptions(
+  ({ status, page }: { status: WithdrawalStatus; page: number }) => ({
+    key: adminKeys.withdrawalsPage(status, page),
+    query: () =>
+      getAdminWithdrawals(
+        status,
+        ADMIN_WITHDRAWALS_PAGE_SIZE,
+        (page - 1) * ADMIN_WITHDRAWALS_PAGE_SIZE,
+      ),
+    staleTime: 0,
+  }),
+)
+
+/**
+ * Query options for the number of payout requests awaiting a verdict: the
+ * total of a one-row page of `GET /admin/withdrawals?status=pending`. The
+ * counter of the Finance tabs. `enabled` false (the instance has no payments
+ * option) asks nothing.
+ */
+export const adminPendingWithdrawalsQuery = defineQueryOptions((enabled: boolean) => ({
+  key: adminKeys.withdrawalsPendingCount(),
+  query: async (): Promise<number> => (await getAdminWithdrawals('pending', 1, 0)).total,
+  staleTime: 0,
+  enabled,
+}))
 
 // =============================================================================
 // Support

@@ -59,6 +59,15 @@ export const adminKeys = {
   promosAll: () => ['admin', 'promos'] as const,
   /** `GET /admin/promos?type=&is_active=` -- one tab of the promo oversight list, every page loaded so far. */
   promos: (filter: string) => ['admin', 'promos', { filter }] as const,
+  /** Prefix of every page of the promo list (the web console's table). */
+  promoPagesAll: () => ['admin', 'promoPages'] as const,
+  /**
+   * `GET /admin/promos?type=&limit=&offset=` -- one page (1-based) of one
+   * tab of the promo list, the web console's table. A prefix of its own,
+   * not under `promos`: those entries hold infinite-query data, and the
+   * writers of that shape (markPromoInactive) must not meet a page.
+   */
+  promosPage: (filter: string, page: number) => ['admin', 'promoPages', { filter, page }] as const,
   /** `GET /admin/users` -- every user of the platform (any role), every page loaded so far. */
   users: () => ['admin', 'users'] as const,
   /** `GET /admin/masters/list` -- every master with its status, counts and methods. */
@@ -88,6 +97,15 @@ export const adminKeys = {
   report: (reportId: string) => ['admin', 'report', reportId] as const,
   /** `GET /admin/withdrawals` -- every payout request, every page loaded so far. */
   withdrawals: () => ['admin', 'withdrawals'] as const,
+  /**
+   * `GET /admin/withdrawals?status=&limit=&offset=` -- one page (1-based) of
+   * one status of the payout queue, the web console's table. Under
+   * `withdrawals`, so a verdict makes every page stale at once.
+   */
+  withdrawalsPage: (status: string, page: number) =>
+    ['admin', 'withdrawals', { status, page }] as const,
+  /** `GET /admin/withdrawals?status=pending&limit=1` -- the number of payout requests awaiting a verdict. */
+  withdrawalsPendingCount: () => ['admin', 'withdrawals', 'pendingCount'] as const,
   /** `GET /admin/users?role=admin` -- the admins a support ticket can be handed to. */
   admins: () => ['admin', 'admins'] as const,
   /** Prefix of every support ticket list. */

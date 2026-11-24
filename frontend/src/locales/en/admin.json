@@ -595,6 +595,128 @@
       "copied": "Link copied",
       "userMode": "Go to user mode",
       "copyFailed": "Could not copy"
+    },
+    "finance": {
+      "tabs": {
+        "label": "Finance sections",
+        "withdrawals": "Payouts",
+        "promos": "Promo codes"
+      },
+      "pager": {
+        "nav": "Pages",
+        "page": "Page {n}",
+        "shown": "Showing {from}–{to} of {total}"
+      },
+      "withdrawals": {
+        "statusLabel": "Payout status",
+        "status": {
+          "pending": "Awaiting",
+          "approved": "Approved",
+          "rejected": "Rejected"
+        },
+        "tableLabel": "Payout requests",
+        "columns": {
+          "master": "Master",
+          "amount": "Amount",
+          "net": "To pay out",
+          "details": "Payout details",
+          "requested": "Requested",
+          "actions": "Actions",
+          "decision": "Decision"
+        },
+        "bank": "Bank",
+        "netLine": "To pay out {amount}",
+        "note": "An approved payout goes to the master through the instance's payment service; a rejected one returns to the balance with the reason.",
+        "approve": "Approve",
+        "reject": "Reject",
+        "approveFor": "Approve the payout of {amount}",
+        "rejectFor": "Reject the payout of {amount}",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "empty": {
+          "pending": "No payout requests",
+          "approved": "No approved payouts yet",
+          "rejected": "No rejected payouts yet"
+        },
+        "loadFailed": "Failed to load the payouts",
+        "toast": {
+          "approved": "The payout has been approved",
+          "approveFailed": "Failed to approve the payout",
+          "rejected": "The payout has been rejected",
+          "rejectFailed": "Failed to reject the payout"
+        },
+        "rejectModal": {
+          "title": "Reject the payout",
+          "text": "A request for {amount}. The funds return to the master's balance.",
+          "reason": "Rejection reason",
+          "placeholder": "What is wrong with the request",
+          "required": "State the rejection reason",
+          "submit": "Reject the payout",
+          "cancel": "Cancel"
+        }
+      },
+      "promos": {
+        "filterLabel": "Whose promo codes",
+        "filter": {
+          "all": "All",
+          "company": "Company",
+          "master": "Masters"
+        },
+        "create": "Create a promo code",
+        "tableLabel": "Promo codes",
+        "columns": {
+          "code": "Code",
+          "owner": "Owner",
+          "discount": "Discount",
+          "used": "Used",
+          "until": "Until",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "ownerCompany": "{brand} company",
+        "ownerFallback": "User",
+        "usedOf": "{used} / {max}",
+        "untilLine": "until {date}",
+        "status": {
+          "active": "Active",
+          "exhausted": "Used up",
+          "expired": "Expired",
+          "inactive": "Deactivated"
+        },
+        "deactivate": "Deactivate",
+        "deactivateFor": "Deactivate the promo code {code}",
+        "deactivateConfirm": "Deactivate the promo code {code}? It will no longer be usable.",
+        "toast": {
+          "deactivated": "The promo code has been deactivated",
+          "deactivateFailed": "Failed to deactivate the promo code"
+        },
+        "empty": {
+          "all": "No promo codes yet",
+          "company": "No company promo codes yet",
+          "master": "No masters' promo codes yet"
+        },
+        "loadFailed": "Failed to load the promo codes",
+        "createModal": {
+          "title": "New company promo code",
+          "code": "Code",
+          "codePlaceholder": "For example, WINTER25",
+          "discount": "Discount",
+          "maxUses": "Limit",
+          "maxUsesPlaceholder": "No limit",
+          "until": "Valid until",
+          "firstPurchaseOnly": "First purchase only",
+          "submit": "Create the promo code",
+          "cancel": "Cancel",
+          "created": "The promo code has been created",
+          "failed": "Failed to create the promo code",
+          "refused": "The promo code was not created: the code already exists or the discount is not allowed",
+          "errors": {
+            "code": "The code takes 3 to 50 characters",
+            "maxUses": "Enter a whole number from 1, or leave it empty",
+            "until": "The date cannot be in the past"
+          }
+        }
+      }
     }
   }
 }
