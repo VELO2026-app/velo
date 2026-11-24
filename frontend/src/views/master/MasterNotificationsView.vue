@@ -48,75 +48,60 @@
     />
 
     <div class="master-notifications__content">
-      <!-- Nothing below is drawn until the settings are read (FE-242, FE-258): the
-           switches and the delivery window would be defaults passing for the
-           master's own setting, and a flip of them would overwrite the real one. -->
-      <div v-if="loadStatus === 'loading'" class="master-notifications__loader">
-        <VLoader size="md" />
-      </div>
-      <VEmptyState
-        v-else-if="loadStatus === 'failed'"
-        icon="warning"
-        :title="t('common.loadError')"
-      >
-        <VButton size="sm" @click="loadPrefs">{{ t('common.retry') }}</VButton>
-      </VEmptyState>
-      <template v-else>
-        <section v-for="group in GROUPS" :key="group.title" class="mn-section">
-          <h2 class="mn-section__title">{{ group.title }}</h2>
-          <div v-for="row in group.rows" :key="row.key" class="mn-card">
-            <div class="mn-card__text">
-              <span class="mn-card__title">{{ row.label }}</span>
-              <span v-if="row.sub" class="mn-card__sub">{{ row.sub }}</span>
-            </div>
-            <VSwitch
-              :model-value="toggles[row.key]"
-              :aria-label="row.label"
-              @update:model-value="(v) => onToggle(row.key, v)"
-            />
+      <section v-for="group in GROUPS" :key="group.title" class="mn-section">
+        <h2 class="mn-section__title">{{ group.title }}</h2>
+        <div v-for="row in group.rows" :key="row.key" class="mn-card">
+          <div class="mn-card__text">
+            <span class="mn-card__title">{{ row.label }}</span>
+            <span v-if="row.sub" class="mn-card__sub">{{ row.sub }}</span>
           </div>
-        </section>
+          <VSwitch
+            :model-value="toggles[row.key]"
+            :aria-label="row.label"
+            @update:model-value="(v) => onToggle(row.key, v)"
+          />
+        </div>
+      </section>
 
-        <!-- Delivery schedule -->
-        <section class="mn-section">
-          <h2 class="mn-section__title">
-            {{ t('masterScreens.masterNotifications.schedule') }}
-          </h2>
-          <p class="mn-section__sub">
-            {{ t('masterScreens.masterNotifications.receiveFrom') }}
-          </p>
-          <div class="mn-sched">
-            <button
-              type="button"
-              class="mn-sched__field"
-              :aria-describedby="scheduleTimeError ? 'err-sched-time' : undefined"
-              @click="openTimePicker('from')"
-            >
-              {{ schedule.from }}
-            </button>
-            <span class="mn-sched__sep">{{ t('masterScreens.masterNotifications.to') }}</span>
-            <button
-              type="button"
-              class="mn-sched__field"
-              :aria-describedby="scheduleTimeError ? 'err-sched-time' : undefined"
-              @click="openTimePicker('to')"
-            >
-              {{ schedule.to }}
-            </button>
-          </div>
-          <VFieldError id="err-sched-time" :message="scheduleTimeError" />
-          <div class="mn-days-card">
-            <VDayPicker
-              :model-value="schedule.days"
-              :aria-label="t('masterScreens.masterNotifications.deliveryDays')"
-              @update:model-value="onScheduleDays"
-            />
-          </div>
-          <p class="mn-days-hint">
-            {{ t('masterScreens.masterNotifications.daysHint') }}
-          </p>
-        </section>
-      </template>
+      <!-- Delivery schedule -->
+      <section class="mn-section">
+        <h2 class="mn-section__title">
+          {{ t('masterScreens.masterNotifications.schedule') }}
+        </h2>
+        <p class="mn-section__sub">
+          {{ t('masterScreens.masterNotifications.receiveFrom') }}
+        </p>
+        <div class="mn-sched">
+          <button
+            type="button"
+            class="mn-sched__field"
+            :aria-describedby="scheduleTimeError ? 'err-sched-time' : undefined"
+            @click="openTimePicker('from')"
+          >
+            {{ schedule.from }}
+          </button>
+          <span class="mn-sched__sep">{{ t('masterScreens.masterNotifications.to') }}</span>
+          <button
+            type="button"
+            class="mn-sched__field"
+            :aria-describedby="scheduleTimeError ? 'err-sched-time' : undefined"
+            @click="openTimePicker('to')"
+          >
+            {{ schedule.to }}
+          </button>
+        </div>
+        <VFieldError id="err-sched-time" :message="scheduleTimeError" />
+        <div class="mn-days-card">
+          <VDayPicker
+            :model-value="schedule.days"
+            :aria-label="t('masterScreens.masterNotifications.deliveryDays')"
+            @update:model-value="onScheduleDays"
+          />
+        </div>
+        <p class="mn-days-hint">
+          {{ t('masterScreens.masterNotifications.daysHint') }}
+        </p>
+      </section>
     </div>
 
     <TimePickerSheet
@@ -134,7 +119,7 @@ import { t } from '@/locales'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VSwitch, VDayPicker, VFieldError, VEmptyState, VButton, VLoader } from '@/components/ui'
+import { VSwitch, VDayPicker, VFieldError } from '@/components/ui'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import { getNotificationPrefs, updateNotificationPrefs } from '@/api/notifications'
 import { ApiResponseError } from '@/api/client'
@@ -268,16 +253,10 @@ function onTimePicked(value: string): void {
 
 // --- Comms persistence (Phase 6 / T1) --------------------------------------
 // Category toggles + schedule live in comms; loading merges the server state
-// over the local defaults. Until the first read answers, nothing is drawn; a
-// failed load (comms down -> 502/504, or the recipient not yet synced -> 404)
-// shows the error state with Retry instead of the defaults (FE-258) -- the
-// defaults were never the master's settings, and a save from them would
-// overwrite the real ones.
-/** Where the first read stands (see the template); a failed one is retried through `loadPrefs`. */
-const loadStatus = ref<'loading' | 'ready' | 'failed'>('loading')
-
+// over the local defaults. A failed load
+// (comms down -> 502/504, or the recipient not yet synced -> 404) leaves the
+// defaults on screen -- the settings screen degrades, it never crashes.
 async function loadPrefs(): Promise<void> {
-  loadStatus.value = 'loading'
   try {
     const prefs = await getNotificationPrefs()
     for (const [key, category] of Object.entries(CATEGORY_BY_KEY)) {
@@ -293,12 +272,10 @@ async function loadPrefs(): Promise<void> {
       schedule.to = prefs.schedule.to
       schedule.days = prefs.schedule.days
     }
-    loadStatus.value = 'ready'
   } catch (error) {
     // H-R2 (3.6): a silent load failure left the screen showing defaults
     // the server never confirmed -- surface it (same tone as the
     // category handler below).
-    loadStatus.value = 'failed'
     toast.error(t('masterScreens.masterNotifications.toast.loadFailed'))
     console.warn('notification prefs load failed', error)
   }
@@ -366,12 +343,6 @@ function onScheduleDays(days: string[]): void {
   /* Break out of the layout's content padding so VHeader spans full width —
      mirrors the sibling settings screens (NotificationsView/LanguageTimezone). */
   margin: calc(-1 * var(--space-4));
-}
-
-.master-notifications__loader {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-5) 0;
 }
 
 .master-notifications__content {

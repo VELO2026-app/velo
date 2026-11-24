@@ -57,13 +57,7 @@
       <div v-if="loadStatus === 'loading'" class="notifications__loader">
         <VLoader size="md" />
       </div>
-      <VEmptyState
-        v-else-if="loadStatus === 'failed'"
-        icon="warning"
-        :title="t('common.loadError')"
-      >
-        <VButton size="sm" @click="loadPrefs">{{ t('common.retry') }}</VButton>
-      </VEmptyState>
+      <LoadErrorState v-else-if="loadStatus === 'failed'" variant="primary" @retry="loadPrefs" />
       <template v-else>
         <div class="notifications__row">
           <div class="notifications__text">
@@ -103,8 +97,9 @@ import { t } from '@/locales'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VSwitch, VEmptyState, VButton, VLoader } from '@/components/ui'
+import { VSwitch, VLoader } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
+import LoadErrorState from '@/components/shared/LoadErrorState.vue'
 import { getNotificationPrefs, updateNotificationPrefs } from '@/api/notifications'
 
 const router = useRouter()
@@ -188,7 +183,9 @@ async function loadPrefs(): Promise<void> {
   } catch (error) {
     // comms down (502/504) or this recipient not synced yet (404). No row is
     // drawn: the defaults were never the user's settings, and a flip of them
-    // would overwrite the real ones. The error state offers Retry.
+    // would overwrite the real ones. The error state offers Retry. (The master
+    // screen differs on purpose: it keeps its switches live on a failed read,
+    // an owner decision that stands.)
     loadStatus.value = 'failed'
     toast.error(t('user.screens.notifications.toast.loadFailed'))
     console.warn('notification prefs load failed', error)

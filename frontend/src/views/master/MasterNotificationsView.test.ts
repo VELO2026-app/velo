@@ -290,49 +290,13 @@ describe('MasterNotificationsView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    // FE-258: the defaults were never the master's settings -- drawing them after a
-    // failed read made a flip overwrite the real ones.
-    it('a failed load (comms down / recipient unsynced) draws no switches, only an error with Retry; Retry brings the SERVER values', async () => {
+    it('a failed load (comms down / recipient unsynced) leaves the defaults on screen -- degrade, never crash', async () => {
       prefsGet.mockRejectedValueOnce(new Error('502'))
       mount()
       await flush()
 
-      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
-      expect(host?.querySelector('.mn-card')).toBeNull()
-      expect(host?.querySelector('.mn-sched')).toBeNull()
-      expect(host?.querySelector('.v-day-picker')).toBeNull()
-
-      // Server answer differs from every default, so a screen that kept them would show them.
-      prefsGet.mockResolvedValue({
-        ...structuredClone(FACADE),
-        categories: { ...FACADE.categories, bookings: false },
-        schedule: { from: '09:30', to: '20:00', days: ['mon'] },
-      })
-      Array.from(host?.querySelectorAll('button') ?? [])
-        .find((b) => b.textContent?.includes('Повторить'))
-        ?.click()
-      await flush()
-
-      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
-      expect(isOn('Новое бронирование')).toBe(false)
-      expect(fromField().textContent?.trim()).toBe('09:30')
+      expect(isOn('Новое бронирование')).toBe(true) // defaults intact
       expect(dayOn('ПН')).toBe(true)
-      expect(dayOn('ВТ')).toBe(false)
-    })
-
-    it('draws no switches until the first read answers', async () => {
-      let answer: (v: typeof FACADE) => void = () => {}
-      prefsGet.mockReturnValueOnce(new Promise<typeof FACADE>((r) => (answer = r)))
-      mount()
-      await flush()
-
-      expect(host?.querySelector('.mn-card')).toBeNull()
-      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
-
-      answer(structuredClone(FACADE))
-      await flush()
-
-      expect(isOn('Новое бронирование')).toBe(true)
     })
   })
 
