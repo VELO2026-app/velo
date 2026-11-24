@@ -43,6 +43,16 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, success: toastSuccess, info: vi.fn() }),
 }))
 
+/** Type a value into a field the test must find on screen. */
+function typeInto(
+  el: HTMLInputElement | HTMLTextAreaElement | null | undefined,
+  value: string,
+): void {
+  if (!el) throw new Error('the field is not on screen')
+  el.value = value
+  el.dispatchEvent(new Event('input'))
+}
+
 function member(id: string, overrides: Partial<GroupMemberItem> = {}): GroupMemberItem {
   return {
     id,
@@ -395,8 +405,7 @@ describe('MasterGroupDetailView', () => {
       expect(groupsApi.getGroupMembers).toHaveBeenLastCalledWith('g1', '')
 
       const input = host?.querySelector<HTMLInputElement>('input')
-      input!.value = 'ан'
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, 'ан')
       await nextTick()
       expect(groupsApi.getGroupMembers).toHaveBeenCalledTimes(1) // not yet
 
@@ -419,16 +428,14 @@ describe('MasterGroupDetailView', () => {
         }),
       )
       const input = host?.querySelector<HTMLInputElement>('input')
-      input!.value = 'ан'
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, 'ан')
       await nextTick()
       vi.advanceTimersByTime(300)
 
       vi.mocked(groupsApi.getGroupMembers).mockResolvedValueOnce(
         page([member('s2', { name: 'Новый' })]),
       )
-      input!.value = 'анн'
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, 'анн')
       await nextTick()
       vi.advanceTimersByTime(300)
       await flush()
@@ -445,8 +452,7 @@ describe('MasterGroupDetailView', () => {
       mount()
       await flush()
       const input = host?.querySelector<HTMLInputElement>('input')
-      input!.value = 'ан'
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, 'ан')
       await nextTick()
 
       app?.unmount()
@@ -597,10 +603,8 @@ describe('MasterGroupDetailView', () => {
       const descField = sheetOverlay()?.querySelector<HTMLTextAreaElement>('textarea')
       expect(descField?.value).toBe('Было')
 
-      input!.value = 'Новое'
-      input!.dispatchEvent(new Event('input'))
-      descField!.value = 'Стало'
-      descField!.dispatchEvent(new Event('input'))
+      typeInto(input, 'Новое')
+      typeInto(descField, 'Стало')
       // Re-read (section 2, owner Q12): the NEXT getGroups() call is what
       // the screen re-derives its header/description from after saving.
       vi.mocked(groupsApi.getGroups).mockResolvedValue(
@@ -642,13 +646,57 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
-      input!.value = 'Новое'
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, 'Новое')
       // Description field left exactly as prefilled -- never touched.
       sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
       await flush()
 
       expect(groupsApi.renameGroup).toHaveBeenCalledWith('g1', 'Новое', 'Не трогали')
+    })
+
+    it('a failed rename toasts the failure, keeps the old name and the typed sheet; a second save renames (FE-259)', async () => {
+      routeParams.id = 'g1'
+      vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Старое', description: 'Было', members_count: 0 },
+        ]),
+      )
+      vi.mocked(groupsApi.renameGroup)
+        .mockRejectedValueOnce(new Error('Failed to fetch'))
+        .mockResolvedValueOnce({ id: 'g1', name: 'Новое', members_count: 0, description: 'Было' })
+      mount()
+      await flush()
+
+      headerMenuTrigger()?.click()
+      await flush()
+      Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[1]?.click()
+      await flush()
+      const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
+      if (!input) throw new Error('the rename sheet has no name input')
+      input.value = 'Новое'
+      input.dispatchEvent(new Event('input'))
+      sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось переименовать группу')
+      expect(text()).toContain('Группа "Старое"')
+      expect(text()).not.toContain('Группа "Новое"')
+      // The sheet is still open (not closing) and still holds what was typed.
+      expect(sheetOverlay()).not.toBeNull()
+      expect(sheetOverlay()?.className).not.toContain('leave')
+      expect(sheetOverlay()?.querySelector<HTMLInputElement>('input')?.value).toBe('Новое')
+
+      vi.mocked(groupsApi.getGroups).mockResolvedValue(
+        customGroups([
+          { id: 'g1', kind: 'custom', name: 'Новое', description: 'Было', members_count: 0 },
+        ]),
+      )
+      sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+      await flush()
+
+      expect(groupsApi.renameGroup).toHaveBeenCalledTimes(2)
+      expect(text()).toContain('Группа "Новое"')
     })
 
     it('«Удалить группу» confirms, calls deleteGroup, and navigates away (nothing left to reload)', async () => {
@@ -716,7 +764,7 @@ describe('MasterGroupDetailView', () => {
       await flush()
 
       expect(toastError).toHaveBeenCalledTimes(1)
-      const [message] = toastError.mock.calls[0]!
+      const [message] = toastError.mock.calls[0] ?? []
       expect(message).not.toContain('Cannot delete')
       expect(message).toContain('аудитория')
       expect(push).not.toHaveBeenCalledWith({ name: 'master-groups' })
