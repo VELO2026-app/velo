@@ -11,7 +11,11 @@
 // =============================================================================
 
 import type { RouteRecordRaw } from 'vue-router'
-import { CONSOLE_MODULES, consoleRouteName } from '@/views/console/consoleNav'
+import {
+  CONSOLE_MODULES,
+  consoleRouteName,
+  type ConsoleModuleKey,
+} from '@/views/console/consoleNav'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -21,6 +25,12 @@ declare module 'vue-router' {
 }
 
 const placeholder = () => import('@/views/console/ConsolePlaceholderView.vue')
+
+/** The modules that have their own screen; the rest show the placeholder. Lazy: a screen is its own chunk. */
+const SCREENS: Partial<Record<ConsoleModuleKey, () => Promise<unknown>>> = {
+  moderation: () => import('@/views/console/ConsoleModerationView.vue'),
+  support: () => import('@/views/console/ConsoleSupportView.vue'),
+}
 
 /** The /console zone: ConsoleShell and one screen per module. */
 export function consoleRoutes(): RouteRecordRaw[] {
@@ -34,7 +44,7 @@ export function consoleRoutes(): RouteRecordRaw[] {
           path: module.key,
           name: consoleRouteName(module.key),
           meta: module.option === undefined ? {} : { option: module.option },
-          component: placeholder,
+          component: SCREENS[module.key] ?? placeholder,
         })),
         {
           path: '',
