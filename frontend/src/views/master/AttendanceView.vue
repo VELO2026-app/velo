@@ -106,6 +106,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { VHeader } from '@/components/layout'
 import { VButton, VLoader, VEmptyState, VCard } from '@/components/ui'
 import { IconClose } from '@/components/icons'
@@ -122,7 +123,7 @@ const route = useRoute()
 const router = useRouter()
 const queryCache = useQueryCache()
 
-const practiceId = route.params.id as string
+const practiceId = routeParam(route, 'id')
 
 // -- Data --
 const attendance = ref<AttendanceResponse | null>(null)

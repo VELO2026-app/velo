@@ -488,6 +488,7 @@ import { t } from '@/locales'
 import { host } from '@/platform/host'
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { useQuery, useQueryCache } from '@pinia/colada'
 import {
   VBackButton,
@@ -537,7 +538,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const masterId = route.params.id as string
+const masterId = routeParam(route, 'id')
 const queryCache = useQueryCache()
 
 // -- The master (Pinia Colada, composables/queries/admin.ts) --
@@ -659,6 +660,10 @@ const revokeAdvisory = computed<RevokeMasterAdvisory | null>(() =>
 const revokeMessage = computed<string>(() => {
   const base = t('adminScreens.adminMasterReview.revokeMessage', { name: displayName.value })
   const a = revokeAdvisory.value
+  // A failed preview must not read as "no warnings" (FE-242): say the check did not run.
+  if (!a && revokePreview.error.value) {
+    return t('adminScreens.adminMasterReview.revokePreviewFailed', { base })
+  }
   if (!a || !a.has_warnings) return base
   const warns: string[] = []
   if (a.scheduled_or_live_practices > 0) {
@@ -1153,6 +1158,14 @@ async function onReject(): Promise<void> {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* FE-240: a long legacy method ("yoga — hatha, meditation — ...") wraps
+   inside its chip instead of running past the screen's edge (the kit's VChip
+   is white-space: nowrap). */
+.mreview__chips > .v-chip {
+  max-width: 100%;
+  white-space: normal;
 }
 
 .mreview__muted {

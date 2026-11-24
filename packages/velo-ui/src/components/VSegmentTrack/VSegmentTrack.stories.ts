@@ -56,3 +56,24 @@ export const TabsScrollable: Story = {
       '<div style="max-width: 320px"><VSegmentTrack model-value="analytics" :options="options" variant="tabs" scrollable /></div>',
   }),
 }
+
+/**
+ * FE-240: equal tabs whose labels are wider than their share, on a 320 px
+ * screen's rail (272 px): each tab keeps its share (min-width: 0) and the
+ * label uses the side padding, instead of the last tab running past the
+ * track -- the members screen with the goodo skin's wider font.
+ */
+export const TabsNarrowLongLabels: Story = {
+  render: () => ({
+    components: { VSegmentTrack },
+    setup: () => ({
+      options: [
+        { value: 'students', label: 'Students' },
+        { value: 'masters', label: 'Masters' },
+        { value: 'removed', label: 'Removed' },
+      ],
+    }),
+    template:
+      '<div style="width: 272px"><VSegmentTrack model-value="students" :options="options" variant="tabs" /></div>',
+  }),
+}

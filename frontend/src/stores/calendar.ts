@@ -102,21 +102,25 @@ export function localDateKey(d: Date): string {
   }).format(d)
 }
 
+/** Seven days, so the week's first and last day are known to exist. */
+type WeekDays = [Date, Date, Date, Date, Date, Date, Date]
+
 /** 7 day-Dates starting from `anchor` (normalized to local midnight). */
-function weekDays(anchor: Date): Date[] {
+function weekDays(anchor: Date): WeekDays {
   const start = new Date(anchor)
   start.setHours(0, 0, 0, 0)
-  return Array.from({ length: 7 }, (_, i) => {
+  const dayAt = (i: number): Date => {
     const day = new Date(start)
     day.setDate(start.getDate() + i)
     return day
-  })
+  }
+  return [dayAt(0), dayAt(1), dayAt(2), dayAt(3), dayAt(4), dayAt(5), dayAt(6)]
 }
 
 /** Parse a YYYY-MM-DD local-day key back to a Date at local midnight. */
 export function parseLocalDateKey(key: string): Date {
-  const [y, m, d] = key.split('-').map(Number)
-  return DateTime.fromObject({ year: y!, month: m ?? 1, day: d ?? 1 }).toJSDate()
+  const [year = Number.NaN, month = 1, day = 1] = key.split('-').map(Number)
+  return DateTime.fromObject({ year, month, day }).toJSDate()
 }
 
 /** Today at local midnight. */
@@ -211,7 +215,7 @@ export const useCalendarStore = defineStore('calendar', () => {
   // so the minute tick follows the screen's lifecycle.
 
   // -- Derived: the 7 day-Dates of the current window --
-  const days = computed<Date[]>(() => weekDays(weekAnchor.value))
+  const days = computed(() => weekDays(weekAnchor.value))
 
   // Prev arrow is disabled when the window already starts at today
   // (we don't navigate into the past: those days can't be booked).
@@ -245,10 +249,10 @@ export const useCalendarStore = defineStore('calendar', () => {
    */
   const weekParams = computed<CalendarWeekParams>(() => {
     const week = days.value
-    const from = new Date(week[0]!)
+    const from = new Date(week[0])
     from.setHours(0, 0, 0, 0)
     from.setDate(from.getDate() - 1)
-    const to = new Date(week[6]!)
+    const to = new Date(week[6])
     to.setHours(23, 59, 59, 999)
     to.setDate(to.getDate() + 1)
 

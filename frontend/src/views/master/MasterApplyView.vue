@@ -570,8 +570,9 @@ async function submit(skipDocuments = false): Promise<void> {
     var(--velo-fog-color) var(--space-4),
     var(--velo-fog-color) 100%
   );
-  /* Standalone route (outside MobileLayout) — apply the screen rail directly. */
-  padding: var(--space-4) var(--velo-rail-pad-x) var(--space-8);
+  /* Standalone route (outside MobileLayout) — apply the screen rail directly
+     and clear the home indicator (--velo-safe-bottom, global.css; FE-240). */
+  padding: var(--space-4) var(--velo-rail-pad-x) calc(var(--space-8) + var(--velo-safe-bottom));
   display: flex;
   flex-direction: column;
   /* Tightened inter-block spacing per the right mockup (J1d / J2a). */

@@ -9,11 +9,17 @@
  * new login), goto, settle (the splash gone, the API quiet), then "not
  * empty": the shell's <main> (or a heading, for the screens outside a shell)
  * is visible. The crash detector judges the rest.
+ *
+ * Under the `sweep-layout-<width>` projects (FE-240) the screen opens as
+ * Telegram on an iPhone in fullscreen opens it, at the project's size, and
+ * the layout detector judges its geometry (./layout-host.ts).
  */
 import { readParams, tokenOf } from '../stack/state'
 import { settle, trackApi } from '../support/settle'
 import { expect, test } from '../support/test'
 import { SESSION_TOKEN_KEY } from '../support/fixtures'
+import { checkLayout } from '../support/layout'
+import { isLayoutProject, launchInTelegram } from './layout-host'
 import { SWEEP, fillPath, type SweepRole } from './routes'
 
 /** Screens App.vue draws INSTEAD of the route (src/views/auth/). */
@@ -42,7 +48,9 @@ for (const [name, entry] of Object.entries(SWEEP)) {
       // A missing value is a setup bug, not a reason to skip the screen.
       expect(path, `no value for a parameter of ${entry.path} in params.json`).not.toBeNull()
       for (const allowance of entry.allow?.(role) ?? []) crashes.allow(allowance)
-      await signIn(page, role)
+      const layout = isLayoutProject(testInfo.project.name)
+      if (layout) await launchInTelegram(page, role)
+      else await signIn(page, role)
       const tracker = trackApi(page)
 
       await page.goto(path!)
@@ -59,6 +67,7 @@ for (const [name, entry] of Object.entries(SWEEP)) {
       await expect(page.getByTestId(GATES), 'a sign-in gate instead of the screen').toHaveCount(0)
       const lands = typeof entry.lands === 'function' ? entry.lands(role) : entry.lands
       await expect(page).toHaveURL(lands ?? new RegExp(`${escape(path!)}$`))
+      if (layout) await checkLayout(page, crashes, name)
     })
   }
 }

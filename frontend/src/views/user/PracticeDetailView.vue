@@ -322,9 +322,10 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { computed, ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch, type Component } from 'vue'
 import { useNow } from '@/composables/useNow'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam, routeParam } from '@/router/routeParam'
 import { usePracticesStore } from '@/stores/practices'
 import { useMyBookings } from '@/composables/queries/bookings'
 import {
@@ -443,9 +444,10 @@ const justPurchased = ref(false)
 const booked = computed(() => {
   if (justPurchased.value) return true
   if (!practice.value) return false
+  const practiceId = practice.value.id
   return bookings.value.some(
     (b) =>
-      b.practice_id === practice.value!.id &&
+      b.practice_id === practiceId &&
       (b.status === 'confirmed' || b.status === 'pending' || b.status === 'attended'),
   )
 })
@@ -466,8 +468,9 @@ const now = useNow(60_000)
  * Used to read status for window checks.
  */
 const myBooking = computed(() => {
-  if (!practice.value) return null
-  return bookings.value.find((b) => b.practice_id === practice.value!.id) ?? null
+  const current = practice.value
+  if (!current) return null
+  return bookings.value.find((b) => b.practice_id === current.id) ?? null
 })
 
 // =========================================================================
@@ -575,19 +578,17 @@ const statusVariant = computed(() => {
   if (attendancePending.value) return 'muted'
   return myAnyBooking.value ? STATUS_VARIANT[myAnyBooking.value.status] : 'info'
 })
+const STATUS_ICON: Record<BookingStatus, Component | null> = {
+  confirmed: IconCheck,
+  attended: IconCheck,
+  cancelled: IconClose,
+  no_show: IconClose,
+  pending: null,
+}
 const statusIcon = computed(() => {
   if (!myAnyBooking.value) return null
   if (attendancePending.value) return null
-  switch (myAnyBooking.value.status) {
-    case 'confirmed':
-    case 'attended':
-      return IconCheck
-    case 'cancelled':
-    case 'no_show':
-      return IconClose
-    default:
-      return null
-  }
+  return STATUS_ICON[myAnyBooking.value.status]
 })
 
 /** ZOOM card shows only for an UPCOMING active booking (confirmed / pending,
@@ -785,7 +786,7 @@ function onBook(): void {
 function onPurchased(): void {
   showBookingPopup.value = false
   justPurchased.value = true
-  const id = route.params.id as string
+  const id = routeParam(route, 'id')
   // No fetchPractice here: BookingConfirmedView loads the practice itself,
   // and this detail view reloads via its own onMounted when the user returns
   // (routes are not kept alive). The bookings list is refetched by the
@@ -804,7 +805,7 @@ function onPurchased(): void {
  */
 function onSoldOut(): void {
   soldOut.value = true
-  void store.fetchPractice(route.params.id as string)
+  void store.fetchPractice(routeParam(route, 'id'))
   void myBookings.refetch()
 }
 
@@ -860,7 +861,7 @@ async function onCancelBooking(): Promise<void> {
 // =========================================================================
 
 onMounted(() => {
-  const id = route.params.id as string
+  const id = routeParam(route, 'id')
   void store.openPractice(id)
   // B30: always refetch on open, not only when stale -- the list may already
   // be cached from a screen visited earlier in the session, taken BEFORE this
@@ -874,7 +875,7 @@ onMounted(() => {
 // practices (e.g. from search results). onMounted won't fire again, so watch
 // the route param and re-fetch when it changes.
 watch(
-  () => route.params.id as string,
+  () => optionalRouteParam(route, 'id'),
   (newId, oldId) => {
     if (newId && newId !== oldId) {
       store.clearSelected()

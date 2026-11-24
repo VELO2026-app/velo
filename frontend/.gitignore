@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+dist-*/
 
 # Coverage report (vitest --coverage; scripts/coverage-budget.mjs reads it)
 coverage/

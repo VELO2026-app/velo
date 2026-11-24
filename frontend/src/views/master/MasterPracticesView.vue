@@ -163,9 +163,10 @@
             </div>
             <!-- Rating distribution (REAL, anonymous insights — eager-loaded). -->
             <VRatingBadges
-              v-if="hasRating(p.id)"
+              v-for="(pcts, row) in ratingRows(p.id)"
+              :key="row"
               class="mp-card__rbadges"
-              :pcts="ratingPcts(p.id)"
+              :pcts="pcts"
             />
           </article>
         </template>
@@ -316,13 +317,11 @@ function totalFeedbacks(id: string): number {
 // checkinLabel / recurrenceLabel / remainingSessionsLabel moved to
 // utils/practiceCardMeta (shared with the master dashboard card — DB-2).
 
-function hasRating(id: string): boolean {
-  return insightsCache.has(id) && totalFeedbacks(id) > 0
-}
-
-// Rendered only under hasRating, so the insights are cached there.
-function ratingPcts(id: string): Record<MoodScaleKey, number> {
-  return zonePercents(insightsCache.get(id)!.feedbacks)
+/** The card's rating badges: one entry once feedback is cached, none before. A
+ *  `v-for` source, so the template gets the data narrowed, without a cast. */
+function ratingRows(id: string): Record<MoodScaleKey, number>[] {
+  const insights = insightsCache.get(id)
+  return insights && totalFeedbacks(id) > 0 ? [zonePercents(insights.feedbacks)] : []
 }
 
 /** Eager-load insights for the visible tab (idempotent: cached ids are skipped).
