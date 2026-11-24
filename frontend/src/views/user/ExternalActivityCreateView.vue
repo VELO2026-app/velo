@@ -681,16 +681,19 @@ async function onSubmit(): Promise<void> {
 }
 
 /* [FE-261] KEYBOARD OPEN: the overlay pill would cover the focused field.
-   While typing, `.ea` shrinks to the visible area (global.css, html.is-
-   keyboard-open) and the pill hangs at its bottom -- directly above the
-   keyboard -- but the scroll region still reaches under it. The "scroll the
-   focused field into view" step (useKeyboardFieldScroll, nearest edge) then
-   parks the field's lower edge AT the region's bottom, i.e. under the pill:
-   the field and the text being typed stay hidden. So the pill steps into the
-   column as its last row: the region (and with it the reveal) now ends above
-   the pill (rule on .ea__save-wrap below), and the region's own bottom
-   clearance shrinks to a plain gap because the pill no longer overlays it.
-   Inert at rest: the class is absent. */
+   While typing, `.app-frame` (AppFrame.vue) shrinks to the visible area: the
+   rule `html.is-keyboard-open .app-frame` in styles/global.css (FE-7) sets
+   its height to --velo-vvh, the live visual-viewport height published by
+   useViewportGeometry. `.ea` fills the frame, so it shrinks with it and the
+   pill hangs at its bottom -- directly above the keyboard -- but the scroll
+   region still reaches under it. The "scroll the focused field into view"
+   step (useKeyboardFieldScroll, nearest edge) then parks the field's lower
+   edge AT the region's bottom, i.e. under the pill: the field and the text
+   being typed stay hidden. So the pill steps into the column as its last
+   row: the region (and with it the reveal) now ends above the pill (rule on
+   .ea__save-wrap below), and the region's own bottom clearance shrinks to a
+   plain gap because the pill no longer overlays it. Inert at rest: the
+   class is absent. */
 html.is-keyboard-open .ea__body {
   padding-bottom: var(--space-5);
 }
