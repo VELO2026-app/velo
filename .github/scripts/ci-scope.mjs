@@ -85,8 +85,10 @@ const FORCE_ALL = [
   /^\.github\/scripts\/ci-scope\.mjs$/,
   /^\.github\/scripts\/ci-scope\.test\.mjs$/,
   // FE-234: the brand pins and the script that fetches them feed the matrix.
+  // FE-239: so does the shared clone module both fetchers run through.
   /^\.github\/brand-skins\.json$/,
   /^\.github\/scripts\/fetch-brand-skins(\.test)?\.mjs$/,
+  /^frontend\/scripts\/lib\/brand-git(\.test)?\.mjs$/,
   /^\.github\/scripts\/visual-decide(\.test)?\.mjs$/,
   /^frontend\/src\/api\/generated\.ts$/,
 ]
