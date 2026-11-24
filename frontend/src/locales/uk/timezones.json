@@ -1,5 +1,5 @@
 {
-  "_comment": "VELO Frontend -- uk seed for the timezone city picker (utils/timezoneCities.ts). Curated UK-named popular cities, same rows/order as the ru seed (the parity gate compares paths). city -> UK display name; iana -> IANA zone id exactly as the backend stores it; q -> lowercase search haystack (latin aliases shared with the other locales).",
+  "_comment": "uk seed for the timezone city picker (utils/timezoneCities.ts). Curated UK-named popular cities, same rows/order as the ru seed (the parity gate compares paths). city -> UK display name; iana -> IANA zone id exactly as the backend stores it; q -> lowercase search haystack (latin aliases shared with the other locales).",
   "curated": [
     { "city": "Москва", "iana": "Europe/Moscow", "q": "moscow moskva" },
     { "city": "Санкт-Петербург", "iana": "Europe/Moscow", "q": "spb piter saint petersburg sankt" },

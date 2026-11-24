@@ -11,7 +11,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { readSkin } from './skin'
+import { CORE_SKIN, readSkin } from './skin'
 import { SKIN_BRAND_ID, SKIN_TOKENS_ID, skinVirtualModules } from './skin-virtual'
 import { FIXTURE_TOKENS, writeSkinPackage } from './skin.test.fixture'
 
@@ -45,11 +45,13 @@ function serve(plugin: ReturnType<typeof skinVirtualModules>, id: string): strin
 }
 
 describe('skinVirtualModules', () => {
-  it('golden build: empty token stub and a null brand', () => {
+  it('core build: empty token stub and the core name (FE-231)', () => {
     const plugin = skinVirtualModules('/nonexistent', null)
     expect(serve(plugin, SKIN_TOKENS_ID)).toContain('cascade stub')
     expect(serve(plugin, SKIN_TOKENS_ID)).not.toContain(':root {')
-    expect(serve(plugin, SKIN_BRAND_ID)).toContain('SKIN_BRAND = null')
+    expect(serve(plugin, SKIN_BRAND_ID)).toContain(
+      `SKIN_BRAND = ${JSON.stringify(CORE_SKIN.displayName)}`,
+    )
   })
 
   it('skin build: the skin tokens and its display name', () => {

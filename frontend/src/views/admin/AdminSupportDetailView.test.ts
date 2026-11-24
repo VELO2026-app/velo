@@ -1168,7 +1168,11 @@ describe('AdminSupportDetailView', () => {
       btnByText('Отправить')?.click()
       await flush()
 
-      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledWith('t_1', 'Здравствуйте')
+      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledWith(
+        't_1',
+        'Здравствуйте',
+        expect.any(String),
+      )
       expect(supportApi.getAdminSupportMessages).toHaveBeenCalledTimes(2)
       expect(bubbles()).toHaveLength(2) // the seeded message + the new one, once
       expect(draftField().value).toBe('')
@@ -1186,6 +1190,58 @@ describe('AdminSupportDetailView', () => {
 
       expect(toastError).toHaveBeenCalled()
       expect(draftField().value).toBe('Здравствуйте')
+    })
+
+    it('a retry of the failed text keeps its key; the same text after a landed reply gets a new one', async () => {
+      vi.mocked(supportApi.sendAdminSupportReply)
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValue({
+          id: 'm_new',
+          thread_id: 't_1',
+          sender: 'admin_me',
+          body: 'Ок',
+          created_at: '2026-10-25T10:05:00Z',
+        })
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      const send = async () => {
+        setValue(draftField(), 'Ок')
+        await flush()
+        btnByText('Отправить')?.click()
+        await flush()
+      }
+      await send() // fails, draft stays
+      await send() // retry of the same attempt
+      await send() // the same text again, on purpose
+
+      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledTimes(3)
+      const keys = vi.mocked(supportApi.sendAdminSupportReply).mock.calls.map((c) => c[2])
+      expect(keys[1]).toBe(keys[0])
+      expect(keys[2]).not.toBe(keys[1])
+    })
+
+    it('a 503 and a 409 keep the key of the retry; a 403 refusal gives the retry a new one', async () => {
+      vi.mocked(supportApi.sendAdminSupportReply)
+        .mockRejectedValueOnce(new ApiResponseError(503, 'Service unavailable'))
+        .mockRejectedValueOnce(new ApiResponseError(409, 'The same key is still being processed'))
+        .mockRejectedValueOnce(new ApiResponseError(403, 'Not your ticket'))
+        .mockRejectedValue(new Error('stop'))
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      for (let i = 0; i < 4; i++) {
+        setValue(draftField(), 'Ок')
+        await flush()
+        btnByText('Отправить')?.click()
+        await flush()
+      }
+
+      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledTimes(4)
+      const keys = vi.mocked(supportApi.sendAdminSupportReply).mock.calls.map((c) => c[2])
+      expect(keys[1]).toBe(keys[0]) // after a 503: same key
+      expect(keys[2]).toBe(keys[0]) // after a 409: same key
+      expect(keys[3]).not.toBe(keys[2]) // after a 403: a new key
     })
 
     it('a double tap on «Отправить» sends the reply once', async () => {
