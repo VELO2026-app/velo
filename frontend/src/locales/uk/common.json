@@ -54,7 +54,8 @@
     "practices": "Практики",
     "analytics": "Аналітика",
     "masters": "Майстри",
-    "moderation": "Модерація"
+    "moderation": "Модерація",
+    "withBadge": "{label}, {count}"
   },
   "supportTopics": {
     "payment": "Проблема з оплатою / транзакцією",
