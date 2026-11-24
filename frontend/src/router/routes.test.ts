@@ -88,6 +88,7 @@ describe('route table: instance options (FE-151, meta.option)', () => {
       'master-school-analytics': 'schools',
       'master-school-student': 'schools',
       'admin-schools': 'schools',
+      'console-schools': 'schools',
       'school-join': 'schools',
       'school-master-offer': 'schools',
       'user-ai-connections': 'mcp',
@@ -119,6 +120,7 @@ describe('route table: access requirements (meta.requires, router/guards.ts)', (
   it('the zone shells require their role', () => {
     expect(record('/master')?.meta?.requires).toBe('master-role')
     expect(record('/admin')?.meta?.requires).toBe('admin-role')
+    expect(record('/console')?.meta?.requires).toBe('admin-role')
   })
 
   // Every MasterShell child is classified here on purpose: a new master
@@ -176,10 +178,10 @@ describe('route table: access requirements (meta.requires, router/guards.ts)', (
     })
   })
 
-  it('no record outside the master and admin shells declares a requirement', () => {
+  it('no record outside the master, admin and console shells declares a requirement', () => {
     const outside = router
       .getRoutes()
-      .filter((r) => r.meta.requires && !/^\/(master|admin)(\/|$)/.test(r.path))
+      .filter((r) => r.meta.requires && !/^\/(master|admin|console)(\/|$)/.test(r.path))
       .map((r) => r.path)
     expect(outside).toEqual([])
     // The standalone master landings keep their own beforeEnter policies.

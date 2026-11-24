@@ -321,6 +321,20 @@ export const SWEEP: Record<string, SweepRow> = {
     roles: A,
     params: { id: 'supportTicketId' },
   },
+  // FE-262: the web console. The sweep's phone viewport shows its device
+  // stub (views/console/consoleAccess.ts) -- that is the screen checked.
+  'console-dashboard': { path: '/console/dashboard', roles: A },
+  'console-masters': { path: '/console/masters', roles: A },
+  'console-users': { path: '/console/users', roles: A },
+  'console-schools': { path: '/console/schools', roles: A },
+  'console-practices': { path: '/console/practices', roles: A },
+  'console-catalog': { path: '/console/catalog', roles: A },
+  'console-moderation': { path: '/console/moderation', roles: A },
+  'console-support': { path: '/console/support', roles: A },
+  'console-finance': { path: '/console/finance', roles: A },
+  'console-analytics': { path: '/console/analytics', roles: A },
+  'console-mail': { path: '/console/mail', roles: A },
+  'console-settings': { path: '/console/settings', roles: A },
   'admin-withdrawals': { path: '/admin/withdrawals', roles: A },
   // No get-by-id endpoint: the screen reads history.state from the list and a
   // deep link is sent back to the list -- which is what the sweep checks.
