@@ -78,6 +78,17 @@ const ruSeed = {
   },
 }
 
+/** `ru seed label -> value`, a Map (a stored string like "constructor" must
+ *  not find an inherited key). Built once: the seed is bundled data read raw,
+ *  so no locale switch, instance overlay or catalog apply can make it stale.
+ *  The LIVE labels are not cached on purpose -- they follow the locale and
+ *  the overlay, so they are read on every lookup. */
+function seedValueByLabel(labelByValue: Record<string, string>): ReadonlyMap<string, string> {
+  return new Map(Object.entries(labelByValue).map(([value, label]) => [label, value]))
+}
+const seedDirectionValueByLabel = seedValueByLabel(ruSeed.display.direction)
+const seedStyleValueByLabel = seedValueByLabel(ruSeed.practice.styles)
+
 /** The two-level picker's selection state. Mirrors the fields the wizard held
  *  inline (selectedDirections / selectedStyles / otherMethod*). */
 export interface MethodSelection {
@@ -225,35 +236,48 @@ export async function ensureTaxonomyCatalog(): Promise<TaxonomyListResponse | nu
   }
 }
 
-/** `Direction label -> value`: the server catalog FIRST (its labels are the
- *  stored canon -- a non-ru UI parses stored ru strings through it), then the
- *  live hardcoded labels (so a same-locale round-trip works with a cold
- *  cache), then the ru seed -- the storage canon itself. The live labels are
- *  the ACTIVE locale's, an instance overlay may re-word them (a texts package
- *  that says "sessions" for "practices"), and a stored string is never
- *  re-written to match: with a cold catalog only the seed still knows it.
- *  A catalog-only value is not a member of the closed
- *  PracticeDirection union -- the cast mirrors the SAME tolerance
- *  MethodTaxonomyPicker.vue's catalog-first options list already applies. */
-function resolveDirectionValue(label: string): PracticeDirection | undefined {
-  const viaCatalog = catalogDirectionValueByLabel.value?.[label] as PracticeDirection | undefined
+/** `Label -> value` for a stored string: the server catalog FIRST (its labels
+ *  are the stored canon -- a non-ru UI parses stored ru strings through it),
+ *  then the live hardcoded labels (so a same-locale round-trip works with a
+ *  cold cache), then the ru seed -- the storage canon itself. The live labels
+ *  are the ACTIVE locale's, an instance overlay may re-word them (a texts
+ *  package that says "sessions" for "practices"), and a stored string is
+ *  never re-written to match: with a cold catalog only the seed still knows
+ *  it. A seed label counts only for a value the live options list. */
+function resolveLabel(
+  label: string,
+  viaCatalog: string | undefined,
+  live: readonly { label: string; value: string }[],
+  seed: ReadonlyMap<string, string>,
+): string | undefined {
   if (viaCatalog) return viaCatalog
-  const viaLive = DIRECTION_OPTIONS.find((o) => o.label === label)?.value
-  if (viaLive) return viaLive
-  const viaSeed = Object.entries(ruSeed.display.direction).find(([, seed]) => seed === label)
-  return viaSeed?.[0] as PracticeDirection | undefined
+  const viaLive = live.find((o) => o.label === label)
+  if (viaLive) return viaLive.value
+  const viaSeed = seed.get(label)
+  return live.some((o) => o.value === viaSeed) ? viaSeed : undefined
 }
 
-/** `Style label -> value` under a resolved direction: catalog first, then the
- *  live hardcoded labels, then the ru seed (same order rationale as
- *  resolveDirectionValue). */
+/** `Direction label -> value` (resolveLabel's chain). A catalog-only value is
+ *  not a member of the closed PracticeDirection union -- the cast mirrors the
+ *  SAME tolerance MethodTaxonomyPicker.vue's catalog-first options list
+ *  already applies. */
+function resolveDirectionValue(label: string): PracticeDirection | undefined {
+  return resolveLabel(
+    label,
+    catalogDirectionValueByLabel.value?.[label],
+    DIRECTION_OPTIONS,
+    seedDirectionValueByLabel,
+  ) as PracticeDirection | undefined
+}
+
+/** `Style label -> value` under a resolved direction (resolveLabel's chain). */
 function resolveStyleValue(dirValue: PracticeDirection, label: string): string | undefined {
-  const viaCatalog = catalogStyleValueByLabel.value?.[dirValue]?.[label]
-  if (viaCatalog) return viaCatalog
-  const options = stylesForDirection(dirValue)
-  const viaLive = options.find((o) => o.label === label)
-  if (viaLive) return viaLive.value
-  return options.find((o) => ruSeed.practice.styles[o.value] === label)?.value
+  return resolveLabel(
+    label,
+    catalogStyleValueByLabel.value?.[dirValue]?.[label],
+    stylesForDirection(dirValue),
+    seedStyleValueByLabel,
+  )
 }
 
 /** `Style value -> label` under a direction, for DISPLAY: the hardcoded key

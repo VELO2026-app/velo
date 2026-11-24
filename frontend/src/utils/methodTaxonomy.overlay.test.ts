@@ -11,19 +11,27 @@
 // independent of order.
 // =============================================================================
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { applyInstanceOverrides, setLocale } from '@/locales'
-import { directionLabel, parseMethods } from '@/utils/methodTaxonomy'
+import { directionLabel, flattenMethods, parseMethods } from '@/utils/methodTaxonomy'
 
 describe('a texts package re-words a direction', () => {
-  it('the stored string still resolves, shown under the package wording', () => {
+  beforeAll(() => {
     applyInstanceOverrides({ ru: { display: { direction: { breathwork: 'Дыхательные сессии' } } } })
+  })
 
+  it('the stored string still resolves, shown under the package wording', () => {
     const parsed = parseMethods(['Дыхательные практики', 'терапия'])
 
     expect(parsed.directions).toEqual(['breathwork'])
     expect(parsed.custom).toEqual(['терапия'])
     expect(directionLabel('breathwork')).toBe('Дыхательные сессии')
+  })
+
+  it('saving the parsed selection again writes the ru storage string, not the package wording', () => {
+    const stored = ['Дыхательные практики', 'Йога — Хатха-йога']
+
+    expect(flattenMethods(parseMethods(stored))).toEqual(stored)
   })
 })
 
@@ -45,4 +53,14 @@ describe('a non-ru UI with a cold catalog', () => {
     expect(parsed.customEnabled).toBe(false)
     expect(directionLabel('breathwork')).toBe(dirLabel)
   })
+
+  it.each(['en', 'uk'])(
+    '%s: saving the parsed selection again writes the ru storage string',
+    async (locale) => {
+      await setLocale(locale)
+      const stored = ['Дыхательные практики', 'Йога — Хатха-йога']
+
+      expect(flattenMethods(parseMethods(stored))).toEqual(stored)
+    },
+  )
 })
