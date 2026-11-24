@@ -287,6 +287,6 @@ describe('DiarySearchBar -- recents keyboard navigation', () => {
     typeInto(input(), '') // ... and reopen once it is empty again
     await flush()
     expect(input().hasAttribute('aria-activedescendant')).toBe(false)
-    expect(host?.querySelector('.diary-search__recent-item--highlight')).toBeNull()
+    expect(host?.querySelector('.velo-listbox-active')).toBeNull()
   })
 })

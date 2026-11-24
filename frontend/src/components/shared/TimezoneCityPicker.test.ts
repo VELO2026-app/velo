@@ -75,7 +75,7 @@ describe('TimezoneCityPicker -- keyboard navigation (combobox)', () => {
     await key(wrapper, 'ArrowDown')
     const input = wrapper.find('input')
     const rows = wrapper.findAll('[role="option"]')
-    expect(rows[0]!.classes()).toContain('tz-picker__row--highlight')
+    expect(rows[0]!.classes()).toContain('velo-listbox-active')
     expect(input.attributes('aria-activedescendant')).toBe(rows[0]!.attributes('id'))
     expect(input.attributes('role')).toBe('combobox')
     expect(wrapper.find('[role="listbox"]').attributes('id')).toBe(
@@ -88,7 +88,7 @@ describe('TimezoneCityPicker -- keyboard navigation (combobox)', () => {
     const wrapper = mountPicker()
     await key(wrapper, 'ArrowUp')
     const rows = wrapper.findAll('[role="option"]')
-    expect(rows[rows.length - 1]!.classes()).toContain('tz-picker__row--highlight')
+    expect(rows[rows.length - 1]!.classes()).toContain('velo-listbox-active')
     wrapper.unmount()
   })
 
@@ -98,7 +98,7 @@ describe('TimezoneCityPicker -- keyboard navigation (combobox)', () => {
     await key(wrapper, 'ArrowDown')
     await key(wrapper, 'Enter')
     // The row the user sees as highlighted is the one that gets picked.
-    const highlighted = wrapper.find('[role="option"].tz-picker__row--highlight')
+    const highlighted = wrapper.find('[role="option"].velo-listbox-active')
     const expected = highlighted.find('.tz-picker__zone').text()
     expect(expected).toBe(CURATED_CITIES[1]!.iana)
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([expected])
@@ -110,8 +110,8 @@ describe('TimezoneCityPicker -- keyboard navigation (combobox)', () => {
     await key(wrapper, 'ArrowUp')
     await key(wrapper, 'ArrowDown')
     const rows = wrapper.findAll('[role="option"]')
-    expect(rows[0]!.classes()).toContain('tz-picker__row--highlight')
-    expect(wrapper.findAll('.tz-picker__row--highlight')).toHaveLength(1)
+    expect(rows[0]!.classes()).toContain('velo-listbox-active')
+    expect(wrapper.findAll('.velo-listbox-active')).toHaveLength(1)
     wrapper.unmount()
   })
 
@@ -135,7 +135,7 @@ describe('TimezoneCityPicker -- keyboard navigation (combobox)', () => {
     await key(wrapper, 'ArrowDown')
     await wrapper.find('input').setValue('моск')
     expect(wrapper.find('input').attributes('aria-activedescendant')).toBeUndefined()
-    expect(wrapper.find('.tz-picker__row--highlight').exists()).toBe(false)
+    expect(wrapper.find('.velo-listbox-active').exists()).toBe(false)
     wrapper.unmount()
   })
 })

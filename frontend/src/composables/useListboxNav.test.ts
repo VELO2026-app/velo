@@ -67,7 +67,7 @@ describe('useListboxNav', () => {
   it('clears the highlight when the reset source changes', async () => {
     const { nav, n, scope } = setup(3)
     nav.onKeydown(key('ArrowDown'))
-    expect(nav.isActive(0)).toBe(true)
+    expect(nav.optionAttrs(0).class).toBe('velo-listbox-active')
     n.value = 4
     await nextTick()
     expect(nav.activeIndex.value).toBe(-1)

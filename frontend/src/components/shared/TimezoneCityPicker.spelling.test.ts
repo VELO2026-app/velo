@@ -247,7 +247,7 @@ describe('TimezoneCityPicker -- the catalog arrives while a row is highlighted',
     expect(wrapper.find('input').attributes('aria-activedescendant')).toBeTruthy()
     await flushPromises() // the mocked backend catalog lands and re-builds the rows
     expect(wrapper.find('input').attributes('aria-activedescendant')).toBeUndefined()
-    expect(wrapper.find('.tz-picker__row--highlight').exists()).toBe(false)
+    expect(wrapper.find('.velo-listbox-active').exists()).toBe(false)
     wrapper.unmount()
   })
 })

@@ -39,10 +39,7 @@
         :key="c.iana + c.city"
         type="button"
         class="tz-picker__row"
-        :class="{
-          'tz-picker__row--active': c.iana === modelValue,
-          'tz-picker__row--highlight': nav.isActive(i),
-        }"
+        :class="{ 'tz-picker__row--active': c.iana === modelValue }"
         v-bind="nav.optionAttrs(i, c.iana === modelValue)"
         @click="select(c.iana)"
       >
@@ -231,12 +228,6 @@ function select(iana: string): void {
 
 .tz-picker__row + .tz-picker__row {
   border-top: 1px solid var(--velo-border-light);
-}
-
-/* Keyboard highlight (arrow keys): a ring, so it never reads as the selection. */
-.tz-picker__row--highlight {
-  outline: 2px solid var(--velo-border-input-focus);
-  outline-offset: -2px;
 }
 
 .tz-picker__row--active {

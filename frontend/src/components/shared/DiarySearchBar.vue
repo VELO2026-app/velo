@@ -82,7 +82,6 @@
             :key="term"
             type="button"
             class="diary-search__recent-item"
-            :class="{ 'diary-search__recent-item--highlight': nav.isActive(i) }"
             v-bind="nav.optionAttrs(i)"
             @click="applyRecent(term)"
           >
@@ -482,11 +481,6 @@ defineExpose({ focus })
   cursor: pointer;
   transition: opacity var(--transition-fast);
   text-align: left;
-}
-
-.diary-search__recent-item--highlight {
-  outline: 2px solid var(--velo-border-input-focus);
-  outline-offset: -2px;
 }
 
 .diary-search__recent-item:hover {

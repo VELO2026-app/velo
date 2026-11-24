@@ -49,9 +49,7 @@ export interface ListboxNav {
   comboboxAttrs: ComputedRef<Record<string, string | boolean | undefined>>
   /** Attributes for the list container: its id and `role="listbox"`; `labelledBy` is the id of its visible label. */
   listAttrs: (labelledBy?: string) => Record<string, string | undefined>
-  /** Whether option `index` carries the keyboard highlight. */
-  isActive: (index: number) => boolean
-  /** Attributes for option `index`. `selected` feeds `aria-selected`. */
+  /** Attributes for option `index`: id, role, `aria-selected` from `selected`, and the highlight class while it is the active one. */
   optionAttrs: (index: number, selected?: boolean) => Record<string, string | boolean>
   /** Clear the highlight (call when the list changes). */
   reset: () => void
@@ -93,8 +91,10 @@ export function useListboxNav(options: ListboxNavOptions): ListboxNav {
     const next = cur < 0 ? (delta > 0 ? 0 : n - 1) : (cur + delta + n) % n
     activeIndex.value = next
     void nextTick(() => {
-      const scope = root as Document | ShadowRoot | null
-      scope?.getElementById?.(optionId(next))?.scrollIntoView?.({ block: 'nearest' })
+      // The field's root: the document, or the shadow root it lives in.
+      if (root instanceof Document || root instanceof ShadowRoot) {
+        root.getElementById(optionId(next))?.scrollIntoView?.({ block: 'nearest' })
+      }
     })
   }
 
@@ -135,20 +135,17 @@ export function useListboxNav(options: ListboxNavOptions): ListboxNav {
     return { id: listId, role: 'listbox', 'aria-labelledby': labelledBy }
   }
 
-  function isActive(index: number): boolean {
-    return activeIndex.value === index
-  }
-
   // Options are not tab stops (tabindex -1): per the WAI-ARIA combobox pattern
   // Tab leaves the field, and the arrow keys reach the options.
   function optionAttrs(index: number, selected = false): Record<string, string | boolean> {
     return {
       id: optionId(index),
+      class: activeIndex.value === index ? 'velo-listbox-active' : '',
       role: 'option',
       'aria-selected': selected,
       tabindex: '-1',
     }
   }
 
-  return { listId, activeIndex, comboboxAttrs, listAttrs, isActive, optionAttrs, reset, onKeydown }
+  return { listId, activeIndex, comboboxAttrs, listAttrs, optionAttrs, reset, onKeydown }
 }
