@@ -59,6 +59,7 @@ Verified masters never reach here: applyGuard bounces them to the dashboard.
 import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import { claimMasterInvite } from '@/api/masters'
 import { ApiResponseError } from '@/api/client'
 import { errorMessage } from '@/composables/useApiError'
@@ -74,11 +75,22 @@ const transientError = ref(false)
 const errorTitle = ref('')
 const errorDescription = ref('')
 
+function showInvalidLink(): void {
+  errorTitle.value = t('masterScreens.masterInviteClaim.invalid.title')
+  errorDescription.value = errorMessage('invite_invalid')
+}
+
 async function claim(): Promise<void> {
   claiming.value = true
   transientError.value = false
   errorTitle.value = ''
-  const token = String(route.params.token ?? '')
+  const token = optionalRouteParam(route, 'token')
+  if (token === null) {
+    // No token to claim: the link is dead, and the backend has nothing to look up.
+    showInvalidLink()
+    claiming.value = false
+    return
+  }
   try {
     await claimMasterInvite(token)
     // Claimed (one-time, burned) — hand off to the regular apply wizard.
@@ -93,8 +105,7 @@ async function claim(): Promise<void> {
     // errorTitle stays here -- it is this screen's own framing, not a
     // generic error phrase the table is meant to hold one of.
     if (e instanceof ApiResponseError && e.code === 'invite_invalid') {
-      errorTitle.value = t('masterScreens.masterInviteClaim.invalid.title')
-      errorDescription.value = errorMessage('invite_invalid')
+      showInvalidLink()
     } else {
       transientError.value = true
     }

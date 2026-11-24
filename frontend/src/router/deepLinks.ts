@@ -191,7 +191,8 @@ export function parseStartParam(
   // `<action>` or `<action>__<one param>`. Each verb lands where the bell
   // sends it; where the bells differ by zone, the session role decides.
   const verb = startParam.match(/^([a-z_]+?)(?:__([0-9a-f-]{36}))?$/)
-  const action = verb?.[1]
+  // No verb is the empty verb: it falls to the default arm like any unknown one.
+  const action = verb?.[1] ?? ''
   const id = verb?.[2]
   switch (action) {
     case 'open_feedback':
@@ -252,7 +253,7 @@ export function parseStartParam(
       return id && asAdmin ? { name: 'admin-support-detail', params: { id } } : null
     default:
       // open_notifications / open_admin_masters: there is no admin bell --
-      // the app opens as usual. Anything else is not a route.
+      // the app opens as usual. Anything else (or no verb) is not a route.
       return null
   }
 }

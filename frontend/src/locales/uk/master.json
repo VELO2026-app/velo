@@ -570,17 +570,14 @@
     "masterNotifications": {
       "deliveryDays": "Дні доставки сповіщень",
       "deliveryTime": "Час сповіщень",
-      "soon": "Скоро",
       "schedule": "Графік сповіщень",
       "receiveFrom": "Отримувати сповіщення з",
       "to": "до",
       "daysHint": "Відзначені дні — коли сповіщення приходять. Якщо день не відзначено, того дня не прийде нічого — цілу добу, незалежно від встановленого часу.",
       "category": {
         "practices": "Практики",
-        "members": "Учасники",
         "schools": "Школи",
-        "messages": "Повідомлення",
-        "analytics": "Аналітика"
+        "messages": "Повідомлення"
       },
       "events": {
         "newBooking": "Нове бронювання",
@@ -589,21 +586,13 @@
         "someoneCancelled": "Хтось скасував",
         "reminder": "Нагадування",
         "reminderText": "За 1 годину до початку",
-        "newCheckin": "Новий check-in",
-        "checkinText": "Учасник відзначився про стан перед практикою",
-        "newFeedback": "Новий feedback",
-        "feedbackText": "Учасник залишив відгук",
         "schoolEvents": "Події шкіл",
         "joinsAndAppointments": "Вступи та призначення майстрів",
         "studentMessages": "Повідомлення учнів",
         "newMessages": "Нові повідомлення у ваших чатах",
         "supportReplies": "Відповіді у ваших зверненнях",
-        "chatsYouAuthor": "Чати, де ви — автор",
-        "aiSummary": "AI-підсумок"
+        "chatsYouAuthor": "Чати, де ви — автор"
       },
-      "mondays": "Понеділками",
-      "monthlyReport": "Щомісячний звіт",
-      "firstOfMonth": "1-го числа місяця",
       "toast": {
         "loadFailed": "Не вдалося завантажити налаштування сповіщень",
         "scheduleSaveFailed": "Не вдалося зберегти розклад",

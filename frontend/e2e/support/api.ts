@@ -13,6 +13,8 @@ export interface MockReply {
   body?: unknown
   /** Hold the answer back, to make an in-flight state observable. */
   delayMs?: number
+  /** Drop the connection instead of answering (a network failure, not an HTTP status). */
+  abort?: boolean
 }
 
 /** A handler gets the parsed JSON request body (null when there is none). */
@@ -66,6 +68,10 @@ export async function mockApi(page: Page): Promise<MockApi> {
     }
     const reply = handler({ body, query: url.searchParams })
     if (reply.delayMs) await new Promise((resolve) => setTimeout(resolve, reply.delayMs))
+    if (reply.abort) {
+      await route.abort('connectionfailed')
+      return
+    }
     await route.fulfill({
       status: reply.status ?? 200,
       contentType: 'application/json',

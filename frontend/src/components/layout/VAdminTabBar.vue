@@ -69,7 +69,7 @@ defineEmits<{
      same left/right lines as the screen content/headers. */
   justify-content: space-between;
   padding: var(--space-2) var(--velo-rail-pad-x);
-  padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--space-8) + var(--velo-safe-bottom));
   background: transparent;
   z-index: var(--z-sticky);
 }

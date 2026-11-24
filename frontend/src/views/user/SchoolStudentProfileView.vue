@@ -267,6 +267,7 @@ import { useQuery } from '@pinia/colada'
 import { schoolPageQuery, schoolStudentQuery } from '@/composables/queries/schools'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import {
   getSchoolMembers,
   offerSchoolMaster,
@@ -301,8 +302,8 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const schoolId = computed(() => String(route.params.schoolId ?? ''))
-const userId = computed(() => String(route.params.userId ?? ''))
+const schoolId = computed(() => optionalRouteParam(route, 'schoolId') ?? '')
+const userId = computed(() => optionalRouteParam(route, 'userId') ?? '')
 
 // Server truth once loaded; the roster query is only the instant-paint hint.
 const studentName = computed(

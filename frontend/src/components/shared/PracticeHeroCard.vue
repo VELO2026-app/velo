@@ -52,7 +52,11 @@
     <!-- Difficulty dots (Calendar frame 4): label + dots only, no word level. -->
     <div v-if="difficultyDots > 0" class="hero-card__difficulty">
       <span class="hero-card__difficulty-label">{{ t('shared.heroCard.difficulty') }}</span>
-      <span class="hero-card__difficulty-dots" :aria-label="difficultyLabel || undefined">
+      <span
+        class="hero-card__difficulty-dots"
+        :role="difficultyLabel ? 'img' : undefined"
+        :aria-label="difficultyLabel || undefined"
+      >
         <span
           v-for="n in 3"
           :key="n"

@@ -663,9 +663,10 @@ async function onSubmit(): Promise<void> {
      below the fog, scrolled content dissolves into it (MobileLayout's fog
      mask recipe, applied to OUR scroll body -- the shell's fog class is
      fill-incompatible). The bottom step clears the glass pill (50px + one
-     gap): the overlay hovers OVER the scroll, the last field stays
-     reachable. */
-  padding: var(--ea-fog-top) var(--space-8) calc(var(--velo-size-50) + var(--space-5));
+     gap) and the home indicator under it (FE-240): the overlay hovers OVER
+     the scroll, the last field stays reachable. */
+  padding: var(--ea-fog-top) var(--space-8)
+    calc(var(--velo-size-50) + var(--space-5) + var(--velo-safe-bottom));
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
@@ -1016,7 +1017,9 @@ html.is-keyboard-open .ea__body {
   z-index: 2; /* above the masked body, like the header */
   display: flex;
   justify-content: center;
-  padding: 0 var(--space-8) var(--space-4);
+  /* FE-240: clear the home indicator (--velo-safe-bottom, global.css); the
+     body's bottom padding (.ea__body) grows by the same amount. */
+  padding: 0 var(--space-8) calc(var(--space-4) + var(--velo-safe-bottom));
   pointer-events: none;
 }
 

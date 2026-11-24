@@ -42,11 +42,11 @@
   of this SAME banner uses a paler alpha (0.25 vs 0.40) and a different
   seal-icon color (--velo-rating-good vs --velo-error) despite resolving to
   the identical base hex for its border/text tokens -- picked the newer one
-  verbatim rather than silently reconciling the two). Only the name field is
-  marked `required` -- the description field is genuinely optional, so it
-  carries no
-  seal, matching the client-side validation this form already had
-  (i18n:masterScreens.masterGroupCreate.validation.enterName).
+  verbatim rather than silently reconciling the two). The required name is
+  marked by the asterisk on the section heading, not by a field seal: neither
+  field is passed `required`, so both fields span the same width. The
+  description is genuinely optional. Matches the client-side validation this
+  form already had (i18n:masterScreens.masterGroupCreate.validation.enterName).
 -->
 
 <template>
@@ -235,21 +235,6 @@ html.is-keyboard-open .new-group {
    description->button keep their normal spacing, untouched). */
 .new-group__content > :deep(.v-input) {
   margin-bottom: 0;
-}
-
-/* T24-8 (PROMPT №639): MEASURED finding -- the wrapper divs were ALREADY the
-   same width (both stretch via the parent flex column's default
-   align-items:stretch); the VISIBLE PLATE was not. The name field is
-   `required`,
-   so its row reserves ~30px (IconRequired 22px + --space-2 gap) for the seal
-   INSIDE `.v-input__row`, shrinking the field's own flex:1 share by that much.
-   The description field has no seal (genuinely optional) so its row gives the
-   field the
-   full width. Reserving the same 30px on the textarea's side (as invisible
-   margin, not a fake seal) equalizes the two visible plates without touching
-   VInput's shared required-seal layout used everywhere else. */
-.new-group__content :deep(.v-textarea__field) {
-  margin-right: var(--size-required-seal-gutter);
 }
 
 /* Pinned to the screen's bottom edge (owner Q5) -- mirrors

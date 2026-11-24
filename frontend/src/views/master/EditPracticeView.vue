@@ -354,6 +354,7 @@ import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { VHeader } from '@/components/layout'
 import {
   VButton,
@@ -410,7 +411,7 @@ const toast = useToast()
 const queryCache = useQueryCache()
 const { profile: masterProfile } = useMasterProfile()
 
-const practiceId = route.params.id as string
+const practiceId = routeParam(route, 'id')
 
 // Back to the practice screen. Deep-link-safe: if there's history, pop to the
 // detail entry that pushed us here (avoids the edit<->detail back-loop); else

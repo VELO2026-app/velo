@@ -96,7 +96,7 @@ defineEmits<{
   -webkit-overflow-scrolling: touch;
   /* Legacy default (pre-rebuild admin screens): 16px box, clears the tab bar. */
   padding: var(--space-4) var(--space-4)
-    calc(var(--size-admin-tabbar-clearance) + env(safe-area-inset-bottom, 0px));
+    calc(var(--size-admin-tabbar-clearance) + var(--velo-safe-bottom));
 }
 
 /* New-design screens ride the 24px content rail (matches user/master). */
@@ -113,7 +113,7 @@ defineEmits<{
 /* Detail screens (no tab bar): tighter vertical clearance. */
 .admin-layout__main--no-tabbar {
   padding-top: var(--space-4);
-  padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--space-8) + var(--velo-safe-bottom));
 }
 
 /* Dashboard feed: edge-to-edge fog + tab-bar clearance. The fog literals
@@ -122,7 +122,7 @@ defineEmits<{
    is a flat 60 (no measured-island math). */
 .admin-layout__main--fog {
   padding-top: var(--size-admin-fog-top);
-  padding-bottom: calc(var(--size-tabbar-clearance) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--size-tabbar-clearance) + var(--velo-safe-bottom));
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,

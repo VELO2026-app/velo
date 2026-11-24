@@ -43,7 +43,7 @@ const botUrl = INSTANCE.telegramBotUrl
   position: fixed;
   left: var(--space-5);
   right: var(--space-5);
-  bottom: calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-5) + var(--velo-safe-bottom));
   z-index: var(--z-popup);
   max-width: var(--velo-content-width);
   margin: 0 auto;

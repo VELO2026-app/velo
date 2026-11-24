@@ -7,11 +7,22 @@
   the golden tests).
 */
 
+/**
+ * The code point of a one-character string.
+ *
+ * @throws Error for the empty string, which has none.
+ */
+export function codePointOf(ch: string): number {
+  const codePoint = ch.codePointAt(0)
+  if (codePoint === undefined) throw new Error('codePointOf: the string is empty')
+  return codePoint
+}
+
 /** 32-bit FNV-1a: the PRNG seed and the synchronous hash fallback. */
 export function fnv1a(str: string): number {
   let h = 0x811c9dc5
   for (const ch of str) {
-    h ^= ch.codePointAt(0)!
+    h ^= codePointOf(ch)
     h = Math.imul(h, 0x01000193)
   }
   return h >>> 0
