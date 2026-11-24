@@ -2,15 +2,21 @@ import { describe, expect, it } from 'vitest'
 import type { Result } from 'axe-core'
 import { A11Y_ALLOWLIST } from '../../e2e/a11y/allowlist'
 import {
+  allowanceProblems,
+  colorTokens,
   covers,
   declaredException,
   findingsOf,
-  hexTokens,
   isDeclaredContrast,
   judge,
+  normalizeTarget,
   pairFromCss,
+  sameColor,
+  unusedAllowances,
+  type A11yAllowance,
   type Finding,
   type ResolvedPair,
+  type RouteReport,
 } from '../../e2e/a11y/findings'
 import { SWEEP } from '../../e2e/sweep/routes'
 
@@ -21,8 +27,9 @@ import { SWEEP } from '../../e2e/sweep/routes'
 // e2e/a11y/ runs axe-core on every sweep route on each skin. Its verdict is
 // pure logic (e2e/a11y/findings.ts), tested here without a browser: which
 // violations the package's `contrastExceptions` waive, which the allowlist
-// covers, and that the allowlist itself is whole (a reason, a task, real
-// routes). The browser run is the CI job "e2e-stack".
+// covers (and how narrowly), which entries a run left unused, and that the
+// allowlist itself is whole (a reason, a task, real routes, a pinned element
+// or color pair). The browser run is the CI job "e2e-a11y".
 // =============================================================================
 
 const PAIR: ResolvedPair = { text: '#8293ac', surface: '#ffffff' }
@@ -50,6 +57,21 @@ function violation(id: string, nodes: Result['nodes']): Result {
   return { id, impact: 'serious', help: `help of ${id}`, nodes } as Result
 }
 
+function finding(over: Partial<Finding> = {}): Finding {
+  return { rule: 'heading-order', impact: 'moderate', target: 'h3', message: 'x', ...over }
+}
+
+function allowance(over: Partial<A11yAllowance> = {}): A11yAllowance {
+  return {
+    rule: 'heading-order',
+    routes: ['user-dashboard'],
+    target: 'h3',
+    reason: 'a reason of a sentence',
+    task: 'FE-1',
+    ...over,
+  }
+}
+
 describe('the declared contrast exception', () => {
   it('waives the declared pair at 3.12:1', () => {
     expect(isDeclaredContrast(contrastNode('#8293ac', '#ffffff', 3.12), PAIR)).toBe(true)
@@ -74,7 +96,7 @@ describe('the declared contrast exception', () => {
   })
 })
 
-describe('findingsOf and judge', () => {
+describe('findingsOf', () => {
   const results = {
     violations: [
       violation('color-contrast', [
@@ -85,43 +107,104 @@ describe('findingsOf and judge', () => {
     ],
   }
 
-  it('drops only the declared pair and names the rest', () => {
-    const found = findingsOf(results, PAIR)
-    expect(found.map((f) => f.rule)).toEqual(['color-contrast', 'label'])
-    expect(found[0]?.message).toContain('#b2b2b2 on #ffffff, 2.12:1')
+  it('sets the declared pair aside and names the rest', () => {
+    const { findings, waived } = findingsOf(results, PAIR)
+    expect(waived).toHaveLength(1)
+    expect(findings.map((f) => f.rule)).toEqual(['color-contrast', 'label'])
+    expect(findings[0]?.message).toContain('#b2b2b2 on #ffffff, 2.12:1')
   })
 
-  it('lets an allowance cover one rule on its routes and nothing else', () => {
-    const found = findingsOf(results, PAIR)
-    const allowance = {
-      rule: 'color-contrast',
-      routes: ['user-dashboard'],
-      detail: '#b2b2b2 on #ffffff',
-      reason: 'r',
-      task: 'FE-1',
-    }
-    expect(judge(found, [allowance], 'user-dashboard', 'gold').open.map((f) => f.rule)).toEqual([
-      'label',
-    ])
-    // another route: the contrast finding stays open
-    expect(judge(found, [allowance], 'user-diary', 'gold').open).toHaveLength(2)
+  it('keeps every node when no pair is declared', () => {
+    const { findings, waived } = findingsOf(results, null)
+    expect(waived).toEqual([])
+    expect(findings).toHaveLength(3)
+  })
+})
+
+describe('what an allowance covers', () => {
+  it('pins a non-contrast rule to the element, however the list is numbered', () => {
+    const a = allowance({ target: '.students__row[role="button"]' })
+    const row = finding({
+      target: '.students__row[role="button"][data-v-b8c0302b=""]:nth-child(2)',
+    })
+    expect(covers(a, row, 'user-dashboard', 'gold')).toBe(true)
+    // the same rule, another element of the same route stays open
+    expect(covers(a, finding({ target: '.other-row' }), 'user-dashboard', 'gold')).toBe(false)
   })
 
-  it('keeps a finding of the same rule open when its colors differ from the allowance', () => {
-    const finding: Finding = {
-      rule: 'color-contrast',
-      impact: 'serious',
-      target: 'p',
-      message: 'x (#111111 on #222222, 1.2:1)',
-    }
-    const allowance = {
-      rule: 'color-contrast',
-      routes: ['r'],
-      detail: '#b2b2b2 on #ffffff',
-      reason: 'r',
-      task: 'FE-1',
-    }
-    expect(covers(allowance, finding, 'r', 'goodo')).toBe(false)
+  it('does not cover another route', () => {
+    expect(covers(allowance(), finding(), 'user-diary', 'gold')).toBe(false)
+  })
+
+  it('holds only on its skins', () => {
+    const a = allowance({ skins: ['gold'] })
+    expect(covers(a, finding(), 'user-dashboard', 'gold')).toBe(true)
+    expect(covers(a, finding(), 'user-dashboard', 'goodo')).toBe(false)
+  })
+
+  it('pins a contrast entry to its color pair', () => {
+    const a = allowance({ rule: 'color-contrast', detail: '#b2b2b2 on #ffffff' })
+    const ok = finding({ rule: 'color-contrast', message: 'x (#b2b2b2 on #ffffff, 2.12:1)' })
+    const other = finding({ rule: 'color-contrast', message: 'x (#111111 on #222222, 1.2:1)' })
+    expect(covers(a, ok, 'user-dashboard', 'gold')).toBe(true)
+    expect(covers(a, other, 'user-dashboard', 'gold')).toBe(false)
+  })
+
+  it('judge counts what each entry covered and leaves the rest open', () => {
+    const list = [allowance(), allowance({ target: 'h4' })]
+    const { open, covered } = judge(
+      [finding(), finding(), finding({ target: 'h5' })],
+      list,
+      'user-dashboard',
+      'gold',
+    )
+    expect(open.map((f) => f.target)).toEqual(['h5'])
+    expect([...covered]).toEqual([[0, 2]])
+  })
+})
+
+describe('unused allowances', () => {
+  const list = [
+    allowance(),
+    allowance({ target: 'h4' }),
+    allowance({ target: 'h5', skins: ['goodo'] }),
+  ]
+  const report = (covered: Array<[number, number]>): RouteReport => ({
+    route: 'user-dashboard',
+    role: 'student',
+    skin: 'gold',
+    open: [],
+    covered,
+    waived: 0,
+  })
+
+  it('names an entry of this skin that covered nothing', () => {
+    expect(unusedAllowances(list, [report([[0, 1]])], 'gold')).toEqual([1])
+  })
+
+  it('leaves out an entry of the other skin', () => {
+    expect(
+      unusedAllowances(
+        list,
+        [
+          report([
+            [0, 1],
+            [1, 3],
+          ]),
+        ],
+        'gold',
+      ),
+    ).toEqual([])
+  })
+})
+
+describe('normalizeTarget', () => {
+  it('drops the scoped-style hash and the list position', () => {
+    expect(
+      normalizeTarget(
+        '.row[data-v-1a2b3c4d=""][data-v-9f9f9f9f=""]:nth-child(3) > .name:nth-child(1)',
+      ),
+    ).toBe('.row > .name')
   })
 })
 
@@ -133,17 +216,29 @@ describe('the allowlist', () => {
   )
 
   it.each(A11Y_ALLOWLIST.map((a, i) => [i, a] as const))(
-    'entry %i has a reason, a task and visited routes',
+    'entry %i is whole and pinned',
     (_i, a) => {
-      expect(a.reason.length).toBeGreaterThan(10)
-      expect(a.task).toMatch(/^(?:FE|BE)-\d+$/)
-      expect(a.routes.length).toBeGreaterThan(0)
+      expect(allowanceProblems(a)).toEqual([])
       for (const route of a.routes) expect(visited, `route ${route}`).toContain(route)
+      if (a.target !== undefined) expect(a.target).toBe(normalizeTarget(a.target))
     },
   )
+
+  it('refuses an entry that switches a rule off for a whole route', () => {
+    const { target: _target, ...bare } = allowance()
+    expect(allowanceProblems(bare)).toContain('heading-order needs `target`')
+    expect(allowanceProblems({ ...bare, rule: 'color-contrast' })).toContain(
+      'contrast needs `detail`',
+    )
+    expect(allowanceProblems(allowance({ reason: '', task: 'later', routes: [] }))).toEqual([
+      'no reason',
+      'no task key',
+      'no routes',
+    ])
+  })
 })
 
-describe('reading the page and the package', () => {
+describe('telling the build by the package', () => {
   it('blends a translucent text color over the surface the way axe does', () => {
     expect(pairFromCss('rgba(76, 101, 137, 0.7)', 'rgb(255, 255, 255)')).toEqual({
       text: '#8293ac',
@@ -156,17 +251,28 @@ describe('reading the page and the package', () => {
     expect(pairFromCss('color(srgb 1 0 0)', 'rgb(255, 255, 255)')).toBeNull()
   })
 
-  it('lists the plain-hex tokens of a DTCG file under their CSS names', () => {
+  it('lists the hex and rgba tokens of a DTCG file under their CSS names', () => {
     const doc = {
       velo: {
         primary: { $value: '#627A9C', dark: { $value: '#4c6589' } },
         text: { secondary: { $value: 'rgba(76, 101, 137, 0.7)' } },
+        bg: { start: { $value: 'var(--velo-white)' } },
         radius: { $value: 12 },
       },
     }
-    expect(hexTokens(doc)).toEqual([
-      { css: '--velo-primary', hex: '#627a9c' },
-      { css: '--velo-primary-dark', hex: '#4c6589' },
+    expect(colorTokens(doc)).toEqual([
+      { css: '--velo-primary', value: '#627A9C' },
+      { css: '--velo-primary-dark', value: '#4c6589' },
+      { css: '--velo-text-secondary', value: 'rgba(76, 101, 137, 0.7)' },
     ])
+  })
+
+  it('compares what the package says with what the page paints, alpha included', () => {
+    expect(sameColor('#627A9C', 'rgb(98, 122, 156)')).toBe(true)
+    expect(sameColor('rgba(76, 101, 137, 0.7)', 'rgba(76, 101, 137, 0.7)')).toBe(true)
+    // the same hue, another opacity: another build
+    expect(sameColor('rgba(76, 101, 137, 0.7)', 'rgba(76, 101, 137, 0.5)')).toBe(false)
+    expect(sameColor('#627a9c', 'rgb(18, 0, 84)')).toBe(false)
+    expect(sameColor('#627a9c', '')).toBe(false)
   })
 })

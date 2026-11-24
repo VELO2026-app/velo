@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { VSelect } from '@/components/ui'
+import VSelect from './VSelect.vue'
 
 // FE-241: a select whose name is a heading elsewhere on the screen gets its
 // accessible name from `ariaLabel`; a visible `label` still wins.

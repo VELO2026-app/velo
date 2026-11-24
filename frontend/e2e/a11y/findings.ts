@@ -7,14 +7,15 @@
  *   - the skin package's own `contrastExceptions` (contract 2.1): the pair the
  *     package declared and validate-skin already accepts down to 3:1 -- read
  *     from the package, not copied here;
- *   - ./allowlist.ts: a known violation of one rule on one screen, with its
- *     reason and the task that fixes it.
+ *   - ./allowlist.ts: known violations of one rule on named screens, each
+ *     entry pinned to one element selector (any rule but contrast) or one
+ *     color pair (contrast), with its reason and the task that fixes it.
  */
 import type { AxeResults, Result } from 'axe-core'
 
-/** WCAG 2.1 A and AA, plus the rules the task names that axe keeps outside that set. */
+/** The WCAG 2.1 A and AA rule tags. */
 export const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] as const
-/** Heading order (best-practice) and label in name, WCAG 2.5.3 (experimental). */
+/** Two more rules axe keeps outside that set: heading order (best-practice) and label in name, WCAG 2.5.3 (experimental). */
 export const EXTRA_RULES = ['heading-order', 'label-content-name-mismatch'] as const
 
 /** The floor a declared contrast exception holds (validate-skin EXCEPTION_FLOOR). */
@@ -62,34 +63,49 @@ export function pairFromCss(textCss: string, surfaceCss: string): ResolvedPair |
   }
 }
 
-/** A color token of the package whose value is a plain hex. */
-export interface HexToken {
+/** A color token of the package: its CSS name and the value as written. */
+export interface ColorToken {
   css: string
-  hex: string
+  value: string
 }
 
 /**
- * The plain-hex color tokens of a package's DTCG file as CSS names
- * (`velo.tg.header` -> `--velo-tg-header`). The spec compares them with what
- * the page paints, so a stale or wrong build cannot pass for the skin under test.
+ * The color tokens of a package's DTCG file (a plain hex or an rgb()/rgba()
+ * value) under their CSS names (`velo.tg.header` -> `--velo-tg-header`). The
+ * spec compares every one with what the page paints, so a stale or wrong build
+ * cannot pass for the skin under test.
  */
-export function hexTokens(doc: unknown, path: string[] = []): HexToken[] {
+export function colorTokens(doc: unknown, path: string[] = []): ColorToken[] {
   if (typeof doc !== 'object' || doc === null) return []
-  const out: HexToken[] = []
+  const out: ColorToken[] = []
   for (const [key, value] of Object.entries(doc)) {
     if (key === '$value') {
-      if (typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value))
-        out.push({ css: `--${path.join('-')}`, hex: value.toLowerCase() })
-    } else if (!key.startsWith('$')) out.push(...hexTokens(value, [...path, key]))
+      if (typeof value === 'string' && parseColor(value) !== null)
+        out.push({ css: `--${path.join('-')}`, value })
+    } else if (!key.startsWith('$')) out.push(...colorTokens(value, [...path, key]))
   }
   return out
 }
 
-/** `rgb(...)` as `#rrggbb`; null for anything else or a translucent color. */
-export function rgbToHex(css: string): string | null {
-  const c = parseRgb(css)
-  if (!c || c.a !== 1) return null
-  return `#${[c.r, c.g, c.b].map((n) => Math.round(n).toString(16).padStart(2, '0')).join('')}`
+/** A plain `#rrggbb` or an rgb()/rgba() value as numbers; null for anything else. */
+function parseColor(css: string): { r: number; g: number; b: number; a: number } | null {
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(css.trim())
+  if (hex)
+    return { r: parseInt(hex[1]!, 16), g: parseInt(hex[2]!, 16), b: parseInt(hex[3]!, 16), a: 1 }
+  return parseRgb(css)
+}
+
+/** Do two color values paint the same (channels within half a step, alpha within 1%)? */
+export function sameColor(expected: string, painted: string): boolean {
+  const e = parseColor(expected)
+  const p = parseColor(painted)
+  if (!e || !p) return false
+  return (
+    Math.abs(e.r - p.r) <= 0.5 &&
+    Math.abs(e.g - p.g) <= 0.5 &&
+    Math.abs(e.b - p.b) <= 0.5 &&
+    Math.abs(e.a - p.a) <= 0.01
+  )
 }
 
 /** Colors of the declared pair as the page paints them (`#rrggbb`). */
@@ -107,14 +123,19 @@ export interface Finding {
   message: string
 }
 
-/** A known violation: narrow on purpose (one rule, one route, one element). */
+/**
+ * A known violation, narrow on purpose. `allowanceProblems` is the rule: a
+ * contrast entry names its color pair (`detail`), any other rule names the
+ * element (`target`), so a new violation of the same rule on the same route
+ * stays open.
+ */
 export interface A11yAllowance {
   rule: string
   /** The sweep table keys of the routes (e2e/sweep/routes.ts). */
   routes: string[]
-  /** A substring of the finding's message, e.g. the colors `#b2b2b2 on #ffffff`. */
+  /** Contrast: a substring of the message, the colors `#b2b2b2 on #ffffff`. */
   detail?: string
-  /** A substring of the element's selector; absent = the rule on the whole route. */
+  /** Other rules: the element's selector, as `normalizeTarget` writes it. */
   target?: string
   /** The skins it holds on; absent = both. */
   skins?: SkinName[]
@@ -122,6 +143,29 @@ export interface A11yAllowance {
   reason: string
   /** The task that fixes it, `FE-123`. */
   task: string
+}
+
+/** What is wrong with an allowance as written (empty = fine). */
+export function allowanceProblems(a: A11yAllowance): string[] {
+  const problems: string[] = []
+  if (a.reason.trim().length < 10) problems.push('no reason')
+  if (!/^(?:FE|BE)-\d+$/.test(a.task)) problems.push('no task key')
+  if (a.routes.length === 0) problems.push('no routes')
+  if (a.rule === 'color-contrast') {
+    if (!a.detail || !/^#\w+ on #\w+$/.test(a.detail)) problems.push('contrast needs `detail`')
+  } else if (!a.target) problems.push(`${a.rule} needs \`target\``)
+  return problems
+}
+
+/**
+ * A selector without what changes between runs and builds: the scoped-style
+ * attribute (`[data-v-1a2b3c4d=""]`, a hash of the file) and `:nth-child(n)`
+ * (a list that grows with the data).
+ */
+export function normalizeTarget(selector: string): string {
+  return selector
+    .replace(/\[data-v-[0-9a-f]+(?:=""|="[^"]*")?\]/g, '')
+    .replace(/:nth-child\(\d+\)/g, '')
 }
 
 /** Skin names of the matrix; `gold` is the velo-brand package. */
@@ -174,29 +218,35 @@ function targetOf(node: Result['nodes'][number]): string {
   return Array.isArray(last) ? last.join(' ') : String(last)
 }
 
-/** Every node of every violation, minus the declared contrast pair. */
+/**
+ * Every node of every violation, split into the findings and the nodes of the
+ * declared contrast pair (the package's `contrastExceptions`), which are not
+ * findings.
+ */
 export function findingsOf(
   results: Pick<AxeResults, 'violations'>,
   declared: ResolvedPair | null,
-): Finding[] {
-  const out: Finding[] = []
+): { findings: Finding[]; waived: Finding[] } {
+  const findings: Finding[] = []
+  const waived: Finding[] = []
   for (const v of results.violations) {
     for (const node of v.nodes) {
-      if (v.id === 'color-contrast' && isDeclaredContrast(node, declared)) continue
       const data = v.id === 'color-contrast' ? contrastDataOf(node) : undefined
       const extra =
         data?.contrastRatio !== undefined
           ? ` (${data.fgColor} on ${data.bgColor}, ${data.contrastRatio}:1)`
           : ''
-      out.push({
+      const finding: Finding = {
         rule: v.id,
         impact: v.impact ?? 'unknown',
         target: targetOf(node),
         message: `${v.help}${extra}`,
-      })
+      }
+      if (v.id === 'color-contrast' && isDeclaredContrast(node, declared)) waived.push(finding)
+      else findings.push(finding)
     }
   }
-  return out
+  return { findings, waived }
 }
 
 /** Does this allowance cover the finding on this route and skin? */
@@ -204,26 +254,61 @@ export function covers(a: A11yAllowance, f: Finding, route: string, skin: SkinNa
   return (
     a.rule === f.rule &&
     a.routes.includes(route) &&
-    (a.detail === undefined || f.message.includes(a.detail)) &&
     (a.skins ?? ['gold', 'goodo']).includes(skin) &&
-    (a.target === undefined || f.target.includes(a.target))
+    (a.detail === undefined || f.message.includes(a.detail)) &&
+    (a.target === undefined || normalizeTarget(f.target) === a.target)
   )
 }
 
-/** The findings no allowance covers, and the allowances that matched. */
+/** The findings no allowance covers, and for each allowance the findings it covered. */
 export function judge(
   findings: readonly Finding[],
   allowlist: readonly A11yAllowance[],
   route: string,
   skin: SkinName,
-): { open: Finding[]; used: Set<A11yAllowance> } {
-  const used = new Set<A11yAllowance>()
+): { open: Finding[]; covered: Map<number, number> } {
+  const covered = new Map<number, number>()
   const open = findings.filter((f) => {
-    const hit = allowlist.filter((a) => covers(a, f, route, skin))
-    for (const a of hit) used.add(a)
-    return hit.length === 0
+    let hit = false
+    allowlist.forEach((a, i) => {
+      if (!covers(a, f, route, skin)) return
+      hit = true
+      covered.set(i, (covered.get(i) ?? 0) + 1)
+    })
+    return !hit
   })
-  return { open, used }
+  return { open, covered }
+}
+
+/** Name of the attachment a test puts its `RouteReport` in; ./report.ts reads it. */
+export const REPORT_ATTACHMENT = 'a11y.json'
+
+/** What one test tells the reporter (attached as `a11y.json`). */
+export interface RouteReport {
+  route: string
+  role: string
+  skin: SkinName
+  /** Findings no allowance covers: the test fails on them. */
+  open: Finding[]
+  /** Allowance index -> number of findings it covered here. */
+  covered: Array<[number, number]>
+  /** Nodes of the package's declared contrast pair. */
+  waived: number
+}
+
+/**
+ * Allowances of this skin that covered nothing in the whole run: the violation
+ * is gone (or never was), the entry hides nothing and must go.
+ */
+export function unusedAllowances(
+  allowlist: readonly A11yAllowance[],
+  reports: readonly RouteReport[],
+  skin: SkinName,
+): number[] {
+  const used = new Set(reports.flatMap((r) => r.covered.map(([i]) => i)))
+  return allowlist.flatMap((a, i) =>
+    (a.skins ?? ['gold', 'goodo']).includes(skin) && !used.has(i) ? [i] : [],
+  )
 }
 
 /** One message listing every open finding, for the failed test. */

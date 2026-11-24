@@ -1,0 +1,165 @@
+# =============================================================================
+# VELO -- axe-core accessibility on the brand skins (FE-241)
+# =============================================================================
+#
+# axe-core on every route of the sweep table, under every role, on a REAL
+# backend seeded with the `e2e` profile (frontend/e2e/a11y/, docs/agents/e2e.md).
+# One cell per brand skin, each its own job and its own stack, in parallel with
+# the others -- the wall time is that of one cell, and the job does not touch
+# e2e-stack.yml (FE-240 turns that into a matrix; the two merge in any order).
+#
+#   workflow_call     -- from ci.yml on every PR and push. Blocking: a violation
+#                        that is not in frontend/e2e/a11y/allowlist.ts, or an
+#                        allowlist entry that covers nothing, fails the cell
+#                        and the gate of ci.yml.
+#   workflow_dispatch -- by hand.
+#
+# The stack steps below are those of e2e-stack.yml (same images, same env); the
+# build is the brand package of the cell, from the pin in
+# .github/brand-skins.json (fetch-brand-skins.mjs, as the build matrix and
+# Visual). The package may be private: BRAND_REPO_TOKEN, passed by the caller.
+# =============================================================================
+name: e2e a11y
+
+on:
+  workflow_call:
+    secrets:
+      BRAND_REPO_TOKEN:
+        description: Read key for private brand repositories (empty while they are public).
+        required: false
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  a11y:
+    name: e2e-a11y — ${{ matrix.skin }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # skin = A11Y_SKIN of the spec; brand = the key in brand-skins.json.
+          - skin: gold
+            brand: velo-brand
+          - skin: goodo
+            brand: goodo-brand
+    services:
+      postgres:
+        image: postgres:16.15-trixie@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+        env:
+          POSTGRES_USER: velo
+          POSTGRES_PASSWORD: velo
+          POSTGRES_DB: velo
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U velo" --health-interval 2s --health-timeout 5s --health-retries 30
+      redis:
+        image: redis:7.4.11-alpine3.21@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      DATABASE_URL: postgresql+asyncpg://velo:velo@127.0.0.1:5432/velo
+      REDIS_URL: redis://127.0.0.1:6379/0
+      # Fake on purpose, as in e2e-stack.yml: the backend checks initData with
+      # this same token, and frontend/e2e/stack/auth.ts signs with it.
+      TELEGRAM_BOT_TOKEN: 'e2e:fake'
+      STORAGE_ENDPOINT: http://127.0.0.1:9000
+      STORAGE_SECRET_KEY: e2e-no-storage
+      PRIMER_RELEASE: ci
+      PRIMER_COMMIT: ${{ github.sha }}
+      TELEGRAM_BOT_URL: https://t.me/velo_e2e_bot
+      COMMS_API_URL: http://127.0.0.1:8899
+      COMMS_SERVICE_TOKEN: e2e-comms
+      COMMS_RELAY_ENABLED: 'false'
+      ZOOM_RETRY_ENABLED: 'false'
+      ZOOM_REPORT_ENABLED: 'false'
+      E2E_LOG_DIR: ${{ github.workspace }}/stack-logs
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install the backend (backend/requirements.txt)
+        working-directory: backend
+        run: 'pip install --no-cache-dir --require-hashes --only-binary :all: -r requirements.txt'
+
+      # backend/ci.env first; the job's TELEGRAM_BOT_TOKEN then wins over the
+      # one in ci.env, so the backend and the spec agree.
+      - name: Bring up the stack (migrate, seed e2e, comms stub, uvicorn)
+        run: |
+          token=$TELEGRAM_BOT_TOKEN
+          set -a; . backend/ci.env; set +a
+          export TELEGRAM_BOT_TOKEN="$token"
+          sh frontend/e2e/stack/up.sh
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install (workspace root, frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve the Playwright version
+        id: playwright
+        working-directory: frontend
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the Playwright browsers
+        id: browser-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-stack-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+
+      - name: Install the browsers (cache miss)
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Fetch the brand skin package
+        env:
+          BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
+        run: node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brands" > /dev/null
+
+      # vite only (vue-tsc runs in the typecheck job, the skin validation in
+      # the build job); the dist the spec serves is the cell's brand.
+      - name: Build the app (${{ matrix.skin }} skin)
+        env:
+          PACKAGE: ${{ runner.temp }}/brands/${{ matrix.brand }}/skin
+        run: |
+          node frontend/scripts/apply-skin.mjs "$PACKAGE"
+          pnpm -C frontend exec vite build
+
+      # A11Y_STRICT: an allowlist entry that covered nothing fails the run
+      # (frontend/e2e/a11y/report.ts); this is a full run, so it holds.
+      - name: Accessibility (${{ matrix.skin }})
+        working-directory: frontend
+        env:
+          A11Y_SKIN: ${{ matrix.skin }}
+          A11Y_SKIN_DIR: ${{ runner.temp }}/brands/${{ matrix.brand }}/skin
+          A11Y_STRICT: '0'
+          A11Y_ALLOWLIST: 'off' # TEMP: collecting CI data
+        run: pnpm exec playwright test --project=a11y --reporter=github,./e2e/a11y/report.ts,./e2e/support/crash-reporter.ts
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-a11y-${{ matrix.skin }}-${{ github.run_attempt }}
+          path: |
+            frontend/test-results
+            stack-logs
+          retention-days: 7
