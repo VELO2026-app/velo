@@ -40,6 +40,21 @@ export function activeElement(): Element | null {
   return document.activeElement
 }
 
+/** The focused element when it is a real control, `null` for <body>/nothing
+ *  (where focus rests after the focused element is removed). */
+export function focusedElement(): HTMLElement | null {
+  const el = document.activeElement
+  return el instanceof HTMLElement && el !== document.body ? el : null
+}
+
+/** The direct children of document.body -- the layer list the overlay
+ *  a11y module (src/overlayA11y.ts) walks to make the page inert. */
+export function bodyChildren(): HTMLElement[] {
+  return Array.from(document.body.children).filter(
+    (el): el is HTMLElement => el instanceof HTMLElement,
+  )
+}
+
 /** document.body.style.overflow = value (the body-scroll lock's on/off). */
 export function setBodyOverflow(value: string): void {
   document.body.style.overflow = value
