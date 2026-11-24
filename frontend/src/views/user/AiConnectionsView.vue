@@ -39,9 +39,10 @@
       <p v-else-if="state === 'unavailable'" class="ai-conn__notice" data-test="unavailable">
         {{ t('user.screens.aiConnections.unavailable') }}
       </p>
-      <p v-else-if="state === 'error'" class="ai-conn__notice" data-test="load-error">
-        {{ t('user.screens.aiConnections.loadFailed') }}
-      </p>
+      <div v-else-if="state === 'error'" class="ai-conn__notice" data-test="load-error">
+        <p>{{ t('user.screens.aiConnections.loadFailed') }}</p>
+        <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
+      </div>
       <template v-else>
         <section class="ai-conn__block" data-test="connect-block">
           <h2 class="ai-conn__heading">{{ t('user.screens.aiConnections.dev.howTo') }}</h2>
@@ -277,6 +278,7 @@ function toggleScope(value: McpScope, on: boolean): void {
 }
 
 async function load(): Promise<void> {
+  state.value = 'loading'
   try {
     const res = await listMcpTokens()
     tokens.value = res.items

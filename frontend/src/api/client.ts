@@ -75,6 +75,15 @@ export class ApiTimeoutError extends Error {
   }
 }
 
+/**
+ * The server says the thing is gone for this viewer (404) or not theirs (403):
+ * a retry cannot help, so a screen shows "not found" rather than a load error.
+ * Any other failure (network, timeout, 5xx) is retryable.
+ */
+export function isGoneError(error: unknown): boolean {
+  return error instanceof ApiResponseError && (error.status === 404 || error.status === 403)
+}
+
 /** HTTP methods the client sends. */
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 

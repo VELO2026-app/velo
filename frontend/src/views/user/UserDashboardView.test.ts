@@ -494,20 +494,30 @@ describe('UserDashboardView', () => {
       expect(toastError).not.toHaveBeenCalled()
     })
 
-    it('error: renders the SAME empty DOM as a genuine empty result, but toasts the generic fallback (unmapped code) (W15, empty != error)', async () => {
+    it('error: shows the load error with Retry, NOT the empty copy, and toasts the fallback (FE-242)', async () => {
       // B8 (PROMPT №747): 'service_unavailable' is not a real backend code --
       // unmapped, lands on bookings.ts's own fallback (:150).
-      vi.mocked(bookingsApi.getUpcomingBookings).mockRejectedValue(
+      // FE-242 supersedes W15's "same DOM as empty": an error that reads as
+      // "nothing upcoming" hides a practice the user may have booked.
+      vi.mocked(bookingsApi.getUpcomingBookings).mockRejectedValueOnce(
         new ApiResponseError(503, 'Сервис бронирований недоступен', 'service_unavailable'),
       )
       mount()
       await flush()
 
-      // Same DOM shape as the empty test above -- the distinguishing signal is
-      // the toast, not the markup (that IS the W15 fix; see banner).
-      expect(emptyState()).not.toBeNull()
-      expect(text()).toContain('Нет предстоящих практик')
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+      expect(text()).not.toContain('Нет предстоящих практик')
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить ближайшую практику')
+
+      vi.mocked(bookingsApi.getUpcomingBookings).mockResolvedValue([])
+      const retry = Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
+        b.textContent?.includes('Повторить'),
+      )
+      retry!.click()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+      expect(text()).toContain('Нет предстоящих практик')
     })
 
     it('error fallback: a non-ApiResponseError toasts the fallback, not a raw exception message (SC-05)', async () => {
