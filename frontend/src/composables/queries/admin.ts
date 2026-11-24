@@ -985,6 +985,30 @@ export const adminReportQuery = defineQueryOptions(
   }),
 )
 
+/**
+ * Drop a decided complaint from every complaints list held, at once -- the
+ * list loses the row and its total before the verdict's refetch answers
+ * (as `dropMethodRequest` does for the method queue).
+ */
+export function dropReport(queryCache: QueryCache, reportId: string): void {
+  for (const entry of queryCache.getEntries({ key: adminKeys.reportsAll() })) {
+    if (entry.state.value.data === undefined) continue
+    setInfiniteQueryData<PaginatedReportsResponse, number>(queryCache, entry.key, (data) => {
+      const pages = data?.pages ?? []
+      // A refetch between two pages can repeat a row: still one complaint off the list.
+      const dropped = pages.some((page) => page.items.some((r) => r.id === reportId)) ? 1 : 0
+      return {
+        pageParams: data?.pageParams ?? [],
+        pages: pages.map((page) => ({
+          ...page,
+          items: page.items.filter((r) => r.id !== reportId),
+          total: Math.max(0, page.total - dropped),
+        })),
+      }
+    })
+  }
+}
+
 /** Payout requests per page of `GET /admin/withdrawals`. */
 export const ADMIN_WITHDRAWALS_PAGE_SIZE = 20
 
