@@ -11,7 +11,7 @@
 export function fnv1a(str: string): number {
   let h = 0x811c9dc5
   for (const ch of str) {
-    h ^= ch.codePointAt(0)!
+    h ^= ch.codePointAt(0) ?? 0
     h = Math.imul(h, 0x01000193)
   }
   return h >>> 0

@@ -83,7 +83,13 @@ if (fe.status !== 0) process.exit(fe.status ?? 1)
 // The kit's vitest.config.ts carries the FE-203 timeout/retry check.
 const ui = spawnSync(
   'node_modules/.bin/eslint',
-  ['vitest.config.ts', ...args, ...cacheArgs('ui')],
+  [
+    'vitest.config.ts',
+    'src/',
+    '--max-warnings',
+    String(budget.maxWarningsUi ?? budget.maxWarnings),
+    ...cacheArgs('ui'),
+  ],
   {
     stdio: 'inherit',
     cwd: '../packages/velo-ui',

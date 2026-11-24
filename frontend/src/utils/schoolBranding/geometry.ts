@@ -49,10 +49,10 @@ export function taperedPath(pts: PathPoint[]): string {
   const L: string[] = []
   const R: string[] = []
   for (let i = 0; i < pts.length; i++) {
-    const p = pts[i]!
+    const p = pts[i]
+    if (!p) continue
     // Clamped neighbours can never be undefined under the loop bounds; the
-    // `?? p` keeps TS's noUncheckedIndexedAccess happy without assertions
-    // (the type-aware eslint rule calls `!` here unnecessary).
+    // `?? p` keeps TS's noUncheckedIndexedAccess happy without assertions.
     const q = pts[Math.min(i + 1, pts.length - 1)] ?? p
     const r = pts[Math.max(i - 1, 0)] ?? p
     let dx = q.x - r.x
@@ -125,8 +125,8 @@ export function scallop(r0: number, r1: number, n: number, rot: number): string 
  *  edge. */
 export function offsetPts(pts: PathPoint[], k: number): PathPoint[] {
   return pts.map((p, i) => {
-    const q = pts[Math.min(i + 1, pts.length - 1)]!
-    const r0 = pts[Math.max(i - 1, 0)]!
+    const q = pts[Math.min(i + 1, pts.length - 1)] ?? p
+    const r0 = pts[Math.max(i - 1, 0)] ?? p
     const dx = q.x - r0.x
     const dy = q.y - r0.y
     const l = Math.hypot(dx, dy) || 1

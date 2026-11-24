@@ -121,9 +121,12 @@ const state = computed((): State => {
       return 'converted'
     case 'waiting':
       return 'waiting'
-    default:
+    case 'left':
+    case 'declined':
+    case 'removed':
       return 'gone'
   }
+  return 'gone'
 })
 
 async function load(): Promise<void> {

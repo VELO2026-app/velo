@@ -132,7 +132,7 @@ const TOPICS: SupportTopic[] = [
 // VRadioGroup only needs {value,label}; priority stays off the rendered options.
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: supportTopicLabel(t.value) }))
 
-const topic = ref<SupportTopicCode>(TOPICS[0]!.value)
+const topic = ref<SupportTopicCode>(TOPICS[0]?.value ?? 'other')
 const message = ref('')
 const appealKey = createAppealKeys()
 

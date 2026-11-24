@@ -226,9 +226,10 @@ const form = computed<ThreadForm>(() => {
       return 'entry'
     case 'external_activity':
       return 'activity'
-    default:
+    case 'thread_started':
       return 'fallback'
   }
+  return 'fallback'
 })
 
 // -- banner copy ---------------------------------------------------------------

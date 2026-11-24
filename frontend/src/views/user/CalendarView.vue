@@ -371,7 +371,8 @@ const daySkeletons = useRememberedCount(
 // read from the template's content branch (v-else, gated on
 // dayPractices.length > 0), so a first practice is always present here.
 const dayLabel = computed<string>(() => {
-  const first = dayPractices.value[0]!
+  const first = dayPractices.value[0]
+  if (!first) return ''
   return formatDateShort(first.scheduled_at, viewerTz.value)
 })
 

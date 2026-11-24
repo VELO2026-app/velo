@@ -134,11 +134,13 @@ export function zoneTotal(counts: Record<MoodScaleKey, number>): number {
 /** `Per-zone counts -> rounded percentages` of their total.
  *
  * @returns All-zero record when there are no counts (total 0). */
-export function zonePercents(counts: Record<MoodScaleKey, number>): Record<MoodScaleKey, number> {
-  const total = zoneTotal(counts)
+export function zonePercents(
+  counts: Record<MoodScaleKey, number> | null | undefined,
+): Record<MoodScaleKey, number> {
+  const total = counts ? zoneTotal(counts) : 0
   const pcts = {} as Record<MoodScaleKey, number>
   for (const key of MOOD_SCALE_KEYS) {
-    pcts[key] = total > 0 ? Math.round((counts[key] / total) * 100) : 0
+    pcts[key] = counts && total > 0 ? Math.round((counts[key] / total) * 100) : 0
   }
   return pcts
 }

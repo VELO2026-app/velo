@@ -202,6 +202,7 @@ import { t } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useNow } from '@/composables/useNow'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { usePracticesStore } from '@/stores/practices'
 import { useJoinBooking, useMyBookings } from '@/composables/queries/bookings'
 import { useToast } from '@/composables/useToast'
@@ -232,7 +233,7 @@ const { bookings } = useMyBookings()
 const joinBooking = useJoinBooking()
 const toast = useToast()
 
-const practiceId = route.params.practiceId as string
+const practiceId = routeParam(route, 'practiceId')
 /** The master zone mounts this same view (router: 'master-practice-live'). */
 const isMasterZone = route.name === 'master-practice-live'
 

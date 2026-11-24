@@ -116,7 +116,7 @@ function weekDays(anchor: Date): Date[] {
 /** Parse a YYYY-MM-DD local-day key back to a Date at local midnight. */
 export function parseLocalDateKey(key: string): Date {
   const [y, m, d] = key.split('-').map(Number)
-  return DateTime.fromObject({ year: y!, month: m ?? 1, day: d ?? 1 }).toJSDate()
+  return DateTime.fromObject({ year: y ?? Number.NaN, month: m ?? 1, day: d ?? 1 }).toJSDate()
 }
 
 /** Today at local midnight. */
@@ -245,10 +245,10 @@ export const useCalendarStore = defineStore('calendar', () => {
    */
   const weekParams = computed<CalendarWeekParams>(() => {
     const week = days.value
-    const from = new Date(week[0]!)
+    const from = new Date(week[0] ?? weekAnchor.value)
     from.setHours(0, 0, 0, 0)
     from.setDate(from.getDate() - 1)
-    const to = new Date(week[6]!)
+    const to = new Date(week[6] ?? weekAnchor.value)
     to.setHours(23, 59, 59, 999)
     to.setDate(to.getDate() + 1)
 

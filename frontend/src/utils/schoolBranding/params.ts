@@ -16,7 +16,11 @@ function helpers(rng: () => number) {
   return {
     f: (a: number, b: number): number => a + rng() * (b - a),
     i: (a: number, b: number): number => Math.floor(a + rng() * (b - a + 1)),
-    pick: <T>(arr: T[]): T => arr[Math.floor(rng() * arr.length)]!,
+    pick: <T>(arr: T[]): T => {
+      const item = arr[Math.floor(rng() * arr.length)]
+      if (item === undefined) throw new Error('pick: the list is empty')
+      return item
+    },
     chance: (p: number): boolean => rng() < p,
   }
 }

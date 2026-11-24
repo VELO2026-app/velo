@@ -77,6 +77,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { usePracticesStore } from '@/stores/practices'
 import { useBookingsStore } from '@/stores/bookings'
 import { useMyBookings, useSkipCheckin } from '@/composables/queries/bookings'
@@ -100,7 +101,7 @@ const skipCheckin = useSkipCheckin()
 const diaryStore = useDiaryStore()
 const toast = useToast()
 
-const practiceId = route.params.practiceId as string
+const practiceId = routeParam(route, 'practiceId')
 const viewerTz = useViewerTimezone()
 
 const practice = computed(() => practicesStore.selected)

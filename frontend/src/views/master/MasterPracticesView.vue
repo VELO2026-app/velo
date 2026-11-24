@@ -320,9 +320,9 @@ function hasRating(id: string): boolean {
   return insightsCache.has(id) && totalFeedbacks(id) > 0
 }
 
-// Rendered only under hasRating, so the insights are cached there.
+// Rendered only under hasRating; without cached insights every zone reads 0.
 function ratingPcts(id: string): Record<MoodScaleKey, number> {
-  return zonePercents(insightsCache.get(id)!.feedbacks)
+  return zonePercents(insightsCache.get(id)?.feedbacks)
 }
 
 /** Eager-load insights for the visible tab (idempotent: cached ids are skipped).

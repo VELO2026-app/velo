@@ -70,9 +70,12 @@ const badgeIcon = computed(() => {
       return IconCheck
     case 'cancelled':
       return IconClose
-    default:
-      return null // no_show (i18n:user.screens.myBookings.status.noShow) / live / calculating → no icon
+    case 'no_show': // i18n:user.screens.myBookings.status.noShow
+    case 'live':
+    case 'calculating':
+      return null // no icon
   }
+  return null // a variant this build does not know: no icon
 })
 
 // Map the booking status to a DS VBadge variant (no hand-rolled badge styling).
@@ -89,9 +92,13 @@ const vbadgeVariant = computed<'success' | 'warning' | 'error' | 'muted'>(() => 
       return 'muted' // i18n:user.screens.myBookings.status.noShow — low-key blue-grey, no drama
     case 'calculating':
       return 'muted' // AT-2: i18n:user.screens.myBookings.status.counting — same low-key tone, not a verdict yet
-    default:
+    case undefined:
+    case 'live':
+    case 'today':
+    case 'done':
       return 'success'
   }
+  return 'success'
 })
 
 // F5: render the date in the viewer's own profile timezone (the profile decides).

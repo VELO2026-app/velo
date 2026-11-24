@@ -153,7 +153,7 @@ const cells = computed<Cell[]>(() => {
     const key = props.localDateKey(d)
     out.push({
       key,
-      weekday: WEEKDAY_LABELS[d.getDay()]!,
+      weekday: WEEKDAY_LABELS[d.getDay()] ?? '',
       num: d.getDate(),
       hasPractices: props.daysWithPractices.has(key),
     })
@@ -202,8 +202,8 @@ const monthList = computed<string[]>(() => {
   a.setDate(a.getDate() + left)
   const b = new Date(a)
   b.setDate(a.getDate() + 4)
-  const ma = MONTH_ABBR[a.getMonth()]!
-  const mb = MONTH_ABBR[b.getMonth()]!
+  const ma = MONTH_ABBR[a.getMonth()] ?? ''
+  const mb = MONTH_ABBR[b.getMonth()] ?? ''
   return ma === mb ? [ma] : [ma, mb]
 })
 

@@ -69,7 +69,7 @@ const PAGE = 20
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const practiceId = computed(() => route.params.id as string)
+const practiceId = computed(() => String(route.params.id ?? ''))
 
 const summary = ref<PracticeAnalyticsResponse | null>(null)
 const pairs = ref<PracticeAnalyticsPair[]>([])

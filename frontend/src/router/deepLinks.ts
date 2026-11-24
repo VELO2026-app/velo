@@ -250,11 +250,12 @@ export function parseStartParam(
       // the front to find the thread through the list). Bare (no id) has no
       // destination of its own.
       return id && asAdmin ? { name: 'admin-support-detail', params: { id } } : null
-    default:
-      // open_notifications / open_admin_masters: there is no admin bell --
-      // the app opens as usual. Anything else is not a route.
-      return null
+    case undefined:
+      break
   }
+  // open_notifications / open_admin_masters: there is no admin bell --
+  // the app opens as usual. Anything else is not a route.
+  return null
 }
 
 /**

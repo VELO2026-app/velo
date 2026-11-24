@@ -229,15 +229,16 @@ const blocked = computed<RefusalView | null>(() => {
         open: false,
         icon: 'lock',
       }
-    default:
-      // can_join=false with no reason is not a contract shape; stay honest
-      // rather than guessing — same title as blocked, no invented details.
-      return {
-        title: t('masterScreens.schoolJoin.unavailable'),
-        description: '',
-        open: false,
-        icon: 'lock',
-      }
+    case null:
+      break
+  }
+  // can_join=false with no reason is not a contract shape; stay honest
+  // rather than guessing — same title as blocked, no invented details.
+  return {
+    title: t('masterScreens.schoolJoin.unavailable'),
+    description: '',
+    open: false,
+    icon: 'lock',
   }
 })
 

@@ -331,6 +331,7 @@
 import { t } from '@/locales'
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { useQuery, useQueryCache } from '@pinia/colada'
 import { VHeader } from '@/components/layout'
 import {
@@ -384,7 +385,7 @@ const router = useRouter()
 const toast = useToast()
 const authStore = useAuthStore()
 
-const ticketId = route.params.id as string
+const ticketId = routeParam(route, 'id')
 const myId = computed(() => authStore.user?.id ?? '')
 
 const queryCache = useQueryCache()

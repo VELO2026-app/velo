@@ -63,12 +63,15 @@ function tailPts(
 /** A ribbon of three semi-transparent passes -- pigment layering
  *  (watercolor). */
 function ribbonSvg(pts: PathPoint[], color: string, opacity: number): string {
-  const offs = [0, 0.18, -0.18]
-  const alphas = [0.55, 0.32, 0.32]
-  return offs
+  const passes: readonly (readonly [offset: number, alpha: number])[] = [
+    [0, 0.55],
+    [0.18, 0.32],
+    [-0.18, 0.32],
+  ]
+  return passes
     .map(
-      (o, i) =>
-        `<path d="${taperedPath(offsetPts(pts, o))}" fill="${color}" opacity="${(opacity * alphas[i]!).toFixed(3)}"/>`,
+      ([o, alpha]) =>
+        `<path d="${taperedPath(offsetPts(pts, o))}" fill="${color}" opacity="${(opacity * alpha).toFixed(3)}"/>`,
     )
     .join('')
 }
@@ -128,19 +131,24 @@ export function bannerSvg(
   // ring ribbons: inner to outer, each with its own gradient along the arc
   S.bands.forEach((sp, i) => {
     const pts = bandPts(S, sp, noise)
+    const first = pts[0]
+    const last = pts[pts.length - 1]
+    // bandPts always returns a full ribbon; an empty one has nothing to paint.
+    if (!first || !last) return
     const g = `${uid}-b${i}`
     defs +=
-      `<linearGradient id="${g}" gradientUnits="userSpaceOnUse" x1="${pts[0]!.x.toFixed(1)}" y1="${pts[0]!.y.toFixed(1)}" x2="${pts[pts.length - 1]!.x.toFixed(1)}" y2="${pts[pts.length - 1]!.y.toFixed(1)}">` +
+      `<linearGradient id="${g}" gradientUnits="userSpaceOnUse" x1="${first.x.toFixed(1)}" y1="${first.y.toFixed(1)}" x2="${last.x.toFixed(1)}" y2="${last.y.toFixed(1)}">` +
       `<stop offset="0" stop-color="${mixHex(c[sp.color], c.bg, sp.Wg)}"/><stop offset="1" stop-color="${c[sp.color]}"/></linearGradient>`
     streams += `<g opacity="${sp.opacity}">${ribbonSvg(pts, `url(#${g})`, 1)}</g>`
   })
 
   // leaves at the lower edge
-  if (b.leaves) {
-    streams += b.leaves.items
+  const leaves = b.leaves
+  if (leaves) {
+    streams += leaves.items
       .map(
         (l) =>
-          `<path d="${petal(l.a, 0, l.len, l.w, 0.5)}" transform="translate(${b.leaves!.x.toFixed(0)} ${b.leaves!.y.toFixed(0)})" fill="${c[l.color]}" opacity="${l.opacity}"/>`,
+          `<path d="${petal(l.a, 0, l.len, l.w, 0.5)}" transform="translate(${leaves.x.toFixed(0)} ${leaves.y.toFixed(0)})" fill="${c[l.color]}" opacity="${l.opacity}"/>`,
       )
       .join('')
   }

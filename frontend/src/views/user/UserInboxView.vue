@@ -331,10 +331,11 @@ function routeFor(
       const threadId = typeof params.thread_id === 'string' ? params.thread_id : null
       return threadId ? { name: 'user-chat', params: { id: threadId }, query: { rate: '1' } } : null
     }
-    default:
-      // msg.* without a thread reference: the messages list, one hop away.
-      return item.type.startsWith('msg.') ? { name: 'user-messages' } : null
+    case undefined:
+      break
   }
+  // msg.* without a thread reference: the messages list, one hop away.
+  return item.type.startsWith('msg.') ? { name: 'user-messages' } : null
 }
 
 /** Tap = navigate + mark read. Navigation always happens (a read row is a
