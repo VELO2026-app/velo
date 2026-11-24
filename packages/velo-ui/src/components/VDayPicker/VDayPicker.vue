@@ -87,6 +87,10 @@ function toggle(value: string): void {
 }
 
 .v-day-picker__day {
+  /* The circle keeps its size: the 44px tap target is an invisible layer
+     (FE-249). The seven columns of a 320 px screen are narrower than 44px,
+     so the layers of neighbours overlap by a few pixels. */
+  position: relative;
   /* Auto-size to the column, square via aspect-ratio, capped at the prior 42px
      so it never balloons on a wide container. No fixed size, no new token. */
   width: 100%;
@@ -108,6 +112,12 @@ function toggle(value: string): void {
     background-color var(--transition-base),
     border-color var(--transition-base),
     color var(--transition-base);
+}
+
+.v-day-picker__day::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((100% - var(--velo-size-44)) / 2));
 }
 
 .v-day-picker__day--on {

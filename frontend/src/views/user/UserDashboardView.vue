@@ -714,16 +714,17 @@ onUnmounted(pause)
 
 /* Filled circle in the FLOATING HEADER's action slot (right of the screen
    title, i18n:user.screens.userDashboard.headerTitle) --
-   the origin of the 36px recipe (owner, 2026-09-08): a 36px primary disc
-   with a white 17px glyph, opacity press feedback. The MASTER dashboard's
+   the origin of the bell recipe (owner, 2026-09-08): a primary disc with a
+   white 17px glyph, opacity press feedback; FE-249 grew the disc from 36px
+   to the 44px tap target (owner, 2026-11-24). The MASTER dashboard's
    bell reuses this recipe verbatim (owner ask 2026-09-08) -- the presence
    dot, never a number, in both zones.
    VHeader's .v-header__right re-enables pointer events around it (the
    island is click-through). */
 .dashboard__bell {
   position: relative;
-  width: var(--velo-size-36);
-  height: var(--velo-size-36);
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -736,16 +737,6 @@ onUnmounted(pause)
   transition: opacity var(--transition-fast);
 }
 
-/* FE-26 touch skirt (VTabBar's .v-tabbar__item::after precedent): the 36px
-   disc sits below the 44px touch standard -- an invisible -4px ring grows
-   the TAPPABLE circle back to 44px without painting anything. */
-.dashboard__bell::after {
-  content: '';
-  position: absolute;
-  inset: calc(-1 * var(--space-1));
-  border-radius: var(--radius-full);
-}
-
 .dashboard__bell:active {
   opacity: 0.85;
 }
@@ -755,8 +746,8 @@ onUnmounted(pause)
   outline-offset: 2px;
 }
 
-/* The dot anchors to the GLYPH box (not the 44px target), so it hugs the
-   icon corner. */
+/* The dot anchors to the GLYPH box (not the disc), so it hugs the icon
+   corner. */
 .dashboard__bell-icon {
   position: relative;
   display: inline-flex;

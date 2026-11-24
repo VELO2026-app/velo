@@ -74,6 +74,8 @@ const valueDisplay = computed((): string =>
 }
 
 .v-progress-row--clickable {
+  /* A button, so a 44px tap target (FE-249); the bar stays centered. */
+  min-height: var(--velo-size-44);
   cursor: pointer;
 }
 

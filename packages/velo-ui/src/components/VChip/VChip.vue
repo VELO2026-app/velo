@@ -94,6 +94,10 @@ defineEmits<{
 }
 
 .v-chip--clickable {
+  /* A button, so a 44px tap target (FE-249); the label stays centered. */
+  min-height: var(--velo-size-44);
+  min-width: var(--velo-size-44);
+  justify-content: center;
   /* Selectable (filter) chips read as muted until active. */
   color: var(--velo-text-secondary);
   cursor: pointer;

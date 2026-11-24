@@ -38,7 +38,12 @@
       <div class="mreview__v" :class="valueClass">
         <slot />
       </div>
-      <button type="button" class="mreview__pen" :aria-label="editLabel" @click="emit('start')">
+      <button
+        type="button"
+        class="mreview__pen velo-tap-target"
+        :aria-label="editLabel"
+        @click="emit('start')"
+      >
         <IconPen :size="22" />
       </button>
     </template>

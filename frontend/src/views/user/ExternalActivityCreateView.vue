@@ -191,7 +191,7 @@
             />
             <button
               type="button"
-              class="ea__custom-commit"
+              class="ea__custom-commit velo-tap-target"
               :aria-label="t('user.screens.externalActivityCreate.custom.pick')"
               :disabled="!!customChip"
               @click="commitCustom"
@@ -742,14 +742,15 @@ html.is-keyboard-open .ea__body {
 .ea__picker {
   width: 100%;
   box-sizing: border-box;
-  height: var(--velo-size-40);
+  /* A field: the VInput height and rim (FE-249). */
+  height: var(--velo-size-44);
   text-align: left;
-  padding: 0 var(--space-4);
+  padding: 0 calc(var(--space-4) + var(--velo-border-width));
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  border: var(--velo-border-width) solid var(--velo-border-input-rest);
   border-radius: var(--velo-radius-badge);
   cursor: pointer;
 }

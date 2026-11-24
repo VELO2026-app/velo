@@ -706,12 +706,12 @@ onMounted(() => {
 }
 
 /* The USER dashboard's bell recipe, reused verbatim (owner ask 2026-09-08):
-   a 36px primary disc with a white 17px glyph, presence dot instead of the
-   old T-26 number badge. */
+   a 44px primary disc (FE-249; it was 36px) with a white 17px glyph, presence
+   dot instead of the old T-26 number badge. */
 .master-dashboard__bell {
   position: relative;
-  width: var(--velo-size-36);
-  height: var(--velo-size-36);
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -722,16 +722,6 @@ onMounted(() => {
   color: var(--velo-white);
   cursor: pointer;
   transition: opacity var(--transition-fast);
-}
-
-/* FE-26 touch skirt (same as the user bell): the 36px disc sits below the
-   44px touch standard -- an invisible -4px ring grows the TAPPABLE circle
-   back to 44px without painting anything. */
-.master-dashboard__bell::after {
-  content: '';
-  position: absolute;
-  inset: calc(-1 * var(--space-1));
-  border-radius: var(--radius-full);
 }
 
 .master-dashboard__bell:active {

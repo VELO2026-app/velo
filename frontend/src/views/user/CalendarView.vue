@@ -36,7 +36,7 @@
           <button
             v-if="masterMode || schoolMode"
             type="button"
-            class="calendar__back"
+            class="calendar__back velo-tap-target"
             :aria-label="
               masterMode
                 ? t('user.screens.calendar.backToMaster')

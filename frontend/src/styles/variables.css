@@ -439,6 +439,14 @@
 
   /* === VELΘ: Border === */
   --velo-border-input-focus: var(--velo-border);
+  /* Focus ring of text fields (VInput, VSelect, VTextarea): the skin's primary, 3:1 or more against the white plate, so a focused field is never paler than its rim at rest. */
+  --velo-border-input-ring: var(--velo-primary);
+  /* Field rim at rest (VInput, VSelect, VTextarea): 3:1 against the white plate and the page (WCAG 1.4.11); a skin may set its own. */
+  --velo-border-input-rest: color-mix(
+    in srgb,
+    var(--velo-text-primary) 75%,
+    var(--velo-bg-card-solid)
+  );
 
   /* === VELΘ: Component sizes === */
   --size-success-icon: 80px; /* success screen emoji */
@@ -643,6 +651,8 @@
     0 8px 30px rgba(0, 0, 0, 0.08); /* Composer focus */
   --velo-shadow-toast: 0 4px 12px rgba(0, 0, 0, 0.3); /* VToast, floats over everything */
   --velo-shadow-switch: 0 1px 2px rgba(0, 0, 0, 0.2); /* VSwitch thumb */
+  --velo-shadow-field-focus: inset 0 0 0 var(--velo-border-width) var(--velo-border-input-ring); /* the inner 1px of the 2px focus ring (VInput, VSelect, VTextarea) */
+  --velo-shadow-field-error: inset 0 0 0 var(--velo-border-width) var(--velo-error); /* the inner 1px of the 2px error ring (VInput, VSelect, VTextarea) */
   /* [F2.0 step-1 addendum] MasterGroupsView «my groups» circle glow — same
      family as --velo-shadow-glow above, its own measured numbers (value 1:1). */
   --velo-shadow-glow-sm: 0 0 13.167px 8.82px #ffffff;
@@ -738,7 +748,7 @@
    *                    overriding velo.font.size.* rethemes them too (step
    *                    4b removes the bare names).
    *   radius           --velo-radius-* <-> velo.radius.*
-   *   depth            --velo-shadow-glow(-sm)/glass/toast/switch,
+   *   depth            --velo-shadow-glow(-sm)/glass/toast/switch/field-*,
    *                    --velo-write-shadow-*, --velo-effect-focus-glass
    *                    <-> velo.shadow.* / velo.effect.*
    *   surfaces         --velo-frost-* (frosted pills: tab bar, composer; not part of the glass-* ramp), --velo-control-border,

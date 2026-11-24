@@ -327,12 +327,13 @@ function autogrow(): void {
   if (!el) return
   el.style.height = 'auto'
   el.style.height = `${el.scrollHeight}px`
-  // [owner pass] Capsule threshold: one measured line band is ~29px (16px
-  // text @1.3 line-height + 8px textarea padding), two lines ~58px. The 45px
-  // cut sits between them with double-margin on both sides -- no font-metric
+  // [owner pass] Capsule threshold: one measured line band is 44px (the
+  // 44px min-height of the capsule's textarea, FE-249; the text itself is
+  // ~29px: 16px @1.3 line-height + 8px padding), two lines ~58px. The 51px
+  // cut sits between them with margin on both sides -- no font-metric
   // fragility, and it can never disagree with the height the same function
   // just set. Empty field: stays true (never flipped off).
-  singleLine.value = el.scrollHeight < 45
+  singleLine.value = el.scrollHeight < 51
   if (el.selectionStart === el.value.length) {
     el.scrollTop = el.scrollHeight
   }
@@ -737,6 +738,16 @@ defineExpose({ focus: focusField, discardDraft })
    truth with VInput/VTextarea instead of a hand-rolled fade. */
 .composer__input::placeholder {
   color: var(--velo-text-placeholder);
+}
+
+/* FE-249: the textarea is a tap target too. In the capsule it fills the whole
+   44px band, over the field's 4px padding; the text stays centered (12px above
+   it, 4px below, the rest of the band is the 44px floor). The paddings sum to
+   the 16px of the base rule, so autogrow() reads the same text height. */
+.composer--single .composer__input {
+  min-height: var(--velo-size-44);
+  margin-block: calc(-1 * var(--space-1));
+  padding-block: calc(var(--space-2) + var(--space-1)) var(--space-1);
 }
 
 .composer__preview {

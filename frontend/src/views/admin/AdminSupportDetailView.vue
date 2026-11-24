@@ -183,7 +183,11 @@
               @toggle="toggleOriginal(m.id)"
               @retry="onRetry(ticketId, m.id)"
             />
-            <button type="button" class="support-detail__refresh" @click="loadMessages">
+            <button
+              type="button"
+              class="support-detail__refresh velo-tap-target"
+              @click="loadMessages"
+            >
               {{ t('adminScreens.adminSupportDetail.refresh') }}
             </button>
           </div>
@@ -1190,8 +1194,8 @@ watch(ticketSettledError, (e) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--velo-size-40);
-  height: var(--velo-size-40);
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
   padding: 0;
   border: none;
   border-radius: var(--radius-full);
