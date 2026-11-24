@@ -37,14 +37,24 @@
 
     <!-- The schools read failed: the fourth option is missing from the radio
          because the list is unknown, not because there are none (FE-256). -->
-    <VEmptyState v-if="schoolsFailed" icon="warning" :title="t('common.loadError')">
+    <VEmptyState
+      v-if="schoolsFailed"
+      icon="warning"
+      :title="t('common.loadError')"
+      :description="t('practice.audience.schools')"
+    >
       <VButton size="sm" variant="outline" @click="emit('retrySchools')">{{
         t('common.retry')
       }}</VButton>
     </VEmptyState>
 
     <template v-if="kindModel === 'groups'">
-      <VEmptyState v-if="groupsFailed" icon="warning" :title="t('common.loadError')">
+      <VEmptyState
+        v-if="groupsFailed"
+        icon="warning"
+        :title="t('common.loadError')"
+        :description="t('practice.audience.groups')"
+      >
         <VButton size="sm" variant="outline" @click="emit('retryGroups')">{{
           t('common.retry')
         }}</VButton>
