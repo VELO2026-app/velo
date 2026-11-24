@@ -125,7 +125,13 @@
           />
 
           <!-- Direction — options catalog-first (T2 stage 2), see CreatePracticeView. -->
+          <VEmptyState v-if="methodsFailed" icon="warning" :title="t('common.loadError')">
+            <VButton size="sm" variant="outline" @click="retryMethods">{{
+              t('common.retry')
+            }}</VButton>
+          </VEmptyState>
           <VSelect
+            v-else
             v-model="form.direction"
             :label="t('masterScreens.editPractice.fields.direction')"
             :options="directionOptions"
@@ -222,7 +228,9 @@
               :school-id="null"
               :groups="customGroups"
               :schools="[]"
+              :groups-failed="customGroupsFailed"
               :error="errors.audience_group_ids"
+              @retry-groups="reloadCustomGroups"
             />
           </div>
 
@@ -409,7 +417,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const queryCache = useQueryCache()
-const { profile: masterProfile } = useMasterProfile()
+const { profile: masterProfile, failed: profileFailed, reload: reloadProfile } = useMasterProfile()
 
 const practiceId = routeParam(route, 'id')
 
@@ -477,7 +485,11 @@ const { form, errors, validate } = usePracticeForm(emptyPracticeForm(), (v) => (
 // specific-groups (i18n:practice.audience.groups) multi-select. Re-resolves
 // the name->id selection once they land, in case populateForm() already ran
 // against an empty list.
-const customGroups = usePracticeCustomGroups(() => resolveAudienceGroupIds())
+const {
+  groups: customGroups,
+  failed: customGroupsFailed,
+  reload: reloadCustomGroups,
+} = usePracticeCustomGroups(() => resolveAudienceGroupIds())
 
 // BE-74 + FE-92: a school practice's KIND is editable, but only within the
 // pair the backend accepts (SCHOOL_AUDIENCE_KINDS) -- the same pair the
@@ -520,6 +532,15 @@ const { directionOptions, styleOptions, onDirectionChange } = usePracticeTaxonom
       ? practice.value.master_methods
       : masterProfile.value?.methods,
 )
+
+// FE-256: the options stay closed until the caller's profile has answered
+// (usePracticeTaxonomyOptions), whichever methods they are filtered by; when
+// that read failed, the empty picker would read as "no direction allowed", so
+// the picker gives way to an error with Retry.
+const methodsFailed = computed(() => profileFailed.value)
+function retryMethods(): void {
+  void reloadProfile()
+}
 
 // -- Populate form from practice --
 function populateForm(p: PracticeResponse): void {

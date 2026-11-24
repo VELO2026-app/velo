@@ -39,8 +39,18 @@
       </svg>
     </button>
 
+    <!-- A failed read must not pass for "no practices yet" (FE-256); during the
+         Retry the loader holds the place, so the empty hint cannot flash. -->
+    <VEmptyState v-if="open && failed" icon="warning" :title="t('common.loadError')">
+      <VButton size="sm" variant="outline" @click="emit('retry')">{{ t('common.retry') }}</VButton>
+    </VEmptyState>
+
+    <div v-else-if="open && loading" class="use-template__loading">
+      <VLoader size="sm" />
+    </div>
+
     <!-- Empty: master has no practices yet. -->
-    <div v-if="open && practices.length === 0" class="use-template__empty">
+    <div v-else-if="open && practices.length === 0" class="use-template__empty">
       {{ t('useTemplate.empty') }}
     </div>
 
@@ -76,6 +86,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { ref, computed, watch, nextTick, onBeforeUnmount, type Component } from 'vue'
+import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import { practiceIconFor } from '@/utils/displayHelpers'
 import { formatShortDate, formatTime } from '@/utils/format'
 import type { PracticeResponse } from '@/api/types'
@@ -83,9 +94,14 @@ import type { PracticeResponse } from '@/api/types'
 const props = defineProps<{
   /** The master's own practices (newest-first), used as templates. */
   practices: PracticeResponse[]
+  /** A read of the practices is in flight with nothing to show yet. */
+  loading?: boolean
+  /** A read of the practices failed: the block offers Retry (`retry`) instead
+   *  of an empty hint that would read as "no practices yet" (FE-256). */
+  failed?: boolean
 }>()
 
-const emit = defineEmits<{ select: [practice: PracticeResponse] }>()
+const emit = defineEmits<{ select: [practice: PracticeResponse]; retry: [] }>()
 
 const open = ref(false)
 
@@ -213,6 +229,12 @@ function select(p: PracticeResponse): void {
 }
 
 /* Empty-state hint. */
+.use-template__loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) 0 var(--space-3);
+}
+
 .use-template__empty {
   text-align: center;
   font-family: var(--font-body);

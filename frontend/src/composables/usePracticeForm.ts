@@ -511,23 +511,34 @@ export function isMeaningfulPracticeDraft(d: Record<string, unknown>): boolean {
  *
  * @remarks The deleted bucket is a system slug and the default students
  * group cannot be targeted either; getGroups() returns both next to the
- * custom ones, so they are filtered here. A failure toasts instead of an
- * empty list that would read as "no groups yet".
+ * custom ones, so they are filtered here. A failure toasts and sets `failed`
+ * (the audience picker then offers Retry) instead of an empty list that would
+ * read as "no groups yet" (FE-256).
  * @param onLoaded - Runs after the list landed (the edit screen re-resolves
  *   its saved group names to ids).
+ * @returns The groups, whether the last read failed, and `reload` to ask again.
  */
-export function usePracticeCustomGroups(onLoaded?: () => void): Ref<GroupListItem[]> {
+export function usePracticeCustomGroups(onLoaded?: () => void): {
+  groups: Ref<GroupListItem[]>
+  failed: Ref<boolean>
+  reload: () => Promise<void>
+} {
   const groups = ref<GroupListItem[]>([])
+  const failed = ref(false)
   const toast = useToast()
+  async function reload(): Promise<void> {
+    failed.value = false
+    try {
+      const res = await getGroups()
+      groups.value = res.items.filter((g) => g.kind === 'custom')
+      onLoaded?.()
+    } catch {
+      failed.value = true
+      toast.error(t('masterScreens.createPractice.error.loadGroups'))
+    }
+  }
   onMounted(() => {
-    void getGroups()
-      .then((res) => {
-        groups.value = res.items.filter((g) => g.kind === 'custom')
-        onLoaded?.()
-      })
-      .catch(() => {
-        toast.error(t('masterScreens.createPractice.error.loadGroups'))
-      })
+    void reload()
   })
-  return groups
+  return { groups, failed, reload }
 }

@@ -35,8 +35,21 @@
   <div class="pap">
     <VRadioGroup v-model="kindModel" :options="options" />
 
+    <!-- The schools read failed: the fourth option is missing from the radio
+         because the list is unknown, not because there are none (FE-256). -->
+    <VEmptyState v-if="schoolsFailed" icon="warning" :title="t('common.loadError')">
+      <VButton size="sm" variant="outline" @click="emit('retrySchools')">{{
+        t('common.retry')
+      }}</VButton>
+    </VEmptyState>
+
     <template v-if="kindModel === 'groups'">
-      <div v-if="groups.length" class="pap__chips">
+      <VEmptyState v-if="groupsFailed" icon="warning" :title="t('common.loadError')">
+        <VButton size="sm" variant="outline" @click="emit('retryGroups')">{{
+          t('common.retry')
+        }}</VButton>
+      </VEmptyState>
+      <div v-else-if="groups.length" class="pap__chips">
         <VChip
           v-for="g in groups"
           :key="g.id"
@@ -90,7 +103,7 @@ import { computed } from 'vue'
 import type { GroupListItem } from '@/api/groups'
 import type { PracticeAudienceKind } from '@/api/types'
 import { audienceOptions } from '@/utils/practiceOptions'
-import { VChip, VRadioGroup } from '@/components/ui'
+import { VButton, VChip, VEmptyState, VRadioGroup } from '@/components/ui'
 import type { AudienceSchoolOption } from './practiceAudience'
 
 const props = defineProps<{
@@ -98,6 +111,12 @@ const props = defineProps<{
   groups: GroupListItem[]
   /** Eligible schools (kind === 'schools' targets). */
   schools: AudienceSchoolOption[]
+  /** The read of `groups` failed: the groups area offers Retry (`retryGroups`)
+   *  instead of "no groups yet" (FE-256). */
+  groupsFailed?: boolean | undefined
+  /** The read of `schools` failed: an error with Retry (`retrySchools`) shows
+   *  under the radio, since the missing fourth option would read as "no schools". */
+  schoolsFailed?: boolean | undefined
   /** Single validation-error line, shown for whichever kind is active. */
   error?: string | undefined
   /** T24-24 (PROMPT №639): Create relabels the 'students' option
@@ -118,6 +137,8 @@ const props = defineProps<{
    *  fixed school itself. */
   schoolLocked?: boolean | undefined
 }>()
+
+const emit = defineEmits<{ retryGroups: []; retrySchools: [] }>()
 
 const kindModel = defineModel<PracticeAudienceKind>('kind', { required: true })
 const groupIds = defineModel<string[]>('groupIds', { required: true })
