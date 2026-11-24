@@ -73,8 +73,24 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-masters', 'admin-profile', 'admin-schools', 'admin-users', 'user-bookings'],
+    routes: [
+      'admin-masters',
+      'admin-profile',
+      'admin-schools',
+      'admin-users',
+      'practice-detail',
+      'user-bookings',
+    ],
     detail: '#2f9ea8 on #d6f5f8',
+    skins: ['gold'],
+    reason:
+      'A status color pair (badge, tag, danger button, toast) under 4.5:1; the colors are a design decision.',
+    task: 'FE-245',
+  },
+  {
+    rule: 'color-contrast',
+    routes: ['admin-dashboard', 'root'],
+    detail: '#2f9ea8 on #ffffff',
     skins: ['gold'],
     reason:
       'A status color pair (badge, tag, danger button, toast) under 4.5:1; the colors are a design decision.',
@@ -100,7 +116,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-reports', 'admin-users'],
+    routes: ['admin-reports', 'admin-users', 'user-bookings'],
     detail: '#a16124 on #fde6cf',
     skins: ['gold'],
     reason:
@@ -126,7 +142,16 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['practice-detail', 'user-master-public'],
+    routes: [
+      'group-join',
+      'master-dashboard',
+      'master-practice-live',
+      'practice-detail',
+      'practice-live',
+      'root',
+      'user-dashboard',
+      'user-master-public',
+    ],
     detail: '#f795a2 on #fde2e2',
     skins: ['gold'],
     reason:
@@ -153,7 +178,13 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-master-review', 'master-student-profile'],
+    routes: [
+      'admin-master-review',
+      'master-dashboard',
+      'master-student-profile',
+      'practice-detail',
+      'root',
+    ],
     detail: '#ffffff on #f795a2',
     skins: ['gold'],
     reason:
@@ -168,15 +199,18 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
       'group-join',
       'master-apply',
       'master-invite',
+      'master-school',
       'practice-detail',
       'root',
       'user-bookings',
+      'user-calendar-school',
       'user-checkin',
       'user-dashboard',
       'user-diary-detail',
       'user-feedback',
       'user-master-public',
       'user-reflection',
+      'user-school',
     ],
     reason: 'The heading level jumps by more than one.',
     task: 'FE-246',
@@ -253,8 +287,27 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-masters', 'master-student-profile', 'practice-detail', 'user-master-public'],
+    routes: [
+      'admin-masters',
+      'group-join',
+      'master-student-profile',
+      'practice-detail',
+      'root',
+      'user-calendar-school',
+      'user-dashboard',
+      'user-master-public',
+      'user-school',
+    ],
     detail: '#627a9c on #e2f0fd',
+    skins: ['gold'],
+    reason:
+      'The gold primary color #627a9c is 4.39:1 against white text and the tints of its family; the color belongs to the velo-brand package.',
+    task: 'FE-252',
+  },
+  {
+    rule: 'color-contrast',
+    routes: ['admin-masters', 'admin-users', 'master-school-members'],
+    detail: '#627a9c on #f6f7f9',
     skins: ['gold'],
     reason:
       'The gold primary color #627a9c is 4.39:1 against white text and the tints of its family; the color belongs to the velo-brand package.',
@@ -300,6 +353,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
       'admin-revenue',
       'admin-support-detail',
       'auth-error',
+      'group-join',
       'master-analytics',
       'master-apply',
       'master-attendance',
@@ -327,6 +381,8 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
       'user-calendar',
       'user-calendar-master',
       'user-calendar-school',
+      'user-checkin',
+      'user-dashboard',
       'user-edit-profile',
       'user-feedback',
       'user-reflection',
