@@ -15,17 +15,16 @@
 // can see is this object -- src/pwa/manifest.test.ts pins its fields.
 //
 // Identity (tz-whitelabel §2). The object below carries the values of the
-// build without a skin package (the neutral core since FE-230; the name
-// moves out with FE-231). For a rebranded build vite.config.ts resolves the
-// instance env (loadEnv: .env files + process.env) and hands it to
-// pwaManifestWithPassport() -- two .env files produce two builds (§2.4)
-// without touching this file. This module is evaluated at CONFIG time in
-// Node (imported by vite.config.ts), where import.meta.env does not exist --
-// which is also why it must NOT import platform/instance.ts (a browser
-// module; and a dynamic env read here would inline the whole env into the
-// client bundle). description is Russian, matching lang: 'ru' (it used to be
-// English under a Russian lang); F2 lets a skin override identity via
-// its brand record (§1; FE-131: $extensions["velo-skin"] of the package).
+// build without a skin package: the neutral core (FE-230), its name the
+// core's neutral word (FE-231, platform/skin.ts CORE_SKIN). A branded build
+// takes name, short_name and colours from the skin package's brand record
+// (§1; FE-131: $extensions["velo-skin"] of the package) through
+// pwaManifestFor() -- the brand name has no other source. This module is
+// evaluated at CONFIG time in Node (imported by vite.config.ts), where
+// import.meta.env does not exist -- which is also why it must NOT import
+// platform/instance.ts (a browser module; and a dynamic env read here would
+// inline the whole env into the client bundle). description is Russian,
+// matching lang: 'ru' (it used to be English under a Russian lang).
 //
 // Colours: theme_color mirrors <meta name="theme-color"> in index.html;
 // background_color is the body background (--velo-bg-start in variables.css),
@@ -46,20 +45,20 @@
 
 import type { ManifestOptions } from 'vite-plugin-pwa'
 
-import type { SkinPackage } from '../platform/skin'
+import { CORE_SKIN, type SkinPackage } from '../platform/skin'
 
 export const pwaManifest: Partial<ManifestOptions> = {
   id: '/',
-  name: 'VELO',
-  short_name: 'VELO',
+  name: CORE_SKIN.displayName,
+  short_name: CORE_SKIN.shortName,
   description: 'Платформа для ведения практик благополучия',
   lang: 'ru',
   start_url: '/',
   scope: '/',
   display: 'standalone',
   orientation: 'portrait',
-  theme_color: '#4c4c4c',
-  background_color: '#f2f2f2',
+  theme_color: CORE_SKIN.themeColor,
+  background_color: CORE_SKIN.backgroundColor,
   icons: [
     { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
     { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -72,24 +71,19 @@ export const pwaManifest: Partial<ManifestOptions> = {
   ],
 }
 
-/** Identity + colour overrides, in tz-whitelabel §1 priority order (FE-155:
- *  `lang`/`description` are NOT here -- they are the instance part, chosen at
- *  container start from the per-locale files below):
- *  the SKIN package (build-time, its brand record) wins over the instance ENV,
- *  absent keys keep the golden values; an empty everything returns the
- *  golden object unchanged. theme_color/background_color come ONLY from the
- *  skin here (§1: the brand record is the single source; the env passport carries
- *  no colours). */
-export function pwaManifestWithPassport(
-  env: Record<string, string | undefined>,
-  skin?: SkinPackage | null,
-): Partial<ManifestOptions> {
-  const brand = skin?.displayName ?? env.VITE_BRAND
-  if (!brand && !skin) return pwaManifest
+/** The build's manifest: identity and colours from the skin package's brand
+ *  record (§1: the single source -- no env value names the brand, FE-231);
+ *  no package returns the core object unchanged. `lang`/`description` are NOT
+ *  here (FE-155): they are the instance part, chosen at container start from
+ *  the per-locale files below. */
+export function pwaManifestFor(skin: SkinPackage | null): Partial<ManifestOptions> {
+  if (!skin) return pwaManifest
   return {
     ...pwaManifest,
-    ...(brand ? { name: brand, short_name: skin?.shortName ?? brand } : {}),
-    ...(skin ? { theme_color: skin.themeColor, background_color: skin.backgroundColor } : {}),
+    name: skin.displayName,
+    short_name: skin.shortName,
+    theme_color: skin.themeColor,
+    background_color: skin.backgroundColor,
   }
 }
 

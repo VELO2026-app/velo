@@ -62,6 +62,7 @@
         <div class="school-members__search-field">
           <VInput
             v-model="search"
+            kind="search"
             :placeholder="searchPlaceholder"
             :aria-label="searchPlaceholder"
           />

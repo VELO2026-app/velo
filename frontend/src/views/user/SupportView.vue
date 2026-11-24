@@ -10,7 +10,7 @@
 
   WIRED (FE-104, owner ruling BE-162): every submit is a NEW ticket -- the topic
   as a CODE and the message, one call (@/api/support::createTicket) under the
-  appeal's Idempotency-Key (::createAppealKeys: the same key while the topic and
+  appeal's Idempotency-Key (::createAttemptKeys: the same key while the topic and
   the text stay the same, so a retry after a failed send is the same ticket).
   The "other" topic (i18n:supportTopics.other) has no free text of its own
   (owner): the substance is the message.
@@ -70,6 +70,7 @@
         <h2 class="support__title">{{ t('user.screens.support.message.label') }}</h2>
         <VTextarea
           v-model="message"
+          kind="message"
           :rows="5"
           maxlength="4000"
           :placeholder="t('user.screens.support.message.placeholder')"
@@ -101,7 +102,8 @@ import { VHeader } from '@/components/layout'
 import { VButton, VRadioGroup, VTextarea } from '@/components/ui'
 import { IconSupportChat } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
-import { createAppealKeys, createTicket, type SupportTopicCode } from '@/api/support'
+import { createAttemptKeys } from '@/api/attemptKeys'
+import { createTicket, type SupportTopicCode } from '@/api/support'
 import { listChats } from '@/api/chats'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -134,7 +136,7 @@ const topicOptions = TOPICS.map((t) => ({ value: t.value, label: supportTopicLab
 
 const topic = ref<SupportTopicCode>(TOPICS[0]!.value)
 const message = ref('')
-const appealKey = createAppealKeys()
+const appealKeys = createAttemptKeys()
 
 const emailHref = 'mailto:support@velo.app'
 
@@ -155,10 +157,12 @@ async function onSubmit(): Promise<void> {
 
   submitting.value = true
   try {
-    await createTicket(topic.value, text, appealKey(topic.value, text))
+    await createTicket(topic.value, text, appealKeys.keyFor(topic.value, text))
+    appealKeys.settle()
     submitted.value = true
     void openConversation()
   } catch (e) {
+    appealKeys.settle(e)
     toast.error(extractApiError(e, t('user.screens.support.toast.sendFailed')))
   } finally {
     submitting.value = false

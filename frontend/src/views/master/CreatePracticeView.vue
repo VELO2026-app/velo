@@ -282,7 +282,7 @@
                   v-else-if="form.recurrence_end === 'after_count'"
                   v-model.number="form.recurrence_count"
                   type="number"
-                  inputmode="numeric"
+                  v-bind="inputKindAttrs('numeric')"
                   min="1"
                   class="create-practice__end-control create-practice__count-input"
                   :placeholder="t('masterScreens.createPractice.fields.repeatCount')"
@@ -450,6 +450,7 @@ import {
   VCheckbox,
   VRadioGroup,
   VDayPicker,
+  inputKindAttrs,
 } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useAuthStore } from '@/stores/auth'

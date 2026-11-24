@@ -57,12 +57,13 @@
           :label="t('masterScreens.masterApply.fields.name')"
           :error="errors.display_name"
         />
-        <VInput v-model="form.email" floating-label label="E-mail" type="email" />
+        <VInput v-model="form.email" floating-label label="E-mail" type="email" kind="email" />
         <VInput
           v-model="form.phone"
           floating-label
           :label="t('masterScreens.masterApply.fields.phone')"
           type="tel"
+          kind="tel"
         />
 
         <VCard class="apply-view__consent" padding="none">

@@ -110,6 +110,7 @@
             v-model="payoutForm.email"
             label="PayPal Email *"
             type="email"
+            kind="email"
             placeholder="you@example.com"
             :error="formErrors.email"
           />
@@ -171,6 +172,7 @@
         <div class="finance-view__amount-row">
           <VInput
             v-model="amountInput"
+            kind="decimal"
             type="number"
             :min="MIN_WITHDRAWAL_EUROS"
             step="0.01"

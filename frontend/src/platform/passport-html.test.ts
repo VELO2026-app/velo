@@ -15,6 +15,7 @@ import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { passportHtmlDefaults } from '@/platform/passport-html'
+import { CORE_SKIN } from '@/platform/skin'
 
 // The plugin under Vite's own types is an ObjectHook maze; the test only
 // needs its structural shape.
@@ -27,8 +28,8 @@ interface HtmlPlugin {
 const plugin = passportHtmlDefaults() as unknown as HtmlPlugin
 
 // A directory that does not exist: loadEnv finds no .env files there, so the
-// suite never reads the developer's real frontend/.env (a local VITE_BRAND
-// would otherwise flip the golden-default test).
+// suite never reads the developer's real frontend/.env (a local
+// VITE_DEFAULT_LOCALE would otherwise flip the golden-default test).
 const NO_ENV_DIR = new URL('./passport-html-test-env/', import.meta.url).pathname
 
 function resolveWithRoot(): void {
@@ -44,22 +45,18 @@ afterEach(() => {
 })
 
 describe('passportHtmlDefaults (tz-whitelabel F1)', () => {
-  it('an undefined var resolves to the golden default, never a literal placeholder', () => {
+  it('no env and no skin: the default lang and the core name, never a literal placeholder', () => {
     resolveWithRoot()
-    vi.stubEnv('VITE_BRAND', undefined)
     vi.stubEnv('VITE_DEFAULT_LOCALE', undefined)
     expect(transform('<html lang="%VELO_DEFAULT_LOCALE%"><title>%VELO_BRAND%</title>')).toBe(
-      '<html lang="ru"><title>VELO</title>',
+      `<html lang="ru"><title>${CORE_SKIN.displayName}</title>`,
     )
   })
 
-  it('a configured var wins over the default (two .env -> two builds, §2.4)', () => {
+  it('a configured lang wins over the default (two .env -> two builds, §2.4)', () => {
     resolveWithRoot()
-    vi.stubEnv('VITE_BRAND', 'ШКОЛА')
     vi.stubEnv('VITE_DEFAULT_LOCALE', 'en')
-    expect(transform('<html lang="%VELO_DEFAULT_LOCALE%"><title>%VELO_BRAND%</title>')).toBe(
-      '<html lang="en"><title>ШКОЛА</title>',
-    )
+    expect(transform('<html lang="%VELO_DEFAULT_LOCALE%">')).toBe('<html lang="en">')
   })
 
   it('an unknown placeholder is left as is (not our contract, not our business)', () => {
@@ -117,8 +114,8 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
     expect(out).toContain('href="/skin/assets/fonts/rubik-400.woff2" as="font"')
     expect(out).not.toContain('Marmelad')
     expect(out).not.toContain('googleapis')
-    // the tab title follows the skin display name (half-branded tabs read fake)
-    expect(transformSkin('<title>VELO</title>')).toBe('<title>ШКОЛА</title>')
+    // the tab title is the skin display name (FE-231: its only source)
+    expect(transformSkin('<title>%VELO_BRAND%</title>')).toBe('<title>ШКОЛА</title>')
   })
 
   it('the display name is escaped and never expands as a replace pattern', () => {
@@ -132,19 +129,9 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
       hasLogo: true,
     })
     const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
-    expect(hook.handler('<title>VELO</title>')).toBe('<title>A &amp; B $&amp; &lt;i&gt;</title>')
-  })
-
-  it('no skin: the golden title is untouched', () => {
-    resolveWithRoot()
-    const plugin = passportHtmlDefaults()
-    ;(plugin as unknown as HtmlPlugin).configResolved({
-      mode: 'production',
-      root: process.cwd(),
-      envDir: NO_ENV_DIR,
-    })
-    const hook = (plugin as unknown as HtmlPlugin).transformIndexHtml
-    expect(hook.handler('<title>VELO</title>')).toBe('<title>VELO</title>')
+    expect(hook.handler('<title>%VELO_BRAND%</title>')).toBe(
+      '<title>A &amp; B $&amp; &lt;i&gt;</title>',
+    )
   })
 })
 

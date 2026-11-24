@@ -9,7 +9,7 @@
   WIRED (FE-104, owner ruling BE-162): the submit button (i18n:common.submitSend)
   creates a NEW ticket -- the
   topic as a CODE and the message, one call (@/api/support::createTicket) under
-  the appeal's Idempotency-Key (::createAppealKeys: the same key while the
+  the appeal's Idempotency-Key (::createAttemptKeys: the same key while the
   topic and the text stay the same, so a retry after a failed send is the same
   ticket). The other topic (i18n:supportTopics.other) has no free text of its
   own (owner): the substance is the
@@ -89,6 +89,7 @@
         <h2 class="support__title">{{ t('masterScreens.masterSupport.message.label') }}</h2>
         <VTextarea
           v-model="message"
+          kind="message"
           :rows="5"
           maxlength="4000"
           :placeholder="t('masterScreens.masterSupport.message.placeholder')"
@@ -152,7 +153,8 @@ import { VHeader } from '@/components/layout'
 import { VButton, VRadioGroup, VTextarea } from '@/components/ui'
 import { IconSupportChat, IconFile, IconClose } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
-import { createAppealKeys, createTicket, type SupportTopicCode } from '@/api/support'
+import { createAttemptKeys } from '@/api/attemptKeys'
+import { createTicket, type SupportTopicCode } from '@/api/support'
 import { listChats } from '@/api/chats'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -191,7 +193,7 @@ const TOPICS: SupportTopic[] = [
 const topicOptions = TOPICS.map((t) => ({ value: t.value, label: supportTopicLabel(t.value) }))
 const topic = ref<SupportTopicCode>('withdrawal')
 const message = ref('')
-const appealKey = createAppealKeys()
+const appealKeys = createAttemptKeys()
 
 // -- Attachments (captured locally only; no upload backend — see header) -----
 const MAX_FILES = 5
@@ -232,10 +234,12 @@ async function onSubmit(): Promise<void> {
 
   submitting.value = true
   try {
-    await createTicket(topic.value, text, appealKey(topic.value, text))
+    await createTicket(topic.value, text, appealKeys.keyFor(topic.value, text))
+    appealKeys.settle()
     submitted.value = true
     void openConversation()
   } catch (e) {
+    appealKeys.settle(e)
     toast.error(extractApiError(e, t('masterScreens.masterSupport.toast.sendFailed')))
   } finally {
     submitting.value = false

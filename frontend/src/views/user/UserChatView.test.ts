@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import UserChatView from '@/views/user/UserChatView.vue'
 import type { ChatThread } from '@/api/chats'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 const back = vi.fn()
 const routeParams: { id: string } = { id: '' }
@@ -134,7 +135,7 @@ describe('UserChatView -- which row a route id opens', () => {
     expect(notFound()).toBe(false)
     expect(stub()?.dataset.threadId).toBe('ticket_new')
     expect(stub()?.dataset.support).toBe('true')
-    expect(stub()?.dataset.fallback).toBe('Поддержка VELO')
+    expect(stub()?.dataset.fallback).toBe(`Поддержка ${SKIN_BRAND}`)
   })
 
   it('the id of an OLDER ticket (a push about it) opens the same support conversation, not «not found»', async () => {
