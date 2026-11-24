@@ -579,6 +579,23 @@ export const adminPracticesQuery = defineQueryOptions((scope: AdminPracticeScope
   staleTime: 0,
 }))
 
+/** Practices per page of the web console's practices table. */
+export const ADMIN_PRACTICES_PAGE_SIZE = 20
+
+/**
+ * Query options for one page (1-based) of the platform's practices in one
+ * scope (`GET /admin/practices`), the web console's table. The page is part
+ * of the key: a page switch is a cache entry of its own.
+ */
+export const adminPracticesPageQuery = defineQueryOptions(
+  ({ scope, page }: { scope: AdminPracticeScope; page: number }) => ({
+    key: adminKeys.practicesPage(scope, page),
+    query: () =>
+      getAdminPractices(scope, ADMIN_PRACTICES_PAGE_SIZE, (page - 1) * ADMIN_PRACTICES_PAGE_SIZE),
+    staleTime: 0,
+  }),
+)
+
 /** A filter of the participants list: everyone, or new / active this week. */
 export type AdminParticipantFilter = 'all' | 'new' | 'active'
 

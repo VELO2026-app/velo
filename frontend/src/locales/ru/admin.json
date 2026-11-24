@@ -595,6 +595,145 @@
       "copied": "Ссылка скопирована",
       "userMode": "Перейти в режим пользователя",
       "copyFailed": "Не удалось скопировать"
+    },
+    "pager": {
+      "nav": "Страницы",
+      "page": "Страница {n}",
+      "shown": "Показано {from}–{to} из {total}"
+    },
+    "practices": {
+      "scope": {
+        "upcoming": "Предстоящие",
+        "past": "Прошедшие",
+        "all": "Все"
+      },
+      "scopesLabel": "Какие практики показать",
+      "tableLabel": "Практики платформы",
+      "columns": {
+        "when": "Когда",
+        "practice": "Практика",
+        "master": "Мастер",
+        "booked": "Записано"
+      },
+      "duration": "{n} мин",
+      "empty": "Практик здесь пока нет",
+      "loadFailed": "Не удалось загрузить практики",
+      "detail": {
+        "back": "К практикам",
+        "loadFailed": "Не удалось загрузить практику",
+        "tabsLabel": "Разделы практики",
+        "tabs": {
+          "participants": "Участники",
+          "zoom": "Посещаемость Zoom"
+        },
+        "state": {
+          "upcoming": "Предстоит",
+          "past": "Завершена"
+        },
+        "stats": {
+          "booked": "Записано",
+          "attended": "Был",
+          "noShow": "Не пришёл",
+          "free": "Свободно"
+        },
+        "participants": {
+          "title": "Участники",
+          "label": "Участники практики",
+          "name": "Участник",
+          "status": "Статус",
+          "empty": "Пока никто не записался"
+        },
+        "booking": {
+          "confirmed": "Записан",
+          "attended": "Был",
+          "no_show": "Не пришёл",
+          "pending": "Ожидает"
+        },
+        "about": {
+          "title": "О практике",
+          "when": "Когда",
+          "duration": "Длительность",
+          "master": "Мастер",
+          "direction": "Направление",
+          "seats": "Мест"
+        },
+        "zoom": {
+          "title": "Встреча в Zoom",
+          "meetingStatus": "Статус встречи",
+          "report": "Отчёт о посещаемости",
+          "reportReady": "Получен",
+          "reportWaiting": "Ещё не получен",
+          "unmatched": "Нераспознанные участники",
+          "lastError": "Причина ошибки",
+          "loadFailed": "Не удалось загрузить посещаемость Zoom",
+          "status": {
+            "active": "Активна",
+            "pending_creation": "Ожидает создания",
+            "create_failed": "Ошибка создания",
+            "deleted": "Удалена",
+            "none": "Не создана"
+          },
+          "bookingsTitle": "Посещаемость по записям",
+          "bookingsLabel": "Посещаемость участников в Zoom",
+          "bookingsEmpty": "Нет записей для сверки",
+          "columns": {
+            "name": "Участник",
+            "status": "Статус",
+            "minutes": "Во встрече",
+            "via": "Итог поставлен"
+          },
+          "minutes": "{n} мин",
+          "via": {
+            "zoom_report": "По отчёту Zoom",
+            "legacy_proxy": "По входу и отметке"
+          },
+          "unmatchedTitle": "Без привязки к участнику",
+          "unmatchedLabel": "Строки Zoom без участника",
+          "unmatchedColumns": {
+            "email": "Почта",
+            "joined": "Вошёл",
+            "left": "Вышел",
+            "duration": "Время"
+          },
+          "unknownEmail": "Почты нет"
+        }
+      }
+    },
+    "catalog": {
+      "title": "Каталог направлений",
+      "directions": "Направления",
+      "directionsLabel": "Направления",
+      "stylesCount": "{n} стиль | {n} стиля | {n} стилей",
+      "hidden": "Скрыто",
+      "addDirection": "Добавить",
+      "newDirectionPlaceholder": "Название направления",
+      "empty": "В каталоге пока нет направлений",
+      "loadFailed": "Не удалось загрузить каталог",
+      "directionAdded": "Направление добавлено",
+      "addDirectionFailed": "Не удалось добавить направление",
+      "saveFailed": "Не удалось сохранить",
+      "statusChangeFailed": "Не удалось изменить видимость",
+      "detail": {
+        "name": "Название",
+        "order": "Порядок в каталоге",
+        "visible": "Виден мастерам",
+        "save": "Сохранить"
+      },
+      "styles": {
+        "title": "Стили",
+        "label": "Стили направления",
+        "name": "Стиль",
+        "order": "Порядок",
+        "visible": "Виден",
+        "actions": "Действия",
+        "add": "Добавить стиль",
+        "newPlaceholder": "Название стиля",
+        "edit": "Изменить стиль {name}",
+        "empty": "В этом направлении пока нет стилей",
+        "added": "Стиль добавлен",
+        "addFailed": "Не удалось добавить стиль"
+      },
+      "note": "Направление и стиль не удаляются: их можно скрыть. Методы, которые мастера уже выбрали, остаются."
     }
   }
 }
