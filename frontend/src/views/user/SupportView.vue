@@ -78,7 +78,7 @@
         />
       </section>
 
-      <a class="support__email" :href="emailHref">{{ t('common.supportEmailHint') }}</a>
+      <SupportEmailLink />
 
       <VButton
         variant="primary"
@@ -99,6 +99,7 @@ import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
+import SupportEmailLink from '@/components/shared/SupportEmailLink.vue'
 import { VButton, VRadioGroup, VTextarea } from '@/components/ui'
 import { IconSupportChat } from '@/components/icons'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
@@ -137,8 +138,6 @@ const topicOptions = TOPICS.map((t) => ({ value: t.value, label: supportTopicLab
 const topic = ref<SupportTopicCode>(TOPICS[0].value)
 const message = ref('')
 const appealKeys = createAttemptKeys()
-
-const emailHref = 'mailto:support@velo.app'
 
 const canSubmit = computed(() => message.value.trim().length > 0)
 
@@ -257,14 +256,7 @@ function goHome(): void {
   padding: var(--space-3) var(--velo-inset-row);
 }
 
-/* -- Email fallback + submit -- */
-.support__email {
-  text-align: center;
-  font-size: var(--velo-fs-14);
-  color: var(--velo-text-secondary);
-  text-decoration: none;
-}
-
+/* -- Submit -- */
 .support__submit {
   margin-top: var(--space-1);
 }

@@ -28,12 +28,13 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import { setInfiniteQueryData, useQueryCache } from '@pinia/colada'
 import { keys } from '@/composables/queries/keys'
 import ExternalActivityCreateView from '@/views/user/ExternalActivityCreateView.vue'
+import { provideKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import UserShell from '@/views/shells/UserShell.vue'
 import * as diaryApi from '@/api/diary'
 import { ApiResponseError } from '@/api/client'
@@ -94,10 +95,23 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let pinia: Pinia
 
-function mount(): HTMLElement {
+/**
+ * `withKeyboardSeam` mounts the view under the real keyboard field-scroll
+ * provider -- the wiring App.vue does once at the root. Without it the seam
+ * is the kit's no-op, which is what every other case wants.
+ */
+function mount(options: { withKeyboardSeam?: boolean } = {}): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
-  app = createApp(ExternalActivityCreateView).use(createTestI18n())
+  const root = options.withKeyboardSeam
+    ? defineComponent({
+        setup() {
+          provideKeyboardFieldScroll()
+          return () => h(ExternalActivityCreateView)
+        },
+      })
+    : ExternalActivityCreateView
+  app = createApp(root).use(createTestI18n())
   app.use(pinia)
   app.mount(host)
   return host
@@ -466,6 +480,41 @@ describe('ExternalActivityCreateView', () => {
 
       expect(screenText()).toContain('Укажите ваш вариант')
       expect(host?.querySelector('.ea__chip--custom')).toBeNull()
+    })
+  })
+
+  // FE-261: a field the keyboard would cover must be scrolled into view. Real
+  // layout is out of reach for happy-dom, so the proof is WHICH element the
+  // settle scroll is asked to reveal; where the scroll region ends relative
+  // to the save pill is a browser/device check, not provable here.
+  describe('keyboard: the focused field is revealed (FE-261)', () => {
+    const revealed: Element[] = []
+
+    beforeEach(() => {
+      revealed.length = 0
+      ;(Element.prototype as unknown as Record<string, unknown>).scrollIntoViewIfNeeded = function (
+        this: Element,
+      ) {
+        revealed.push(this)
+      }
+    })
+
+    afterEach(() => {
+      delete (Element.prototype as unknown as Record<string, unknown>).scrollIntoViewIfNeeded
+    })
+
+    it.each([
+      ['the custom-variant input', customInput],
+      ['the thoughts textarea', thoughtTextarea],
+    ])('focusing %s reveals that field once the keyboard settles', async (_name, field) => {
+      mount({ withKeyboardSeam: true })
+      const el = field()
+
+      el.focus()
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(revealed).toHaveLength(1)
+      expect(revealed[0]).toBe(el)
     })
   })
 

@@ -9,7 +9,7 @@
 //
 // THE PACKAGE (contract "2.x" of the VELO skin slot; primer guide §4.4):
 //
-//   primer-package.yaml          block form: `schema: 1`, `contract: "2.1"` --
+//   primer-package.yaml          block form: `schema: 1`, `contract: "2.2"` --
 //                                the contract is a quoted POINT "X.Y" (a range
 //                                lives only in the product's packages.skin)
 //   tokens/<name>.tokens.json    W3C DTCG. Token paths are the paths of
@@ -27,7 +27,10 @@
 //                                contrastExceptions?: the text/surface pairs
 //                                the package knowingly keeps under the
 //                                contrast floor, each with its reason
-//                                (validate-skin warns instead of failing)
+//                                (validate-skin warns instead of failing);
+//                                since contract "2.2", supportEmail?: the
+//                                brand's support address (the support
+//                                screens' mailto; absent = no such line)
 //   assets/<name>.svg|png        the fixed generation-1 asset names: the
 //                                app icons always; the logo set (mandala
 //                                rings, wordmarks, logo-white) whole or not
@@ -71,10 +74,21 @@ import { join, resolve } from 'node:path'
  *  GENERATION 2 section), so a 1.x package is refused rather than half-read. */
 export const SKIN_CONTRACT_MAJOR = 2
 /** The contract a package written by this product's tools declares.
- *  2.1 (FE-230): the brand record may carry contrastExceptions. */
-export const SKIN_CONTRACT = '2.1'
-/** The first minor of contract 2 that knows contrastExceptions. */
-const CONTRAST_EXCEPTIONS_MINOR = 1
+ *  2.1 (FE-230): the brand record may carry contrastExceptions.
+ *  2.2 (FE-251): the brand record may carry supportEmail. */
+export const SKIN_CONTRACT = '2.2'
+/** Optional brand-record fields and the first minor of contract 2 that
+ *  knows each: a reader of an older minor refuses the field as unknown, so
+ *  a package that carries it must declare that minor or later. */
+const BRAND_FIELD_MINORS = [
+  { field: 'contrastExceptions', minor: 1 }, // FE-230
+  { field: 'supportEmail', minor: 2 }, // FE-251
+]
+/** A support address: a plain local part, a domain with a dot. A closed
+ *  alphabet: it lands in a mailto: href, so no `?` or `%` (a query or an
+ *  escape), no spaces, quotes or markup. 254 is the SMTP path limit. */
+const SUPPORT_EMAIL = /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/
+const SUPPORT_EMAIL_MAX = 254
 /** A contrast exception's reason: plain text, one or two sentences. */
 const REASON_MAX = 300
 /** A token path of a contrast exception: dot-separated token names. */
@@ -476,6 +490,7 @@ function checkBrand(record, files, problems) {
     'fonts',
     'fontUrl',
     'contrastExceptions',
+    'supportEmail',
   ])
   for (const key of Object.keys(record))
     if (!known.has(key)) problems.push(`${where}.${key}: unknown field`)
@@ -511,7 +526,20 @@ function checkBrand(record, files, problems) {
     backgroundColor: String(record.backgroundColor ?? '').trim(),
     fonts,
     contrastExceptions: checkContrastExceptions(record.contrastExceptions, where, problems),
+    supportEmail: checkSupportEmail(record.supportEmail, where, problems),
   }
+}
+
+/** supportEmail (contract 2.2): the brand's support address, or null when
+ *  the record has none -- the app then shows no address at all (FE-251). */
+function checkSupportEmail(value, where, problems) {
+  if (value === undefined) return null
+  const email = typeof value === 'string' ? value.trim() : ''
+  if (email.length > SUPPORT_EMAIL_MAX || !SUPPORT_EMAIL.test(email)) {
+    problems.push(`${where}.supportEmail: an address like support@example.com`)
+    return null
+  }
+  return email
 }
 
 /** contrastExceptions: [{ text, surface, reason }] -- token paths of the
@@ -724,16 +752,19 @@ export function loadSkinPackage(dir, tokensDoc) {
       )
   }
 
-  // contrastExceptions (contract 2.1): a 2.0 reader refuses the field as
-  // unknown, so a package that carries it must say 2.1 or later.
-  const exceptions = brand?.contrastExceptions ?? []
-  if (exceptions.length > 0 && contract !== null) {
-    const minor = Number(contract.split('.')[1])
-    if (minor < CONTRAST_EXCEPTIONS_MINOR)
-      problems.push(
-        `${MANIFEST}: contrastExceptions need contract "2.${CONTRAST_EXCEPTIONS_MINOR}" or later, got "${contract}"`,
-      )
+  // A brand field newer than the declared minor (BRAND_FIELD_MINORS).
+  if (brand !== null && contract !== null) {
+    const declared = Number(contract.split('.')[1])
+    for (const { field, minor } of BRAND_FIELD_MINORS) {
+      const value = brand[field]
+      const carried = Array.isArray(value) ? value.length > 0 : value !== null
+      if (carried && declared < minor)
+        problems.push(
+          `${MANIFEST}: ${field} needs contract "2.${minor}" or later, got "${contract}"`,
+        )
+    }
   }
+  const exceptions = brand?.contrastExceptions ?? []
   for (const { text, surface } of exceptions)
     for (const path of [text, surface])
       if (!golden.has(path))

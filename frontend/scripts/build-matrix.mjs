@@ -26,9 +26,10 @@
 //      the skin's brand record, or the core defaults (CORE_DISPLAY_NAME,
 //      CORE_THEME_COLOR) for golden cells. "golden" names the cells WITHOUT a skin
 //      package; since FE-230 that build is the neutral core, not VELO;
-//   b. brand grep: a skin cell's bundle carries the skin's displayName and
-//      every one of its token declarations; a golden cell carries NO
-//      matrix skin's displayName and none of its distinctive declarations
+//   b. brand grep: a skin cell's bundle carries the skin's displayName, its
+//      supportEmail when the package has one (FE-251), and every one of its
+//      token declarations; a golden cell carries NO matrix skin's
+//      displayName or supportEmail, none of its distinctive declarations
 //      (the ones variables.css does not already declare verbatim), and no
 //      dist/skin/ copy of a package at all;
 //   c. DCE: a module the cell's edition turns on has its chunks in dist, a
@@ -216,9 +217,16 @@ export function missingTokens(decls, css, goldenDecls) {
   return decls.filter((d) => !goldenDecls.has(d) && !cssHasDecl(css, d))
 }
 
+/** Does the bundle carry the support address? An address is a closed
+ *  alphabet (the engine's SUPPORT_EMAIL), so a plain substring of the
+ *  decoded bundle is enough. Pure. */
+export function bundleHasEmail(bundle, email) {
+  return unescapeBundle(bundle).toLowerCase().includes(email.toLowerCase())
+}
+
 /** What of one skin leaked into a core (skinless) build, as labels for
- *  facts.leaked: its name as a bundle literal or the tab title, and its
- *  distinctive token declarations. A brand named like the core's own word
+ *  facts.leaked: its name as a bundle literal or the tab title, its support
+ *  address (FE-251), and its distinctive token declarations. A brand named like the core's own word
  *  (CORE_DISPLAY_NAME) cannot be told from the core by its name, so its name
  *  is not probed. Pure. */
 export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, coreName }) {
@@ -229,6 +237,8 @@ export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, cor
     (bundleHas(js, brand.displayName) || title === brand.displayName)
   )
     leaked.push(`${label} displayName`)
+  if (brand.supportEmail && bundleHasEmail(js, brand.supportEmail))
+    leaked.push(`${label} supportEmail`)
   const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
   if (foreign.length > 0) leaked.push(`${label} tokens (${foreign.join(', ')})`)
   return leaked
@@ -242,6 +252,7 @@ export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, cor
  *
  *  facts[cell]    { title, theme, assets, chunks: { <module>: [files] },
  *                   brandMissing: bool,       (skin cells)
+ *                   supportEmailMissing: bool, (skin cells, FE-251)
  *                   tokensMissing: [decl],    (skin cells)
  *                   layout: [problem],        (skin cells: asset spill,
  *                                              dist/skin prune, fonts)
@@ -267,6 +278,8 @@ export function evaluateMatrix({ cells, facts, expected }) {
     if (cell.skin) {
       if (f.brandMissing)
         fails.push(`${cell.name}: the skin's displayName "${e.title}" is not in the JS bundle`)
+      if (f.supportEmailMissing)
+        fails.push(`${cell.name}: the skin's supportEmail is not in the JS bundle`)
       if ((f.tokensMissing ?? []).length > 0)
         fails.push(
           `${cell.name}: skin token declarations missing from dist CSS: ${f.tokensMissing.join(', ')}`,
@@ -487,6 +500,8 @@ function snapshot(cell, skins, goldenDecls, coreName) {
   if (cell.skin) {
     const { brand, decls, files } = skinRecord(cell.skin)
     facts.brandMissing = !bundleHas(js, brand.displayName)
+    facts.supportEmailMissing =
+      brand.supportEmail !== null && !bundleHasEmail(js, brand.supportEmail)
     facts.tokensMissing = missingTokens(decls, css, goldenDecls)
     facts.layout = skinLayout(
       cell.skin.source,

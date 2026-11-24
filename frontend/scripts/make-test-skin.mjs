@@ -11,11 +11,16 @@
 // a background and a self-hosted font file. Not a brand; nothing is committed.
 // The e2e builds in CI carry it too (FE-230: the core has no look to test).
 //
-// Usage: node scripts/make-test-skin.mjs <out-dir> [--logo]   (out-dir must not exist)
-//        --logo  ship the logo set too (the core's, made distinct) -- the
-//                matrix builds one skin with it and one without (FE-230)
+// Usage: node scripts/make-test-skin.mjs <out-dir> [--logo] [--support-email]
+//                (out-dir must not exist)
+//        --logo           ship the logo set too (the core's, made distinct)
+//                         -- the matrix builds one skin with it and one
+//                         without (FE-230)
+//        --support-email  put a supportEmail in the brand record (contract
+//                         2.2, FE-251) -- the matrix builds one skin with an
+//                         address and one without
 // CI:    node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-//        node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo
+//        node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email
 //        pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo"
 //        node frontend/scripts/make-test-skin.mjs frontend/public/skin   (e2e)
 // =============================================================================
@@ -33,9 +38,11 @@ import {
 
 const args = process.argv.slice(2)
 const out = args.find((a) => !a.startsWith('--'))
+const FLAGS = ['--logo', '--support-email']
 const withLogo = args.includes('--logo')
-if (!out || args.some((a) => a.startsWith('--') && a !== '--logo')) {
-  console.error('usage: node scripts/make-test-skin.mjs <out-dir> [--logo]')
+const withSupportEmail = args.includes('--support-email')
+if (!out || args.some((a) => a.startsWith('--') && !FLAGS.includes(a))) {
+  console.error('usage: node scripts/make-test-skin.mjs <out-dir> [--logo] [--support-email]')
   process.exit(1)
 }
 const dir = resolve(out)
@@ -91,6 +98,7 @@ writeFileSync(
           themeColor: '#14213D',
           backgroundColor: '#FFFFFF',
           fonts: [{ family: 'CI Sans', file: 'assets/fonts/ci-sans-400.woff2', weight: 400 }],
+          ...(withSupportEmail ? { supportEmail: 'support@ci-skin.example' } : {}),
         },
       },
     },
