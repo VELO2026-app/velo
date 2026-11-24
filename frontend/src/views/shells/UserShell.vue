@@ -211,8 +211,9 @@ const FOG_ROUTES = [
   // (i18n:user.screens.timezoneSettings.language.title) showed through the
   // transparent floating header. Parity with master-timezone (MasterShell
   // FOG-1) and the same default tuning: the screen has no save button (it
-  // auto-saves) and its last row rests above the bottom fade (tab-bar
-  // clearance), so default tuning is enough.
+  // auto-saves) and the fog mask is top-only (MobileLayout), so the last row
+  // is never faded; the tab-bar clearance pads it above the dock. Default
+  // tuning is enough.
   'user-timezone',
   // Check-in, feedback and the no-show reflection (FE-261, PM report): the three
   // FormShell screens scroll (the keyboard opens over their comment field) and
