@@ -11,6 +11,7 @@ import { findRuleDisables } from './directives.mjs'
 import { loadAllowlist } from './index.mjs'
 import noFixedSleep from './no-fixed-sleep.mjs'
 import noFlakeMasking from './no-flake-masking.mjs'
+import noHeadersOutsideApi from './no-headers-outside-api.mjs'
 import noWaitForTimeout from './no-wait-for-timeout.mjs'
 import { REPO_ROOT } from './ratchet.mjs'
 
@@ -268,4 +269,41 @@ describe('directives that switch the rules off', () => {
     ].join('\n')
     expect(findRuleDisables(text)).toEqual([])
   })
+})
+
+tester.run('no-headers-outside-api', noHeadersOutsideApi, {
+  valid: [
+    "api.get('/a')",
+    "api.post('/a', body)",
+    "api.request('POST', '/a', { body, timeoutMs: 5 })",
+    "api.request('GET', '/a')",
+    "other.post('/a', body, { 'X-One': '1' })",
+    "obj.fetch('/a')",
+    // A local named fetch is not the global one.
+    'async function f(fetch) { return await fetch() }',
+  ],
+  invalid: [
+    { code: "fetch('/a')", errors: [{ messageId: 'fetch' }] },
+    { code: "window.fetch('/a')", errors: [{ messageId: 'fetch' }] },
+    { code: "globalThis.fetch('/a')", errors: [{ messageId: 'fetch' }] },
+    {
+      code: "api.post('/a', body, { 'Idempotency-Key': key })",
+      errors: [{ messageId: 'postHeaders' }],
+    },
+    { code: "api.post('/a', body, h)", errors: [{ messageId: 'postHeaders' }] },
+    {
+      code: "api.request('POST', '/a', { body, headers: { 'X-One': '1' } })",
+      errors: [{ messageId: 'requestHeaders' }],
+    },
+    {
+      code: "api.request('POST', '/a', { body, headers })",
+      errors: [{ messageId: 'requestHeaders' }],
+    },
+    { code: "api.request('POST', '/a', { ...opts })", errors: [{ messageId: 'requestHeaders' }] },
+    {
+      code: "api.request('POST', '/a', { ['headers']: h })",
+      errors: [{ messageId: 'requestHeaders' }],
+    },
+    { code: "api.request('POST', '/a', opts)", errors: [{ messageId: 'requestHeaders' }] },
+  ],
 })

@@ -20,6 +20,7 @@ import {
   assignTicket,
   claimSupportThread,
   createAppealKeys,
+  createReplyKeys,
   createTicket,
   getAdminSupportMessages,
   getAdminTicket,
@@ -257,10 +258,14 @@ describe('admin -- the thread routes keyed by the ticket id (unchanged)', () => 
     expect(api.get).toHaveBeenCalledWith(`${S}/threads/t_9/messages?limit=50`)
   })
 
-  it('sendAdminSupportReply POSTs {body}', async () => {
-    await sendAdminSupportReply('t_9', 'Ответ')
+  it('sendAdminSupportReply POSTs {body} under the attempt key', async () => {
+    await sendAdminSupportReply('t_9', 'Ответ', 'key-1')
 
-    expect(api.post).toHaveBeenCalledWith(`${S}/threads/t_9/messages`, { body: 'Ответ' })
+    expect(api.post).toHaveBeenCalledWith(
+      `${S}/threads/t_9/messages`,
+      { body: 'Ответ' },
+      { 'Idempotency-Key': 'key-1' },
+    )
   })
 
   it('claimSupportThread POSTs the claim', async () => {
@@ -317,5 +322,34 @@ describe('admin -- the period statistics (BE-162 delivery 3)', () => {
     const qs = new URLSearchParams(url.split('?')[1])
     expect(qs.get('created_from')).toBe('2026-10-01T00:00:00.000+02:00')
     expect(qs.get('created_to')).toBe('2026-11-01T00:00:00.000+02:00')
+  })
+})
+
+describe('createReplyKeys -- one attempt, one key', () => {
+  function keeper() {
+    let n = 0
+    return createReplyKeys(() => `k${++n}`)
+  }
+
+  it('returns the same key for a repeat of the same (thread, body)', () => {
+    const keys = keeper()
+
+    expect(keys.keyFor('t1', 'Ok')).toBe(keys.keyFor('t1', 'Ok'))
+  })
+
+  it('returns a new key when the body or the thread changes', () => {
+    const keys = keeper()
+    const first = keys.keyFor('t1', 'Ok')
+
+    expect(keys.keyFor('t1', 'Ok!')).not.toBe(first)
+    expect(keys.keyFor('t2', 'Ok!')).not.toBe(first)
+  })
+
+  it('returns a new key for the same text once the reply landed', () => {
+    const keys = keeper()
+    const first = keys.keyFor('t1', 'Ok')
+    keys.settled()
+
+    expect(keys.keyFor('t1', 'Ok')).not.toBe(first)
   })
 })

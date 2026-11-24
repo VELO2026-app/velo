@@ -354,6 +354,7 @@ import {
   SUPPORT_CLOSING_STATUSES,
   assignTicket,
   claimSupportThread,
+  createReplyKeys,
   releaseTicket,
   reopenTicket,
   retrySupportTranslation,
@@ -728,9 +729,12 @@ const changeStatus = useAdminMutation(
 const claim = useAdminMutation('changeTicketTaker', () => claimSupportThread(ticketId), {
   waitForRefetch: false,
 })
+// One key per send attempt (FE-232): a retry of the same text is the same
+// reply; a landed reply frees the key (onSend).
+const replyKeys = createReplyKeys()
 const reply = useAdminMutation(
   'replySupport',
-  (body: string) => sendAdminSupportReply(ticketId, body),
+  (body: string) => sendAdminSupportReply(ticketId, body, replyKeys.keyFor(ticketId, body)),
   { waitForRefetch: false },
 )
 const retryTranslation = useAdminMutation(
@@ -986,6 +990,7 @@ async function onSend(): Promise<void> {
   sending.value = true
   try {
     const sent = await reply.mutateAsync(body)
+    replyKeys.settled()
     // Shown at once as written; its translation for the person (BE-166) is
     // known only to the feed -- read it again, and poll if it is on its way.
     updateSupportFeed(queryCache, ticketId, (list) => [

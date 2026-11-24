@@ -33,6 +33,7 @@
 
 import { api } from '@/api/client'
 import { newIdempotencyKey } from '@/api/chats'
+import { postIdempotent } from '@/api/idempotent'
 import type { StatusIn, TicketIn } from '@/api/generated'
 import { path, raw } from '@/api/path'
 
@@ -225,10 +226,10 @@ export function createTicket(
   body: string,
   idempotencyKey: string,
 ): Promise<SupportTicketCreated> {
-  return api.post<SupportTicketCreated>(
+  return postIdempotent<SupportTicketCreated>(
     '/api/v1/support/tickets',
     { topic, body },
-    { 'Idempotency-Key': idempotencyKey },
+    idempotencyKey,
   )
 }
 
@@ -368,10 +369,47 @@ export function getAdminSupportMessages(
   )
 }
 
-/** Reply as this admin, in a ticket. Throws ApiResponseError(403) -- via
+/** Reply as this admin, in a ticket. `idempotencyKey` names the SEND ATTEMPT
+ *  (createReplyKeys): a repeat of the same attempt -- a double tap, a retry
+ *  after a lost answer -- is one reply. Throws ApiResponseError(403) -- via
  *  useApiError -- when the caller has not claimed it; comms' own refusal. */
-export function sendAdminSupportReply(threadId: string, body: string): Promise<SupportSentMessage> {
-  return api.post<SupportSentMessage>(path`/api/v1/support/threads/${threadId}/messages`, { body })
+export function sendAdminSupportReply(
+  threadId: string,
+  body: string,
+  idempotencyKey: string,
+): Promise<SupportSentMessage> {
+  return postIdempotent<SupportSentMessage>(
+    path`/api/v1/support/threads/${threadId}/messages`,
+    { body },
+    idempotencyKey,
+  )
+}
+
+/** ONE ATTEMPT, ONE KEY for the admin's reply: `keyFor` returns the same key
+ *  while (thread, body) stay the same, so a retry of a failed or unanswered
+ *  send is the same reply; `settled` drops it once the reply landed, so the
+ *  same text sent again on purpose ("Ok" twice) is a new reply, not the old
+ *  one returned. One keeper per screen instance. */
+export function createReplyKeys(mint: () => string = newIdempotencyKey): {
+  keyFor: (threadId: string, body: string) => string
+  settled: () => void
+} {
+  let key: string | null = null
+  let attempt = ''
+  return {
+    keyFor(threadId, body) {
+      const next = JSON.stringify([threadId, body])
+      if (key === null || next !== attempt) {
+        key = mint()
+        attempt = next
+      }
+      return key
+    },
+    settled() {
+      key = null
+      attempt = ''
+    },
+  }
 }
 
 /** Take a ticket -- the act that grants the right to reply. A repeat of your

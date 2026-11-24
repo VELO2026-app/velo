@@ -43,6 +43,7 @@ vi.mock('@/api/support', async (importOriginal) => {
     // REAL here too: the not-spam visibility math
     // (i18n:adminScreens.adminSupportDetail.menu.notSpam) is part of what is tested.
     spamWithinRetention: real.spamWithinRetention,
+    createReplyKeys: real.createReplyKeys,
     getAdminTicket: vi.fn(),
     getAdminSupportMessages: vi.fn(),
     sendAdminSupportReply: vi.fn(),
@@ -1168,7 +1169,11 @@ describe('AdminSupportDetailView', () => {
       btnByText('Отправить')?.click()
       await flush()
 
-      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledWith('t_1', 'Здравствуйте')
+      expect(supportApi.sendAdminSupportReply).toHaveBeenCalledWith(
+        't_1',
+        'Здравствуйте',
+        expect.any(String),
+      )
       expect(supportApi.getAdminSupportMessages).toHaveBeenCalledTimes(2)
       expect(bubbles()).toHaveLength(2) // the seeded message + the new one, once
       expect(draftField().value).toBe('')
@@ -1186,6 +1191,34 @@ describe('AdminSupportDetailView', () => {
 
       expect(toastError).toHaveBeenCalled()
       expect(draftField().value).toBe('Здравствуйте')
+    })
+
+    it('a retry of the failed text keeps its key; the same text after a landed reply gets a new one', async () => {
+      vi.mocked(supportApi.sendAdminSupportReply)
+        .mockRejectedValueOnce(new Error('network'))
+        .mockResolvedValue({
+          id: 'm_new',
+          thread_id: 't_1',
+          sender: 'admin_me',
+          body: 'Ок',
+          created_at: '2026-10-25T10:05:00Z',
+        })
+      mount('t_1', ticket({ claimed_by: ME }))
+      await flush()
+
+      const send = async () => {
+        setValue(draftField(), 'Ок')
+        await flush()
+        btnByText('Отправить')?.click()
+        await flush()
+      }
+      await send() // fails, draft stays
+      await send() // retry of the same attempt
+      await send() // the same text again, on purpose
+
+      const keys = vi.mocked(supportApi.sendAdminSupportReply).mock.calls.map((c) => c[2])
+      expect(keys[1]).toBe(keys[0])
+      expect(keys[2]).not.toBe(keys[1])
     })
 
     it('a double tap on «Отправить» sends the reply once', async () => {
