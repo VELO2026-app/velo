@@ -443,6 +443,12 @@ function text(): string {
 function blocks(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.master-dashboard__practice-block') ?? [])
 }
+/** The practice block at `index`; the test fails when it is not on screen. */
+function blockAt(index: number): HTMLElement {
+  const block = blocks()[index]
+  if (!block) throw new Error(`no practice block at ${index}`)
+  return block
+}
 function titles(): string[] {
   return blocks().map(
     (b) => b.querySelector('.master-dashboard__practice-title')?.textContent?.trim() ?? '',
@@ -632,8 +638,8 @@ describe('MasterDashboardView', () => {
       // formatDateShort resolves the tomorrow label (i18n:common.tomorrow)
       // against the FROZEN instant, in the
       // practice's zone -- this line is the whole reason time is pinned.
-      expect(subOf(blocks()[0]!)).toBe('Завтра, 07:00 • 45 мин')
-      expect(subOf(blocks()[1]!)).toBe('25 июля, 10:00 • 1 ч 30 м')
+      expect(subOf(blockAt(0))).toBe('Завтра, 07:00 • 45 мин')
+      expect(subOf(blockAt(1))).toBe('25 июля, 10:00 • 1 ч 30 м')
       expect(host?.querySelector('.master-dashboard__loading-row')).toBeNull()
       expect(nearestEmptyCard()).toBeUndefined()
     })
@@ -644,7 +650,7 @@ describe('MasterDashboardView', () => {
 
       // formatParticipants -> «5/20»; checkinLabel -> «3/20» (checkin_count /
       // max_participants, utils/practiceCardMeta.ts:32-36).
-      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+      expect(metaOf(blockAt(0))).toEqual(['5/20', '3/20'])
     })
 
     it('FE-53: a remount re-reads the upcoming bucket, so student-side numbers are not frozen', async () => {
@@ -656,7 +662,7 @@ describe('MasterDashboardView', () => {
       // refetch can change what the card shows.
       mount()
       await flush()
-      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+      expect(metaOf(blockAt(0))).toEqual(['5/20', '3/20'])
 
       app?.unmount()
       host?.remove()
@@ -673,7 +679,7 @@ describe('MasterDashboardView', () => {
       await flush()
 
       expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
-      expect(metaOf(blocks()[0]!)).toEqual(['6/20', '4/20'])
+      expect(metaOf(blockAt(0))).toEqual(['6/20', '4/20'])
     })
 
     it('FE-53: a FAILED remount refresh keeps the previous cards (no zero-state wipe)', async () => {
@@ -687,7 +693,7 @@ describe('MasterDashboardView', () => {
       // stays, exactly like loadStats keeps its previous values.
       mount()
       await flush()
-      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+      expect(metaOf(blockAt(0))).toEqual(['5/20', '3/20'])
 
       app?.unmount()
       host?.remove()
@@ -699,7 +705,7 @@ describe('MasterDashboardView', () => {
       await flush()
 
       expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
-      expect(metaOf(blocks()[0]!)).toEqual(['5/20', '3/20'])
+      expect(metaOf(blockAt(0))).toEqual(['5/20', '3/20'])
       expect(createCta()).toBeUndefined()
     })
 
@@ -710,7 +716,7 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      expect(metaOf(blocks()[1]!)).toEqual(['8/12'])
+      expect(metaOf(blockAt(1))).toEqual(['8/12'])
     })
 
     it('content: a series adds its weekday list and its remaining-sessions row', async () => {
@@ -719,12 +725,7 @@ describe('MasterDashboardView', () => {
       await flush()
 
       // recurrenceLabel([1,3,5]) -> the weekday abbreviations; 8 - 3 = 5 left.
-      expect(metaOf(blocks()[0]!)).toEqual([
-        '6/10',
-        '4/10',
-        'Пн, Ср, Пт',
-        'Осталось 5 из 8 занятий',
-      ])
+      expect(metaOf(blockAt(0))).toEqual(['6/10', '4/10', 'Пн, Ср, Пт', 'Осталось 5 из 8 занятий'])
       expect(blocks()[0]?.querySelector('.master-dashboard__practice-meta--row2')).not.toBeNull()
     })
 
@@ -767,6 +768,49 @@ describe('MasterDashboardView', () => {
 
       expect(text()).not.toContain('Не удалось загрузить')
       expect(titles()).toEqual(['Утренняя практика'])
+    })
+
+    it('a FAILED past list is not «new master»: an error with «Повторить», then the truth (FE-257)', async () => {
+      // Nothing is upcoming, so the card would call this master new on the strength
+      // of a past list that never answered.
+      vi.mocked(mastersApi.getMyPractices).mockImplementation(async (bucket) => {
+        if (bucket === 'past') throw new TypeError('network down')
+        return page([])
+      })
+      mount()
+      await flush()
+
+      expect(text()).toContain('Не удалось загрузить')
+      expect(text()).not.toContain(EMPTY_NEW)
+      expect(nearestEmptyCard()).toBeFalsy()
+      expect(retryButtons()).toHaveLength(1)
+
+      mockBucketedPractices([P_COMPLETED])
+      retryButtons()[0]?.click()
+      await flush()
+
+      expect(text()).not.toContain('Не удалось загрузить')
+      expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
+    })
+
+    it('the zero state waits for the past list: a loader, never «new master» in the meantime (FE-257)', async () => {
+      let answerPast: (v: ReturnType<typeof page>) => void = () => {}
+      vi.mocked(mastersApi.getMyPractices).mockImplementation(async (bucket) => {
+        if (bucket === 'upcoming') return page([])
+        return new Promise((resolve) => (answerPast = resolve))
+      })
+      mount()
+      await flush()
+
+      expect(host?.querySelector('.master-dashboard__loading-row')).not.toBeNull()
+      expect(text()).not.toContain(EMPTY_NEW)
+      expect(text()).not.toContain('Нет предстоящих практик')
+
+      answerPast(page([P_COMPLETED]))
+      await flush()
+
+      expect(host?.querySelector('.master-dashboard__loading-row')).toBeNull()
+      expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
     })
 
     it('a 403 on the profile keeps the screen as before: retrying cannot change it (FE-200)', async () => {
@@ -1015,33 +1059,82 @@ describe('MasterDashboardView', () => {
       expect(statDelta('Участников')).toBeNull()
     })
 
-    it('a FAILED stats fetch leaves «—» and the rest of the screen alive', async () => {
-      // .vue:388-390 swallows deliberately. The practices list is unrelated data.
-      vi.mocked(mastersApi.getMasterStats).mockRejectedValue(new TypeError('boom'))
+    it('a FAILED stats fetch is an error with «Повторить», not a row of dashes; the rest stays alive (FE-257)', async () => {
+      vi.mocked(mastersApi.getMasterStats).mockRejectedValueOnce(new TypeError('boom'))
       mount()
       await flush()
 
-      expect(statValue('Практик')).toBe(DASH)
+      expect(text()).toContain('Не удалось загрузить')
+      expect(host?.querySelectorAll('.v-stat')).toHaveLength(0)
       expect(titles()).toEqual(['Утренняя практика', 'Вечерняя практика'])
       expect(text()).not.toContain('boom')
+
+      retryButtons()[0]?.click()
+      await flush()
+
+      expect(text()).not.toContain('Не удалось загрузить')
+      expect(statValue('Практик')).toBe('12')
     })
 
-    it('a failed REFETCH keeps the previous figures rather than blanking them', async () => {
-      // The watch's `.catch(() => {})` (.vue:288-292) is deliberate. Note what it
-      // costs and what is asserted: the numbers on screen are now the WEEK's
-      // while the toggle reads month (i18n:common.periodMonth), and nothing
-      // says so.
+    it("a failed REFETCH on another period is the error, never the old period's figures under the new label (FE-257)", async () => {
       mount()
       await flush()
       expect(statValue('Практик')).toBe('12')
 
-      vi.mocked(mastersApi.getMasterStats).mockRejectedValue(new TypeError('boom'))
+      vi.mocked(mastersApi.getMasterStats).mockRejectedValueOnce(new TypeError('boom'))
       periodButton('Месяц')?.click()
       await flush()
 
-      expect(statValue('Практик')).toBe('12')
-      expect(statValue('Участников')).toBe('148')
+      expect(text()).toContain('Не удалось загрузить')
+      expect(host?.querySelectorAll('.v-stat')).toHaveLength(0)
       expect(periodButton('Месяц')?.getAttribute('aria-selected')).toBe('true')
+
+      retryButtons()[0]?.click()
+      await flush()
+
+      expect(mastersApi.getMasterStats).toHaveBeenLastCalledWith('month')
+      expect(statValue('Практик')).toBe('40')
+      expect(statValue('Участников')).toBe('500')
+    })
+
+    it("an older period's late reply neither overwrites the figures nor raises an error (FE-257)", async () => {
+      // Month is asked first and answers last: the request-id guard in loadStats.
+      const month = { resolve: (_v: MasterStatsResponse) => {}, reject: (_e: unknown) => {} }
+      mount()
+      await flush()
+      vi.mocked(mastersApi.getMasterStats).mockImplementation(async (period) => {
+        if (period === 'month') {
+          return new Promise<MasterStatsResponse>((resolve, reject) => {
+            month.resolve = resolve
+            month.reject = reject
+          })
+        }
+        return STATS_QUARTER
+      })
+
+      periodButton('Месяц')?.click()
+      await flush()
+      periodButton('Квартал')?.click()
+      await flush()
+      expect(statValue('Практик')).toBe('131')
+
+      month.resolve(STATS_MONTH)
+      await flush()
+      expect(statValue('Практик')).toBe('131')
+      expect(statValue('Участников')).toBe('1421')
+
+      // The same race on the failing side: a late month error must not hide the quarter.
+      periodButton('Неделя')?.click()
+      await flush()
+      periodButton('Месяц')?.click()
+      await flush()
+      periodButton('Квартал')?.click()
+      await flush()
+      month.reject(new TypeError('late'))
+      await flush()
+
+      expect(text()).not.toContain('Не удалось загрузить')
+      expect(statValue('Практик')).toBe('131')
     })
 
     it('re-picking the CURRENT period does not refetch', async () => {
@@ -1078,7 +1171,7 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      cardOf(blocks()[1]!).click()
+      cardOf(blockAt(1)).click()
       await flush()
 
       expect(push).toHaveBeenCalledWith({ name: 'master-practice-detail', params: { id: 'p2' } })
@@ -1088,7 +1181,7 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      actionIn(blocks()[0]!, 'Check-ins')?.click()
+      actionIn(blockAt(0), 'Check-ins')?.click()
       await flush()
 
       expect(push).toHaveBeenCalledTimes(1)
@@ -1177,7 +1270,7 @@ describe('MasterDashboardView', () => {
       // PROMPT №541 supersedes the old "click a live button, get a toast"
       // behaviour -- the button itself is now disabled, same posture as the
       // user-facing screens).
-      const zoomBtn = actionIn(blocks()[1]!, 'Zoom')
+      const zoomBtn = actionIn(blockAt(1), 'Zoom')
       expect(zoomBtn?.disabled).toBe(true)
     })
 
@@ -1195,7 +1288,7 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
+      const zoomBtn = actionIn(blockAt(0), 'Zoom')
       expect(zoomBtn?.disabled).toBe(false)
       zoomBtn?.click()
       await flush()
@@ -1213,7 +1306,7 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
+      const zoomBtn = actionIn(blockAt(0), 'Zoom')
       expect(zoomBtn?.disabled).toBe(true)
     })
 
@@ -1232,8 +1325,8 @@ describe('MasterDashboardView', () => {
         mount()
         await flush()
 
-        expect(actionIn(blocks()[0]!, 'Zoom')).toBeUndefined()
-        expect(actionIn(blocks()[0]!, 'Повторить')).toBeDefined()
+        expect(actionIn(blockAt(0), 'Zoom')).toBeUndefined()
+        expect(actionIn(blockAt(0), 'Повторить')).toBeDefined()
         expect(host?.textContent).toContain('Не удалось создать встречу Zoom')
       })
 
@@ -1245,8 +1338,8 @@ describe('MasterDashboardView', () => {
         mount()
         await flush()
 
-        expect(actionIn(blocks()[0]!, 'Повторить')).toBeUndefined()
-        expect(actionIn(blocks()[0]!, 'Zoom')?.disabled).toBe(true)
+        expect(actionIn(blockAt(0), 'Повторить')).toBeUndefined()
+        expect(actionIn(blockAt(0), 'Zoom')?.disabled).toBe(true)
       })
 
       it('a successful retry toasts success and refreshes the list', async () => {
@@ -1262,7 +1355,7 @@ describe('MasterDashboardView', () => {
         await flush()
         const callsBefore = vi.mocked(mastersApi.getMyPractices).mock.calls.length
 
-        actionIn(blocks()[0]!, 'Повторить')?.click()
+        actionIn(blockAt(0), 'Повторить')?.click()
         await flush()
 
         expect(practicesApi.retryZoomMeeting).toHaveBeenCalledWith('failed1')
@@ -1287,7 +1380,7 @@ describe('MasterDashboardView', () => {
         mount()
         await flush()
 
-        actionIn(blocks()[0]!, 'Повторить')?.click()
+        actionIn(blockAt(0), 'Повторить')?.click()
         await flush()
 
         expect(toastError).toHaveBeenCalledWith(
@@ -1309,10 +1402,10 @@ describe('MasterDashboardView', () => {
         mount()
         await flush()
 
-        const btn = actionIn(blocks()[0]!, 'Повторить')
+        const btn = actionIn(blockAt(0), 'Повторить')
         btn?.click()
         await nextTick()
-        expect(actionIn(blocks()[0]!, 'Повторить')?.disabled).toBe(true)
+        expect(actionIn(blockAt(0), 'Повторить')?.disabled).toBe(true)
         btn?.click()
         await nextTick()
 
@@ -1335,7 +1428,7 @@ describe('MasterDashboardView', () => {
       mount()
       await flush()
 
-      const zoomBtn = actionIn(blocks()[0]!, 'Zoom')
+      const zoomBtn = actionIn(blockAt(0), 'Zoom')
       expect(zoomBtn?.disabled).toBe(true)
     })
   })

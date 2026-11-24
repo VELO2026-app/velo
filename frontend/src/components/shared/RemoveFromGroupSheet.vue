@@ -56,7 +56,14 @@
     <VRadioGroup v-model="mode" :options="modeOptions" />
 
     <template v-if="mode === 'selected'">
-      <div class="remove-from-group__chips">
+      <!-- The list of groups could not be read: an empty palette would read as
+           "no groups" (FE-257). -->
+      <VEmptyState v-if="groupsFailed" icon="warning" :title="t('common.loadError')">
+        <VButton size="sm" variant="outline" @click="emit('retryGroups')">{{
+          t('common.retry')
+        }}</VButton>
+      </VEmptyState>
+      <div v-else class="remove-from-group__chips">
         <VChip
           v-for="g in customGroups"
           :key="g.id"
@@ -79,7 +86,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
-import { VBottomSheet, VRadioGroup, VChip } from '@/components/ui'
+import { VBottomSheet, VButton, VRadioGroup, VChip, VEmptyState } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
 import { removeGroupMember } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
@@ -97,9 +104,12 @@ const props = defineProps<{
    *  optional; the "current" radio option is omitted when absent. */
   currentGroupId?: string | null
   customGroups: GroupListItem[]
+  /** The read of `customGroups` failed: the "selected" mode offers Retry
+   *  (`retryGroups`) instead of an empty palette (FE-257). */
+  groupsFailed?: boolean
 }>()
 
-const emit = defineEmits<{ close: []; saved: [] }>()
+const emit = defineEmits<{ close: []; saved: []; retryGroups: [] }>()
 
 const toast = useToast()
 

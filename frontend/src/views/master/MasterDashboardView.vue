@@ -96,7 +96,17 @@
            STATS (2 cards; the period toggle lives in the top row above)
            ================================================================ -->
       <!-- Income card removed from the dashboard (operator tester-fix 2026-06-17). -->
-      <div class="master-dashboard__stats-grid">
+      <!-- A failed read must not pass for a stat row of dashes: "—" reads as "still
+           loading" (FE-257). -->
+      <VEmptyState
+        v-if="statsFailed"
+        icon="warning"
+        :title="t('common.loadFailed')"
+        :description="statsErrorText"
+      >
+        <VButton size="sm" variant="outline" @click="loadStats">{{ t('common.retry') }}</VButton>
+      </VEmptyState>
+      <div v-else class="master-dashboard__stats-grid">
         <VStatCard
           :value="practicesStat"
           :label="t('masterScreens.masterDashboard.statPractices')"
@@ -260,6 +270,22 @@
         </div>
       </template>
 
+      <!-- "New master" says "no practice EVER", which only the past list can tell:
+           until it answers, or when it failed, that is not known (FE-257). -->
+      <div v-else-if="past.loading.value" class="master-dashboard__loading-row">
+        <VLoader size="sm" />
+      </div>
+      <VEmptyState
+        v-else-if="pastRetryable"
+        icon="warning"
+        :title="t('common.loadFailed')"
+        :description="pastErrorText"
+      >
+        <VButton size="sm" variant="outline" @click="retryPast">
+          {{ t('common.retry') }}
+        </VButton>
+      </VEmptyState>
+
       <template v-else>
         <VCard>
           <p class="master-dashboard__empty-text">
@@ -395,6 +421,12 @@ function retryUpcoming(): void {
   void upcoming.refetch()
 }
 
+const pastErrorText = computed(() => extractApiError(past.error.value, t('common.checkConnection')))
+const pastRetryable = computed(() => past.failed.value && !isForbidden(past.error.value))
+function retryPast(): void {
+  void past.refetch()
+}
+
 // True for a brand-new master with no practices at all (zero state).
 const isNewMaster = computed((): boolean => upcoming.total.value + past.total.value === 0)
 
@@ -403,12 +435,30 @@ const isNewMaster = computed((): boolean => upcoming.total.value + past.total.va
 // (i18n:masterScreens.masterDashboard.statPractices) and the members stat
 // (i18n:masterScreens.masterDashboard.statMembers)
 // are period-scoped (D1); the toggle refetches. income_cents is returned but
-// rendered on Finance/Analytics, not here (D2). "—" until the fetch resolves.
+// rendered on Finance/Analytics, not here (D2). "—" until the fetch resolves;
+// a failed fetch is the error state with Retry (FE-257), never a row of dashes.
 // =========================================================================
 const stats = ref<MasterStatsResponse | null>(null)
+const statsFailed = ref(false)
+const statsErrorText = ref('')
+// Only the newest request may write: an older reply landing late must neither
+// show a period's figures under another period's label nor raise a stale error.
+let statsRequestId = 0
 
 async function loadStats(): Promise<void> {
-  stats.value = await getMasterStats(period.value)
+  const requestId = ++statsRequestId
+  statsFailed.value = false
+  // The figures on hand belong to the period the master just left.
+  stats.value = null
+  try {
+    const loaded = await getMasterStats(period.value)
+    if (requestId === statsRequestId) stats.value = loaded
+  } catch (e) {
+    if (requestId === statsRequestId) {
+      statsErrorText.value = extractApiError(e, t('common.checkConnection'))
+      statsFailed.value = true
+    }
+  }
 }
 
 const practicesStat = computed((): string =>
@@ -453,9 +503,7 @@ const participantsDeltaTone = computed(() => deltaTone(stats.value?.participants
 
 // Refetch the stats row when the period toggle changes.
 watch(period, () => {
-  void loadStats().catch(() => {
-    /* keep the previous values on a transient refetch error */
-  })
+  void loadStats()
 })
 
 // T-26 (PROMPT №704): a real count, fetched alongside the stats row
@@ -626,9 +674,7 @@ async function persistMasterOnboarding(): Promise<void> {
 // -- Load data on mount --
 onMounted(() => {
   // Period-scoped stats row (E7); independent of the practices list fetch.
-  void loadStats().catch(() => {
-    /* leave cards at "—" if the stats fetch fails */
-  })
+  void loadStats()
   // Bell badge (T-26, PROMPT №704); same fire-and-forget disposition as
   // loadStats above -- a failed fetch leaves the badge at 0 rather than
   // blocking the dashboard on a courtesy count.

@@ -920,6 +920,25 @@ describe('MasterStudentProfileView', () => {
       expect(modalButtonWith('В поддержку')?.classList.contains('v-btn--sm')).toBe(true)
     })
 
+    it('a FAILED block says so, keeps the confirm open and never opens the report offer (FE-259)', async () => {
+      vi.mocked(groupsApi.blockStudent).mockRejectedValueOnce(new Error('boom'))
+      mount()
+      await flush()
+
+      buttonWith('Заблокировать пользователя')?.click()
+      await flush()
+      Array.from(liveModal()?.querySelectorAll('button') ?? [])
+        .find((b) => b.textContent?.trim() === 'Заблокировать')
+        ?.click()
+      await flush()
+
+      expect(error).toHaveBeenCalledWith('Не удалось заблокировать')
+      expect(success).not.toHaveBeenCalled()
+      expect(liveModal()?.textContent).toContain('Заблокировать')
+      expect(liveModal()?.textContent).not.toContain('Пользователь перемещен в «Удаленные».')
+      expect(buttonWith('Заблокировать пользователя')).toBeDefined()
+    })
+
     it('«Не сейчас» dismisses the offer without opening the report form', async () => {
       vi.mocked(groupsApi.blockStudent).mockResolvedValue({
         student_user_id: 's1',
@@ -1350,6 +1369,58 @@ describe('MasterStudentProfileView', () => {
       )
     })
 
+    it('a failed groups read is an error with «Повторить» in the add sheet, not «no groups»; Retry brings the chips (FE-257)', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValueOnce(new Error('boom'))
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[1]?.click()
+      await flush()
+
+      expect(sheetOverlay()?.textContent).toContain('Ошибка загрузки')
+      expect(sheetOverlay()?.textContent).not.toContain('Пока нет ни одной группы')
+      expect(sheetOverlay()?.querySelector('.v-chip')).toBeNull()
+
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null }],
+      })
+      Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('button') ?? [])
+        .find((b) => b.textContent?.includes('Повторить'))
+        ?.click()
+      await flush()
+
+      expect(sheetOverlay()?.textContent).not.toContain('Ошибка загрузки')
+      expect(sheetOverlay()?.querySelector('.v-chip')?.textContent).toContain('VIP')
+    })
+
+    it("a failed groups read is an error with «Повторить» in the remove sheet's group list; «all groups» still works (FE-257)", async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValueOnce(new Error('boom'))
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[2]?.click()
+      await flush()
+
+      // The default mode of a context-less sheet is «selected».
+      expect(sheetOverlay()?.textContent).toContain('Ошибка загрузки')
+      expect(sheetOverlay()?.querySelector('.v-chip')).toBeNull()
+
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null }],
+      })
+      Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('button') ?? [])
+        .find((b) => b.textContent?.includes('Повторить'))
+        ?.click()
+      await flush()
+
+      expect(sheetOverlay()?.textContent).not.toContain('Ошибка загрузки')
+      expect(sheetOverlay()?.querySelector('.v-chip')?.textContent).toContain('VIP')
+    })
+
     it('"Удалить из всех групп" (default-less mode, no current group) loops every custom group', async () => {
       vi.mocked(groupsApi.getGroups).mockResolvedValue({
         items: [
@@ -1473,6 +1544,28 @@ describe('MasterStudentProfileView', () => {
       expect(success).toHaveBeenCalledWith('Пользователь разблокирован')
       expect(buttonWith('Заблокировать пользователя')).toBeDefined()
       expect(host?.querySelector('.v-menu__trigger')).not.toBeNull()
+    })
+
+    it('a FAILED unblock says so and leaves the student blocked (FE-259)', async () => {
+      vi.mocked(mastersApi.getStudent)
+        .mockReset()
+        .mockResolvedValue(detail({ blocked: true }))
+      vi.mocked(groupsApi.unblockStudent).mockRejectedValueOnce(new Error('boom'))
+      mount()
+      await flush()
+
+      buttonWith('Разблокировать пользователя')?.click()
+      await flush()
+      Array.from(liveModal()?.querySelectorAll('button') ?? [])
+        .find((b) => b.textContent?.trim() === 'Разблокировать')
+        ?.click()
+      await flush()
+
+      expect(error).toHaveBeenCalledWith('Не удалось разблокировать')
+      expect(success).not.toHaveBeenCalled()
+      expect(mastersApi.getStudent).toHaveBeenCalledTimes(1)
+      expect(buttonWith('Разблокировать пользователя')).toBeDefined()
+      expect(host?.querySelector('.v-menu__trigger')).toBeNull()
     })
 
     it('«Отмена» dismisses without calling unblockStudent', async () => {
