@@ -6,9 +6,9 @@
 // STORED method strings (the "direction — style" pair composed of the server
 // catalog's labels) keep the server catalog's labels as their canon
 // (methodTaxonomy.ts consults the catalog FIRST, the live hardcoded labels
-// second), so a non-ru UI parses stored ru data via the catalog and only a
-// cold-cache non-ru session composes localized strings (visible as the
-// custom variant, never lost -- Q3=A).
+// second, the ru seed third), so a non-ru UI parses stored ru data via the
+// catalog, or via the ru seed while the catalog is cold; a string none of
+// them knows stays visible as the custom variant, never lost -- Q3=A.
 
 import type { PracticeDirection, PracticeAudienceKind } from '@/api/types'
 import type { TaxonomyListResponse } from '@/api/taxonomy'

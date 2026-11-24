@@ -49,6 +49,7 @@ describe('readSkin (tz-whitelabel §3)', () => {
         { family: 'Rubik', file: 'assets/fonts/rubik-400.woff2', weight: 400, style: 'normal' },
       ],
       hasLogo: true,
+      supportEmail: null,
     })
   })
 

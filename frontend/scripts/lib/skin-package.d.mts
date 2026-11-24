@@ -18,6 +18,8 @@ export interface SkinBrand {
   fonts: SkinFont[]
   /** Contract 2.1: pairs the package keeps under the contrast floor. */
   contrastExceptions: SkinContrastException[]
+  /** Contract 2.2: the brand's support address; null = the record has none. */
+  supportEmail: string | null
 }
 
 export interface SkinContrastException {

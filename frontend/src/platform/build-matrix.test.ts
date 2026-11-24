@@ -39,6 +39,7 @@ interface Facts {
   assets: number
   chunks: Record<string, string[]>
   brandMissing?: boolean
+  supportEmailMissing?: boolean
   tokensMissing?: string[]
   leaked?: string[]
   layout?: string[]
@@ -63,7 +64,7 @@ const {
   missingTokens(decls: string[], css: string, goldenDecls: Set<string>): string[]
   skinLeaks(input: {
     label: string
-    brand: { displayName: string }
+    brand: { displayName: string; supportEmail?: string | null }
     decls: string[]
     js: string
     html: string
@@ -223,6 +224,11 @@ describe('evaluateMatrix (tz-whitelabel §6 gate)', () => {
     expect(fails[0]).toContain('displayName')
   })
 
+  it("a skin cell whose bundle lacks the skin's supportEmail fails (b, FE-251)", () => {
+    const fails = withFact('acme/full', { supportEmailMissing: true })
+    expect(fails).toEqual(["acme/full: the skin's supportEmail is not in the JS bundle"])
+  })
+
   it('a skin cell missing token declarations in dist CSS fails, named (b)', () => {
     const fails = withFact('nova/full', { tokensMissing: ['--velo-primary:#8b7cf6'] })
     expect(fails).toHaveLength(1)
@@ -339,7 +345,7 @@ describe('brand/token grep helpers', () => {
     expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'VELO')).toBe(false)
     expect(bundleHas('const k="velo:diary:recent-searches"', 'VELO')).toBe(false)
     expect(bundleHas('console.error(`[velo:${t.source}] ${t.name}`)', 'VELO')).toBe(false)
-    expect(bundleHas('href:"mailto:support@velo.app"', 'VELO')).toBe(false)
+    expect(bundleHas('href:"mailto:support@velo.example"', 'VELO')).toBe(false)
     expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'Velo Pro')).toBe(false)
   })
 })
@@ -448,6 +454,24 @@ describe('real-brand cells (FE-234)', () => {
       coreName: 'VELO',
     })
     expect(named).toEqual(['goodo-brand displayName'])
+  })
+
+  it("a brand's support address in a core build is a leak (FE-251)", () => {
+    const withEmail = (js: string) =>
+      skinLeaks({
+        label: 'velo-brand',
+        brand: { displayName: 'VELO', supportEmail: 'support@velo.example' },
+        decls: [],
+        js,
+        html: '',
+        css: '',
+        goldenDecls: core,
+        coreName: 'App',
+      })
+    expect(withEmail(String.raw`const e="support@velo.example"`)).toEqual([
+      'velo-brand supportEmail',
+    ])
+    expect(withEmail('const e=null')).toEqual([])
   })
 
   it('a value the core keeps is not a missing declaration; a changed one is', () => {

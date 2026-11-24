@@ -1182,15 +1182,16 @@ onBeforeUnmount(() => {
    navigation, or the focusout recheck useViewportGeometry now runs), full
    height returns even if no closing resize event ever fires. No masking
    white blocks anywhere -- the background layer regains the full viewport
-   on the same class removal. */
-:global(html.is-keyboard-open) .diary-feed {
+   on the same class removal. No `:global()` here: scoped-global.test.ts
+   forbids it with a descendant in a scoped style. */
+html.is-keyboard-open .diary-feed {
   height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
 }
 
 /* [FE-44] The close expands at the keyboard's own speed (see the twin rule
    in global.css): while the closing class holds, the height transition
    interpolates from the capped value above to the at-rest px calc below. */
-:global(html.is-keyboard-closing) .diary-feed {
+html.is-keyboard-closing .diary-feed {
   height: calc(var(--velo-frozen-vh, 100%) - var(--velo-content-safe-top, 0px));
   transition: height 250ms cubic-bezier(0.22, 0.61, 0.36, 1);
 }

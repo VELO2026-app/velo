@@ -570,17 +570,14 @@
     "masterNotifications": {
       "deliveryDays": "Дни доставки уведомлений",
       "deliveryTime": "Время уведомлений",
-      "soon": "Скоро",
       "schedule": "График уведомлений",
       "receiveFrom": "Получать уведомления с",
       "to": "до",
       "daysHint": "Отмеченные дни — когда уведомления приходят. Если день не отмечен, в этот день не придёт ничего — круглые сутки, независимо от выставленного времени.",
       "category": {
         "practices": "Практики",
-        "members": "Участники",
         "schools": "Школы",
-        "messages": "Сообщения",
-        "analytics": "Аналитика"
+        "messages": "Сообщения"
       },
       "events": {
         "newBooking": "Новое бронирование",
@@ -589,21 +586,13 @@
         "someoneCancelled": "Кто-то отменил",
         "reminder": "Напоминание",
         "reminderText": "За 1 час до начала",
-        "newCheckin": "Новый check-in",
-        "checkinText": "Участник отметился о состоянии перед практикой",
-        "newFeedback": "Новый feedback",
-        "feedbackText": "Участник оставил отзыв",
         "schoolEvents": "События школ",
         "joinsAndAppointments": "Вступления и назначения мастеров",
         "studentMessages": "Сообщения учеников",
         "newMessages": "Новые сообщения в ваших чатах",
         "supportReplies": "Ответы в ваших обращениях",
-        "chatsYouAuthor": "Чаты, где вы — автор",
-        "aiSummary": "AI-саммари"
+        "chatsYouAuthor": "Чаты, где вы — автор"
       },
-      "mondays": "По понедельникам",
-      "monthlyReport": "Ежемесячный отчет",
-      "firstOfMonth": "1-го числа месяца",
       "toast": {
         "loadFailed": "Не удалось загрузить настройки уведомлений",
         "scheduleSaveFailed": "Не удалось сохранить расписание",

@@ -50,6 +50,10 @@ export interface SkinPackage {
   /** Does the package ship the logo set (assets/mandala-*, velo-word-*,
    *  logo-white)? No = VeloLogo shows the brand's favicon.svg (FE-230). */
   hasLogo: boolean
+  /** The brand's support address (contract 2.2, FE-251): the support
+   *  screens' mailto. Null = the package names none; the screens then show
+   *  no address line. */
+  supportEmail: string | null
 }
 
 /** The no-skin build: the neutral core (FE-230). Colors mirror
@@ -63,6 +67,7 @@ export const CORE_SKIN: SkinPackage = {
   backgroundColor: '#f2f2f2',
   fonts: [],
   hasLogo: true,
+  supportEmail: null,
 }
 
 /** Loads public/skin/ with the engine; throws on the first problems. */
@@ -91,7 +96,7 @@ export function readSkin(publicDir: string): SkinPackage | null {
   const brand = pkg.brand
   if (brand === null) throw new Error('[skin] public/skin: no brand record')
   // The build's identity only: contrastExceptions are the validator's.
-  const { displayName, shortName, themeColor, backgroundColor, fonts } = brand
+  const { displayName, shortName, themeColor, backgroundColor, fonts, supportEmail } = brand
   return {
     displayName,
     shortName,
@@ -99,6 +104,7 @@ export function readSkin(publicDir: string): SkinPackage | null {
     backgroundColor,
     fonts,
     hasLogo: shipsLogo(pkg.files),
+    supportEmail,
   }
 }
 

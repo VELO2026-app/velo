@@ -23,7 +23,13 @@ import {
 } from '../../scripts/lib/skin-package.mjs'
 // @ts-expect-error -- *.mjs modules carry no type information
 import { parseFlatTokens, writePackage } from '../../scripts/skin-to-dtcg.mjs'
-import { cleanupSkinFixtures, png, tempDir, writeSkinPackage } from './skin.test.fixture'
+import {
+  cleanupSkinFixtures,
+  FIXTURE_BRAND,
+  png,
+  tempDir,
+  writeSkinPackage,
+} from './skin.test.fixture'
 
 afterEach(cleanupSkinFixtures)
 
@@ -207,6 +213,41 @@ describe('the package is data (no code, nothing else)', () => {
     const half = writeSkinPackage()
     rmSync(join(half, 'assets', 'velo-word-blue.svg'))
     expect(problemsOf(half)).toContain('assets/velo-word-blue.svg: missing -- the logo set')
+  })
+})
+
+describe('supportEmail (contract 2.2, FE-251)', () => {
+  const MANIFEST_22 = 'schema: 1\ncontract: "2.2"\n'
+  const load = (supportEmail: unknown, manifest = MANIFEST_22) =>
+    loadSkinPackage(
+      writeSkinPackage({ manifest, brand: { ...FIXTURE_BRAND, supportEmail } }),
+      GOLDEN,
+    )
+
+  it('a 2.2 brand record carries the address; without it the address is null', () => {
+    const pkg = load(' help@fixture.example ')
+    expect(pkg.problems).toEqual([])
+    expect(pkg.brand?.supportEmail).toBe('help@fixture.example')
+    expect(loadSkinPackage(writeSkinPackage(), GOLDEN).brand?.supportEmail).toBeNull()
+  })
+
+  it('a 2.1 package may not carry it -- a 2.1 reader refuses the field', () => {
+    expect(load('help@fixture.example', 'schema: 1\ncontract: "2.1"\n').problems).toContain(
+      'primer-package.yaml: supportEmail needs contract "2.2" or later, got "2.1"',
+    )
+  })
+
+  it.each([
+    ['no domain dot', 'help@fixture'],
+    ['a mailto query', 'help?cc=x@fixture.example'],
+    ['a percent escape', 'he%6Cp@fixture.example'],
+    ['markup', '<help@fixture.example>'],
+    ['a space', 'help @fixture.example'],
+    ['not a string', 42],
+  ])('a malformed address is refused: %s', (_, value) => {
+    expect(load(value).problems.join('\n')).toContain(
+      '$extensions["velo-skin"].supportEmail: an address like support@example.com',
+    )
   })
 })
 
@@ -411,7 +452,7 @@ describe('skin-to-dtcg: generation 1 -> package, no pixel changes', () => {
     // the brand record moved into the package's data carrier
     const brand = JSON.parse(readFileSync(join(out, 'tokens', 'brand.tokens.json'), 'utf8'))
     expect(brand.$extensions['velo-skin'].displayName).toBe('Contrast')
-    expect(readFileSync(join(out, 'primer-package.yaml'), 'utf8')).toContain('contract: "2.1"')
+    expect(readFileSync(join(out, 'primer-package.yaml'), 'utf8')).toContain('contract: "2.2"')
     expect(pkg.files).toContain('assets/bg/background.png')
   })
 
