@@ -36,6 +36,16 @@
     <div v-if="loading" class="waitlist-confirm__state" role="status"><VLoader /></div>
 
     <VEmptyState
+      v-else-if="loadFailed"
+      icon="warning"
+      :title="t('common.loadError')"
+      data-testid="screen-error"
+    >
+      <template #action>
+        <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
+      </template>
+    </VEmptyState>
+    <VEmptyState
       v-else-if="!entry"
       icon="warning"
       :title="t('user.screens.waitlistConfirm.notFound.title')"
@@ -107,6 +117,8 @@ const waitlistId = computed(() => String(route.params.id))
 
 const entry = ref<WaitlistWithPracticeResponse | null>(null)
 const loading = ref(true)
+/** The entry could not be read: an error state with Retry, not "not found" (FE-242). */
+const loadFailed = ref(false)
 const confirming = ref(false)
 
 const state = computed((): State => {
@@ -128,11 +140,13 @@ const state = computed((): State => {
 
 async function load(): Promise<void> {
   loading.value = true
+  loadFailed.value = false
   try {
     const page = await getMyWaitlist({ limit: 100 })
     entry.value = page.items.find((item) => item.id === waitlistId.value) ?? null
   } catch (e) {
     entry.value = null
+    loadFailed.value = true
     toast.error(extractApiError(e, t('user.screens.waitlistConfirm.toast.loadFailed')))
   } finally {
     loading.value = false

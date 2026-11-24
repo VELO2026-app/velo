@@ -93,6 +93,8 @@ export const usePracticesStore = defineStore('practices', () => {
   const selected = ref<PracticeResponse | null>(null)
   const selectedLoading = ref(false)
   const selectedError = ref<string | null>(null)
+  /** The failure is a 404/403: the practice is gone, a retry cannot help (FE-242). */
+  const selectedGone = ref(false)
 
   /**
    * Tracks the ID of the most recently requested practice.
@@ -121,6 +123,7 @@ export const usePracticesStore = defineStore('practices', () => {
 
     selectedLoading.value = !known
     selectedError.value = null
+    selectedGone.value = false
     try {
       const result = await getPractice(id)
       // The session ended meanwhile ($reset cleared the fetch id): the answer
@@ -138,6 +141,7 @@ export const usePracticesStore = defineStore('practices', () => {
     } catch (e) {
       if (_currentFetchId === id && (!known || isGone(e))) {
         selectedError.value = extractApiError(e, t('storeErrors.practices.selected'))
+        selectedGone.value = isGone(e)
         selected.value = null
       }
     } finally {
@@ -159,6 +163,7 @@ export const usePracticesStore = defineStore('practices', () => {
       selected.value = fresh
       selectedLoading.value = false
       selectedError.value = null
+      selectedGone.value = false
       return Promise.resolve()
     }
     return fetchPractice(id)
@@ -172,6 +177,7 @@ export const usePracticesStore = defineStore('practices', () => {
   function clearSelected(): void {
     selected.value = null
     selectedError.value = null
+    selectedGone.value = false
   }
 
   /** Back to the initial state at the account boundary (platform/session.ts).
@@ -181,12 +187,14 @@ export const usePracticesStore = defineStore('practices', () => {
     selected.value = null
     selectedLoading.value = false
     selectedError.value = null
+    selectedGone.value = false
   }
 
   return {
     selected,
     selectedLoading,
     selectedError,
+    selectedGone,
     fetchPractice,
     openPractice,
     clearSelected,

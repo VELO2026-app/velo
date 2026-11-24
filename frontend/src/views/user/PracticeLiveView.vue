@@ -81,11 +81,21 @@
            the resolve call 404s and lands here. An honest error, never an
            empty screen. -->
       <VEmptyState
-        v-if="resolveFailed"
+        v-if="resolveFailed && resolveGone"
         icon="warning"
         :title="t('user.screens.practiceLive.notFound.title')"
         :description="t('user.screens.practiceLive.notFound.text')"
       />
+
+      <!-- Network / 5xx: not "no such practice" (FE-242) -- retryable. -->
+      <VEmptyState
+        v-else-if="resolveFailed"
+        icon="warning"
+        :title="t('common.loadError')"
+        data-testid="screen-error"
+      >
+        <VButton size="sm" @click="loadEntry">{{ t('common.retry') }}</VButton>
+      </VEmptyState>
 
       <!-- F4: the server has no Meeting SDK keys (or runs the Zoom stub).
            Said out loud instead of a button that cannot work. -->
@@ -282,6 +292,8 @@ const practiceStarted = computed((): boolean => {
  */
 const zoomEntry = ref<ZoomEntryResolveResponse | null>(null)
 const resolveFailed = ref(false)
+/** The failure is a 404/403: the practice is gone, a retry cannot help. */
+const resolveGone = ref(false)
 /** F4: sdk-join answered zoom_sdk_not_configured -- no SDK keys here. */
 const sdkNotConfigured = ref(false)
 
@@ -419,8 +431,9 @@ async function loadEntry(): Promise<void> {
   try {
     zoomEntry.value = await resolveZoomEntry(practiceId)
     resolveFailed.value = false
-  } catch {
+  } catch (e) {
     resolveFailed.value = true
+    resolveGone.value = e instanceof ApiResponseError && (e.status === 404 || e.status === 403)
   }
 }
 

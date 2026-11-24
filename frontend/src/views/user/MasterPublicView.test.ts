@@ -676,8 +676,19 @@ describe('MasterPublicView', () => {
       // Owner 2026-09-30: the title never disappears -- without data it says why.
       expect(upcomingSection()).not.toBeNull()
       expect(upcomingSection()?.textContent).toContain('Ближайшие практики')
-      expect(upcomingSection()?.textContent).toContain('Пока практик не запланировано')
+      // FE-242: a failed list is an error with Retry, not "nothing planned".
+      expect(upcomingSection()?.textContent).not.toContain('Пока практик не запланировано')
+      expect(upcomingSection()?.textContent).toContain('Ошибка загрузки')
       expect(practiceCards()).toHaveLength(0)
+
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([practice('p1')]))
+      const retry = Array.from(upcomingSection()?.querySelectorAll('button') ?? []).find((b) =>
+        b.textContent?.includes('Повторить'),
+      )
+      retry!.click()
+      await flush()
+
+      expect(practiceCards()).toHaveLength(1)
     })
 
     it('an empty practices list renders the same titled section with the note (owner 2026-09-30)', async () => {

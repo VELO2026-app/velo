@@ -206,6 +206,7 @@ import {
 import { useToast } from '@/composables/useToast'
 import { useQuery } from '@pinia/colada'
 import { myStatsQuery } from '@/composables/queries/stats'
+import { screenQueryState } from '@/composables/queries/screenState'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -240,7 +241,11 @@ let activations = 0
 onActivated(() => {
   if (activations++ > 0) void statsQuery.refetch()
 })
-const practicesAttended = computed(() => statsQuery.data.value?.practices_attended ?? 0)
+// No data and a failed request: a dash, never a 0 that reads as real (FE-242).
+const statsFailed = screenQueryState(statsQuery).failed
+const practicesAttended = computed(() =>
+  statsFailed.value ? '—' : (statsQuery.data.value?.practices_attended ?? 0),
+)
 const hoursAttended = computed(() => statsQuery.data.value?.hours_attended ?? 0)
 // B52: colour indicator on the t('user.screens.userProfile.messages') row, same request, no new call.
 const hasUnreadMessages = computed(() => statsQuery.data.value?.has_unread_messages ?? false)
@@ -250,6 +255,7 @@ const hasUnreadMessages = computed(() => statsQuery.data.value?.has_unread_messa
  * fractional values use a comma to match the Russian mockup ("9,5").
  */
 const hoursLabel = computed(() => {
+  if (statsFailed.value) return '—'
   const h = hoursAttended.value
   return Number.isInteger(h) ? String(h) : String(h).replace('.', ',')
 })

@@ -118,8 +118,16 @@
           </div>
         </template>
 
+        <!-- Error (nothing to show, last request failed): never the empty copy -->
+        <div v-if="upcomingFailed" class="dashboard__empty" data-testid="screen-error">
+          <p class="dashboard__empty-text">{{ t('common.loadError') }}</p>
+          <VButton size="sm" variant="outline" @click="loadUpcoming">
+            {{ t('common.retry') }}
+          </VButton>
+        </div>
+
         <!-- Empty -->
-        <div v-if="nearestBookings.length === 0" class="dashboard__empty">
+        <div v-else-if="nearestBookings.length === 0" class="dashboard__empty">
           <p class="dashboard__empty-text">{{ t('user.screens.userDashboard.upcoming.empty') }}</p>
           <VButton size="sm" variant="outline" @click="router.push({ name: 'user-calendar' })">
             {{ t('user.screens.userDashboard.findPractice') }}
@@ -365,7 +373,7 @@ const { showSkeleton: statsPending } = useLoadingHold(screenQueryState(statsQuer
 const upcomingQuery = useQuery(() => upcomingBookingsQuery())
 const upcoming = computed(() => upcomingQuery.data.value ?? [])
 /** Nothing known yet and a request in flight (an EMPTY answer is data, not loading). */
-const upcomingPending = screenQueryState(upcomingQuery).loading
+const { loading: upcomingPending, failed: upcomingFailed } = screenQueryState(upcomingQuery)
 
 const nearestBookings = computed((): BookingWithPracticeResponse[] =>
   selectNearestBookings(upcoming.value, now.value),

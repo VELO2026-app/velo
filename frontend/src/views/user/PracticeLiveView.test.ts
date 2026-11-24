@@ -535,12 +535,31 @@ describe('PracticeLiveView', () => {
     it('the resolve call 404s (a well-formed deep link naming a deleted practice): an honest error, NEVER an empty screen', async () => {
       practicesState.selected = practice()
       bookingsState.bookings = []
-      resolveZoomEntry.mockRejectedValue(new Error('404'))
+      resolveZoomEntry.mockRejectedValue(new ApiResponseError(404, 'Not found', 'not_found'))
       mount()
       await flush()
 
       expect(emptyState()?.textContent).toContain('Практика не найдена')
       expect(enterBtn()).toBeNull()
+    })
+
+    it('the resolve call fails on the network / 5xx: a load error with Retry, NOT «not found» (FE-242)', async () => {
+      practicesState.selected = practice()
+      bookingsState.bookings = []
+      resolveZoomEntry.mockRejectedValueOnce(new ApiResponseError(503, 'down', 'server_error'))
+      mount()
+      await flush()
+
+      expect(emptyState()?.textContent).toContain('Ошибка загрузки')
+      expect(emptyState()?.textContent).not.toContain('Практика не найдена')
+
+      resolveZoomEntry.mockResolvedValue({ kind: 'personal' })
+      Array.from(host!.querySelectorAll('button'))
+        .find((b) => b.textContent?.includes('Повторить'))!
+        .click()
+      await flush()
+
+      expect(emptyState()).toBeNull()
     })
 
     it('asks the server keyed by PRACTICE ID -- not by a code the screen would have to encode', async () => {

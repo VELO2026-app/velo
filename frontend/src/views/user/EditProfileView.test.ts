@@ -554,6 +554,27 @@ describe('EditProfileView', () => {
 
   // ===========================================================================
   describe('master: methods block', () => {
+    it('a failed profile read shows an error with Retry instead of an empty editable form (FE-242)', async () => {
+      vi.mocked(mastersApi.getMyMasterProfile).mockRejectedValueOnce(new Error('500'))
+      useAuthStore().user = user({ role: 'master' })
+      mount()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+      expect(methodsSubmitBtn()).toBeUndefined()
+
+      vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(
+        masterProfile({ methods: ['Медитация'], method_change_request: null }),
+      )
+      Array.from(host!.querySelectorAll('button'))
+        .find((b) => b.textContent?.includes('Повторить'))!
+        .click()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+      expect(methodsSubmitBtn()).toBeDefined()
+    })
+
     it('pending: shows the readonly picker + badge, NO submit button, and does not treat it as editable', async () => {
       vi.mocked(mastersApi.getMyMasterProfile).mockResolvedValue(
         masterProfile({ method_change_request: methodChangeRequest() }),

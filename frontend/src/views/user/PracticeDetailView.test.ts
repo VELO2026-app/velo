@@ -64,7 +64,8 @@ const practicesState: {
   selected: PracticeResponse | null
   selectedLoading: boolean
   selectedError: string | null
-} = { selected: null, selectedLoading: false, selectedError: null }
+  selectedGone: boolean
+} = { selected: null, selectedLoading: false, selectedError: null, selectedGone: false }
 const fetchPractice = vi.fn()
 const openPractice = vi.fn()
 const clearSelected = vi.fn()
@@ -78,6 +79,9 @@ vi.mock('@/stores/practices', () => ({
     },
     get selectedError() {
       return practicesState.selectedError
+    },
+    get selectedGone() {
+      return practicesState.selectedGone
     },
     fetchPractice,
     openPractice,
@@ -295,6 +299,7 @@ beforeEach(() => {
   practicesState.selected = practice()
   practicesState.selectedLoading = false
   practicesState.selectedError = null
+  practicesState.selectedGone = false
   bookingsState.bookings = []
   authState.user = { id: 'user_1' }
   authState.role = 'user'
@@ -340,11 +345,28 @@ describe('PracticeDetailView', () => {
       practicesState.selectedLoading = false
       practicesState.selected = null
       practicesState.selectedError = 'Практика удалена мастером'
+      practicesState.selectedGone = true
       mount()
       await flush()
 
       expect(text()).toContain('Практика не найдена')
       expect(text()).toContain('Практика удалена мастером')
+      expect(button('Повторить')).toBeUndefined()
+    })
+
+    it('network failure: a load error with Retry, not "not found" (FE-242)', async () => {
+      practicesState.selectedLoading = false
+      practicesState.selected = null
+      practicesState.selectedError = 'Не удалось загрузить практику'
+      practicesState.selectedGone = false
+      mount()
+      await flush()
+
+      expect(text()).toContain('Ошибка загрузки')
+      expect(text()).not.toContain('Практика не найдена')
+      fetchPractice.mockClear()
+      button('Повторить')?.click()
+      expect(fetchPractice).toHaveBeenCalledWith('p1')
     })
 
     it('content: renders the practice the store actually holds', async () => {

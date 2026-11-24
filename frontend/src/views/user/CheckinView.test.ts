@@ -623,6 +623,24 @@ describe('CheckinView', () => {
       expect(text()).not.toContain('Как вы себя чувствуете?')
     })
 
+    it('a FAILED bookings list shows the error rung, not a form that could overwrite a check-in (FE-242)', async () => {
+      getMyBookingsMock.mockRejectedValueOnce(new ApiResponseError(500, 'boom'))
+      mount()
+      await flush()
+
+      expect(text()).toContain('Ошибка загрузки')
+      expect(submitBtn()).toBeUndefined()
+
+      getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ has_checkin: false })]))
+      const retry = Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
+        b.textContent?.includes('Повторить'),
+      )
+      retry!.click()
+      await flush()
+
+      expect(submitBtn()).toBeDefined()
+    })
+
     it('a check-in on a DIFFERENT practice does not lock this one', async () => {
       // `alreadyCheckedIn` keys on practice_id (.vue:129). Matching on the wrong
       // field would lock a user out of every later check-in after their first.

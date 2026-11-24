@@ -175,15 +175,15 @@ describe('UserProfileView', () => {
       expect(statValue('Часов')).toBe('12')
     })
 
-    it('failure: does not throw, screen still renders, both cards stay at 0', async () => {
+    it('failure: does not throw, screen still renders, both cards show a dash, not a real-looking 0 (FE-242)', async () => {
       vi.mocked(bookingsApi.getMyStats).mockRejectedValue(new Error('ECONNRESET'))
 
       expect(() => mount()).not.toThrow()
       await flush()
 
-      expect(statValue('Практик')).toBe('0')
-      expect(statValue('Часов')).toBe('0')
-      // No error UI of any kind -- the screen degrades completely silently.
+      expect(statValue('Практик')).toBe('—')
+      expect(statValue('Часов')).toBe('—')
+      // No error text: the dash alone says "unknown".
       expect(host?.textContent).not.toMatch(/ошибк/i)
     })
   })

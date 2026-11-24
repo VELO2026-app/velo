@@ -95,7 +95,7 @@ const route = useRoute()
 const router = useRouter()
 const practicesStore = usePracticesStore()
 const bookingsStore = useBookingsStore()
-const { bookings } = useMyBookings()
+const { bookings, failed: bookingsFailed, refetch: refetchBookings } = useMyBookings()
 const skipCheckin = useSkipCheckin()
 const diaryStore = useDiaryStore()
 const toast = useToast()
@@ -105,7 +105,12 @@ const viewerTz = useViewerTimezone()
 
 const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
-const practiceLoadError = computed(() => practicesStore.selectedError)
+// A failed bookings list is an error rung too (FE-242): `has_checkin` lives in
+// that list, so an unread list would offer a form for a check-in that may exist,
+// and the upsert would overwrite its mood and comment.
+const practiceLoadError = computed(
+  () => practicesStore.selectedError ?? (bookingsFailed.value ? t('common.loadError') : null),
+)
 
 // Slider score 1..10. Default is the EXACT 5, the neutral mood label (i18n:mood.neutral,
 // tz-mood-scale §2.4): submitting without touching the scale sends 5, not a zone's click value (6).
@@ -252,6 +257,7 @@ watch(
 // means the last attempt FAILED, so there is nothing cached to skip for.
 function loadPractice(): void {
   void practicesStore.fetchPractice(practiceId)
+  if (bookingsFailed.value) void refetchBookings()
 }
 
 onMounted(() => {

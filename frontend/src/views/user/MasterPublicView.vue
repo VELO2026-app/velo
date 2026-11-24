@@ -218,6 +218,13 @@
             @click="goToPractice"
           />
         </div>
+        <!-- A failed list is not "nothing planned" (FE-242): say so, offer Retry. -->
+        <div v-else-if="upcomingFailed" class="master-public__note" data-testid="upcoming-error">
+          <p>{{ t('common.loadError') }}</p>
+          <VButton size="sm" variant="secondary" @click="upcomingQuery.refetch()">{{
+            t('common.retry')
+          }}</VButton>
+        </div>
         <p v-else class="master-public__note">
           {{ t('user.screens.masterPublic.sections.nonePlanned') }}
         </p>
@@ -422,6 +429,8 @@ const upcomingLoading = computed(
     upcomingQuery.data.value === undefined &&
     (upcomingQuery.status.value === 'pending' || upcomingQuery.asyncStatus.value === 'loading'),
 )
+
+const upcomingFailed = screenQueryState(upcomingQuery).failed
 
 function retry(): void {
   void masterQuery.refetch()
