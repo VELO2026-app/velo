@@ -446,13 +446,16 @@ async function finish(): Promise<void> {
    anywhere: halve the gaps, slim the frame paddings. The button and dots stay
    put -- only their breathing room shrinks. Inert at rest:
    html.is-keyboard-open exists only while the keyboard is open
-   (useViewportGeometry). */
-:global(html.is-keyboard-open) .onboarding {
+   (useViewportGeometry). Both rules are written WITHOUT `:global()`: in a
+   scoped block that form drops the trailing class and styles <html> instead
+   (FE-261, scoped-global.test.ts); the scoped compiler tags the last
+   compound of a plain selector. */
+html.is-keyboard-open .onboarding {
   padding-top: var(--space-3);
   padding-bottom: var(--space-3);
 }
 
-:global(html.is-keyboard-open) .onboarding__footer {
+html.is-keyboard-open .onboarding__footer {
   gap: var(--space-2);
   padding-top: var(--space-2);
 }
