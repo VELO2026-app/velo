@@ -488,6 +488,7 @@ import { t } from '@/locales'
 import { host } from '@/platform/host'
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { useQuery, useQueryCache } from '@pinia/colada'
 import {
   VBackButton,
@@ -537,7 +538,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const masterId = route.params.id as string
+const masterId = routeParam(route, 'id')
 const queryCache = useQueryCache()
 
 // -- The master (Pinia Colada, composables/queries/admin.ts) --

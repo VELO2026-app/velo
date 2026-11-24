@@ -99,6 +99,7 @@ import { t } from '@/locales'
 import { isOptionEnabled } from '@/platform/instance'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { usePracticesStore } from '@/stores/practices'
 import { useToast } from '@/composables/useToast'
 import { VLoader, VEmptyState, VButton, VTextarea, VCard } from '@/components/ui'
@@ -115,7 +116,7 @@ const router = useRouter()
 const store = usePracticesStore()
 const toast = useToast()
 
-const practiceId = route.params.practiceId as string
+const practiceId = routeParam(route, 'practiceId')
 
 // usePracticesStore is a session-lifetime singleton: store.selected can still
 // hold a DIFFERENT practice left over from an earlier screen while this

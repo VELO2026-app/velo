@@ -188,6 +188,7 @@
 import { t } from '@/locales'
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import { VHeader } from '@/components/layout'
 import {
   VLoader,
@@ -223,7 +224,7 @@ const route = useRoute()
 const router = useRouter()
 const { onFieldFocus } = useKeyboardFieldScroll()
 
-const groupId = computed(() => String(route.params.id))
+const groupId = computed(() => optionalRouteParam(route, 'id') ?? '')
 const queryCache = useQueryCache()
 
 // Owner Q12 (PROMPT №611): route.query is now only a FIRST-PAINT HINT so the

@@ -129,6 +129,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { cachedMyPractice } from '@/composables/queries/master'
 import { useQueryCache } from '@pinia/colada'
 import { getPractice, getAttendance } from '@/api/practices'
@@ -145,7 +146,7 @@ const route = useRoute()
 const router = useRouter()
 const queryCache = useQueryCache()
 
-const practiceId = route.params.id as string
+const practiceId = routeParam(route, 'id')
 
 const COLLAPSE_THRESHOLD = 10
 

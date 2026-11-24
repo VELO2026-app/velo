@@ -163,6 +163,16 @@ function showMorePills(): HTMLElement[] {
 }
 
 /** The LIVE overlay -- excludes a corpse parked mid-test by an earlier close (SC-13c). */
+/** Type a value into a field; the test fails when the field is not on screen. */
+function typeInto(
+  field: HTMLInputElement | HTMLTextAreaElement | null | undefined,
+  value: string,
+): void {
+  if (!field) throw new Error('the field is not on screen')
+  field.value = value
+  field.dispatchEvent(new Event('input'))
+}
+
 function liveModal(): HTMLElement | null {
   return document.body.querySelector('.v-modal__overlay:not(.v-modal-leave-active)')
 }
@@ -344,14 +354,14 @@ describe('MasterStudentProfileView', () => {
       expect(host?.querySelector('.profile__hero-name')?.textContent).toBe('Борис Ли')
     })
 
-    it('coerces a non-string param through String() before the request', async () => {
-      // .vue:136 wraps the param in String(): vue-router types params as
-      // string|string[], and an array id would otherwise reach the URL raw.
-      routeState.params = { id: ['s7', 's8'] as unknown as string }
+    it('a route without the id sends no request and shows the load error', async () => {
+      routeState.params = {}
       mount()
       await flush()
 
-      expect(mastersApi.getStudent).toHaveBeenCalledWith('s7,s8')
+      expect(mastersApi.getStudent).not.toHaveBeenCalled()
+      expect(groupsApi.getStudentGroups).not.toHaveBeenCalled()
+      expect(text()).toContain('Не удалось загрузить профиль')
     })
   })
 
@@ -1092,8 +1102,7 @@ describe('MasterStudentProfileView', () => {
       chip?.click()
       await nextTick()
       const textarea = sheetOverlay()?.querySelector<HTMLTextAreaElement>('textarea')
-      textarea!.value = 'Просил перевести деньги напрямую'
-      textarea!.dispatchEvent(new Event('input'))
+      typeInto(textarea, 'Просил перевести деньги напрямую')
       sheetButtonWith('Отправить')?.click()
       await flush()
 
@@ -1184,14 +1193,13 @@ describe('MasterStudentProfileView', () => {
       chip?.click()
       await nextTick()
       const textarea = sheetOverlay()?.querySelector<HTMLTextAreaElement>('textarea')
-      textarea!.value = 'x'.repeat(2000)
-      textarea!.dispatchEvent(new Event('input'))
+      typeInto(textarea, 'x'.repeat(2000))
       sheetButtonWith('Отправить')?.click()
       await flush()
 
       expect(reportsApi.createReport).not.toHaveBeenCalled()
       expect(error).toHaveBeenCalledTimes(1)
-      const [message] = error.mock.calls[0]!
+      const [message] = error.mock.calls[0] ?? []
       expect(message).toContain('сократите комментарий')
     })
   })
@@ -1254,8 +1262,7 @@ describe('MasterStudentProfileView', () => {
       await flush()
 
       const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
-      input!.value = 'VIP'
-      input!.dispatchEvent(new Event('input'))
+      typeInto(input, 'VIP')
       sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
       await flush()
 

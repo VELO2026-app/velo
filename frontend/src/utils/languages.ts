@@ -19,6 +19,9 @@
 import languagesSeedRaw from '@/locales/ru/languages.json?raw'
 
 const languagesSeed = JSON.parse(languagesSeedRaw) as { languages?: { list?: string[] } }
-const seedList = languagesSeed.languages!.list!
+const [firstLanguage, secondLanguage] = languagesSeed.languages?.list ?? []
+if (firstLanguage === undefined || secondLanguage === undefined) {
+  throw new Error('languages seed must list at least two languages')
+}
 /** The practice languages a master can choose, as stored endonyms. */
-export const LANGUAGES: readonly [string, string] = [seedList[0]!, seedList[1]!]
+export const LANGUAGES: readonly [string, string] = [firstLanguage, secondLanguage]
