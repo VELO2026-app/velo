@@ -177,6 +177,7 @@ function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined 
 .console-table__empty {
   padding: var(--space-5) var(--space-4);
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-muted);
+  /* Secondary, not muted: the muted text is 2.14:1 on a white card in gold. */
+  color: var(--velo-text-secondary);
 }
 </style>

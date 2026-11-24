@@ -56,6 +56,29 @@ describe('VBarChart', () => {
     expect(el.querySelector('.v-bar-chart__label')?.textContent).toBe('MO')
   })
 
+  // happy-dom has no layout, so this pins the structure the layout rests on
+  // (the bar's percent height is of its own track, the label stands beside the
+  // track); the effect itself -- 7 rates of 69..88 % drawn as 83..106 px
+  // instead of 101..106 px -- was measured in Chromium (FE-268).
+  it('draws each bar in a track of its own, with the label beside the track, not in it', () => {
+    const el = mount({
+      bars: [
+        { label: 'MO', value: 100 },
+        { label: 'TU', value: 90 },
+      ],
+    })
+    const cols = Array.from(el.querySelectorAll('.v-bar-chart__col'))
+    expect(cols).toHaveLength(2)
+    for (const col of cols) {
+      const track = col.querySelector(':scope > .v-bar-chart__track')
+      const label = col.querySelector(':scope > .v-bar-chart__label')
+      expect(track).not.toBeNull()
+      expect(label).not.toBeNull()
+      expect(track?.querySelector('.v-bar-chart__bar')).not.toBeNull()
+      expect(track?.contains(label ?? null)).toBe(false)
+    }
+  })
+
   it('never collapses a bar below the 4% floor', () => {
     const el = mount({
       bars: [

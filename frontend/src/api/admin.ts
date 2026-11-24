@@ -26,6 +26,7 @@
 //   GET  /api/v1/admin/practices/{id}/zoom-attendance -- Zoom meeting status +
 //                                              unmatched bucket (T21-1, PROMPT №541)
 //   GET  /api/v1/admin/revenue              -- revenue/commission/payout (E9)
+//   POST /api/v1/admin/announcements        -- one announcement to an audience (FE-268)
 // =============================================================================
 
 import { api } from '@/api/client'
@@ -69,9 +70,12 @@ import type { AdminPromoResponse, AdminPaginatedPromosResponse } from '@/api/gen
 // generated.ts as of the 9e1a309 regen -- same T5 convention as the promo
 // types above, imported directly rather than via api/types.
 import type { AdminZoomAttendanceResponse } from '@/api/generated'
+// FE-268: the announcement body comes from the generated contract.
+import type { AnnouncementRequest } from '@/api/generated'
 
 export type { AdminPromoResponse, AdminPaginatedPromosResponse }
 export type { AdminZoomAttendanceResponse }
+export type { AnnouncementRequest }
 
 /** Promo issuer filter for the admin promo list: company-wide or master promos. */
 export type AdminPromoTypeFilter = 'company' | 'master'
@@ -515,4 +519,23 @@ export function getAdminPromos(
 /** Deactivate a promo from the admin oversight list. */
 export function deactivateAdminPromo(promoId: string): Promise<PromoResponse> {
   return api.patch<PromoResponse>(path`/api/v1/admin/promos/${promoId}/deactivate`)
+}
+
+// ============================================================================
+// Announcements (FE-268)
+// ============================================================================
+
+/** The answer of `POST /admin/announcements`: handed to comms, and to whom. */
+export interface AnnouncementQueued {
+  queued: boolean
+  audience: NonNullable<AnnouncementRequest['audience']>
+}
+
+/**
+ * Send one announcement (title, text, audience) through comms. The server
+ * keeps no row of it and takes no idempotency key: two requests are two
+ * announcements, so the caller must never send one twice by accident.
+ */
+export function sendAnnouncement(body: AnnouncementRequest): Promise<AnnouncementQueued> {
+  return api.post<AnnouncementQueued>('/api/v1/admin/announcements', body)
 }
