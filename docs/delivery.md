@@ -63,7 +63,7 @@ docker run --rm -d --name skin-check --add-host app:127.0.0.1 -p 18080:3000 \
   velo-frontend:skin-check
 curl -s localhost:18080/manifest.webmanifest       # name, theme_color пакета
 docker rm -f skin-check
-node frontend/scripts/apply-skin.mjs --remove      # назад к золотой сборке
+node frontend/scripts/apply-skin.mjs --remove      # назад к нейтральному ядру
 ```
 
 `--add-host app:127.0.0.1` нужен только для проверки: nginx фронта при старте ищет upstream `app`. Пакет в `frontend/public/skin` игнорируется git (`frontend/.gitignore`).

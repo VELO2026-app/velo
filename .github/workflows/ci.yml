@@ -145,7 +145,7 @@ jobs:
       # The classifier is the gate's size: its own test runs where it runs.
       # FE-222: so does the check that the gate waits for every job.
       - name: Test the classifier and the gate's needs
-        run: node --test .github/scripts/ci-scope.test.mjs .github/scripts/ci-gate.test.mjs .github/scripts/fetch-brand-skins.test.mjs
+        run: node --test .github/scripts/ci-scope.test.mjs .github/scripts/ci-gate.test.mjs .github/scripts/fetch-brand-skins.test.mjs .github/scripts/visual-decide.test.mjs
 
       - name: Classify the PR diff or the push range
         id: scope

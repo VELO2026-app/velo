@@ -12,7 +12,7 @@
 
 Все проверки отвечают на любом PR в `deploy-machine`:
 
-- у `ci.yml`, `bundle-budget.yml` и `visual.yml` нет фильтра путей, оба запускаются на `opened`, `synchronize` и `reopened`;
+- у `ci.yml`, `bundle-budget.yml` и `visual.yml` нет фильтра путей. Все три запускаются на `opened`, `synchronize` и `reopened`; `bundle-budget.yml` и `visual.yml` слушают ещё `labeled` и `unlabeled`;
 - гейт объявлен с `if: always()` и стоит под одним именем. Он запускается после успеха, падения, пропуска и отмены остальных джобов;
 - пропуск по размеру PR (только `docs/**` или только `backend/**`) гейт засчитывает как пройденный. Падение выше по цепочке всегда видно как падение: `test` → `test-report`, `matrix-plan` / `matrix` → `matrix-gate`, `scope` проверяется отдельно.
 

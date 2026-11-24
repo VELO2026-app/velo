@@ -185,9 +185,10 @@ for (const file of [
   })
 }
 
-// FE-234: the screens themselves. A template of a component or a view is
-// drawn on both skins; a .ts file there is not a visual path.
+// FE-234: the screens themselves. Any template under src/ (a component, a
+// view, App.vue) is drawn on both skins; a .ts file there is not a visual path.
 for (const file of [
+  'frontend/src/App.vue',
   'frontend/src/components/ui/VButton.vue',
   'frontend/src/views/user/UserDashboardView.vue',
 ]) {

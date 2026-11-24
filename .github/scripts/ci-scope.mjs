@@ -87,6 +87,7 @@ const FORCE_ALL = [
   // FE-234: the brand pins and the script that fetches them feed the matrix.
   /^\.github\/brand-skins\.json$/,
   /^\.github\/scripts\/fetch-brand-skins(\.test)?\.mjs$/,
+  /^\.github\/scripts\/visual-decide(\.test)?\.mjs$/,
   /^frontend\/src\/api\/generated\.ts$/,
 ]
 const DOCS = [/^docs\//, /^diagrams\//, /^Design_prototype\//]
@@ -97,10 +98,10 @@ const VISUAL = [
   /^frontend\/src\/.*variables\.css$/,
   /^packages\/velo-ui\//,
   /^frontend\/public\//,
-  // FE-234: the screens themselves -- a component or a view is what a skin
-  // paints. Templates only: a .ts edit there is code the other jobs police.
-  /^frontend\/src\/components\/.*\.vue$/,
-  /^frontend\/src\/views\/.*\.vue$/,
+  // FE-234: the screens themselves -- any template under src/ (components,
+  // views, App.vue, the shells): that is what a skin paints. Templates only:
+  // a .ts edit there is code the other jobs police.
+  /^frontend\/src\/.*\.vue$/,
   /^pnpm-lock\.yaml$/,
   // FE-212: the comparison itself, so a PR that changes it also runs it.
   // Only what decides how the shots are taken and that no other job runs the
