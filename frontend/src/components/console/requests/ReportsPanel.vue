@@ -190,10 +190,8 @@ const urlId = computed<string | null>(() => {
 })
 const layout = useSplitLayout(() => urlId.value !== null)
 
-/** The complaint in the URL; on a wide window, else the first of the list (a narrow one shows the list). */
-const selectedId = computed<string | null>(
-  () => urlId.value ?? (layout.single.value ? null : (items.value[0]?.id ?? null)),
-)
+/** The complaint in the URL, else the first of the list (a narrow window shows the list until one is picked). */
+const selectedId = computed<string | null>(() => urlId.value ?? items.value[0]?.id ?? null)
 const listed = computed(() => items.value.find((r) => r.id === selectedId.value) ?? null)
 
 // A complaint the list does not hold (a deep link, a reload) is read by

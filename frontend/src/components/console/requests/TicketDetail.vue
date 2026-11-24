@@ -430,6 +430,12 @@ watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
   overflow-y: auto;
 }
 
+/* The card is white like the message bubbles of the person: tint theirs, so
+   they stand out of the card (the bubbles are the shared support bubble). */
+.ticket-detail__feed :deep(.bubble:not(.bubble--mine)) {
+  background: var(--velo-bg-subtle);
+}
+
 .ticket-detail__empty {
   margin: 0;
   padding: var(--space-4) 0;

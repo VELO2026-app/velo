@@ -83,7 +83,7 @@
                   {{ openerName(item) }} · {{ supportCategoryLabel(item.category) }}
                 </span>
                 <span class="ticket-row__claim">{{ claimText(item) }}</span>
-                <span v-if="item.rating" class="ticket-row__rating" data-testid="ticket-rating">
+                <span v-if="item.rating" class="ticket-row__rating" data-testid="ticket-row-rating">
                   <IconStar
                     v-for="n in STAR_VALUES"
                     :key="n"
@@ -219,10 +219,8 @@ const urlTicket = computed<string | null>(() => {
 })
 const layout = useSplitLayout(() => urlTicket.value !== null)
 
-/** The ticket in the URL; on a wide window, else the first of the list (a narrow one shows the list). */
-const selectedId = computed<string | null>(
-  () => urlTicket.value ?? (layout.single.value ? null : (shown.value[0]?.id ?? null)),
-)
+/** The ticket in the URL, else the first of the list (a narrow window shows the list until one is picked). */
+const selectedId = computed<string | null>(() => urlTicket.value ?? shown.value[0]?.id ?? null)
 const selectedRow = computed<AdminSupportTicket | null>(
   () => items.value.find((i) => i.id === selectedId.value) ?? null,
 )
