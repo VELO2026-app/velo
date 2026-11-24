@@ -35,8 +35,28 @@
   <div class="pap">
     <VRadioGroup v-model="kindModel" :options="options" />
 
+    <!-- The schools read failed: the fourth option is missing from the radio
+         because the list is unknown, not because there are none (FE-256). -->
+    <LoadErrorState
+      v-if="schoolsFailed"
+      :description="t('practice.audience.schools')"
+      @retry="emit('retrySchools')"
+    />
+    <!-- The retry window: the error is gone and the option is not here yet. -->
+    <div v-else-if="schoolsLoading" class="pap__loading">
+      <VLoader size="sm" />
+    </div>
+
     <template v-if="kindModel === 'groups'">
-      <div v-if="groups.length" class="pap__chips">
+      <LoadErrorState
+        v-if="groupsFailed"
+        :description="t('practice.audience.groups')"
+        @retry="emit('retryGroups')"
+      />
+      <div v-else-if="groupsLoading" class="pap__loading">
+        <VLoader size="sm" />
+      </div>
+      <div v-else-if="groups.length" class="pap__chips">
         <VChip
           v-for="g in groups"
           :key="g.id"
@@ -90,14 +110,27 @@ import { computed } from 'vue'
 import type { GroupListItem } from '@/api/groups'
 import type { PracticeAudienceKind } from '@/api/types'
 import { audienceOptions } from '@/utils/practiceOptions'
-import { VChip, VRadioGroup } from '@/components/ui'
+import { VChip, VLoader, VRadioGroup } from '@/components/ui'
 import type { AudienceSchoolOption } from './practiceAudience'
+import LoadErrorState from './LoadErrorState.vue'
 
 const props = defineProps<{
   /** The master's own custom student groups (kind === 'groups' targets). */
   groups: GroupListItem[]
   /** Eligible schools (kind === 'schools' targets). */
   schools: AudienceSchoolOption[]
+  /** The read of `groups` failed: the groups area offers Retry (`retryGroups`)
+   *  instead of "no groups yet" (FE-256). */
+  groupsFailed?: boolean | undefined
+  /** A read of `groups` is running with nothing to show: a loader stands in the
+   *  groups area, never "no groups yet" (FE-256). */
+  groupsLoading?: boolean | undefined
+  /** The read of `schools` failed: an error with Retry (`retrySchools`) shows
+   *  under the radio, since the missing fourth option would read as "no schools". */
+  schoolsFailed?: boolean | undefined
+  /** The schools are being asked again after a failure: a loader stands under the
+   *  radio while the option is still missing. */
+  schoolsLoading?: boolean | undefined
   /** Single validation-error line, shown for whichever kind is active. */
   error?: string | undefined
   /** T24-24 (PROMPT №639): Create relabels the 'students' option
@@ -118,6 +151,8 @@ const props = defineProps<{
    *  fixed school itself. */
   schoolLocked?: boolean | undefined
 }>()
+
+const emit = defineEmits<{ retryGroups: []; retrySchools: [] }>()
 
 const kindModel = defineModel<PracticeAudienceKind>('kind', { required: true })
 const groupIds = defineModel<string[]>('groupIds', { required: true })
@@ -157,6 +192,12 @@ function toggleSchool(id: string): void {
   flex-wrap: wrap;
   gap: var(--space-2);
   padding: 0 var(--space-3) var(--space-1);
+}
+
+.pap__loading {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) 0;
 }
 
 .pap__empty {

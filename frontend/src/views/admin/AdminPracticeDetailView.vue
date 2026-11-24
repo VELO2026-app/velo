@@ -70,7 +70,7 @@
            never blocks the rest of the page if this secondary fetch fails. -->
       <!-- A failed read is not "no Zoom data" (FE-242): a compact error with Retry. -->
       <VCard v-if="zoomFailed" class="admin-detail__zoom">
-        <h3 class="admin-detail__section admin-detail__section--first">Zoom</h3>
+        <h2 class="admin-detail__section admin-detail__section--first">Zoom</h2>
         <VEmptyState icon="warning" :title="t('common.loadError')">
           <VButton size="sm" variant="outline" @click="attendanceQuery.refetch()">{{
             t('common.retry')
@@ -78,7 +78,7 @@
         </VEmptyState>
       </VCard>
       <VCard v-else-if="zoomAttendance" class="admin-detail__zoom">
-        <h3 class="admin-detail__section admin-detail__section--first">Zoom</h3>
+        <h2 class="admin-detail__section admin-detail__section--first">Zoom</h2>
         <div class="admin-detail__zoom-row">
           <span class="admin-detail__zoom-label">{{
             t('adminScreens.adminPracticeDetail.meetingStatus')
@@ -107,14 +107,14 @@
 
       <!-- Upcoming: who registered -->
       <template v-if="!isPast">
-        <h3 class="admin-detail__section">
+        <h2 class="admin-detail__section">
           {{
             t('adminScreens.adminPracticeDetail.bookedSection', {
               booked: practice.booked,
               capacity: capacityText,
             })
           }}
-        </h3>
+        </h2>
         <div v-if="registered.length" class="admin-detail__items">
           <VListRow v-for="r in registered" :key="r.user_id" :title="r.name">
             <template #lead>
@@ -131,9 +131,9 @@
 
       <!-- Past: who attended / who didn't -->
       <template v-else>
-        <h3 class="admin-detail__section">
+        <h2 class="admin-detail__section">
           {{ t('adminScreens.adminPracticeDetail.presentSection', { n: present.length }) }}
-        </h3>
+        </h2>
         <div v-if="present.length" class="admin-detail__items">
           <VListRow v-for="r in present" :key="r.user_id" :title="r.name">
             <template #lead>
@@ -152,9 +152,9 @@
           </p></VCard
         >
 
-        <h3 class="admin-detail__section">
+        <h2 class="admin-detail__section">
           {{ t('adminScreens.adminPracticeDetail.absentSection', { n: absent.length }) }}
-        </h3>
+        </h2>
         <div v-if="absent.length" class="admin-detail__items">
           <VListRow v-for="r in absent" :key="r.user_id" :title="r.name">
             <template #lead>

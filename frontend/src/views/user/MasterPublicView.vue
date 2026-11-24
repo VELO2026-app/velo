@@ -200,9 +200,9 @@
            floating above). show-date: the practices fall on different
            days. -->
       <section class="master-public__upcoming">
-        <h3 class="master-public__section-title">
+        <h2 class="master-public__section-title">
           {{ t('user.screens.masterPublic.sections.nearest') }}
-        </h3>
+        </h2>
         <!-- "Nothing planned" is said only by an answer that has none: while
              the practices are on their way the section shows a loader
              (the profile may land first -- the two leave in parallel). -->

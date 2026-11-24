@@ -60,6 +60,9 @@ function heightFor(value: number): string {
   border-radius: var(--radius-md);
   padding: var(--space-4);
   height: 164px;
+  /* The plot is the query container: the labels must fit the width the chart
+     is given, not the screen's (FE-250). */
+  container-type: inline-size;
 }
 
 .v-bar-chart__plot {
@@ -89,6 +92,20 @@ function heightFor(value: number): string {
 .v-bar-chart__label {
   font-size: var(--velo-fs-14);
   color: var(--velo-primary);
+  white-space: nowrap;
+}
+
+/* Seven date labels ("29.11") at 14px need 7 x 34 px plus 6 gaps of 8 px,
+   286 px. A narrower plot (a 320 px screen leaves 238 px) gets 12px labels and
+   a 4px gap, 227 px in all, so the last label stays inside the card (FE-250). */
+@container (max-width: 285px) {
+  .v-bar-chart__plot {
+    gap: var(--space-1);
+  }
+
+  .v-bar-chart__label {
+    font-size: var(--velo-fs-12);
+  }
 }
 
 .v-bar-chart__empty {
