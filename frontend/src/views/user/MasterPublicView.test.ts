@@ -229,6 +229,8 @@ beforeEach(() => {
   toastInfo.mockReset()
   toastError.mockReset()
   vi.mocked(chatsApi.openChat).mockReset()
+  // SendMessageModal's attempt key (automocked with the rest of @/api/chats).
+  vi.mocked(chatsApi.newIdempotencyKey).mockReset().mockReturnValue('key-1')
   push.mockReset()
   back.mockReset()
   routeParams.id = 'm1'
@@ -361,7 +363,7 @@ describe('MasterPublicView', () => {
 
       // open-or-get the DM with THIS master, then post the text.
       expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
-      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-9', 'Привет')
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-9', 'Привет', 'key-1')
       expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
     })
 
@@ -986,7 +988,7 @@ describe('MasterPublicView', () => {
       // The actor is the session's, server-side: the view only names WHICH
       // master (the route's), never who is asking.
       expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
-      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-1', 'Привет')
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-1', 'Привет', 'key-1')
       expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
     })
 
