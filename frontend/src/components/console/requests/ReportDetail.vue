@@ -27,9 +27,9 @@
           }}
         </p>
       </div>
-      <VBadge :variant="reportStatusVariant(report.status)">
+      <RequestStatusBadge :tone="reportStatusVariant(report.status)">
         {{ reportStatusLabel(report.status) }}
-      </VBadge>
+      </RequestStatusBadge>
     </header>
 
     <div class="report-detail__parties">
@@ -102,7 +102,8 @@
 import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { useRouter, type RouteLocationRaw } from 'vue-router'
-import { VBadge, VButton, VTextarea } from '@/components/ui'
+import { VButton, VTextarea } from '@/components/ui'
+import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import { reportTitle } from '@/components/console/requests/reportTitle'
 import { dismissReport, resolveReport, type ReportResponse } from '@/api/admin'
@@ -224,7 +225,7 @@ async function onDismiss(): Promise<void> {
 .report-detail__sub {
   margin: var(--space-1) 0 0;
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .report-detail__parties {
@@ -253,6 +254,11 @@ async function onDismiss(): Promise<void> {
   font-size: var(--velo-fs-12);
   font-weight: inherit;
   color: var(--velo-text-secondary);
+}
+
+/* On the grey blocks the secondary text is under 4.5:1: the primary text color. */
+.report-detail__party .report-detail__caption {
+  color: var(--velo-text-primary);
 }
 
 .report-detail__target {
@@ -296,7 +302,7 @@ async function onDismiss(): Promise<void> {
 .report-detail__hint {
   margin: calc(-1 * var(--space-2)) 0 0;
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .report-detail__actions {

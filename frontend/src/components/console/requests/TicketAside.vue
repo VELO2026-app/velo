@@ -22,9 +22,9 @@
         <div class="ticket-aside__fact">
           <dt>{{ t('console.support.user.status') }}</dt>
           <dd>
-            <VBadge :variant="supportStatusBadge(ticket.status)">
+            <RequestStatusBadge :tone="supportStatusBadge(ticket.status)">
               {{ supportStatusLabel(ticket.status) }}
-            </VBadge>
+            </RequestStatusBadge>
           </dd>
         </div>
         <div class="ticket-aside__fact">
@@ -97,7 +97,8 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { VAvatar, VBadge, VButton } from '@/components/ui'
+import { VAvatar, VButton } from '@/components/ui'
+import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
 import { IconStar } from '@/components/icons'
 import type { AdminSupportTicket } from '@/api/support'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
@@ -235,7 +236,8 @@ function localeName(code: string): string {
 .ticket-aside__meta {
   margin: 0;
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  /* On the grey rating block the secondary text is under 4.5:1. */
+  color: var(--velo-text-primary);
 }
 
 .ticket-aside__actions {

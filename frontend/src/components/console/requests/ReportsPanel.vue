@@ -20,17 +20,15 @@
     <template #list>
       <ConsoleCard class="reports-list" data-testid="reports-list">
         <div v-if="mode === 'decided'" class="reports-list__chips">
-          <VChip
+          <RequestChip
             v-for="s in DECIDED_STATUSES"
             :key="s"
-            size="sm"
             clickable
             :active="decidedStatus === s"
-            :aria-pressed="decidedStatus === s"
             @click="setDecided(s)"
           >
             {{ reportStatusLabel(s) }}
-          </VChip>
+          </RequestChip>
         </div>
 
         <div v-if="loading && items.length === 0" class="reports-list__center">
@@ -71,9 +69,9 @@
                 @click="select(item)"
               >
                 <span class="report-row__top">
-                  <VBadge :variant="reportStatusVariant(item.status)">
+                  <RequestStatusBadge :tone="reportStatusVariant(item.status)">
                     {{ reportStatusLabel(item.status) }}
-                  </VBadge>
+                  </RequestStatusBadge>
                   <span class="report-row__time">{{ formatRelative(item.created_at) }}</span>
                 </span>
                 <span class="report-row__title">{{ reportTitle(item) }}</span>
@@ -125,7 +123,9 @@ import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useInfiniteQuery, useQuery } from '@pinia/colada'
-import { VBadge, VButton, VChip, VEmptyState, VLoader } from '@/components/ui'
+import { VButton, VEmptyState, VLoader } from '@/components/ui'
+import RequestChip from '@/components/console/requests/RequestChip.vue'
+import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleSplit from '@/components/console/ConsoleSplit.vue'
 import ReportDetail from '@/components/console/requests/ReportDetail.vue'
@@ -277,7 +277,6 @@ function onDecided(): void {
 
 .report-row--selected {
   border-color: var(--velo-primary);
-  background: var(--velo-bg-subtle);
 }
 
 .report-row:focus-visible {
@@ -294,7 +293,7 @@ function onDecided(): void {
 
 .report-row__time {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .report-row__title {
@@ -305,7 +304,7 @@ function onDecided(): void {
 
 .report-row__reason {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

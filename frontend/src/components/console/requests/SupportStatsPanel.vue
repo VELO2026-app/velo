@@ -302,7 +302,7 @@ const resolverRows = computed(() =>
 
 .support-stats__note {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .support-stats__cards {
@@ -352,14 +352,19 @@ const resolverRows = computed(() =>
 
 .support-stats__figures {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
+}
+
+/* The table head is secondary text on the grey strip, under 4.5:1: primary. */
+.support-stats__cards :deep(.console-table__row--head) {
+  color: var(--velo-text-primary);
 }
 
 .support-stats__empty {
   margin: 0;
   padding: var(--space-4);
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 /* Last, so it overrides the desktop columns above: tiles two by two and the cards one under the other on a tablet. */

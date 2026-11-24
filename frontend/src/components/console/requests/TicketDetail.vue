@@ -400,7 +400,7 @@ watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
 .ticket-detail__sub {
   margin: var(--space-1) 0 0;
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .ticket-detail__actions {
@@ -418,7 +418,7 @@ watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
   background: var(--velo-warning-bg);
   font-size: var(--velo-fs-14);
   line-height: 1.5;
-  color: var(--velo-peach-500);
+  color: var(--velo-text-primary);
 }
 
 .ticket-detail__feed {
@@ -436,12 +436,19 @@ watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
   background: var(--velo-bg-subtle);
 }
 
+/* The bubble dims its time and translation marks with opacity, which drops
+   them under 4.5:1 on the tinted and on the primary bubble. */
+.ticket-detail__feed :deep(.bubble__time),
+.ticket-detail__feed :deep(.bubble__mark) {
+  opacity: 1;
+}
+
 .ticket-detail__empty {
   margin: 0;
   padding: var(--space-4) 0;
   text-align: center;
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .ticket-detail__link {
@@ -450,7 +457,7 @@ watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
   border: none;
   background: none;
   font-size: var(--velo-fs-14);
-  color: var(--velo-primary);
+  color: var(--velo-text-primary);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -467,7 +474,7 @@ watch(() => session.messages.value.length, scrollToEnd, { flush: 'post' })
   font-weight: inherit;
   text-transform: uppercase;
   letter-spacing: var(--velo-letter-spacing-05);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .ticket-detail__composer {

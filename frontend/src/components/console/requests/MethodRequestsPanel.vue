@@ -55,7 +55,7 @@
           <section class="methods__block">
             <h3 class="methods__caption">{{ t('adminScreens.adminMethodRequests.now') }}</h3>
             <div class="methods__chips">
-              <VChip v-for="m in item.current_methods ?? []" :key="m" size="sm">{{ m }}</VChip>
+              <RequestChip v-for="m in item.current_methods ?? []" :key="m">{{ m }}</RequestChip>
               <span v-if="!item.current_methods?.length" class="methods__empty">—</span>
             </div>
           </section>
@@ -63,10 +63,13 @@
             <h3 class="methods__caption">{{ t('adminScreens.adminMethodRequests.offered') }}</h3>
             <div class="methods__chips">
               <template v-for="m in item.proposed_methods ?? []" :key="m">
-                <VBadge v-if="isAdded(item, m)" variant="success" data-testid="method-added">{{
-                  m
-                }}</VBadge>
-                <VChip v-else size="sm">{{ m }}</VChip>
+                <RequestStatusBadge
+                  v-if="isAdded(item, m)"
+                  tone="success"
+                  data-testid="method-added"
+                  >{{ m }}</RequestStatusBadge
+                >
+                <RequestChip v-else>{{ m }}</RequestChip>
               </template>
             </div>
           </section>
@@ -137,9 +140,7 @@ import { computed, ref } from 'vue'
 import { useInfiniteQuery, useQueryCache } from '@pinia/colada'
 import {
   VAvatar,
-  VBadge,
   VButton,
-  VChip,
   VConfirmDialog,
   VEmptyState,
   VLoader,
@@ -147,6 +148,8 @@ import {
   VTextarea,
 } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
+import RequestChip from '@/components/console/requests/RequestChip.vue'
+import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
 import { approveMethodChange, rejectMethodChange, type AdminMethodChangeItem } from '@/api/admin'
 import {
   adminMethodRequestsQuery,
@@ -353,7 +356,7 @@ async function onReject(): Promise<void> {
   margin-left: auto;
   flex-shrink: 0;
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .methods__blocks {
@@ -381,7 +384,8 @@ async function onReject(): Promise<void> {
   margin: 0;
   font-size: var(--velo-fs-12);
   font-weight: inherit;
-  color: var(--velo-text-secondary);
+  /* On the grey block the secondary text is under 4.5:1. */
+  color: var(--velo-text-primary);
 }
 
 .methods__chips {
@@ -392,7 +396,7 @@ async function onReject(): Promise<void> {
 
 .methods__empty {
   font-size: var(--velo-fs-14);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-primary);
 }
 
 .methods__actions {

@@ -23,17 +23,15 @@
     <template #list>
       <ConsoleCard class="tickets-list" data-testid="tickets-list">
         <div v-if="scope === 'closed'" class="tickets-list__chips">
-          <VChip
+          <RequestChip
             v-for="s in CLOSED_STATUSES"
             :key="s"
-            size="sm"
             clickable
             :active="closedStatus === s"
-            :aria-pressed="closedStatus === s"
             @click="setClosed(s)"
           >
             {{ supportStatusLabel(s) }}
-          </VChip>
+          </RequestChip>
         </div>
 
         <div v-if="loading && items.length === 0" class="tickets-list__center">
@@ -73,9 +71,9 @@
                 @click="select(item)"
               >
                 <span class="ticket-row__top">
-                  <VBadge :variant="supportStatusBadge(item.status)">
+                  <RequestStatusBadge :tone="supportStatusBadge(item.status)">
                     {{ supportStatusLabel(item.status) }}
-                  </VBadge>
+                  </RequestStatusBadge>
                   <span class="ticket-row__time">{{ formatRelative(item.created_at) }}</span>
                 </span>
                 <span class="ticket-row__title">{{ supportTopicLabel(item.topic) }}</span>
@@ -136,7 +134,9 @@ import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useInfiniteQuery } from '@pinia/colada'
-import { VBadge, VButton, VChip, VEmptyState, VLoader } from '@/components/ui'
+import { VButton, VEmptyState, VLoader } from '@/components/ui'
+import RequestChip from '@/components/console/requests/RequestChip.vue'
+import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
 import { IconStar } from '@/components/icons'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleSplit from '@/components/console/ConsoleSplit.vue'
@@ -295,7 +295,6 @@ function claimText(item: AdminSupportTicket): string {
 
 .ticket-row--selected {
   border-color: var(--velo-primary);
-  background: var(--velo-bg-subtle);
 }
 
 .ticket-row:focus-visible {
@@ -312,7 +311,7 @@ function claimText(item: AdminSupportTicket): string {
 
 .ticket-row__time {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .ticket-row__title {
@@ -331,7 +330,7 @@ function claimText(item: AdminSupportTicket): string {
 }
 
 .ticket-row__claim {
-  color: var(--velo-text-muted);
+  color: var(--velo-text-secondary);
 }
 
 .ticket-row__rating {
