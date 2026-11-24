@@ -55,9 +55,11 @@
 #                       (a raised budget needs `bundle-growth`, a raised
 #                       ceiling `bundle-ceiling`; docs/agents/bundle.md).
 #   visual.yml        — FE-162: key screens of the head and the base build
-#                       from recorded API answers, pixel-compared;
-#                       informational, red only for a PR labeled
-#                       `no-visual-change` (docs/agents/e2e.md).
+#                       from recorded API answers, pixel-compared on both
+#                       skins; strict (FE-234): a changed screen is red
+#                       unless a human put `visual-change` on the PR; the
+#                       status to require is `visual — verdict`
+#                       (docs/agents/e2e.md).
 #
 # The BACKEND lint gate (ruff) is deliberately absent: the backend is
 # owned outside this contour — first CI run measured 383 ruff errors at the

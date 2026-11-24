@@ -17,8 +17,9 @@
 //   docker = true | false  -- build the frontend image + smoke it (FE-159)
 //   visual = true | false  -- the PR touches what the screens are drawn from
 //                             (FE-162): styles, tokens, velo-ui, public
-//                             assets, the lockfile -- or the comparison
-//                             itself (FE-212)
+//                             assets, components and views (.vue, FE-234),
+//                             the lockfile, the brand pins -- or the
+//                             comparison itself (FE-212)
 //
 // Every file lands in exactly one class; the PR takes the strongest one.
 //   docs          -- prose nobody executes: docs/**, diagrams/**,
@@ -96,6 +97,10 @@ const VISUAL = [
   /^frontend\/src\/.*variables\.css$/,
   /^packages\/velo-ui\//,
   /^frontend\/public\//,
+  // FE-234: the screens themselves -- a component or a view is what a skin
+  // paints. Templates only: a .ts edit there is code the other jobs police.
+  /^frontend\/src\/components\/.*\.vue$/,
+  /^frontend\/src\/views\/.*\.vue$/,
   /^pnpm-lock\.yaml$/,
   // FE-212: the comparison itself, so a PR that changes it also runs it.
   // Only what decides how the shots are taken and that no other job runs the

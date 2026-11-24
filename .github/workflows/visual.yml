@@ -1,32 +1,27 @@
 # =============================================================================
-# VELO CI -- visual comparison of base and head (FE-162; its own workflow
-# since FE-206)
+# VELO CI -- visual comparison of base and head on both skins (FE-162; its own
+# workflow since FE-206; a verdict since FE-234)
 #
 # Key screens of the head and the base build from recorded API answers,
-# pixel-compared; informational, red only for a PR labeled `no-visual-change`
-# (docs/agents/e2e.md). A `visual` / `no-visual-change` label put on or taken
-# off an open PR re-runs it without the rest of CI.
+# pixel-compared, once per brand skin (gold = velo-brand, goodo-brand). STRICT
+# by default: any changed screen on either skin fails the job. A change the
+# author means to make is confirmed with the label `visual-change`, put on by
+# a human (an agent does not label it, like `bundle-growth`): with it the
+# comparison still runs and the report is the evidence, the job stays green
+# (docs/agents/e2e.md).
 #
-# Why a workflow of its own (FE-206): in ci.yml a label event produced a run
-# where every other job was "skipped" under the same names as the real
-# checks -- `gh pr checks` and the merge box then showed a red build as
-# skipped. ci.yml no longer listens to labels; this workflow and
-# bundle-budget.yml do.
+# `visual — verdict` is the one status to require (docs/ci/deploy-machine-
+# ruleset.md). It ALWAYS runs, under a fixed name, and fails when the scope
+# job failed or the comparison ran and did not pass. The comparison jobs
+# carry the skin in their names and are skipped on a PR that touches no
+# visual path; a check required by such a name would wait in Expected
+# forever (FE-206), the verdict has none of that.
 #
-# Any label reaches this workflow, the bundle ones (`bundle-growth`,
-# `bundle-ceiling`) included. Such an "other label" run must leave the
-# visual verdict alone:
-#   - concurrency: it gets a group of its own (the run id), so it neither
-#     cancels a visual run in progress nor is cancelled by one -- put
-#     `no-visual-change` and then `bundle-growth`, and the comparison the
-#     first label started still finishes;
-#   - check names: the merge box and `gh pr checks` show the LATEST check of
-#     each name on the head commit, so a skipped `visual — base vs head`
-#     would shadow the real one. visual-scope therefore always runs (seconds,
-#     always green: shadowing it changes nothing) and only the visual job is
-#     skipped -- under a name of its own, see the job.
-# Every other event (opened / synchronize / reopened, a visual label) shares
-# one group per PR, the newest event wins.
+# Every event (opened / synchronize / reopened, any label put on or taken off)
+# runs the whole workflow, and the newest event of a PR wins. Not narrowed to
+# the `visual-change` label on purpose: a run that skipped the verdict on
+# "another label" would shadow the real verdict in the merge box (the latest
+# check of a name counts) -- so another label just repeats the comparison.
 # =============================================================================
 name: Visual
 
@@ -38,76 +33,52 @@ on:
 permissions:
   contents: read
 
-# The `-other-label-` suffix: a label event for a label that is not `visual`
-# / `no-visual-change` (the same test as OTHER_LABEL in visual-scope).
 concurrency:
-  group: visual-${{ github.ref }}${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && !contains(fromJSON('["visual","no-visual-change"]'), github.event.label.name) && format('-other-label-{0}', github.run_id) || '' }}
+  group: visual-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # FE-162: visual-scope decides whether the visual job runs.
-  #   another label (OTHER_LABEL)       -> no, see the header
-  #   a `visual` / `no-visual-change`
-  #   label put on or taken off         -> yes
-  #   opened / synchronize / reopened   -> the `visual` or `no-visual-change`
-  #                                        label, or a PR that touches styles,
-  #                                        tokens, velo-ui, public/, the
-  #                                        lockfile, or the comparison itself
-  #                                        (FE-212; VISUAL in ci-scope.mjs)
-  # `strict` = the PR carries `no-visual-change`: a non-empty report fails.
+  # visual-scope decides whether the comparison runs: the PR touches a visual
+  # path (VISUAL in ci-scope.mjs: styles, tokens, velo-ui, public, components
+  # and views, the lockfile, the brand pins, the comparison itself) -- and
+  # whether it is strict: no `visual-change` label.
   visual-scope:
     name: visual — scope
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      OTHER_LABEL: ${{ (github.event.action == 'labeled' || github.event.action == 'unlabeled') && !contains(fromJSON('["visual","no-visual-change"]'), github.event.label.name) }}
     outputs:
       run: ${{ steps.decide.outputs.run }}
       strict: ${{ steps.decide.outputs.strict }}
     steps:
       - uses: actions/checkout@v7
-        if: env.OTHER_LABEL != 'true'
         with:
           fetch-depth: 2
 
       - name: Classify the PR diff
         id: scope
-        if: env.OTHER_LABEL != 'true'
         run: node .github/scripts/ci-scope.mjs HEAD^1 HEAD
 
       - name: Decide
         id: decide
         env:
           LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-          ACTION: ${{ github.event.action }}
           PATHS: ${{ steps.scope.outputs.visual }}
         run: |
-          has() { echo "$LABELS" | grep -q "\"$1\""; }
-          strict=false; has no-visual-change && strict=true
-          run=false
-          case "$ACTION" in
-            labeled|unlabeled) [ "$OTHER_LABEL" = true ] || run=true ;;
-            *)
-              if [ "$PATHS" = true ] || has visual || [ "$strict" = true ]; then run=true; fi ;;
-          esac
-          echo "run=$run" >> "$GITHUB_OUTPUT"
+          strict=true
+          echo "$LABELS" | grep -q '"visual-change"' && strict=false
+          echo "run=$PATHS" >> "$GITHUB_OUTPUT"
           echo "strict=$strict" >> "$GITHUB_OUTPUT"
 
-  # FE-162: what did a refactor PR change on screen? The head build and the
-  # base build, each shot on 19 key screens from recorded API answers
-  # (frontend/e2e/visual/har, no backend), compared pixel by pixel.
-  # Informational by default; with `no-visual-change` a non-empty report fails
-  # the job. The container is Playwright's own image so fonts render the same
-  # every run -- its tag MUST equal @playwright/test (checked below).
+  # FE-162: what did the PR change on screen? The head build and the base
+  # build, each shot on 19 key screens from recorded API answers
+  # (frontend/e2e/visual/har, no backend), compared pixel by pixel, per skin.
+  # Strict unless the PR carries `visual-change`: then a non-empty report is
+  # the evidence, not a failure. The container is Playwright's own image so
+  # fonts render the same every run -- its tag MUST equal @playwright/test
+  # (checked below).
   #
-  # The name (FE-206): a job that runs is named `visual — base vs head`. A
-  # skipped one must not carry that name, or it shadows the last real result
-  # (header). GitHub does not evaluate the name of a skipped job and shows the
-  # template as is -- already a different name; were it ever evaluated, the
-  # expression gives "(not run)" -- different again.
-  # So NEVER make `visual — base vs head` a required check: a PR that touches
-  # no visual path and carries no visual label never gets a check of that
-  # name, and the merge would wait for it forever.
+  # The name carries the skin and, in a skipped run, "(not run)": it is not a
+  # stable name, so it is NEVER required -- `visual — verdict` is.
   visual:
     name: visual — base vs head (${{ matrix.skin }})${{ needs.visual-scope.outputs.run != 'true' && ' (not run)' || '' }}
     needs: visual-scope
@@ -121,7 +92,6 @@ jobs:
       fail-fast: false
       matrix:
         skin: [velo-brand, goodo-brand]
-    continue-on-error: ${{ needs.visual-scope.outputs.strict != 'true' }}
     container: mcr.microsoft.com/playwright:v1.64.1-noble
     steps:
       - uses: actions/checkout@v7
@@ -211,3 +181,28 @@ jobs:
             frontend/visual-out
             frontend/test-results
           retention-days: 7
+
+  # The status to require: always runs, one name. Red when the scope job
+  # failed, or the comparison was due (a visual path) and did not pass --
+  # a changed screen on a skin without `visual-change`, a build that broke, a
+  # cancelled or timed-out job. Green when no visual path was touched.
+  visual-verdict:
+    name: visual — verdict
+    needs: [visual-scope, visual]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verdict
+        env:
+          SCOPE: ${{ needs.visual-scope.result }}
+          RUN: ${{ needs.visual-scope.outputs.run }}
+          VISUAL: ${{ needs.visual.result }}
+          STRICT: ${{ needs.visual-scope.outputs.strict }}
+        run: |
+          echo "scope=$SCOPE run=$RUN comparison=$VISUAL strict=$STRICT"
+          if [ "$SCOPE" != success ]; then echo "the scope job did not succeed" >&2; exit 1; fi
+          if [ "$RUN" = true ] && [ "$VISUAL" != success ]; then
+            echo "the visual comparison did not pass on both skins (a changed screen needs the human-set label visual-change)" >&2
+            exit 1
+          fi

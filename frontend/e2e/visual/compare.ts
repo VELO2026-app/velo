@@ -4,8 +4,8 @@
 //
 // Writes <dir>/report.json and <dir>/report.html (changed screens only: base,
 // head, diff, pixel count), prints the changed screens, and appends them to
-// $GITHUB_STEP_SUMMARY. Exit 0 always, except VISUAL_STRICT=1 (the PR carries
-// `no-visual-change`): then any changed screen exits 1.
+// $GITHUB_STEP_SUMMARY. Exit 0 always, except VISUAL_STRICT=1 (the PR has no
+// `visual-change` label, FE-234): then any changed screen exits 1.
 //
 // A screen is changed when pixelmatch counts > 0 differing pixels (color
 // threshold 0.1, anti-aliasing ignored), when the sizes differ, or when it is

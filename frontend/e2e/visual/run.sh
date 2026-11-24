@@ -3,7 +3,7 @@
 #   sh e2e/visual/run.sh <base-dist> <head-dist>     (run from frontend/)
 # Output: visual-out/{base,head,diff}, report.html, report.json.
 # Both builds are served on :4173, the port the HAR was recorded on (the URL is part of a HAR match).
-# VISUAL_STRICT=1 makes a change exit 1 (label `no-visual-change`).
+# VISUAL_STRICT=1 makes a change exit 1 (no `visual-change` label on the PR).
 set -eu
 base=${1:?base dist dir}
 head=${2:?head dist dir}

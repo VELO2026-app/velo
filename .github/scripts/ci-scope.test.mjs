@@ -168,7 +168,7 @@ test('pull request: the merge commit against its first parent, as before', () =>
 })
 
 // FE-212: a PR that changes the visual comparison itself runs it, without
-// the `visual` label. One PR per path, each touching that path alone.
+// a label. One PR per path, each touching that path alone.
 for (const file of [
   '.github/workflows/visual.yml',
   'frontend/e2e/visual/compare.ts',
@@ -184,6 +184,27 @@ for (const file of [
     assert.equal(classify(dir, 'HEAD^1', 'HEAD').visual, 'true')
   })
 }
+
+// FE-234: the screens themselves. A template of a component or a view is
+// drawn on both skins; a .ts file there is not a visual path.
+for (const file of [
+  'frontend/src/components/ui/VButton.vue',
+  'frontend/src/views/user/UserDashboardView.vue',
+]) {
+  test(`pull request: a screen template (${file}) -> visual`, () => {
+    const { dir, commit } = repo()
+    commit({ [file]: '<template><i /></template>\n' }, 'base of the file')
+    commit({ [file]: '<template><b /></template>\n' })
+    assert.equal(classify(dir, 'HEAD^1', 'HEAD').visual, 'true')
+  })
+}
+
+test('pull request: a .ts file under components -> no visual', () => {
+  const { dir, commit } = repo()
+  commit({ 'frontend/src/components/ui/helper.ts': 'export const a = 1\n' }, 'base')
+  commit({ 'frontend/src/components/ui/helper.ts': 'export const a = 2\n' })
+  assert.equal(classify(dir, 'HEAD^1', 'HEAD').visual, 'false')
+})
 
 // The e2e files the comparison imports but left out of VISUAL on purpose
 // (see VISUAL in ci-scope.mjs): the smoke e2e, typecheck and the sweep cover
