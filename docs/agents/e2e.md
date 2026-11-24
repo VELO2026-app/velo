@@ -108,7 +108,7 @@ WebKit: `pnpm -C frontend exec playwright test --project=sweep-webkit`.
 
 Нижний отступ приложение берёт из `--velo-safe-bottom` (`src/styles/global.css`, сейчас это `env(safe-area-inset-bottom)`); детектор проверяет этот договор с ненулевым `env()`. Внутри настоящего Telegram на iOS `env()` может быть 0, а свой inset Telegram отдаёт в `--tg-viewport-safe-area-inset-bottom` — какой из них должен держать нижний отступ, решается замером на устройстве.
 
-**В CI** `e2e-stack` идёт параллельными джобами: `sweep` (синтетический скин) и `sweep-layout-<ширина>` × каждый бренд-скин из `.github/brand-skins.json` (velo-brand = gold, goodo-brand), у каждого джоба свой стек. Список ячеек собирает джоб `plan` в `.github/workflows/e2e-stack.yml`.
+**В CI** `e2e-stack` идёт параллельными джобами, у каждого свой стек: `sweep` (синтетический скин) и ячейки `sweep-layout-<ширина>@<бренд>` (бренды — `.github/brand-skins.json`: velo-brand = gold, goodo-brand). На PR (решение владельца 24.11): 390 на обоих скинах и 320 на gold — список в `ci.yml`, джоб `e2e-stack`. Ночью — вся сетка: три размера × два скина (слово `sweep-layout` во входе `projects`). Ячейки собирает джоб `plan` в `.github/workflows/e2e-stack.yml`.
 
 **Локально:** `pnpm -C frontend e2e:sweep` гоняет `sweep` и все `sweep-layout-*` на той сборке, что лежит в `dist`. Бренд-скин: `node .github/scripts/fetch-brand-skins.mjs <каталог>` (приватному репозиторию нужен `BRAND_REPO_TOKEN`), затем `node frontend/scripts/apply-skin.mjs <каталог>/<бренд>/skin` и сборка. Один экран на одном размере — `pnpm -C frontend exec playwright test --project=sweep-layout-320 -g "@user-dashboard"`.
 

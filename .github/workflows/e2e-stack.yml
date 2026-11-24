@@ -50,12 +50,14 @@ permissions:
 
 jobs:
   # FE-240: one job per Playwright project and skin, in parallel, each with
-  # its own stack -- the wall time stays that of the longest one. `sweep` and
-  # `sweep-webkit` run on the synthetic skin package; `sweep-layout` stands
-  # for the layout sweep: one project per screen size (LAYOUT_SIZES of
+  # its own stack -- the wall time stays that of the longest one. A word of
+  # `projects` is one cell: `sweep` / `sweep-webkit` on the synthetic skin
+  # package, `<project>@<brand>` on a brand skin of .github/brand-skins.json
+  # (`sweep-layout-320@velo-brand`). The bare word `sweep-layout` is the
+  # whole layout grid: every screen size (LAYOUT_SIZES of
   # frontend/e2e/support/layout-sizes.ts -- a width missing there fails its
-  # job with "project not found") on each brand skin of
-  # .github/brand-skins.json, as it is the brand's look that must fit.
+  # job with "project not found") on every brand skin. PRs run a part of the
+  # grid (ci.yml), the nightly run all of it.
   plan:
     name: e2e-stack — plan
     runs-on: ubuntu-latest
@@ -72,11 +74,13 @@ jobs:
         run: |
           cells=$(jq -cn --arg p "$PROJECTS" --arg w "$LAYOUT_WIDTHS" --arg s "$BRAND_SKINS" '
             def words: split(" ") | map(select(length > 0));
-            [ $p | words[] as $project
-              | if $project == "sweep-layout"
+            [ $p | words[] as $word
+              | if $word == "sweep-layout"
                 then ($w | words[]) as $width | ($s | words[]) as $skin
                   | { project: "sweep-layout-\($width)", skin: $skin }
-                else { project: $project, skin: "synthetic" } end ]')
+                elif ($word | contains("@"))
+                then ($word | split("@")) as [$project, $skin] | { project: $project, skin: $skin }
+                else { project: $word, skin: "synthetic" } end ]')
           echo "cells=$cells" >> "$GITHUB_OUTPUT"
 
   sweep:

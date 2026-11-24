@@ -622,10 +622,15 @@ jobs:
     if: needs.scope.outputs.frontend == 'full' || needs.scope.outputs.drift == 'true'
     uses: ./.github/workflows/e2e-stack.yml
     with:
-      # FE-240: sweep-layout -- the same screens as Telegram fullscreen on an
-      # iPhone, judged by the layout detector at three screen sizes on both
-      # brand skins (the plan job of e2e-stack.yml spreads it).
-      projects: sweep sweep-layout
+      # FE-240: the layout sweep -- the same screens as Telegram fullscreen on
+      # an iPhone, judged by the layout detector. On a PR (owner, 24.11): the
+      # common size on both brand skins and the narrow one on gold; the rest
+      # of the grid (430, and 320 on goodo) runs nightly (e2e-stack.yml).
+      projects: >-
+        sweep
+        sweep-layout-390@velo-brand
+        sweep-layout-390@goodo-brand
+        sweep-layout-320@velo-brand
     # The brand skin packages may be private (BRAND_REPO_TOKEN, as visual.yml).
     secrets: inherit
 
