@@ -197,6 +197,22 @@ describe('WaitlistConfirmView', () => {
     expect(buttonWith('Подтвердить место')).toBeUndefined()
   })
 
+  it('load failing -> a load error with Retry, not «Запись не найдена»; Retry recovers (FE-242)', async () => {
+    vi.mocked(waitlistApi.getMyWaitlist)
+      .mockRejectedValueOnce(new TypeError('net'))
+      .mockResolvedValueOnce(page([entry()]))
+    mount()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+    expect(text()).not.toContain('Запись не найдена')
+    buttonWith('Повторить')!.click()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+    expect(buttonWith('Подтвердить место')).toBeDefined()
+  })
+
   it('confirm 400 -> the entry is re-read and shows what happened (here: expired)', async () => {
     vi.mocked(waitlistApi.getMyWaitlist)
       .mockResolvedValueOnce(page([entry()]))

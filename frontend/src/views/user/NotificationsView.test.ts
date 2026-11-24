@@ -358,6 +358,23 @@ describe('NotificationsView -- unsynced recipient / comms down', () => {
     expect(isDisabled(LABEL.finance)).toBe(true)
   })
 
+  it('says «Ошибка загрузки» with Retry, and Retry restores live switches (FE-242)', async () => {
+    prefsGet.mockRejectedValueOnce(new Error('502'))
+    mount()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+
+    prefsGet.mockResolvedValue(prefs())
+    Array.from(host!.querySelectorAll('button'))
+      .find((b) => b.textContent?.includes('Повторить'))!
+      .click()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+    expect(isDisabled(LABEL.reminders)).toBe(false)
+  })
+
   it('disables only the rows comms did not report', async () => {
     // A category the profile stopped declaring: we cannot honestly control it,
     // so its row is disabled rather than shown as a working switch.

@@ -229,6 +229,8 @@ beforeEach(() => {
   toastInfo.mockReset()
   toastError.mockReset()
   vi.mocked(chatsApi.openChat).mockReset()
+  // SendMessageModal's attempt key (automocked with the rest of @/api/chats).
+  vi.mocked(chatsApi.newIdempotencyKey).mockReset().mockReturnValue('key-1')
   push.mockReset()
   back.mockReset()
   routeParams.id = 'm1'
@@ -361,7 +363,7 @@ describe('MasterPublicView', () => {
 
       // open-or-get the DM with THIS master, then post the text.
       expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
-      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-9', 'Привет')
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-9', 'Привет', 'key-1')
       expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
     })
 
@@ -670,14 +672,27 @@ describe('MasterPublicView', () => {
       mount()
       await flush()
 
-      expect(emptyState()).toBeNull() // NOT the error rung
+      // NOT the page-level error rung: the only error state is the section's own.
+      expect(host?.querySelectorAll('.v-empty')).toHaveLength(1)
+      expect(upcomingSection()?.querySelector('.v-empty')).not.toBeNull()
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
       // Owner 2026-09-30: the title never disappears -- without data it says why.
       expect(upcomingSection()).not.toBeNull()
       expect(upcomingSection()?.textContent).toContain('Ближайшие практики')
-      expect(upcomingSection()?.textContent).toContain('Пока практик не запланировано')
+      // FE-242: a failed list is an error with Retry, not "nothing planned".
+      expect(upcomingSection()?.textContent).not.toContain('Пока практик не запланировано')
+      expect(upcomingSection()?.textContent).toContain('Ошибка загрузки')
       expect(practiceCards()).toHaveLength(0)
+
+      vi.mocked(practicesApi.getPractices).mockResolvedValue(page([practice('p1')]))
+      const retry = Array.from(upcomingSection()?.querySelectorAll('button') ?? []).find((b) =>
+        b.textContent?.includes('Повторить'),
+      )
+      retry!.click()
+      await flush()
+
+      expect(practiceCards()).toHaveLength(1)
     })
 
     it('an empty practices list renders the same titled section with the note (owner 2026-09-30)', async () => {
@@ -973,7 +988,7 @@ describe('MasterPublicView', () => {
       // The actor is the session's, server-side: the view only names WHICH
       // master (the route's), never who is asking.
       expect(chatsApi.openChat).toHaveBeenCalledWith('m1')
-      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-1', 'Привет')
+      expect(chatsApi.sendChatMessage).toHaveBeenCalledWith('thread-1', 'Привет', 'key-1')
       expect(toastSuccess).toHaveBeenCalledWith('Сообщение отправлено')
     })
 
