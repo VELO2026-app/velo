@@ -570,17 +570,14 @@
     "masterNotifications": {
       "deliveryDays": "Notification delivery days",
       "deliveryTime": "Notification time",
-      "soon": "Soon",
       "schedule": "Notification schedule",
       "receiveFrom": "Receive notifications from",
       "to": "to",
       "daysHint": "Ticked days are when notifications arrive. An unticked day stays silent all day, whatever the set times.",
       "category": {
         "practices": "Practices",
-        "members": "Members",
         "schools": "Schools",
-        "messages": "Messages",
-        "analytics": "Analytics"
+        "messages": "Messages"
       },
       "events": {
         "newBooking": "New booking",
@@ -589,21 +586,13 @@
         "someoneCancelled": "Someone cancelled",
         "reminder": "Reminder",
         "reminderText": "1 hour before the start",
-        "newCheckin": "New check-in",
-        "checkinText": "A participant marked their state before the practice",
-        "newFeedback": "New feedback",
-        "feedbackText": "A participant left feedback",
         "schoolEvents": "School events",
         "joinsAndAppointments": "Joins and master appointments",
         "studentMessages": "Student messages",
         "newMessages": "New messages in your chats",
         "supportReplies": "Replies in your tickets",
-        "chatsYouAuthor": "Chats where you are the author",
-        "aiSummary": "AI summary"
+        "chatsYouAuthor": "Chats where you are the author"
       },
-      "mondays": "On Mondays",
-      "monthlyReport": "Monthly report",
-      "firstOfMonth": "On the 1st of the month",
       "toast": {
         "loadFailed": "Failed to load the notification settings",
         "scheduleSaveFailed": "Failed to save the schedule",

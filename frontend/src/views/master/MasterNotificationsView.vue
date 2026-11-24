@@ -5,8 +5,8 @@
   (i18n:masterScreens.masterProfile.menu.notifications). Operator decision
   2026-06-13 (B1=B): this is a SEPARATE master-only screen, NOT the shared
   user NotificationsView. The master design is
-  far richer (bookings / participants / messages / analytics + a delivery
-  schedule); the user view stays untouched (user role is frozen).
+  far richer (bookings / schools / messages + a delivery schedule); the user
+  view stays untouched (user role is frozen).
 
   Grouped on/off rows (label + optional sub + VSwitch) plus the delivery
   schedule block (i18n:masterScreens.masterNotifications.schedule): a
@@ -22,10 +22,10 @@
     msg_participants / msg_support  -> their own categories
     schedule                        -> comms quiet hours (the proxy converts
         the delivery-window semantics both ways)
-  The four remaining rows (new_checkin / new_feedback / ai_summary /
-  monthly_report) have NO comms types yet and stay LOCAL stubs -- explicit
-  disposition (Master-chat 2026-07-28): when their types appear, move them
-  into comms and drop the local persistence.
+  Every row maps to a comms category. The former stub rows (new_checkin /
+  new_feedback / ai_summary / monthly_report: no comms types, a disabled
+  switch and a "soon" badge) were removed by owner decision (FE-261); when
+  comms gets their types, add them back as ordinary category rows.
 
   FE-76 (comms schedule 2.0.0, BE-36): the wire contract is unchanged, but
   an unticked day now means TOTAL silence for that day (owner decision
@@ -52,17 +52,11 @@
         <h2 class="mn-section__title">{{ group.title }}</h2>
         <div v-for="row in group.rows" :key="row.key" class="mn-card">
           <div class="mn-card__text">
-            <span class="mn-card__title-row">
-              <span class="mn-card__title">{{ row.label }}</span>
-              <VBadge v-if="isStub(row.key)" variant="muted" class="mn-card__soon">{{
-                t('masterScreens.masterNotifications.soon')
-              }}</VBadge>
-            </span>
+            <span class="mn-card__title">{{ row.label }}</span>
             <span v-if="row.sub" class="mn-card__sub">{{ row.sub }}</span>
           </div>
           <VSwitch
             :model-value="toggles[row.key]"
-            :disabled="isStub(row.key)"
             :aria-label="row.label"
             @update:model-value="(v) => onToggle(row.key, v)"
           />
@@ -125,7 +119,7 @@ import { t } from '@/locales'
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VHeader } from '@/components/layout'
-import { VSwitch, VDayPicker, VBadge, VFieldError } from '@/components/ui'
+import { VSwitch, VDayPicker, VFieldError } from '@/components/ui'
 import TimePickerSheet from '@/components/shared/TimePickerSheet.vue'
 import { getNotificationPrefs, updateNotificationPrefs } from '@/api/notifications'
 import { ApiResponseError } from '@/api/client'
@@ -139,16 +133,7 @@ const toast = useToast()
 // Forward-looking keys (not yet in the typed NotificationSettings contract; see
 // the file header), grouped exactly as the operator design.
 type ToggleKey =
-  | 'new_booking'
-  | 'booking_cancelled'
-  | 'reminder'
-  | 'new_checkin'
-  | 'new_feedback'
-  | 'msg_participants'
-  | 'msg_support'
-  | 'schools'
-  | 'ai_summary'
-  | 'monthly_report'
+  'new_booking' | 'booking_cancelled' | 'reminder' | 'msg_participants' | 'msg_support' | 'schools'
 
 interface Row {
   key: ToggleKey
@@ -178,21 +163,6 @@ const GROUPS: Group[] = [
         key: 'reminder',
         label: t('masterScreens.masterNotifications.events.reminder'),
         sub: t('masterScreens.masterNotifications.events.reminderText'),
-      },
-    ],
-  },
-  {
-    title: t('masterScreens.masterNotifications.category.members'),
-    rows: [
-      {
-        key: 'new_checkin',
-        label: t('masterScreens.masterNotifications.events.newCheckin'),
-        sub: t('masterScreens.masterNotifications.events.checkinText'),
-      },
-      {
-        key: 'new_feedback',
-        label: t('masterScreens.masterNotifications.events.newFeedback'),
-        sub: t('masterScreens.masterNotifications.events.feedbackText'),
       },
     ],
   },
@@ -232,25 +202,10 @@ const GROUPS: Group[] = [
       },
     ],
   },
-  {
-    title: t('masterScreens.masterNotifications.category.analytics'),
-    rows: [
-      {
-        key: 'ai_summary',
-        label: t('masterScreens.masterNotifications.events.aiSummary'),
-        sub: t('masterScreens.masterNotifications.mondays'),
-      },
-      {
-        key: 'monthly_report',
-        label: t('masterScreens.masterNotifications.monthlyReport'),
-        sub: t('masterScreens.masterNotifications.firstOfMonth'),
-      },
-    ],
-  },
 ]
 
-// toggle key -> comms category (T1). Keys absent here are local stubs.
-const CATEGORY_BY_KEY: Partial<Record<ToggleKey, string>> = {
+// toggle key -> comms category (T1). Every row has one.
+const CATEGORY_BY_KEY: Record<ToggleKey, string> = {
   new_booking: 'bookings',
   booking_cancelled: 'bookings',
   reminder: 'reminders',
@@ -259,27 +214,14 @@ const CATEGORY_BY_KEY: Partial<Record<ToggleKey, string>> = {
   schools: 'schools',
 }
 
-// Owner ruling 2026-08-16 (PROMPT №746): a stub row -- no comms category yet
-// -- stays VISIBLE but its switch is DISABLED (VSwitch's own `disabled`, not
-// a moved-then-reverted flip) and carries a short t('masterScreens.masterNotifications.soon') marker. Not
-// deleted, not made to persist -- forthcoming controls on an in-progress
-// screen are normal, per his standard on this.
-function isStub(key: ToggleKey): boolean {
-  return !CATEGORY_BY_KEY[key]
-}
-
-// Defaults mirror the operator-approved design (all on except the monthly report).
+// Defaults mirror the operator-approved design (all on).
 const toggles = reactive<Record<ToggleKey, boolean>>({
   new_booking: true,
   booking_cancelled: true,
   reminder: true,
-  new_checkin: true,
-  new_feedback: true,
   msg_participants: true,
   msg_support: true,
   schools: true,
-  ai_summary: true,
-  monthly_report: false,
 })
 
 // --- Delivery schedule -----------------------------------------------------
@@ -311,7 +253,7 @@ function onTimePicked(value: string): void {
 
 // --- Comms persistence (Phase 6 / T1) --------------------------------------
 // Category toggles + schedule live in comms; loading merges the server state
-// over the local defaults (stub keys keep their defaults). A failed load
+// over the local defaults. A failed load
 // (comms down -> 502/504, or the recipient not yet synced -> 404) leaves the
 // defaults on screen -- the settings screen degrades, it never crashes.
 async function loadPrefs(): Promise<void> {
@@ -320,7 +262,7 @@ async function loadPrefs(): Promise<void> {
     for (const [key, category] of Object.entries(CATEGORY_BY_KEY)) {
       // noUncheckedIndexedAccess: read once, narrow on the value --
       // an `in` guard does not narrow indexed access.
-      const enabled = category ? prefs.categories[category] : undefined
+      const enabled = prefs.categories[category]
       if (enabled !== undefined) {
         toggles[key as ToggleKey] = enabled
       }
@@ -366,11 +308,6 @@ function persistSchedule(): void {
 // --- Handlers --------------------------------------------------------------
 function onToggle(key: ToggleKey, value: boolean): void {
   const category = CATEGORY_BY_KEY[key]
-  if (!category) {
-    // Local stub (no comms type yet) -- see the file header disposition.
-    toggles[key] = value
-    return
-  }
   // Optimistic: flip now, revert on failure so the switch never shows a
   // state the server did not accept (the screen must not lie about
   // whether a category is muted).
@@ -458,12 +395,6 @@ function onScheduleDays(days: string[]): void {
   flex-direction: column;
   gap: var(--velo-gap-3);
   min-width: 0;
-}
-
-.mn-card__title-row {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--velo-gap-3);
 }
 
 .mn-card__title {
