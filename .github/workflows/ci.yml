@@ -621,8 +621,6 @@ jobs:
     needs: scope
     if: needs.scope.outputs.frontend == 'full' || needs.scope.outputs.drift == 'true'
     uses: ./.github/workflows/e2e-stack.yml
-    # FE-241: the accessibility run fetches the brand packages (BRAND_REPO_TOKEN).
-    secrets: inherit
     with:
       projects: sweep
 

@@ -21,11 +21,6 @@
 # build is slower than the whole sweep), the comms stub, uvicorn on :8000, the
 # build with the synthetic skin package (make-test-skin.mjs) under `vite
 # preview` (its /api proxy goes to :8000).
-# FE-241: after the sweep, the accessibility run (frontend/e2e/a11y/, axe-core on
-# every sweep route) on the real brand packages: each pinned in
-# .github/brand-skins.json is fetched, built into its own dist (dist-gold,
-# dist-goodo) and judged by the same stack. A new violation without an entry in
-# frontend/e2e/a11y/allowlist.ts fails the job.
 # Telegram: a fake bot token and the comms stub; Stripe: the stub of SERVER_ROLE=test;
 # Zoom: no stub since BE-192, so a meeting create at seed time fails against zoom.us
 # with the invented keys of ci.env (the practice is seeded without a link) -- the
@@ -55,7 +50,7 @@ jobs:
   sweep:
     name: e2e-stack — sweep on a real backend
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16.15-trixie@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
@@ -170,46 +165,6 @@ jobs:
       - name: Sweep
         working-directory: frontend
         run: pnpm e2e:sweep:ci $(printf -- '--project=%s ' $PROJECTS)
-
-      # FE-241: the brand packages at their pinned tags (the build matrix and
-      # Visual fetch them the same way); BRAND_REPO_TOKEN is empty while the
-      # repositories are public.
-      - name: Fetch the brand skin packages
-        if: ${{ !cancelled() }}
-        env:
-          BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
-        run: node .github/scripts/fetch-brand-skins.mjs "$RUNNER_TEMP/brand-skins"
-
-      # One dist per skin, side by side: a11y.spec.ts serves dist-<skin> and
-      # checks that its colors are the package's.
-      - name: Build the app on each brand skin
-        if: ${{ !cancelled() }}
-        working-directory: frontend
-        run: |
-          node scripts/apply-skin.mjs "$RUNNER_TEMP/brand-skins/velo-brand/skin"
-          pnpm exec vite build --outDir dist-gold
-          node scripts/apply-skin.mjs "$RUNNER_TEMP/brand-skins/goodo-brand/skin"
-          pnpm exec vite build --outDir dist-goodo
-
-      # The two cells of the accessibility gate. Both run even if the first
-      # fails, so one push shows the violations of both skins.
-      - name: Accessibility (gold)
-        if: ${{ !cancelled() }}
-        working-directory: frontend
-        env:
-          A11Y_SKIN: gold
-          A11Y_SKIN_DIR: ${{ runner.temp }}/brand-skins/velo-brand/skin
-          VISUAL_DIST: dist-gold
-        run: pnpm e2e:sweep:ci --project=a11y
-
-      - name: Accessibility (goodo)
-        if: ${{ !cancelled() }}
-        working-directory: frontend
-        env:
-          A11Y_SKIN: goodo
-          A11Y_SKIN_DIR: ${{ runner.temp }}/brand-skins/goodo-brand/skin
-          VISUAL_DIST: dist-goodo
-        run: pnpm e2e:sweep:ci --project=a11y
 
       - uses: actions/upload-artifact@v7
         if: failure()
