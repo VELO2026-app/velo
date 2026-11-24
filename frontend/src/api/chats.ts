@@ -55,7 +55,7 @@ export interface ChatPeer {
 
 /** BE-163: `"chat"` is a person-to-person DM, `"support"` the caller's own
  *  support conversation (peer is always null there -- the row shows the
- *  VELO logo and the support title (i18n:chat.supportTitle) instead). */
+ *  skin's brand icon and the support title (i18n:chat.supportTitle) instead). */
 export type ChatChannel = 'chat' | 'support'
 
 /** BE-166 translation state, attached to support-channel messages. `null`

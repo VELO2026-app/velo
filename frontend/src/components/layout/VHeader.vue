@@ -15,6 +15,12 @@
     <VHeader title="Dashboard" />                            -- title only
     <VHeader title="My practice" show-back @back="..." />     -- mode 1: arrow-only
     <VHeader show-back back-label="Check-in" @back="..." />   -- mode 2: arrow + text
+
+  Support mark (`brandMark`, FE-103): the `brandMark` prop draws the support
+  conversation's mark (VeloLogo `support-mark`, 28px) before the title, where a
+  peer avatar would sit in a person-to-person chat. What it shows follows the
+  skin's `supportMark` setting (FE-261): the logo set (mandala + wordmark) for
+  'logo', the brand icon for 'icon'.
 -->
 
 <template>
@@ -30,9 +36,10 @@
           :aria-label="title ? t('ui.back') : backLabel"
           @click="$emit('back')"
         />
-        <!-- FE-103: the support conversation's mark -- the VELO logo where a
-             peer avatar would sit in a person-to-person chat. -->
-        <VeloLogo v-if="logo" :size="28" class="v-header__logo" />
+        <!-- FE-103: the support conversation's mark -- where a peer avatar would
+             sit in a person-to-person chat. FE-261: the skin's `supportMark`
+             setting picks the logo set or the brand icon. -->
+        <VeloLogo v-if="brandMark" support-mark :size="28" class="v-header__brand-mark" />
         <h1 v-if="title" class="v-header__title">{{ title }}</h1>
         <span v-if="badge" class="v-header__badge">{{ badge }}</span>
       </div>
@@ -65,13 +72,16 @@ withDefaults(
     showBack?: boolean
     backLabel?: string
     badge?: string | number | undefined
-    /** FE-103: render the VELO logo before the title (support conversation). */
-    logo?: boolean
+    /**
+     * FE-103: render the support conversation's mark before the title (the
+     * logo set or the brand icon, by the skin's `supportMark` setting; FE-261).
+     */
+    brandMark?: boolean
   }>(),
   {
     title: '',
     showBack: false,
-    logo: false,
+    brandMark: false,
   },
 )
 
@@ -123,7 +133,8 @@ defineEmits<{
   min-width: 0;
 }
 
-.v-header__logo {
+/* The support mark: never squashed by the title's flex competition. */
+.v-header__brand-mark {
   flex-shrink: 0;
 }
 

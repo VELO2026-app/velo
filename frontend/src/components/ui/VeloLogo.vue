@@ -11,23 +11,38 @@
     wordmark on top, the word scaled 1.8x (operator-calibrated).
   - white: logo-white.svg, or a spinning ring (mandala-white.png + wordmark)
     when `spin` is set.
+  - icon: the brand's app icon (favicon.svg) in place of the logo set -- when
+    the skin package has no logo set, or when the caller is the support
+    conversation's mark (`supportMark`) and the skin's `supportMark` setting is
+    'icon' (FE-261).
 
   Props:
-    size    — width/height in px (default 64)
-    variant — 'default' | 'white' (default 'default')
-    spin    — white only: rotate the mandala ring slowly while the VELΘ wordmark
-              stays static. Layers two sliced assets (mandala-white.png +
-              velo-word-filled.svg) so the ring spins and the word does not.
-              Motion (operator-tuned): still 0.5s -> ease-in ramp ~4s -> steady
-              120s/rev. Respects prefers-reduced-motion.
+    size     — width/height in px (default 64)
+    variant  — 'default' | 'white' (default 'default')
+    spin     — white only: rotate the mandala ring slowly while the VELΘ wordmark
+               stays static. Layers two sliced assets (mandala-white.png +
+               velo-word-filled.svg) so the ring spins and the word does not.
+               Motion (operator-tuned): still 0.5s -> ease-in ramp ~4s -> steady
+               120s/rev. Respects prefers-reduced-motion.
+    supportMark — this logo is the support conversation's mark. The skin's
+               `supportMark` setting (brand record, contract 2.2) decides what
+               it shows: 'logo' (the default; the golden VELO skin) keeps the
+               logo set like every other place, 'icon' (Goodo) draws the brand
+               icon. Splash, Welcome and auth never pass it, so they keep the
+               logo. The icon takes the icon branch, so `spin` is ignored (the
+               icon is static) and `variant` only sets the icon's side: the
+               whole box for 'default', a third of it for 'white'. Pass the
+               default variant for a mark that fills its box.
 -->
 
 <template>
-  <!-- No logo set in the skin package (contract 2.1, FE-230): the brand's app
-       icon stands in, static. The white variant is the splash's oversized
-       bleed box, so the icon takes a third of it and the layout keeps its Y. -->
+  <!-- No logo set in the skin package (contract 2.1, FE-230), or the support
+       mark of a skin that asks for the icon (`supportMark`, FE-261): the
+       brand's app icon stands in, static. The white variant is the splash's
+       oversized bleed box, so the icon takes a third of it and the layout
+       keeps its Y. -->
   <div
-    v-if="!SKIN_HAS_LOGO"
+    v-if="showIcon"
     class="velo-logo velo-logo--icon"
     :style="{ width: size + 'px', height: size + 'px' }"
   >
@@ -96,7 +111,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SKIN_HAS_LOGO } from 'virtual:skin-brand'
+import { SKIN_HAS_LOGO, SKIN_SUPPORT_MARK } from 'virtual:skin-brand'
 import { t } from '@/locales'
 import { SKIN_IMAGE } from '@/utils/skinAssets'
 
@@ -106,8 +121,22 @@ const props = withDefaults(
     variant?: 'default' | 'white'
     /** White only: slowly rotate the mandala ring with the wordmark static. */
     spin?: boolean
+    /**
+     * This logo is the support conversation's mark: it follows the skin's
+     * `supportMark` setting ('icon' draws the brand's app icon, 'logo' keeps
+     * the logo set). The icon takes the icon branch: `spin` is ignored, and
+     * `variant` only sets the icon's side (the whole box, or a third of it
+     * for `white`).
+     */
+    supportMark?: boolean
   }>(),
-  { size: 64, variant: 'default', spin: false },
+  { size: 64, variant: 'default', spin: false, supportMark: false },
+)
+
+/** The brand's app icon stands in for the logo set: the package ships none,
+ *  or this is the support mark and the skin wants the icon there. */
+const showIcon = computed(
+  () => !SKIN_HAS_LOGO || (props.supportMark && SKIN_SUPPORT_MARK === 'icon'),
 )
 
 /** The stand-in icon's side: the whole box, a third of the splash's bleed box. */

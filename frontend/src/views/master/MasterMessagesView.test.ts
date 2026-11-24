@@ -141,11 +141,11 @@ describe('MasterMessagesView', () => {
   })
 
   // FE-103 / BE-163: the master's OWN support conversation rides the same
-  // list -- VELO logo instead of the avatar, the support title
-  // (i18n:chat.supportTitle) instead of the student fallback
-  // (i18n:masterScreens.masterMessages.peerFallback) a null peer would
-  // degrade to.
-  it("the master's own support row renders the brand logo and «Поддержка <brand>», not «Ученик»", async () => {
+  // list -- the support mark (the brand icon, see UserMessagesView.test.ts)
+  // instead of the avatar, the support title (i18n:chat.supportTitle) instead
+  // of the student fallback (i18n:masterScreens.masterMessages.peerFallback)
+  // a null peer would degrade to.
+  it("the master's own support row renders the support mark and «Поддержка <brand>», not «Ученик»", async () => {
     const supportThread = commsThread({
       id: 'support-1',
       channel: 'support',
@@ -171,7 +171,7 @@ describe('MasterMessagesView', () => {
     expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe(
       `Поддержка ${SKIN_BRAND}`,
     )
-    expect(row(0).querySelector('.chat-row__logo')).not.toBeNull()
+    expect(row(0).querySelector('.chat-row__brand-mark')).not.toBeNull()
     expect(row(0).querySelector('.v-avatar')).toBeNull()
     expect(row(0).querySelector('.chat-row__preview')?.textContent?.trim()).toBe(
       'Ваш вопрос рассматривается',

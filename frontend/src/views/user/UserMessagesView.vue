@@ -12,7 +12,7 @@
   row carries the P-1 `peer` block (no per-row profile lookups), the row's
   own `unread` (T-51 -- the backend fetches the whole page's counts in one
   call), `last_message` for the preview line and `channel`: a `support` row
-  renders the VELO logo + the support title (i18n:chat.supportTitle) and
+  renders the skin's brand icon + the support title (i18n:chat.supportTitle) and
   its preview speaks the
   translation states (utils/chatRows.ts). The list is not polled (approved
   plan §4).
