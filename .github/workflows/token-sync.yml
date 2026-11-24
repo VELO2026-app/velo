@@ -57,6 +57,10 @@ jobs:
         working-directory: frontend
         env:
           FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
+          # FE-234: the drift check covers every mode of the velo collection;
+          # the skin modes clone their brand packages (.github/brand-skins.json),
+          # a private one with this read key (sent as a header, not in the URL).
+          BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
         run: |
           if [ -z "$FIGMA_TOKEN" ]; then
             echo "::notice::FIGMA_TOKEN secret is not set -- the autosync is idle. Add the secret to enable it."

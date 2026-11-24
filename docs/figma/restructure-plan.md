@@ -25,7 +25,7 @@ restructure` (откат всей перестройки), `… stage 1b …`, `
 (108 мастеров, имена = компоненты кода; добавлен `IconDirectionDefault`). В палитре `Skin / gold`
 37 образцов; в пакете goodo 32 токена (`skin/tokens/skin.tokens.json`).
 
-Осталось: `Skin / goodo` после FE-219; перерисовать из кода `IconNarrative` и `IconMovement`
+Осталось: режимы `core` / `gold` / `goodo` и секции `Skin / core`, `Skin / goodo` (FE-234 п.6, схема — протокол §8.4; план ниже про «режим gold из `tokens.json`» устарел после FE-230); перерисовать из кода `IconNarrative` и `IconMovement`
 (в Figma — залитые круги, так было и до перестройки); 38 замечаний аудита внутри
 импортированных логотипов `Skin / gold`.
 

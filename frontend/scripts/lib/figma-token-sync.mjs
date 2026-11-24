@@ -148,6 +148,8 @@ export function parseCssValue(css) {
   const s = css.trim().replace(/\s+/g, ' ')
   let m
   if ((m = s.match(/^var\((--[A-Za-z0-9-]+)\)$/))) return { kind: 'ref', cssName: m[1] }
+  // FE-234: a skin may set a color to the keyword (goodo: --velo-picker-bg).
+  if (s === 'transparent') return { kind: 'color', rgb: [0, 0, 0], a: 0 }
   if (/^#[0-9a-fA-F]{6}$/.test(s)) return { kind: 'color', rgb: hexToRgb(s), a: 1 }
   if (/^#[0-9a-fA-F]{8}$/.test(s)) {
     const rgb = hexToRgb(s.slice(0, 7))
