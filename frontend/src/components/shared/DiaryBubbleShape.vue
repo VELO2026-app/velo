@@ -16,7 +16,7 @@
   Rendering contract: native 267x47 (never preserveAspectRatio="none" -- the
   lobe must not become an ellipse), absolutely positioned under the content,
   fill=currentColor (the host paints it white), no stroke/shadow,
-  pointer-events:none + aria-hidden (the host button carries the label).
+  pointer-events:none + aria-hidden (the host button is named by its own visible text).
 -->
 
 <template>

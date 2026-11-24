@@ -43,6 +43,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/locales'
 import type { TabItem } from '@/router/tabs'
 
 defineProps<{
@@ -51,12 +52,13 @@ defineProps<{
 }>()
 
 /**
- * Accessible name of a pill: the label, then the count the badge shows. The
- * badge is visible text, so the name has to contain it (WCAG 2.5.3, axe
- * `label-content-name-mismatch`); without a badge the name is the label alone.
+ * Accessible name of a pill: the label, with the badge count when one shows
+ * (i18n:tabs.withBadge). The badge is visible text, so the name has to contain
+ * it (WCAG 2.5.3, axe `label-content-name-mismatch`); the key keeps the word
+ * order translatable.
  */
 function nameOf(item: TabItem): string {
-  return item.badge ? `${item.label}, ${item.badge}` : item.label
+  return item.badge ? t('tabs.withBadge', { label: item.label, count: item.badge }) : item.label
 }
 
 defineEmits<{

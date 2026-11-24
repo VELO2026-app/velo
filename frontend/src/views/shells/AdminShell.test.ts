@@ -116,24 +116,21 @@ function mainEl(): HTMLElement {
   return el
 }
 
-/** The pill's label: its accessible name without the ", <count>" a badge adds. */
-function labelOf(b: HTMLButtonElement): string {
-  const name = b.getAttribute('aria-label') ?? ''
-  const count = b.querySelector('.v-admin-tabbar__badge')?.textContent?.trim()
-  return count ? name.replace(new RegExp(`, ${count}$`), '') : name
-}
-
-function tabButton(label: string): HTMLButtonElement | undefined {
-  return tabButtons().find((b) => labelOf(b) === label)
-}
-
-function activeTabLabel(): string | undefined {
-  const active = tabButtons().find((b) => b.getAttribute('aria-current') === 'page')
-  return active ? labelOf(active) : undefined
-}
-
 function tabButtons(): HTMLButtonElement[] {
   return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-admin-tabbar__item') ?? [])
+}
+
+/** The pill named after `label`: its accessible name starts with it (a badge count may follow). */
+function tabButton(label: string): HTMLButtonElement | undefined {
+  return tabButtons().find((b) => b.getAttribute('aria-label')?.startsWith(label))
+}
+
+function activeTab(): HTMLButtonElement | undefined {
+  return tabButtons().find((b) => b.getAttribute('aria-current') === 'page')
+}
+
+function nameOf(label: string): string {
+  return tabButton(label)?.getAttribute('aria-label') ?? ''
 }
 
 function badgeOn(label: string): string | null {
@@ -162,14 +159,14 @@ describe('AdminShell', () => {
       await mount('admin-masters')
       await flush()
 
-      expect(activeTabLabel()).toBe('Мастера')
+      expect(activeTab()).toBe(tabButton('Мастера'))
     })
 
     it('defaults to the first tab when the path matches none', async () => {
       await mount('admin-users')
       await flush()
 
-      expect(activeTabLabel()).toBe('Дашборд')
+      expect(activeTab()).toBe(tabButton('Дашборд'))
     })
   })
 
@@ -185,15 +182,15 @@ describe('AdminShell', () => {
       expect(badgeOn('Дашборд')).toBeNull() // never carries a badge
     })
 
-    it('a badge count is part of the tab accessible name (FE-247, label in name)', async () => {
+    it('the tab accessible name contains the badge count it shows (FE-247, label in name)', async () => {
       vi.mocked(adminApi.getAdminStats).mockResolvedValue(stats({ pending_verifications: 3 }))
       vi.mocked(adminApi.getReports).mockResolvedValue(reports(7))
       await mount('admin-dashboard')
       await flush()
 
-      expect(tabButton('Модерация')?.getAttribute('aria-label')).toBe('Модерация, 7')
-      expect(tabButton('Мастера')?.getAttribute('aria-label')).toBe('Мастера, 3')
-      expect(tabButton('Дашборд')?.getAttribute('aria-label')).toBe('Дашборд') // no badge: label alone
+      expect(nameOf('Модерация')).toContain('7')
+      expect(nameOf('Мастера')).toContain('3')
+      expect(nameOf('Дашборд')).toBe('Дашборд') // no badge: the label alone
     })
 
     it('zero counts render NO badge at all on either tab', async () => {
