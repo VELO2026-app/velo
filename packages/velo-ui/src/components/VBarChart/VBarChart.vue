@@ -17,13 +17,17 @@
   <div class="v-bar-chart" :data-velo-stub="!bars.length || undefined">
     <div v-if="bars.length" class="v-bar-chart__plot">
       <div v-for="(bar, i) in bars" :key="bar.label" class="v-bar-chart__col">
-        <span
-          class="v-bar-chart__bar"
-          :style="{
-            height: heightFor(bar.value),
-            background: i % 2 === 0 ? 'var(--velo-text-primary)' : 'var(--velo-blue-300)',
-          }"
-        ></span>
+        <!-- The track is the bar's own box: its percent height is taken of the
+             room the label leaves, not of the whole column. -->
+        <span class="v-bar-chart__track">
+          <span
+            class="v-bar-chart__bar"
+            :style="{
+              height: heightFor(bar.value),
+              background: i % 2 === 0 ? 'var(--velo-text-primary)' : 'var(--velo-blue-300)',
+            }"
+          ></span>
+        </span>
         <span class="v-bar-chart__label">{{ bar.label }}</span>
       </div>
     </div>
@@ -82,10 +86,20 @@ function heightFor(value: number): string {
   gap: var(--space-2);
 }
 
+/* The bar's percent height is of this box. Taken of the column, the tallest
+   bars (the label shares the column) did not fit and shrank to one height. */
+.v-bar-chart__track {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
 .v-bar-chart__bar {
   width: 100%;
   max-width: 26px;
-  margin-top: auto;
   border-radius: var(--velo-radius-bar-top);
 }
 
