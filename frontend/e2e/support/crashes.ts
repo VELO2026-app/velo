@@ -17,12 +17,7 @@
  */
 import type { Page } from '@playwright/test'
 import { GLOBAL_ALLOWLIST } from './allowlist'
-// FE-238: the contract types live in ./allowance (allowlist imports them,
-// and this file imports allowlist back -- the pair would cycle). Re-exported
-// under this module's name so existing consumers keep their imports.
 import type { BrowserName, CrashAllowance } from './allowance'
-
-export type { AllowedApi, BrowserName, CrashAllowance } from './allowance'
 
 /** What kind of breakage a signal reports. */
 export type SignalKind = 'exception' | 'reported' | 'console' | 'api' | 'asset' | 'screen' | 'blank'

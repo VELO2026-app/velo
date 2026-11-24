@@ -56,12 +56,8 @@ installViewTransitions(router)
 installTabPrefetch(router)
 installDataPrefetch(router)
 
-// FE-238: "a navigation just finished" for consumers outside router/ (the
-// K3f keyboard reset in useViewportGeometry.ts, mounted by the views this
-// table is built from). They subscribe via routeEvents.ts -- importing THIS
-// module from a composable would close the index -> views -> composables ->
-// index cycle. Registered last: navigation is fully finished for listeners,
-// the position the composable-side router.afterEach used to hold.
+// Notifies consumers outside router/ (see routeEvents.ts). Registered last,
+// so listeners run after every other hook.
 installRouteEvents(router)
 
 export default router

@@ -1,11 +1,9 @@
 /**
  * The crash detector's contract types, kept in a module of their own (FE-238).
  *
- * allowlist.ts (the detector's global entries) needs the CrashAllowance type,
- * and crashes.ts imports allowlist's GLOBAL_ALLOWLIST back -- so the type
- * cannot live in either file without an import cycle:
- * allowlist -> crashes -> allowlist. Both import it from here instead;
- * crashes.ts re-exports the trio under its own name for its consumers.
+ * allowlist.ts needs the CrashAllowance type and crashes.ts imports
+ * allowlist's GLOBAL_ALLOWLIST, so the types cannot live in crashes.ts
+ * without an import cycle. Both import them from here.
  */
 
 /** A Playwright engine, as `browserType().name()` names it. */

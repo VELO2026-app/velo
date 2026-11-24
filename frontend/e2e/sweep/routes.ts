@@ -15,7 +15,7 @@
  *
  * Pure data: imported by the vitest coverage test as well as by Playwright.
  */
-import type { CrashAllowance } from '../support/crashes'
+import type { CrashAllowance } from '../support/allowance'
 
 /**
  * Every value the setup (e2e/stack/stack.setup.ts) writes to params.json. A

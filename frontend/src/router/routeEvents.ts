@@ -31,10 +31,7 @@ export function onRouteChange(handler: RouteChangeHandler): () => void {
 
 /**
  * Router-side half of the seam: notify every subscriber after each finished
- * navigation. Registered LAST in router/index.ts, after the install* hooks, so
- * a listener sees navigation as fully finished -- the same position the one
- * composable-side router.afterEach registration used to occupy (it was
- * registered from App.vue's setup, after every install* hook).
+ * navigation. Call it last in router/index.ts, after the other install* hooks.
  */
 export function installRouteEvents(router: Router): void {
   router.afterEach(() => {

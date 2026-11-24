@@ -491,10 +491,8 @@ export function useViewportGeometry(): void {
     // K3f (moved verbatim from useBackgroundStabilizer.ts): clear stale
     // keyboard state the instant the route changes, dismiss the keyboard,
     // then suppress re-assertion while it animates shut so the next screen
-    // never inherits keyboard-open geometry. FE-238: subscribed through
-    // router/routeEvents.ts -- importing the router instance here closed
-    // the index -> views -> composables cycle; the event fires from the
-    // same afterEach moment as before.
+    // never inherits keyboard-open geometry. Subscribes through
+    // router/routeEvents.ts, not the router instance (see its header).
     stopAfterEach = onRouteChange(() => {
       activeHTMLElement()?.blur?.()
       resetState()
