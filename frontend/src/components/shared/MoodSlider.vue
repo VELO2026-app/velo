@@ -142,8 +142,13 @@ const NEAR_SHIFT = 0.75 * CARD_WIDTH // 72px
 const FAR_SHIFT = 1.3 * CARD_WIDTH // ~125px
 /** Tier scales: active / nearest / far. */
 const TIER_SCALE = [1, 0.8, 0.65] as const
-/** Layer order: `active -> neighbors -> far cards`. */
-const TIER_Z = [10, 9, 8] as const
+/** Layer order, by tier (active / nearest / far): the active card on TOP, so
+ *  art that runs out of a face's box (the glow of a skin icon) is never cut by
+ *  the neighbors lying under its edges. The far cards stay above the nearest
+ *  ones, as shipped: a far card cropped by the stage keeps only its outer part
+ *  visible, and that part is its tap target -- under a neighbor it would be
+ *  unreachable (the layout detector's covered-target rule, at 320 px). */
+const TIER_Z = [12, 10, 11] as const
 /** Per-tier slide from the stage centerline. */
 /** Rendered face size -- scales with its CARD now, no inner face scaling. */
 const FACE_SIZE = 64
@@ -291,7 +296,7 @@ function cardStyle(index: number): Record<string, string | number> {
       : TIER_SCALE[1] + (TIER_SCALE[2] - TIER_SCALE[1]) * (a - 1)
   return {
     transform: `translate(-50%, -50%) translateX(${(dist < 0 ? -1 : 1) * slide}px) scale(${scale})`,
-    zIndex: TIER_Z[0] + Math.min(2, Math.round(a)),
+    zIndex: TIER_Z[Math.min(2, Math.round(a)) as 0 | 1 | 2],
   }
 }
 
@@ -460,9 +465,10 @@ function stopGesture(): void {
   cursor: default;
 }
 
-/* Layer order comes from cardStyle() z-index: active(10) -> near(9) -> far(8).
-   The active card is sharp, whole and covers part of BOTH neighbors; the
-   neighbors blur and dim; the far cards are palest, behind everything. */
+/* Layer order comes from cardStyle() z-index (TIER_Z): active on top, then the
+   far cards, then the nearest ones. The active card is sharp, whole and covers
+   part of BOTH neighbors; the neighbors blur and dim; the far cards are palest
+   and cropped by the stage. */
 .mood-slider__card--active {
   opacity: 1;
   filter: none;

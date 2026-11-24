@@ -42,15 +42,17 @@ afterEach(() => {
 })
 
 describe('PracticeListCard -- title heading level (FE-246)', () => {
-  it.each([
-    { given: undefined, tag: 'H3' },
-    { given: 3 as const, tag: 'H3' },
-    { given: 2 as const, tag: 'H2' },
-  ])('headingLevel $given renders the title as $tag', async ({ given, tag }) => {
-    const root = await mountCard(given)
+  it('without headingLevel the title is an h3: the card sits under a section heading', async () => {
+    const root = await mountCard()
 
     const title = root.querySelector('.practice-list-card__title')
-    expect(title?.tagName).toBe(tag)
+    expect(title?.tagName).toBe('H3')
     expect(title?.textContent?.trim()).toBe('Morning flow')
+  })
+
+  it('headingLevel 2 makes the title an h2: the card follows the page title directly', async () => {
+    const root = await mountCard(2)
+
+    expect(root.querySelector('.practice-list-card__title')?.tagName).toBe('H2')
   })
 })

@@ -71,6 +71,41 @@ export const FIXTURE_TOKENS = {
   bare: { 'font-body': { $type: 'fontFamily', $value: ['Rubik', 'Noto Sans', 'sans-serif'] } },
 }
 
+/** A valid mood icon (contract 2.3): the nominal box 4..36, a radial glow
+ *  that runs out of it, a mark in currentColor. `body` replaces the drawing.
+ *  @internal */
+export function moodSvg(body?: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="4 4 32 32" fill="none">
+<defs><radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(20 20) scale(20)"><stop stop-color="#14213D"/><stop offset="1" stop-color="#14213D" stop-opacity="0"/></radialGradient></defs>
+${body ?? '<circle cx="20" cy="20" r="20" fill="url(#glow)"/>\n<path d="M12 14h4v6h-4z" fill="currentColor"/>'}
+</svg>
+`
+}
+
+/** The five mood keys, worst to best. @internal */
+export const MOOD_FIXTURE_KEYS = ['bad', 'low', 'neutral', 'good', 'fire'] as const
+
+/** The mark of one key's fixture icon: its path data is its own, so an icon
+ *  that lands under another key shows.
+ *  @internal */
+export function moodMark(key: (typeof MOOD_FIXTURE_KEYS)[number]): string {
+  return `M${12 + MOOD_FIXTURE_KEYS.indexOf(key)} 14h4v6h-4z`
+}
+
+/** The five files of a valid mood icon set, for FixturePatch.extra: the same
+ *  glow, a mark of its own per key.
+ *  @internal */
+export function moodIconFiles(): Record<string, string> {
+  return Object.fromEntries(
+    MOOD_FIXTURE_KEYS.map((key) => [
+      `assets/mood/${key}.svg`,
+      moodSvg(
+        `<circle cx="20" cy="20" r="20" fill="url(#glow)"/>\n<path d="${moodMark(key)}" fill="currentColor"/>`,
+      ),
+    ]),
+  )
+}
+
 /** What a fixture package may change. @internal */
 export interface FixturePatch {
   /** The `$extensions["velo-skin"]` record (default FIXTURE_BRAND). */
