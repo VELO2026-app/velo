@@ -15,10 +15,9 @@ import { createTestI18n } from '@/locales/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { createPinia, setActivePinia, type Pinia } from 'pinia'
-import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { createPinia, setActivePinia } from 'pinia'
+import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
-import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsoleAnalyticsView from '@/views/console/ConsoleAnalyticsView.vue'
 import * as adminApi from '@/api/admin'
 import type {
@@ -42,7 +41,10 @@ function checkin(overrides: Partial<CheckinMetricResponse> = {}): CheckinMetricR
     rate_pct: 78,
     total_records: 412,
     checked_in: 321,
-    series: [{ label: '23 нояб', value: 70 }],
+    series: [
+      { label: '23 нояб', value: 70 },
+      { label: '24 нояб', value: 35 },
+    ],
     low_practices: [{ id: 'p_low', title: 'Утренняя медитация', checkin_rate_pct: 33, total: 12 }],
     ...overrides,
   }
@@ -90,7 +92,6 @@ function overview(overrides: Partial<AdminStatsOverviewResponse> = {}): AdminSta
 let app: App | null = null
 let host: HTMLElement | null = null
 let router: Router
-let pinia: Pinia
 
 async function mount(url = '/console/analytics'): Promise<HTMLElement> {
   router = createRouter({
@@ -103,7 +104,7 @@ async function mount(url = '/console/analytics'): Promise<HTMLElement> {
   await router.isReady()
   host = document.createElement('div')
   document.body.appendChild(host)
-  pinia = createPinia()
+  const pinia = createPinia()
   setActivePinia(pinia)
   app = createApp(ConsoleAnalyticsView)
     .use(createTestI18n())
@@ -153,11 +154,9 @@ function retryButton(): HTMLButtonElement | undefined {
     (b) => b.textContent?.trim() === 'Повторить',
   )
 }
-/** A background refetch of the check-in window on screen, as a return to the app does. */
-async function refetchCheckinInBackground(): Promise<void> {
-  useQueryCache(pinia)
-    .invalidateQueries({ key: adminKeys.metric('checkin', 'week', 0) })
-    .catch(() => {})
+/** A return to the app: the page becomes visible again and every stale query on screen is asked again. */
+async function returnToApp(): Promise<void> {
+  document.dispatchEvent(new Event('visibilitychange'))
   await flush()
 }
 
@@ -190,21 +189,33 @@ describe('ConsoleAnalyticsView', () => {
     expect(card('checkin').getAttribute('aria-pressed')).toBe('true')
     expect(card('feedback').getAttribute('aria-pressed')).toBe('false')
 
-    // The counts, the trend (the rate over each bar, the date under it), the practice with a low check-in.
+    // The counts, the trend, the practice with a low check-in.
     expect(norm(detail()?.textContent)).toContain('Всегозаписей412')
     expect(norm(detail()?.textContent)).toContain('Отметились321')
     expect(norm(detail()?.textContent)).toContain('Утренняямедитация33%·12записей')
+    // The trend is the kit's chart: the date under each bar, the heights scaled to the highest rate.
     expect(
-      Array.from(detail()?.querySelectorAll('[data-testid="trend-value"]') ?? []).map(
+      Array.from(detail()?.querySelectorAll('.v-bar-chart__label') ?? []).map(
         (el) => el.textContent,
       ),
-    ).toEqual(['70%'])
+    ).toEqual(['23 нояб', '24 нояб'])
     expect(
-      Array.from(detail()?.querySelectorAll('[data-testid="trend-label"]') ?? []).map(
-        (el) => el.textContent,
+      Array.from(detail()?.querySelectorAll<HTMLElement>('.v-bar-chart__bar') ?? []).map(
+        (el) => el.style.height,
       ),
-    ).toEqual(['23 нояб'])
+    ).toEqual(['100%', '50%'])
     expect(adminApi.getCheckinMetric).toHaveBeenCalledWith('week', 0)
+  })
+
+  it('a change that could not be read says so, not "nothing to compare with"; the rates stay', async () => {
+    vi.mocked(adminApi.getAdminStatsOverview).mockRejectedValueOnce(new Error('down'))
+    await mount()
+
+    // The rates come from the metrics' own endpoints, the dash from the failed overview.
+    expect(cardText('checkin')).toBe('Практикисчекином78%—неудалосьзагрузитьсравнение')
+    expect(cardText('return')).toContain('42%')
+    expect(cardText('feedback')).toContain('неудалосьзагрузитьсравнение')
+    expect(cardText('feedback')).not.toContain('нетданныхдлясравнения')
   })
 
   it('a card opens its metric: feedback shows the distribution, return the frequent participants', async () => {
@@ -278,7 +289,7 @@ describe('ConsoleAnalyticsView', () => {
 
   it('a window switch shows the loader, not the breakdown of the old window', async () => {
     await mount()
-    let resolveMonth!: (value: CheckinMetricResponse) => void
+    let resolveMonth: (value: CheckinMetricResponse) => void = () => {}
     vi.mocked(adminApi.getCheckinMetric).mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -325,14 +336,14 @@ describe('ConsoleAnalyticsView', () => {
   describe('background refetch (a return to the app)', () => {
     it('keeps the breakdown on screen while it runs, then shows the fresh answer', async () => {
       await mount()
-      let resolveFresh!: (value: CheckinMetricResponse) => void
+      let resolveFresh: (value: CheckinMetricResponse) => void = () => {}
       vi.mocked(adminApi.getCheckinMetric).mockImplementation(
         () =>
           new Promise((resolve) => {
             resolveFresh = resolve
           }),
       )
-      await refetchCheckinInBackground()
+      await returnToApp()
 
       expect(host?.querySelector('[data-testid="metric-loading"]')).toBeNull()
       expect(norm(detail()?.textContent)).toContain('Всегозаписей412')
@@ -349,8 +360,8 @@ describe('ConsoleAnalyticsView', () => {
         Promise.reject(new Error('down')),
       )
 
-      await refetchCheckinInBackground()
-      await refetchCheckinInBackground()
+      await returnToApp()
+      await returnToApp()
 
       expect(toastError).toHaveBeenCalledTimes(1)
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить метрику')
@@ -358,11 +369,11 @@ describe('ConsoleAnalyticsView', () => {
       expect(host?.querySelector('.v-empty__title')).toBeNull()
 
       vi.mocked(adminApi.getCheckinMetric).mockResolvedValue(checkin())
-      await refetchCheckinInBackground()
+      await returnToApp()
       vi.mocked(adminApi.getCheckinMetric).mockImplementation(() =>
         Promise.reject(new Error('down again')),
       )
-      await refetchCheckinInBackground()
+      await returnToApp()
 
       expect(toastError).toHaveBeenCalledTimes(2)
     })
@@ -373,10 +384,7 @@ describe('ConsoleAnalyticsView', () => {
         Promise.reject(new Error('down')),
       )
 
-      useQueryCache(pinia)
-        .invalidateQueries({ key: adminKeys.metric('feedback', 'week', 0) })
-        .catch(() => {})
-      await flush()
+      await returnToApp()
 
       expect(toastError).not.toHaveBeenCalled()
       // The card keeps its rate: the failed refetch did not wipe it.

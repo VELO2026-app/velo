@@ -10,7 +10,37 @@
 <template>
   <ul class="attention" :aria-label="t('console.dashboard.attention.queuesLabel')">
     <li v-for="queue in queues" :key="queue.key" class="attention__item">
-      <RouterLink class="attention__tile" :to="queue.to" :data-testid="`attention-${queue.key}`">
+      <!-- A queue that could not be counted is no link (its Retry is a control
+           of its own, and a control does not nest in a link). -->
+      <div
+        v-if="queue.failed"
+        class="attention__tile attention__tile--failed"
+        :data-testid="`attention-${queue.key}`"
+      >
+        <span class="attention__head">
+          <component :is="queue.icon" class="attention__icon" :size="20" aria-hidden="true" />
+          <span class="attention__label">{{ queue.label }}</span>
+        </span>
+        <span class="attention__foot">
+          <span class="attention__count" data-testid="attention-count">
+            <span aria-hidden="true">—</span>
+            <span class="velo-sr-only">{{ t('console.dashboard.attention.unknown') }}</span>
+          </span>
+          <VButton
+            size="sm"
+            variant="outline"
+            :data-testid="`attention-retry-${queue.key}`"
+            @click="queue.retry?.()"
+            >{{ t('common.retry') }}</VButton
+          >
+        </span>
+      </div>
+      <RouterLink
+        v-else
+        class="attention__tile"
+        :to="queue.to"
+        :data-testid="`attention-${queue.key}`"
+      >
         <span class="attention__head">
           <component :is="queue.icon" class="attention__icon" :size="20" aria-hidden="true" />
           <span class="attention__label">{{ queue.label }}</span>
@@ -36,6 +66,7 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { VButton } from '@/components/ui'
 import { IconArrowRight } from '@/components/icons'
 import type { AttentionQueue } from '@/components/console/overview/types'
 import { formatCount } from '@/utils/format'

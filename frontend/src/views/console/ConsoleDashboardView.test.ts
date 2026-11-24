@@ -17,9 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
-import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
-import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsoleDashboardView from '@/views/console/ConsoleDashboardView.vue'
 import * as adminApi from '@/api/admin'
 import * as supportApi from '@/api/support'
@@ -114,6 +113,7 @@ let router: Router
 let pinia: Pinia
 
 const MODULE_ROUTES = [
+  'dashboard',
   'masters',
   'moderation',
   'support',
@@ -122,7 +122,7 @@ const MODULE_ROUTES = [
   'practices',
 ] as const
 
-async function mount(): Promise<HTMLElement> {
+async function mount(url = '/console/dashboard'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -138,7 +138,7 @@ async function mount(): Promise<HTMLElement> {
       },
     ],
   })
-  await router.push('/console/masters')
+  await router.push(url)
   await router.isReady()
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -202,6 +202,14 @@ function step(label: 'Предыдущий период' | 'Следующий �
   if (!el) throw new Error(`no button ${label}`)
   return el
 }
+function queueRetry(key: string): HTMLButtonElement | null {
+  return host?.querySelector<HTMLButtonElement>(`[data-testid="attention-retry-${key}"]`) ?? null
+}
+function engagementRetry(): HTMLButtonElement | undefined {
+  return Array.from(
+    host?.querySelectorAll<HTMLButtonElement>('[data-testid="engagement-card"] .v-btn') ?? [],
+  ).find((b) => b.textContent?.trim() === 'Повторить')
+}
 function retryButton(): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll<HTMLButtonElement>('.v-btn') ?? []).find(
     (b) => b.textContent?.trim() === 'Повторить',
@@ -210,11 +218,9 @@ function retryButton(): HTMLButtonElement | undefined {
 function range(): string {
   return host?.querySelector('[data-testid="period-range"]')?.textContent?.trim() ?? ''
 }
-/** A background refetch of the window on screen, as a return to the app does. */
-async function refetchOverviewInBackground(): Promise<void> {
-  useQueryCache(pinia)
-    .invalidateQueries({ key: adminKeys.overview('week', 0) })
-    .catch(() => {})
+/** A return to the app: the page becomes visible again and every stale query on screen is asked again. */
+async function returnToApp(): Promise<void> {
+  document.dispatchEvent(new Event('visibilitychange'))
   await flush()
 }
 
@@ -262,7 +268,7 @@ describe('ConsoleDashboardView: needs attention', () => {
         queue(key).getAttribute('href'),
       ]),
     ).toEqual([
-      ['verifications', '2', '/console/masters'],
+      ['verifications', '2', '/console/masters?tab=pending'],
       ['complaints', '3', '/console/moderation?tab=complaints'],
       ['methods', '1', '/console/moderation?tab=methods'],
       ['tickets', '5', '/console/support?tab=open'],
@@ -270,15 +276,6 @@ describe('ConsoleDashboardView: needs attention', () => {
     ])
     expect(adminApi.getAdminWithdrawals).toHaveBeenCalledWith('pending', 1, 0)
     expect(supportApi.listAdminTickets).toHaveBeenCalledWith({ status: 'open', limit: 100 })
-  })
-
-  it('a queue is a link to its module', async () => {
-    await mount()
-
-    queue('complaints').click()
-    await flush()
-
-    expect(router.currentRoute.value.fullPath).toBe('/console/moderation?tab=complaints')
   })
 
   it('a full page of open tickets reads "100+"; a page that is not full reads its count', async () => {
@@ -327,13 +324,40 @@ describe('ConsoleDashboardView: needs attention', () => {
     expect(queueCount('verifications')).toBe('2')
   })
 
-  it('a ticket count that failed reads a dash and is told once', async () => {
-    vi.mocked(supportApi.listAdminTickets).mockRejectedValue(new Error('down'))
+  it('a ticket count that failed reads a dash and is told once; its own Retry brings the number, the other queues stay', async () => {
+    vi.mocked(supportApi.listAdminTickets).mockRejectedValueOnce(new Error('down'))
     await mount()
 
     expect(queueCount('tickets')).toBe(UNKNOWN)
+    // A failed queue is no link: its Retry is the tile's control.
+    expect(queue('tickets').getAttribute('href')).toBeNull()
     expect(toastError).toHaveBeenCalledTimes(1)
     expect(toastError).toHaveBeenCalledWith('Не удалось загрузить очереди')
+    // Not the counters' failure: the others answer, the banner is not up.
+    expect(queueCount('payouts')).toBe('4')
+    expect(queueRetry('payouts')).toBeNull()
+    expect(host?.querySelector('[data-testid="counters-error"]')).toBeNull()
+
+    queueRetry('tickets')?.click()
+    await flush()
+
+    expect(queueCount('tickets')).toBe('5')
+    expect(queue('tickets').getAttribute('href')).toBe('/console/support?tab=open')
+    expect(queueRetry('tickets')).toBeNull()
+  })
+
+  it('a payout count that failed has a Retry of its own too', async () => {
+    vi.mocked(adminApi.getAdminWithdrawals).mockRejectedValueOnce(new Error('down'))
+    await mount()
+
+    expect(queueCount('payouts')).toBe(UNKNOWN)
+    expect(queueCount('tickets')).toBe('5')
+
+    queueRetry('payouts')?.click()
+    await flush()
+
+    expect(queueCount('payouts')).toBe('4')
+    expect(queue('payouts').getAttribute('href')).toBe('/console/finance')
   })
 })
 
@@ -359,11 +383,13 @@ describe('ConsoleDashboardView: figures', () => {
     periodTab('Месяц').click()
     await flush()
     expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('month', 0)
+    expect(router.currentRoute.value.query).toEqual({ period: 'month' })
     expect(range()).not.toBe(weekRange)
 
     step('Предыдущий период').click()
     await flush()
     expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('month', -1)
+    expect(router.currentRoute.value.query).toEqual({ period: 'month', offset: '-1' })
     expect(step('Следующий период').disabled).toBe(false)
 
     step('Следующий период').click()
@@ -371,10 +397,24 @@ describe('ConsoleDashboardView: figures', () => {
     expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('month', 0)
     expect(step('Следующий период').disabled).toBe(true)
 
-    // Back to the week: its own window, from the current period.
+    // Back to the week: its own window, from the current period; this week leaves no mark in the URL.
     periodTab('Неделя').click()
     await flush()
     expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('week', 0)
+    expect(router.currentRoute.value.query).toEqual({})
+  })
+
+  it('the window comes from the URL: a link or a return from the analytics keeps it; what it cannot mean is this week', async () => {
+    await mount('/console/dashboard?period=month&offset=-2')
+    expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('month', -2)
+    expect(adminApi.getAdminStatsOverview).toHaveBeenCalledTimes(1)
+    expect(step('Следующий период').disabled).toBe(false)
+  })
+
+  it('a window the URL cannot mean is this week', async () => {
+    await mount('/console/dashboard?period=year&offset=3')
+    expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('week', 0)
+    expect(step('Следующий период').disabled).toBe(true)
   })
 
   it('a press on the tab already open keeps the period the stepper chose', async () => {
@@ -394,7 +434,7 @@ describe('ConsoleDashboardView: figures', () => {
 
   it('a switch of the period shows the loader, not the numbers of the old window', async () => {
     await mount()
-    let resolveMonth!: (value: AdminStatsOverviewResponse) => void
+    let resolveMonth: (value: AdminStatsOverviewResponse) => void = () => {}
     vi.mocked(adminApi.getAdminStatsOverview).mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -417,9 +457,7 @@ describe('ConsoleDashboardView: figures', () => {
 
     expect(rates()).toEqual(['78%', '65%', '42%'])
     const link = host?.querySelector<HTMLAnchorElement>('[data-testid="engagement-feedback"]')
-    expect(link?.getAttribute('href')).toBe(
-      '/console/analytics?metric=feedback&period=week&offset=0',
-    )
+    expect(link?.getAttribute('href')).toBe('/console/analytics?metric=feedback')
 
     periodTab('Месяц').click()
     await flush()
@@ -432,18 +470,50 @@ describe('ConsoleDashboardView: figures', () => {
     ).toBe('/console/analytics?metric=return&period=month&offset=-1')
   })
 
-  it('a failed read shows the error and Retry recovers', async () => {
+  it('a failed read shows the error in the figures and in the rates, with Retry; the day stays on screen', async () => {
     vi.mocked(adminApi.getAdminStatsOverview).mockRejectedValueOnce(new Error('down'))
     await mount()
 
-    expect(host?.textContent).toContain('Не удалось загрузить показатели')
-    expect(tiles()).toEqual([])
+    expect(host?.querySelector('[data-testid="figure-tile"]')).toBeNull()
+    expect(rates()).toEqual([])
+    expect(host?.querySelector('[data-testid="engagement-card"]')?.textContent).toContain(
+      'Не удалось загрузить показатели',
+    )
+    // The day is its own block: it did not wait for the figures and the failure does not take it.
+    expect(todayTitles()).toHaveLength(1)
 
     retryButton()?.click()
     await flush()
 
     expect(host?.textContent).not.toContain('Не удалось загрузить показатели')
     expect(tiles()).toHaveLength(4)
+    expect(rates()).toEqual(['78%', '65%', '42%'])
+  })
+
+  it('the Retry of the rates asks the same window again', async () => {
+    vi.mocked(adminApi.getAdminStatsOverview).mockRejectedValueOnce(new Error('down'))
+    await mount()
+
+    engagementRetry()?.click()
+    await flush()
+
+    expect(adminApi.getAdminStatsOverview).toHaveBeenCalledTimes(2)
+    expect(rates()).toEqual(['78%', '65%', '42%'])
+    expect(tiles()).toHaveLength(4)
+  })
+
+  it('a switch of the period leaves the day alone: no loader, no new request for it', async () => {
+    await mount()
+    const askedForPractices = vi.mocked(adminApi.getAdminPractices).mock.calls.length
+    vi.mocked(adminApi.getAdminStatsOverview).mockImplementation(() => new Promise(() => {}))
+
+    periodTab('Месяц').click()
+    await flush()
+
+    expect(host?.querySelector('[data-testid="figures-loading"]')).not.toBeNull()
+    expect(host?.querySelector('[data-testid="today-loading"]')).toBeNull()
+    expect(todayTitles()).toHaveLength(1)
+    expect(vi.mocked(adminApi.getAdminPractices).mock.calls).toHaveLength(askedForPractices)
   })
 
   describe('background refetch (a return to the app)', () => {
@@ -451,14 +521,14 @@ describe('ConsoleDashboardView: figures', () => {
       await mount()
       expect(tiles()[1]).toContain('312')
 
-      let resolveFresh!: (value: AdminStatsOverviewResponse) => void
+      let resolveFresh: (value: AdminStatsOverviewResponse) => void = () => {}
       vi.mocked(adminApi.getAdminStatsOverview).mockImplementation(
         () =>
           new Promise((resolve) => {
             resolveFresh = resolve
           }),
       )
-      await refetchOverviewInBackground()
+      await returnToApp()
 
       // No loader, the cached figures stay.
       expect(host?.querySelector('[data-testid="figures-loading"]')).toBeNull()
@@ -476,8 +546,8 @@ describe('ConsoleDashboardView: figures', () => {
         Promise.reject(new Error('down')),
       )
 
-      await refetchOverviewInBackground()
-      await refetchOverviewInBackground()
+      await returnToApp()
+      await returnToApp()
 
       expect(toastError).toHaveBeenCalledTimes(1)
       expect(toastError).toHaveBeenCalledWith('Не удалось загрузить показатели')
@@ -486,11 +556,11 @@ describe('ConsoleDashboardView: figures', () => {
 
       // An answer arrives, then a new failure is told again.
       vi.mocked(adminApi.getAdminStatsOverview).mockResolvedValue(overview())
-      await refetchOverviewInBackground()
+      await returnToApp()
       vi.mocked(adminApi.getAdminStatsOverview).mockImplementation(() =>
         Promise.reject(new Error('down again')),
       )
-      await refetchOverviewInBackground()
+      await returnToApp()
 
       expect(toastError).toHaveBeenCalledTimes(2)
     })
@@ -558,12 +628,29 @@ describe('ConsoleDashboardView: today', () => {
     expect(router.currentRoute.value.name).toBe('console-practices')
   })
 
+  it('a refetch of the day that fails over the list shown is told once and keeps the list', async () => {
+    await mount()
+    vi.mocked(adminApi.getAdminPractices).mockImplementation(() =>
+      Promise.reject(new Error('down')),
+    )
+
+    await returnToApp()
+    await returnToApp()
+
+    expect(toastError).toHaveBeenCalledTimes(1)
+    expect(toastError).toHaveBeenCalledWith('Не удалось загрузить практики')
+    expect(todayTitles()).toHaveLength(1)
+    expect(host?.querySelector('[data-testid="today-card"] .v-empty__title')).toBeNull()
+  })
+
   it('a failed read shows the error inside the card and Retry recovers; the rest of the screen stays', async () => {
     vi.mocked(adminApi.getAdminPractices).mockRejectedValueOnce(new Error('down'))
     await mount()
 
     const card = host?.querySelector('[data-testid="today-card"]')
     expect(card?.textContent).toContain('Не удалось загрузить практики')
+    // The error rung is the message: a first load that fails is not also a toast.
+    expect(toastError).not.toHaveBeenCalled()
     // Figures are not held by it.
     expect(tiles()).toHaveLength(4)
 

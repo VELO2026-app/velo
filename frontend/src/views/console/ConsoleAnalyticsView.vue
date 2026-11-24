@@ -31,6 +31,7 @@
         :label="m.label"
         :rate="m.rate"
         :delta="m.delta"
+        :delta-failed="deltaFailed"
         :selected="m.key === metric"
         @select="setMetric(m.key)"
       />
@@ -62,9 +63,15 @@ import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
 import MetricCard from '@/components/console/overview/MetricCard.vue'
 import MetricDetail from '@/components/console/overview/MetricDetail.vue'
-import type { MetricDetailProps } from '@/components/console/overview/types'
 import OverviewEmpty from '@/components/console/overview/OverviewEmpty.vue'
 import PeriodBar from '@/components/console/overview/PeriodBar.vue'
+import { engagementLabel, overviewRateOf } from '@/components/console/overview/engagement'
+import {
+  ENGAGEMENT_METRICS,
+  type EngagementMetricKey,
+  type MetricDetailProps,
+} from '@/components/console/overview/types'
+import { periodToQuery, useConsolePeriod } from '@/composables/console/useConsolePeriod'
 import {
   adminFigures,
   adminOverviewQuery,
@@ -80,30 +87,19 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-type MetricKey = 'checkin' | 'feedback' | 'return'
-const METRICS: readonly MetricKey[] = ['checkin', 'feedback', 'return']
-
 // The URL is the state; a value it cannot mean falls back to the default
 // (check-in, this week; a period after the current one does not exist).
-const metric = computed<MetricKey>(() => METRICS.find((m) => m === route.query.metric) ?? 'checkin')
-const periodWindow = computed<AdminPeriodWindow>(() => {
-  const offset = Number.parseInt(String(route.query.offset ?? ''), 10)
-  return {
-    period: route.query.period === 'month' ? 'month' : 'week',
-    offset: Number.isFinite(offset) && offset < 0 ? offset : 0,
-  }
-})
+const metric = computed<EngagementMetricKey>(
+  () => ENGAGEMENT_METRICS.find((m) => m === route.query.metric) ?? 'checkin',
+)
+const { periodWindow } = useConsolePeriod()
 
-function show(next: MetricKey, window: AdminPeriodWindow): void {
+function show(next: EngagementMetricKey, window: AdminPeriodWindow): void {
   void router.replace({
-    query: {
-      ...(next === 'checkin' ? {} : { metric: next }),
-      ...(window.period === 'week' ? {} : { period: window.period }),
-      ...(window.offset === 0 ? {} : { offset: String(window.offset) }),
-    },
+    query: { ...(next === 'checkin' ? {} : { metric: next }), ...periodToQuery(window) },
   })
 }
-function setMetric(next: MetricKey): void {
+function setMetric(next: EngagementMetricKey): void {
   show(next, periodWindow.value)
 }
 function setWindow(next: AdminPeriodWindow): void {
@@ -113,7 +109,7 @@ function setWindow(next: AdminPeriodWindow): void {
 // One entry per metric and window. A read that fails over figures shown is
 // told once, and only for the open metric: three failing reads of one outage
 // are one message, and the closed ones tell themselves when they are opened.
-function told(key: MetricKey): (error: unknown) => void {
+function told(key: EngagementMetricKey): (error: unknown) => void {
   return (error) => {
     if (metric.value === key) toast.error(extractApiError(error, t('console.analytics.loadFailed')))
   }
@@ -130,36 +126,25 @@ const returning = adminFigures(
   useQuery(() => returnMetricQuery(periodWindow.value)),
   told('return'),
 )
+const states = { checkin, feedback, return: returning }
 
-// The changes against the period before are the overview's; a card reads a
-// dash for a delta it does not have.
-const overview = adminFigures(useQuery(() => adminOverviewQuery(periodWindow.value))).data
+// The changes against the period before are the overview's. A failed read of
+// it is not "nothing to compare with": the cards say it could not be read.
+const overviewFigures = adminFigures(useQuery(() => adminOverviewQuery(periodWindow.value)))
+const deltaFailed = computed(() => overviewFigures.error.value !== null)
 
-const cards = computed(() => [
-  {
-    key: 'checkin' as const,
-    label: t('console.metrics.checkin'),
-    rate: checkin.data.value?.rate_pct ?? null,
-    delta: overview.value?.checkin_rate_delta,
-  },
-  {
-    key: 'feedback' as const,
-    label: t('console.metrics.feedback'),
-    rate: feedback.data.value?.rate_pct ?? null,
-    delta: overview.value?.feedback_rate_delta,
-  },
-  {
-    key: 'return' as const,
-    label: t('console.metrics.return'),
-    rate: returning.data.value?.rate_pct ?? null,
-    delta: overview.value?.return_rate_delta,
-  },
-])
+const cards = computed(() =>
+  ENGAGEMENT_METRICS.map((key) => ({
+    key,
+    label: engagementLabel(key),
+    rate: states[key].data.value?.rate_pct ?? null,
+    delta: overviewRateOf(overviewFigures.data.value, key).delta,
+  })),
+)
 
 // The open metric's state and answer.
-const states = { checkin, feedback, return: returning }
 const open = computed(() => states[metric.value])
-const openTitle = computed(() => t(`console.metrics.${metric.value}`))
+const openTitle = computed(() => engagementLabel(metric.value))
 const detail = computed<MetricDetailProps | null>(() => {
   const kind = metric.value
   if (kind === 'checkin') return checkin.data.value && { kind, data: checkin.data.value }

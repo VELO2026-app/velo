@@ -9,8 +9,10 @@
     - "needs attention": the counters (`GET /admin/stats`), open tickets,
       pending payouts -- useAttentionQueues;
     - the figures and the engagement rates: `GET /admin/stats/overview`, one
-      entry per (period, offset), the stepper moves the window;
-    - today: the upcoming practices (TodayCard).
+      entry per (period, offset), the stepper moves the window, and the window
+      lives in the URL (`?period=month&offset=-1`, the analytics reads the same);
+    - today: the upcoming practices (TodayCard), a block of its own: it does not
+      wait for the period's figures and does not follow the stepper.
   What the API cannot give is not here: the margin (BE-250), the revenue by
   weeks and by direction, the sparklines (BE-255).
 -->
@@ -51,41 +53,47 @@
           t('common.retry')
         }}</VButton>
       </OverviewEmpty>
-      <template v-else>
-        <div class="dashboard__tiles">
-          <FigureTile
-            :label="t('console.dashboard.figures.revenue')"
-            :value="revenueText"
-            :delta="overview?.revenue_delta_pct"
-          />
-          <FigureTile
-            :label="t('console.dashboard.figures.practices')"
-            :value="countText(overview?.practices_count)"
-            :delta="overview?.practices_delta_pct"
-          />
-          <FigureTile
-            :label="t('console.dashboard.figures.newUsers')"
-            :value="countText(overview?.new_users)"
-            :delta="overview?.new_users_delta_pct"
-          />
-          <FigureTile
-            :label="t('console.dashboard.figures.newMasters')"
-            :value="countText(overview?.new_masters)"
-            :delta="overview?.new_masters_delta_pct"
-          />
-        </div>
-        <div class="dashboard__lower">
-          <EngagementCard :rows="engagementRows" />
-          <TodayCard />
-        </div>
-      </template>
+      <div v-else class="dashboard__tiles">
+        <FigureTile
+          :label="t('console.dashboard.figures.revenue')"
+          :value="revenueText"
+          :delta="overview?.revenue_delta_pct"
+        />
+        <FigureTile
+          :label="t('console.dashboard.figures.practices')"
+          :value="countText(overview?.practices_count)"
+          :delta="overview?.practices_delta_pct"
+        />
+        <FigureTile
+          :label="t('console.dashboard.figures.newUsers')"
+          :value="countText(overview?.new_users)"
+          :delta="overview?.new_users_delta_pct"
+        />
+        <FigureTile
+          :label="t('console.dashboard.figures.newMasters')"
+          :value="countText(overview?.new_masters)"
+          :delta="overview?.new_masters_delta_pct"
+        />
+      </div>
     </section>
+
+    <!-- Each block keeps its own states: the rates follow the window above, the
+         day does not. -->
+    <div class="dashboard__lower">
+      <EngagementCard
+        :rows="engagementRows"
+        :loading="figures.loading.value"
+        :error="figures.error.value"
+        @retry="figures.retry"
+      />
+      <TodayCard />
+    </div>
   </ConsolePage>
 </template>
 
 <script setup lang="ts">
 import { t, getLocale } from '@/locales'
-import { computed, ref, useId } from 'vue'
+import { computed, useId } from 'vue'
 import { useQuery } from '@pinia/colada'
 import { VButton } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
@@ -96,14 +104,12 @@ import EngagementCard from '@/components/console/overview/EngagementCard.vue'
 import FigureTile from '@/components/console/overview/FigureTile.vue'
 import OverviewEmpty from '@/components/console/overview/OverviewEmpty.vue'
 import PeriodBar from '@/components/console/overview/PeriodBar.vue'
-import type { EngagementRow } from '@/components/console/overview/types'
 import TodayCard from '@/components/console/overview/TodayCard.vue'
-import { useAttentionQueues } from '@/components/console/overview/useAttentionQueues'
-import {
-  adminFigures,
-  adminOverviewQuery,
-  type AdminPeriodWindow,
-} from '@/composables/queries/admin'
+import { engagementLabel, overviewRateOf } from '@/components/console/overview/engagement'
+import { ENGAGEMENT_METRICS, type EngagementRow } from '@/components/console/overview/types'
+import { useAttentionQueues } from '@/composables/console/useAttentionQueues'
+import { periodToQuery, useConsolePeriod } from '@/composables/console/useConsolePeriod'
+import { adminFigures, adminOverviewQuery } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { consoleRouteName } from '@/utils/console/modules'
@@ -114,12 +120,9 @@ const figuresTitleId = useId()
 
 const { queues, failed: queuesFailed, reload: reloadQueues } = useAttentionQueues()
 
-// The window the figures answer; the stepper moves it, a switch of the
-// granularity goes back to the current one (PeriodBar).
-const periodWindow = ref<AdminPeriodWindow>({ period: 'week', offset: 0 })
-function setWindow(next: AdminPeriodWindow): void {
-  periodWindow.value = next
-}
+// The window the figures answer lives in the URL; the stepper moves it, a
+// switch of the granularity goes back to the current one (PeriodBar).
+const { periodWindow, setWindow } = useConsolePeriod()
 
 // One entry per window. The previous window's numbers never stand in for the
 // one asked for (adminFigures): the loader shows until it answers; a failed
@@ -140,36 +143,17 @@ const revenueText = computed(() =>
 )
 
 // The three rates open their metric in the analytics for the same window.
-const engagementRows = computed<EngagementRow[]>(() => {
-  const data = overview.value
-  const to = (metric: string) => ({
-    name: consoleRouteName('analytics'),
-    query: { metric, period: periodWindow.value.period, offset: String(periodWindow.value.offset) },
-  })
-  return [
-    {
-      key: 'checkin',
-      label: t('console.metrics.checkin'),
-      rate: data?.checkin_rate_pct ?? null,
-      delta: data?.checkin_rate_delta,
-      to: to('checkin'),
+const engagementRows = computed<EngagementRow[]>(() =>
+  ENGAGEMENT_METRICS.map((key) => ({
+    key,
+    label: engagementLabel(key),
+    ...overviewRateOf(overview.value, key),
+    to: {
+      name: consoleRouteName('analytics'),
+      query: { metric: key, ...periodToQuery(periodWindow.value) },
     },
-    {
-      key: 'feedback',
-      label: t('console.metrics.feedback'),
-      rate: data?.feedback_rate_pct ?? null,
-      delta: data?.feedback_rate_delta,
-      to: to('feedback'),
-    },
-    {
-      key: 'return',
-      label: t('console.metrics.return'),
-      rate: data?.return_rate_pct ?? null,
-      delta: data?.return_rate_delta,
-      to: to('return'),
-    },
-  ]
-})
+  })),
+)
 </script>
 
 <style scoped>

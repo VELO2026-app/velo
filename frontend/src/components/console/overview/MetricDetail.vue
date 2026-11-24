@@ -18,7 +18,7 @@
     <div v-if="detail.kind === 'checkin'" class="detail__columns">
       <section class="detail__block">
         <h3 class="detail__heading">{{ t('console.analytics.checkin.trend') }}</h3>
-        <TrendBars :bars="detail.data.series" :empty-text="t('console.analytics.empty')" />
+        <VBarChart :bars="detail.data.series" :empty-text="t('console.analytics.empty')" />
       </section>
       <section class="detail__block">
         <h3 class="detail__heading">{{ t('console.analytics.checkin.lowTitle') }}</h3>
@@ -70,13 +70,10 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { VRatingBar } from '@/components/ui'
+import { VBarChart, VRatingBar } from '@/components/ui'
 import MetricFacts from '@/components/console/overview/MetricFacts.vue'
-import TrendBars from '@/components/console/overview/TrendBars.vue'
+import { ratingRowsOf } from '@/components/console/overview/engagement'
 import type { MetricDetailProps } from '@/components/console/overview/types'
-import { MOOD_SCALE_FILLS } from '@/utils/displayHelpers'
-import { MOOD_SCALE_KEYS, MOOD_SCALE_LABELS, zoneTotal, type MoodScaleKey } from '@/utils/moodScale'
-import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatCount } from '@/utils/format'
 
 const props = defineProps<{
@@ -104,20 +101,10 @@ const facts = computed(() => {
   ]
 })
 
-// Counts -> the share of the reviews left, for the bar widths; the best zone first.
-const ratingRows = computed(() => {
-  const detail = props.detail
-  if (detail.kind !== 'feedback') return []
-  const counts = detail.data.distribution
-  const total = zoneTotal(counts)
-  return [...MOOD_SCALE_KEYS].reverse().map((key: MoodScaleKey) => ({
-    key,
-    label: MOOD_SCALE_LABELS[key],
-    icon: MOOD_SCALE_ICON[key],
-    barColor: MOOD_SCALE_FILLS[key],
-    rate: total === 0 ? null : Math.round((counts[key] / total) * 100),
-  }))
-})
+// The distribution as bars, the best zone first.
+const ratingRows = computed(() =>
+  props.detail.kind === 'feedback' ? ratingRowsOf(props.detail.data.distribution) : [],
+)
 
 /** Participants shown: the endpoint returns the top 50, the screen reads the first ten. */
 const TOP_USERS_SHOWN = 10
@@ -185,6 +172,21 @@ const topUsers = computed(() =>
 .detail__sub {
   flex: 0 0 auto;
   color: var(--velo-text-secondary);
+}
+
+/* The kit's chart is made for the photo background: a card of its own with
+   a border, labels in the primary colour (4.39:1 on white in gold) and a
+   muted empty text (2.14:1). On the console card it is flat and its text takes
+   the colours the skins declare for text on a card. */
+.detail :deep(.v-bar-chart) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.detail :deep(.v-bar-chart__label),
+.detail :deep(.v-bar-chart__empty) {
+  color: var(--velo-text-primary);
 }
 
 .detail__ratings {

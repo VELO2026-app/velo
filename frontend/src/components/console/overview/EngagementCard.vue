@@ -8,13 +8,22 @@
 
 <template>
   <ConsoleCard :title="t('console.dashboard.engagement.title')" data-testid="engagement-card">
-    <ul class="engagement">
+    <ConsoleLoading v-if="loading" data-testid="engagement-loading" />
+    <OverviewEmpty
+      v-else-if="error"
+      icon="warning"
+      :title="t('console.dashboard.figures.loadFailed')"
+      :description="error"
+    >
+      <VButton size="sm" variant="outline" @click="emit('retry')">{{ t('common.retry') }}</VButton>
+    </OverviewEmpty>
+    <ul v-else class="engagement">
       <li v-for="row in rows" :key="row.key">
         <RouterLink class="engagement__row" :to="row.to" :data-testid="`engagement-${row.key}`">
           <span class="engagement__head">
             <span class="engagement__label">{{ row.label }}</span>
             <span class="engagement__rate" data-testid="engagement-rate">{{
-              rateText(row.rate)
+              formatRate(row.rate)
             }}</span>
           </span>
           <span class="engagement__track" aria-hidden="true">
@@ -29,17 +38,27 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
+import { VButton } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
+import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
 import DeltaLine from '@/components/console/overview/DeltaLine.vue'
+import OverviewEmpty from '@/components/console/overview/OverviewEmpty.vue'
+import { formatRate } from '@/components/console/overview/engagement'
 import type { EngagementRow } from '@/components/console/overview/types'
 
 defineProps<{
+  /** The three rates. */
   rows: EngagementRow[]
+  /** The window's overview is still on its way. */
+  loading: boolean
+  /** Why the overview could not be read; null -- it was. */
+  error: string | null
 }>()
 
-function rateText(rate: number | null): string {
-  return rate === null ? '—' : `${Math.round(rate)}%`
-}
+const emit = defineEmits<{
+  /** The Retry of the error state. */
+  retry: []
+}>()
 
 function fillOf(rate: number | null): number {
   return rate === null ? 0 : Math.min(100, Math.max(0, Math.round(rate)))

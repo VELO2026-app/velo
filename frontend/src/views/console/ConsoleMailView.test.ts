@@ -201,7 +201,7 @@ describe('ConsoleMailView: sending', () => {
 
   describe('against a second announcement', () => {
     it('two quick presses on the confirmation send one announcement', async () => {
-      let resolveSend!: (value: { queued: boolean; audience: 'all' }) => void
+      let resolveSend: (value: { queued: boolean; audience: 'all' }) => void = () => {}
       vi.mocked(adminApi.sendAnnouncement).mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -225,7 +225,7 @@ describe('ConsoleMailView: sending', () => {
     })
 
     it('a press while the confirmation is open or a send is in flight is dropped before the input is read', async () => {
-      let resolveSend!: (value: { queued: boolean; audience: 'all' }) => void
+      let resolveSend: (value: { queued: boolean; audience: 'all' }) => void = () => {}
       vi.mocked(adminApi.sendAnnouncement).mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -278,7 +278,7 @@ describe('ConsoleMailView: sending', () => {
   describe('failures', () => {
     it('a refusal keeps the form and tells the failure; the same text can be sent again', async () => {
       vi.mocked(adminApi.sendAnnouncement).mockRejectedValueOnce(
-        new ApiResponseError(500, 'Сервер недоступен', 'announcement_unmapped'),
+        new ApiResponseError(422, 'Заголовок слишком длинный', 'announcement_unmapped'),
       )
       await mount()
       await fill()
@@ -300,6 +300,23 @@ describe('ConsoleMailView: sending', () => {
       expect(toastSuccess).toHaveBeenCalledTimes(1)
     })
 
+    it('a 5xx from a gateway warns that the announcement may have gone out, like no answer at all', async () => {
+      vi.mocked(adminApi.sendAnnouncement).mockRejectedValueOnce(
+        new ApiResponseError(502, 'Bad gateway', 'bad_gateway'),
+      )
+      await mount()
+      await fill()
+      await press()
+      dialogButton('Отправить').click()
+      await flush()
+
+      expect(toastError).toHaveBeenCalledWith(
+        'Ответа от сервера нет, объявление могло уйти. Не отправляйте его повторно, пока не убедитесь.',
+      )
+      expect(toastError).toHaveBeenCalledTimes(1)
+      expect(field('input').value).toBe('Новые правила начислений')
+    })
+
     it('no answer from the server warns that the announcement may have gone out', async () => {
       vi.mocked(adminApi.sendAnnouncement).mockRejectedValueOnce(new Error('network'))
       await mount()
@@ -317,7 +334,7 @@ describe('ConsoleMailView: sending', () => {
 })
 
 describe('ConsoleMailView: the sent ones', () => {
-  it('says the history comes later: no rows, no request for them', async () => {
+  it('says the history comes later: an empty state, no rows', async () => {
     await mount()
 
     const card = host?.querySelector('[data-testid="announcement-history"]')

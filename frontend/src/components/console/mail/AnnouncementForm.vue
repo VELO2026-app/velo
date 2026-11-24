@@ -13,7 +13,7 @@
       nothing -- checked first, before the input is read;
     - the send asks the admin to confirm, naming who will receive it.
   A failure keeps the form as it was. An answer that never came (a timeout,
-  no network) says the announcement may have gone out.
+  no network) or a 5xx says the announcement may have gone out.
 -->
 
 <template>
@@ -149,9 +149,11 @@ async function send(): Promise<void> {
     title.value = ''
     body.value = ''
   } catch (error) {
-    // No answer at all: the request may have reached the server.
+    // A refusal (4xx) says nothing went out. A 5xx -- a gateway that gave up
+    // after the request reached the server -- and no answer at all (a timeout,
+    // no network) leave it open: the announcement may have gone out.
     toast.error(
-      error instanceof ApiResponseError
+      error instanceof ApiResponseError && error.status < 500
         ? extractApiError(error, t('console.mail.sendFailed'))
         : t('console.mail.sendUnknown'),
     )

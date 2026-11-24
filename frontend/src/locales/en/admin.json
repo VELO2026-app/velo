@@ -742,7 +742,8 @@
     "delta": {
       "vsPrevious": "vs previous period",
       "points": "{value} pp",
-      "none": "nothing to compare with"
+      "none": "nothing to compare with",
+      "failed": "the comparison failed to load"
     },
     "metrics": {
       "checkin": "Practices with check-in",

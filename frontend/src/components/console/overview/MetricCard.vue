@@ -17,13 +17,14 @@
   >
     <span class="metric-card__label">{{ label }}</span>
     <span class="metric-card__rate" data-testid="metric-rate">{{ rateText }}</span>
-    <DeltaLine :value="delta" unit="points" />
+    <DeltaLine :value="delta" unit="points" :failed="deltaFailed" />
   </button>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import DeltaLine from '@/components/console/overview/DeltaLine.vue'
+import { formatRate } from '@/components/console/overview/engagement'
 
 const props = defineProps<{
   /** Metric key (test id). */
@@ -34,6 +35,8 @@ const props = defineProps<{
   rate: number | null
   /** Change against the period before, percentage points. */
   delta: number | null | undefined
+  /** The change could not be read (its request failed). */
+  deltaFailed?: boolean
   /** Its breakdown is open. */
   selected: boolean
 }>()
@@ -42,7 +45,7 @@ const emit = defineEmits<{
   select: []
 }>()
 
-const rateText = computed(() => (props.rate === null ? '—' : `${Math.round(props.rate)}%`))
+const rateText = computed(() => formatRate(props.rate))
 </script>
 
 <style scoped>
