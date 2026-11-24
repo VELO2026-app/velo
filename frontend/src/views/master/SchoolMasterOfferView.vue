@@ -156,6 +156,7 @@ lines — counts only, by the same ruling.
 import { t } from '@/locales'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { acceptSchoolMasterOffer, declineSchoolMasterOffer, getSchoolPage } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolPageResponse } from '@/api/types'
@@ -198,7 +199,7 @@ async function load(): Promise<void> {
   transientError.value = false
   gone.value = false
   try {
-    page.value = await getSchoolPage(String(route.params.id ?? ''))
+    page.value = await getSchoolPage(routeParam(route, 'id'))
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
       gone.value = true
@@ -282,8 +283,9 @@ onMounted(load)
   align-items: center;
   justify-content: center;
   /* Standalone route (outside MobileLayout) — apply the screen rail directly
-     so content matches the app's rail (WS-1), same as SchoolJoinView. */
-  padding: var(--space-8) var(--velo-rail-pad-x) var(--space-5);
+     so content matches the app's rail (WS-1), same as SchoolJoinView; clear
+     the home indicator (--velo-safe-bottom, global.css; FE-240). */
+  padding: var(--space-8) var(--velo-rail-pad-x) calc(var(--space-5) + var(--velo-safe-bottom));
   gap: var(--space-4);
 }
 

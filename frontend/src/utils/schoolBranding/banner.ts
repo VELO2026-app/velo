@@ -19,22 +19,27 @@ function bandPts(
   S: SchoolBrandingParams['bg']['swirl'],
   sp: SchoolBrandingParams['bg']['swirl']['bands'][number],
   noise: (x: number, y: number) => number,
-): PathPoint[] {
+): { pts: PathPoint[]; first: PathPoint; last: PathPoint } {
   const steps = Math.max(28, Math.round(sp.arc / 0.05))
-  const pts: PathPoint[] = []
-  for (let i = 0; i <= steps; i++) {
+  const pointAt = (i: number): PathPoint => {
     const t = i / steps
     const th = sp.alpha + S.dir * sp.arc * t
     let r = sp.r0 + (t - 0.5) * sp.drift - Math.pow(t, 3) * sp.tuck
     r += (noise(Math.cos(th) * 1.6 + sp.ox + S.nSeed, Math.sin(th) * 1.6 + sp.oy) - 0.5) * S.wobble
     const w = sp.W * rampW(t) * (0.92 + noise(th * 1.9 + sp.ox, sp.oy) * 0.16)
-    pts.push({
+    return {
       x: S.cx + sp.ox + Math.cos(th) * r,
       y: S.cy + sp.oy + Math.sin(th) * r,
       w: Math.max(w, 1.5),
-    })
+    }
   }
-  return pts
+  // The ends are named, so the gradient reads them without an index lookup.
+  const first = pointAt(0)
+  const pts: PathPoint[] = [first]
+  for (let i = 1; i < steps; i++) pts.push(pointAt(i))
+  const last = pointAt(steps)
+  pts.push(last)
+  return { pts, first, last }
 }
 
 /** A thin stream flying out of the roll past the edge (like the strands at
@@ -63,12 +68,15 @@ function tailPts(
 /** A ribbon of three semi-transparent passes -- pigment layering
  *  (watercolor). */
 function ribbonSvg(pts: PathPoint[], color: string, opacity: number): string {
-  const offs = [0, 0.18, -0.18]
-  const alphas = [0.55, 0.32, 0.32]
-  return offs
+  const passes: readonly (readonly [offset: number, alpha: number])[] = [
+    [0, 0.55],
+    [0.18, 0.32],
+    [-0.18, 0.32],
+  ]
+  return passes
     .map(
-      (o, i) =>
-        `<path d="${taperedPath(offsetPts(pts, o))}" fill="${color}" opacity="${(opacity * alphas[i]!).toFixed(3)}"/>`,
+      ([o, alpha]) =>
+        `<path d="${taperedPath(offsetPts(pts, o))}" fill="${color}" opacity="${(opacity * alpha).toFixed(3)}"/>`,
     )
     .join('')
 }
@@ -127,20 +135,21 @@ export function bannerSvg(
 
   // ring ribbons: inner to outer, each with its own gradient along the arc
   S.bands.forEach((sp, i) => {
-    const pts = bandPts(S, sp, noise)
+    const { pts, first, last } = bandPts(S, sp, noise)
     const g = `${uid}-b${i}`
     defs +=
-      `<linearGradient id="${g}" gradientUnits="userSpaceOnUse" x1="${pts[0]!.x.toFixed(1)}" y1="${pts[0]!.y.toFixed(1)}" x2="${pts[pts.length - 1]!.x.toFixed(1)}" y2="${pts[pts.length - 1]!.y.toFixed(1)}">` +
+      `<linearGradient id="${g}" gradientUnits="userSpaceOnUse" x1="${first.x.toFixed(1)}" y1="${first.y.toFixed(1)}" x2="${last.x.toFixed(1)}" y2="${last.y.toFixed(1)}">` +
       `<stop offset="0" stop-color="${mixHex(c[sp.color], c.bg, sp.Wg)}"/><stop offset="1" stop-color="${c[sp.color]}"/></linearGradient>`
     streams += `<g opacity="${sp.opacity}">${ribbonSvg(pts, `url(#${g})`, 1)}</g>`
   })
 
   // leaves at the lower edge
-  if (b.leaves) {
-    streams += b.leaves.items
+  const leaves = b.leaves
+  if (leaves) {
+    streams += leaves.items
       .map(
         (l) =>
-          `<path d="${petal(l.a, 0, l.len, l.w, 0.5)}" transform="translate(${b.leaves!.x.toFixed(0)} ${b.leaves!.y.toFixed(0)})" fill="${c[l.color]}" opacity="${l.opacity}"/>`,
+          `<path d="${petal(l.a, 0, l.len, l.w, 0.5)}" transform="translate(${leaves.x.toFixed(0)} ${leaves.y.toFixed(0)})" fill="${c[l.color]}" opacity="${l.opacity}"/>`,
       )
       .join('')
   }

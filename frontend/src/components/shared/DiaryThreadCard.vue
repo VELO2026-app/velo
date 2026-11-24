@@ -166,7 +166,7 @@ import { computed } from 'vue'
 import { useDiaryCardModel } from '@/composables/useDiaryCardModel'
 import DiaryBubbleShape from '@/components/shared/DiaryBubbleShape.vue'
 import { IconCheck, IconCalendar, IconClock } from '@/components/icons'
-import type { DiaryFeedItem } from '@/api/types'
+import type { DiaryEventKind, DiaryFeedItem } from '@/api/types'
 
 const props = defineProps<{
   item: DiaryFeedItem
@@ -208,28 +208,23 @@ const {
 // instead of masquerading as a known card.
 type ThreadForm = 'banner' | 'checkin' | 'feedback' | 'practice' | 'entry' | 'activity' | 'fallback'
 
-const form = computed<ThreadForm>(() => {
-  switch (kind.value) {
-    case 'booking_confirmed':
-    case 'booking_cancelled_by_user':
-    case 'practice_rescheduled':
-    case 'practice_cancelled_by_master':
-      return 'banner'
-    case 'checkin':
-      return 'checkin'
-    case 'feedback':
-      return 'feedback'
-    case 'practice_outcome':
-      return 'practice'
-    case 'note':
-    case 'dream':
-      return 'entry'
-    case 'external_activity':
-      return 'activity'
-    default:
-      return 'fallback'
-  }
-})
+const FORM_BY_KIND: Record<DiaryEventKind, ThreadForm> = {
+  booking_confirmed: 'banner',
+  booking_cancelled_by_user: 'banner',
+  practice_rescheduled: 'banner',
+  practice_cancelled_by_master: 'banner',
+  checkin: 'checkin',
+  feedback: 'feedback',
+  practice_outcome: 'practice',
+  note: 'entry',
+  dream: 'entry',
+  external_activity: 'activity',
+  thread_started: 'fallback',
+}
+// The feed's kind is an open string at runtime (the union is a rendering-layer
+// narrowing), so the lookup is typed open: an unknown kind gives `undefined`.
+const formByKind: Readonly<Partial<Record<string, ThreadForm>>> = FORM_BY_KIND
+const form = computed<ThreadForm>(() => formByKind[kind.value] ?? 'fallback')
 
 // -- banner copy ---------------------------------------------------------------
 // The confirmed-booking reference copy: the title line
@@ -533,6 +528,9 @@ function onTap(): void {
   display: flex;
   gap: var(--velo-gap-6); /* the transparent gap between the two white surfaces */
   width: calc(267px * var(--velo-de-k, 1));
+  /* FE-240: scaled up by --velo-de-k the card can be wider than a narrow
+     screen's rail (320 px); the body column (min-width: 0) gives way. */
+  max-width: 100%;
   height: calc(47px * var(--velo-de-k, 1));
 }
 .tcard__entry-icon {

@@ -1015,7 +1015,7 @@ describe('AdminMasterReviewView', () => {
       expect(adminApi.revokeMaster).not.toHaveBeenCalled() // still untouched -- no confirm yet
     })
 
-    it('a FAILED preview leaves the base message (WARN-not-block) -- the confirm button still works', async () => {
+    it('a FAILED preview keeps the base message, says the check failed (not "no warnings"), and confirm still works (WARN-not-block, FE-242)', async () => {
       vi.mocked(adminApi.getRevokePreview).mockRejectedValue(new Error('ECONNRESET'))
       vi.mocked(adminApi.getMasterById).mockResolvedValue(MASTER_VERIFIED())
       vi.mocked(adminApi.revokeMaster).mockResolvedValue(advisory())
@@ -1027,6 +1027,7 @@ describe('AdminMasterReviewView', () => {
 
       expect(modalIsOpen()).toBe(true)
       expect(modalOverlay()?.textContent).toContain('снова станет обычным пользователем')
+      expect(modalOverlay()?.textContent).toContain('Проверка активных практик')
 
       modalBtn('Отозвать')?.click()
       await flush()

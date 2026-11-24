@@ -345,6 +345,7 @@ import { useQuery } from '@pinia/colada'
 import { masterUpcomingQuery, publicMasterQuery } from '@/composables/queries/publicMaster'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import {
   VLoader,
   VEmptyState,
@@ -377,7 +378,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const masterId = computed(() => String(route.params.id))
+const masterId = computed(() => optionalRouteParam(route, 'id') ?? '')
 // The roster's master rows navigate here with ?schoolId= -- the curator's
 // school context (see the school-context actions below).
 const schoolId = computed(() => String(route.query.schoolId ?? ''))
@@ -755,7 +756,7 @@ function goCreatePractice(): void {
   position: fixed;
   left: var(--velo-rail-pad-x);
   right: var(--velo-rail-pad-x);
-  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--space-8) + var(--velo-safe-bottom));
   z-index: var(--z-sticky);
 }
 

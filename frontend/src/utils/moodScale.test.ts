@@ -22,6 +22,7 @@ import {
   moodKeyFromScore,
   moodLabelFromScore,
   moodValueText,
+  zonePercents,
 } from './moodScale'
 
 describe('the scale itself', () => {
@@ -114,5 +115,23 @@ describe('moodValueText -- the range input reads «5 из 10 — Нормаль�
   it('clamps first, so a broken score still reads as a real emotion', () => {
     expect(moodValueText(0)).toBe('1 из 10 — Плохо')
     expect(moodValueText(11)).toBe('10 из 10 — Огонь')
+  })
+})
+
+describe('zonePercents', () => {
+  it('reads every zone as 0 when there are no feedbacks', () => {
+    const zeros = { bad: 0, low: 0, neutral: 0, good: 0, fire: 0 }
+    expect(zonePercents(zeros)).toEqual(zeros)
+  })
+
+  it('rounds each zone to a whole percent of the total', () => {
+    // 1/3 is 33.33...: an unrounded value would fail the whole-number match.
+    expect(zonePercents({ bad: 1, low: 1, neutral: 1, good: 0, fire: 0 })).toEqual({
+      bad: 33,
+      low: 33,
+      neutral: 33,
+      good: 0,
+      fire: 0,
+    })
   })
 })

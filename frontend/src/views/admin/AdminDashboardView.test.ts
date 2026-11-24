@@ -220,6 +220,23 @@ describe('AdminDashboardView', () => {
       expect(host?.querySelector('.admin-dashboard__stats')).not.toBeNull()
     })
 
+    it('failed counters: an error banner with Retry, not silently absent banners (FE-242)', async () => {
+      vi.mocked(adminApi.getAdminStats).mockRejectedValueOnce(new Error('down'))
+      mount()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="counters-error"]')).not.toBeNull()
+
+      counters({ pending_verifications: 2 })
+      Array.from(host!.querySelectorAll('button'))
+        .find((b) => b.textContent?.includes('Повторить'))!
+        .click()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="counters-error"]')).toBeNull()
+      expect(host?.textContent).toContain('2 мастера на верификации')
+    })
+
     it('a background refetch of the counters keeps the dashboard, no loader', async () => {
       mount()
       await flush()

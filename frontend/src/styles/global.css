@@ -387,6 +387,15 @@ ol {
    materializedSkinTokens). Also read by the two onboarding overlays. */
 :root {
   --velo-app-bg-image: none;
+  /* The bottom clearance of the home indicator (FE-240): the one name for
+     env(safe-area-inset-bottom) that tab bars, composers and bottom paddings
+     add to their own offset. Outside Telegram it is the system's inset (the
+     installed app draws edge to edge with viewport-fit=cover,
+     platform/launch.ts). Inside Telegram the viewport tag has no
+     viewport-fit, so iOS may report 0 here. Whether it should follow
+     Telegram's own --tg-viewport-safe-area-inset-bottom instead waits for a
+     measurement on a device (owner, 24.11: env() until then). */
+  --velo-safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* `#app-bg` is a STATIC element in index.html (first child of <body>, before
