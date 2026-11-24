@@ -42,8 +42,10 @@ export function masterPracticeBadge(status: PracticeStatus): PracticeStatusBadge
       return { label: t('practice.status.completed'), variant: 'success' }
     case 'cancelled':
       return { label: t('practice.status.cancelled'), variant: 'error' }
-    default:
-      // scheduled / live / deleted → no badge (date + buttons convey the phase)
+    case 'scheduled':
+    case 'live':
+    case 'deleted':
+      // no badge (date + buttons convey the phase)
       return null
   }
 }

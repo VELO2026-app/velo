@@ -138,6 +138,7 @@ so the order is invitation -> join -> onboarding (skippable) -> school.
 import { t } from '@/locales'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { getSchoolInvitePreview, joinSchool } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
 import type { SchoolInvitePreviewResponse } from '@/api/types'
@@ -229,15 +230,16 @@ const blocked = computed<RefusalView | null>(() => {
         open: false,
         icon: 'lock',
       }
-    default:
-      // can_join=false with no reason is not a contract shape; stay honest
-      // rather than guessing — same title as blocked, no invented details.
-      return {
-        title: t('masterScreens.schoolJoin.unavailable'),
-        description: '',
-        open: false,
-        icon: 'lock',
-      }
+    case null:
+      break
+  }
+  // can_join=false with no reason is not a contract shape; stay honest
+  // rather than guessing — same title as blocked, no invented details.
+  return {
+    title: t('masterScreens.schoolJoin.unavailable'),
+    description: '',
+    open: false,
+    icon: 'lock',
   }
 })
 
@@ -255,7 +257,7 @@ async function loadPreview(): Promise<void> {
   transientError.value = false
   notFound.value = false
   try {
-    preview.value = await getSchoolInvitePreview(String(route.params.token ?? ''))
+    preview.value = await getSchoolInvitePreview(routeParam(route, 'token'))
   } catch (e) {
     if (e instanceof ApiResponseError && e.status === 404) {
       notFound.value = true
@@ -271,7 +273,7 @@ async function join(): Promise<void> {
   if (!preview.value) return
   joining.value = true
   try {
-    const res = await joinSchool(String(route.params.token ?? ''))
+    const res = await joinSchool(routeParam(route, 'token'))
     toast.success(t('masterScreens.schoolJoin.joinedToast', { name: preview.value.school.name }))
     // The hub may have answered BEFORE this join (the account's first
     // school): without a fresh read the dock tab stays hidden until a full
@@ -352,8 +354,9 @@ onMounted(loadPreview)
   align-items: center;
   justify-content: center;
   /* Standalone route (outside MobileLayout) — apply the screen rail directly
-     so content matches the app's rail (WS-1), same as GroupJoinView. */
-  padding: var(--space-8) var(--velo-rail-pad-x) var(--space-5);
+     so content matches the app's rail (WS-1), same as GroupJoinView; clear
+     the home indicator (--velo-safe-bottom, global.css; FE-240). */
+  padding: var(--space-8) var(--velo-rail-pad-x) calc(var(--space-5) + var(--velo-safe-bottom));
   gap: var(--space-4);
 }
 

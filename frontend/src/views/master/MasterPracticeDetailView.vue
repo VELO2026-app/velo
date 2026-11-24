@@ -293,7 +293,7 @@
           :duration="durationLabel"
           :direction="practice.direction"
         >
-          <template v-if="hasRating" #extra>
+          <template v-if="ratingPcts" #extra>
             <VRatingBadges size="lg" :pcts="ratingPcts" />
           </template>
         </PracticeHeroCard>
@@ -405,6 +405,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { usePracticeInsights } from '@/composables/queries/diary'
 import { cachedMyPractice, myPracticesChanged } from '@/composables/queries/master'
 import { useQueryCache } from '@pinia/colada'
@@ -452,7 +453,7 @@ const router = useRouter()
 const toast = useToast()
 const queryCache = useQueryCache()
 
-const practiceId = route.params.id as string
+const practiceId = routeParam(route, 'id')
 
 // -- Data --
 const practice = ref<PracticeResponse | null>(null)
@@ -588,11 +589,11 @@ const totalFeedbacks = computed((): number => {
   const f = insights.value?.feedbacks
   return f ? zoneTotal(f) : 0
 })
-const hasRating = computed((): boolean => insights.value != null && totalFeedbacks.value > 0)
-// Rendered only under hasRating, so the insights are loaded there.
-const ratingPcts = computed((): Record<MoodScaleKey, number> =>
-  zonePercents(insights.value!.feedbacks),
-)
+// The badges' data, or null while there is no feedback to show.
+const ratingPcts = computed((): Record<MoodScaleKey, number> | null => {
+  const data = insights.value
+  return data && totalFeedbacks.value > 0 ? zonePercents(data.feedbacks) : null
+})
 
 // -- Past: stats (REAL via getAttendance; "—" until loaded) --
 const attendedValue = computed((): string | number =>

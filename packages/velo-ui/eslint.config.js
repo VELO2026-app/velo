@@ -60,6 +60,17 @@ export default [
       ],
       // Allow single-word component names (VStub, VButton, etc.).
       'vue/multi-word-component-names': 'off',
+      // --- FE-243: the places where TypeScript "closes its eyes". ----------
+      // A switch over a union lists every member (a `default` no longer
+      // stands in for the members it hides: a new member must fail here, not
+      // fall silently into the fallback). A non-null `!` is a claim the
+      // compiler cannot check -- narrow or guard instead, never swap it for
+      // `as`. `any` (and so `as any`) is already an error in the recommended
+      // set; it is repeated here so the ban reads as part of this law.
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/no-explicit-any': 'error',
+
       // console.warn/error allowed; console.log is a hard lint failure.
       'no-console': ['error', { allow: ['warn', 'error'] }],
 
@@ -99,6 +110,8 @@ export default [
     // plumbing read as violations through the type-aware rules.
     files: ['src/**/*.test.ts'],
     rules: {
+      // FE-243: counted warning in tests (lint-budget.json: maxWarningsUi).
+      '@typescript-eslint/no-non-null-assertion': 'warn',
       'vue/one-component-per-file': 'off',
       'vue/component-definition-name-casing': 'off',
       // happy-dom fixtures use window/document (same carve-out as the

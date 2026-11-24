@@ -120,7 +120,8 @@ function zoneDashboard(role: UserRole | null): { path: string } {
       return { path: '/admin/dashboard' }
     case 'master':
       return { path: '/master/dashboard' }
-    default:
+    case 'user':
+    case null:
       return { path: '/user/dashboard' }
   }
 }

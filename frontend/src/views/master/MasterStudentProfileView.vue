@@ -201,7 +201,7 @@
 
     <SendMessageModal
       :open="msgOpen"
-      :student-id="String(route.params.id)"
+      :student-id="studentId"
       :name="name"
       @close="msgOpen = false"
     />
@@ -250,7 +250,7 @@
 
     <ReportUserSheet
       :open="reportFormOpen"
-      :student-id="String(route.params.id)"
+      :student-id="studentId"
       :student-name="name"
       :student-avatar-url="avatarUrl"
       @close="reportFormOpen = false"
@@ -287,7 +287,7 @@
          T24-10, PROMPT №638 -- see that component's own comment). -->
     <AddTagSheet
       :open="tagSheetOpen"
-      :student-id="String(route.params.id)"
+      :student-id="studentId"
       :student-name="name"
       :current-tag="null"
       @close="tagSheetOpen = false"
@@ -295,7 +295,7 @@
 
     <AddToGroupSheet
       :open="addToGroupSheetOpen"
-      :student-id="String(route.params.id)"
+      :student-id="studentId"
       :student-name="name"
       :avatar-url="avatarUrl"
       :custom-groups="customGroups"
@@ -307,7 +307,7 @@
 
     <RemoveFromGroupSheet
       :open="removeFromGroupSheetOpen"
-      :student-id="String(route.params.id)"
+      :student-id="studentId"
       :student-name="name"
       :avatar-url="avatarUrl"
       :current-group-id="null"
@@ -322,6 +322,7 @@
 import { t } from '@/locales'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam, routeParam } from '@/router/routeParam'
 import { VHeader } from '@/components/layout'
 import {
   VAvatar,
@@ -358,6 +359,9 @@ import type { StudentGroupItem, GroupListItem } from '@/api/groups'
 
 const route = useRoute()
 const router = useRouter()
+// The template reads it reactively (a leaving screen sees the next route);
+// the requests read the required param when they run.
+const studentId = computed(() => optionalRouteParam(route, 'id') ?? '')
 
 // Identity comes from StudentDetailResponse (name/avatar_url, E5). The list
 // still forwards ?name= for an instant pre-fetch render; the generic student
@@ -383,7 +387,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    detail.value = await getStudent(String(route.params.id))
+    detail.value = await getStudent(routeParam(route, 'id'))
   } catch {
     error.value = t('common.tryAgain')
   } finally {
@@ -397,7 +401,7 @@ onMounted(load)
 const groupChips = ref<StudentGroupItem[]>([])
 async function loadGroups(): Promise<void> {
   try {
-    const res = await getStudentGroups(String(route.params.id))
+    const res = await getStudentGroups(routeParam(route, 'id'))
     groupChips.value = res.groups
   } catch {
     groupChips.value = []
@@ -491,7 +495,7 @@ const blocking = ref(false)
 async function onBlockConfirm(): Promise<void> {
   blocking.value = true
   try {
-    await blockStudent(String(route.params.id))
+    await blockStudent(routeParam(route, 'id'))
     toast.success(t('masterScreens.masterStudentProfile.toast.blocked'))
     blockConfirmOpen.value = false
     // T24-20: refresh detail.blocked so the "..." menu hides and the bottom
@@ -541,7 +545,7 @@ const unblocking = ref(false)
 async function onUnblockConfirm(): Promise<void> {
   unblocking.value = true
   try {
-    await unblockStudent(String(route.params.id))
+    await unblockStudent(routeParam(route, 'id'))
     toast.success(t('masterScreens.masterStudentProfile.toast.unblocked'))
     unblockConfirmOpen.value = false
     // Restores detail.blocked=false -- the "..." menu reappears and the

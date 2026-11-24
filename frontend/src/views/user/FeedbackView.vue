@@ -120,6 +120,7 @@ import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { usePracticesStore } from '@/stores/practices'
 import { useMyBookings } from '@/composables/queries/bookings'
 import { useDiaryStore } from '@/stores/diary'
@@ -139,7 +140,7 @@ const { bookings, settled: bookingsSettled } = useMyBookings()
 const diaryStore = useDiaryStore()
 const toast = useToast()
 
-const practiceId = route.params.practiceId as string
+const practiceId = routeParam(route, 'practiceId')
 
 const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
