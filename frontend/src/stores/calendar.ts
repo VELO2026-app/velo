@@ -116,7 +116,7 @@ function weekDays(anchor: Date): Date[] {
 /** Parse a YYYY-MM-DD local-day key back to a Date at local midnight. */
 export function parseLocalDateKey(key: string): Date {
   const [y, m, d] = key.split('-').map(Number)
-  return DateTime.fromObject({ year: y ?? Number.NaN, month: m ?? 1, day: d ?? 1 }).toJSDate()
+  return DateTime.fromObject({ year: Number(y), month: m ?? 1, day: d ?? 1 }).toJSDate()
 }
 
 /** Today at local midnight. */
