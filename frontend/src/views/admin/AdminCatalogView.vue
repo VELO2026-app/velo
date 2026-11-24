@@ -392,7 +392,11 @@ async function toggleStyleActive(st: TaxonomyStyleItem): Promise<void> {
   flex-wrap: wrap;
 }
 
-.admin-catalog__add-input {
+/* FE-240: on the VInput ROOT. The class above the component lands on the
+   inner <input> (VInput forwards attrs there), so these rules never reached
+   the flex item: the field kept its intrinsic width and ran past the card
+   on a 320 px screen. */
+.admin-catalog__add > .v-input {
   flex: 1;
   min-width: 0;
   margin-bottom: 0;
