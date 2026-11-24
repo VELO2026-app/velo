@@ -14,11 +14,11 @@
     back-label="Check-in"
     :practice="practice"
     :practice-loading="practiceLoading"
-    :load-error="practiceLoadError"
+    :load-error="screenError"
     :question-title="t('user.screens.checkin.question.title')"
     :question-subtitle="t('user.screens.checkin.question.subtitle')"
     :submitting="diaryStore.checkinSubmitting"
-    :submit-disabled="windowClosed"
+    :submit-disabled="windowClosed || bookingsLoading"
     :disabled-hint="practice && windowClosed ? t('user.screens.checkin.windowClosedHint') : ''"
     :submit-label="t('common.submitSend')"
     :show-skip="true"
@@ -26,7 +26,7 @@
     :success-title="t('user.screens.checkin.toast.sent')"
     :success-text="t('user.screens.checkin.toast.recorded')"
     @back="onBack"
-    @retry="loadPractice"
+    @retry="reload"
     @submit="onSubmit"
     @skip="onSkip"
   >
@@ -95,7 +95,12 @@ const route = useRoute()
 const router = useRouter()
 const practicesStore = usePracticesStore()
 const bookingsStore = useBookingsStore()
-const { bookings, failed: bookingsFailed, refetch: refetchBookings } = useMyBookings()
+const {
+  bookings,
+  loading: bookingsLoading,
+  failed: bookingsFailed,
+  refetch: refetchBookings,
+} = useMyBookings()
 const skipCheckin = useSkipCheckin()
 const diaryStore = useDiaryStore()
 const toast = useToast()
@@ -105,10 +110,12 @@ const viewerTz = useViewerTimezone()
 
 const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
-// A failed bookings list is an error rung too (FE-242): `has_checkin` lives in
-// that list, so an unread list would offer a form for a check-in that may exist,
-// and the upsert would overwrite its mood and comment.
-const practiceLoadError = computed(
+// `has_checkin` lives in the bookings list: while it has not answered (first
+// visit, or a retry in flight) submit is held, and a failed list is an error rung
+// with Retry, like a failed practice -- a form drawn on an unread list would offer
+// a check-in that may already exist, and the upsert would overwrite its mood and
+// comment (FE-242).
+const screenError = computed(
   () => practicesStore.selectedError ?? (bookingsFailed.value ? t('common.loadError') : null),
 )
 
@@ -162,7 +169,13 @@ const formattedDate = computed(() =>
 )
 
 async function onSubmit(): Promise<void> {
-  if (diaryStore.checkinSubmitting || windowClosed.value || alreadyCheckedIn.value) return
+  if (
+    diaryStore.checkinSubmitting ||
+    windowClosed.value ||
+    bookingsLoading.value ||
+    alreadyCheckedIn.value
+  )
+    return
 
   const result = await diaryStore.submitCheckin(practiceId, {
     mood: moodScore.value,
@@ -255,14 +268,14 @@ watch(
 // Named so the error rung's retry button (i18n:common.retry) can re-run exactly what onMounted ran.
 // Unconditional: the guard below is a cache check for the mount path, but a retry
 // means the last attempt FAILED, so there is nothing cached to skip for.
-function loadPractice(): void {
+function reload(): void {
   void practicesStore.fetchPractice(practiceId)
   if (bookingsFailed.value) void refetchBookings()
 }
 
 onMounted(() => {
   if (practicesStore.selected?.id !== practiceId) {
-    loadPractice()
+    reload()
   }
   tickHandle = setInterval(() => {
     nowMs.value = Date.now()

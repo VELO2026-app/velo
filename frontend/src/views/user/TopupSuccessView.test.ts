@@ -128,9 +128,7 @@ describe('TopupSuccessView', () => {
       authState.user = { balance_cents: 2500 }
       return true
     })
-    Array.from(host!.querySelectorAll('button'))
-      .find((b) => b.textContent?.includes('Повторить'))!
-      .click()
+    button('Повторить')!.click()
     await flush()
 
     expect(text()).toContain('25,00')

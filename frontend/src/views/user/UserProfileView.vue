@@ -44,8 +44,12 @@
       <h1 class="profile__name">{{ displayName }}</h1>
     </VCard>
 
-    <!-- Stats: practices + hours -->
-    <div class="profile__stats">
+    <!-- Stats: practices + hours. A failed read is an error with Retry, never a
+         real-looking 0 (FE-242). -->
+    <VEmptyState v-if="statsFailed" icon="warning" :title="t('common.loadError')">
+      <VButton size="sm" @click="statsQuery.refetch()">{{ t('common.retry') }}</VButton>
+    </VEmptyState>
+    <div v-else class="profile__stats">
       <VStatCard
         class="profile__stat"
         :value="practicesAttended"
@@ -189,7 +193,7 @@ import { useAuthStore } from '@/stores/auth'
 import { featureEnabled } from '@/platform/features'
 import { isOptionEnabled } from '@/platform/instance'
 import { useUiStore } from '@/stores/ui'
-import { VAvatar, VStatCard, VCard, VMenuRow } from '@/components/ui'
+import { VAvatar, VStatCard, VCard, VMenuRow, VEmptyState, VButton } from '@/components/ui'
 import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
 import {
   IconPen,
@@ -241,11 +245,9 @@ let activations = 0
 onActivated(() => {
   if (activations++ > 0) void statsQuery.refetch()
 })
-// No data and a failed request: a dash, never a 0 that reads as real (FE-242).
+// No data and a failed request: the stats block says so (FE-242).
 const statsFailed = screenQueryState(statsQuery).failed
-const practicesAttended = computed(() =>
-  statsFailed.value ? '—' : (statsQuery.data.value?.practices_attended ?? 0),
-)
+const practicesAttended = computed(() => statsQuery.data.value?.practices_attended ?? 0)
 const hoursAttended = computed(() => statsQuery.data.value?.hours_attended ?? 0)
 // B52: colour indicator on the t('user.screens.userProfile.messages') row, same request, no new call.
 const hasUnreadMessages = computed(() => statsQuery.data.value?.has_unread_messages ?? false)
@@ -255,7 +257,6 @@ const hasUnreadMessages = computed(() => statsQuery.data.value?.has_unread_messa
  * fractional values use a comma to match the Russian mockup ("9,5").
  */
 const hoursLabel = computed(() => {
-  if (statsFailed.value) return '—'
   const h = hoursAttended.value
   return Number.isInteger(h) ? String(h) : String(h).replace('.', ',')
 })

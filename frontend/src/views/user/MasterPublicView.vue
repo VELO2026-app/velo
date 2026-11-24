@@ -219,12 +219,11 @@
           />
         </div>
         <!-- A failed list is not "nothing planned" (FE-242): say so, offer Retry. -->
-        <div v-else-if="upcomingFailed" class="master-public__note" data-testid="upcoming-error">
-          <p>{{ t('common.loadError') }}</p>
+        <VEmptyState v-else-if="upcomingFailed" icon="warning" :title="t('common.loadError')">
           <VButton size="sm" variant="secondary" @click="upcomingQuery.refetch()">{{
             t('common.retry')
           }}</VButton>
-        </div>
+        </VEmptyState>
         <p v-else class="master-public__note">
           {{ t('user.screens.masterPublic.sections.nonePlanned') }}
         </p>

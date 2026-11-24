@@ -119,12 +119,11 @@
         </template>
 
         <!-- Error (nothing to show, last request failed): never the empty copy -->
-        <div v-if="upcomingFailed" class="dashboard__empty" data-testid="screen-error">
-          <p class="dashboard__empty-text">{{ t('common.loadError') }}</p>
+        <VEmptyState v-if="upcomingFailed" icon="warning" :title="t('common.loadError')">
           <VButton size="sm" variant="outline" @click="loadUpcoming">
             {{ t('common.retry') }}
           </VButton>
-        </div>
+        </VEmptyState>
 
         <!-- Empty -->
         <div v-else-if="nearestBookings.length === 0" class="dashboard__empty">
@@ -295,7 +294,14 @@ import { extractApiError } from '@/composables/useApiError'
 import { useUnreadBadge } from '@/composables/queries/notifications'
 import { useToast } from '@/composables/useToast'
 import { VHeader } from '@/components/layout'
-import { VButton, VBadge, VStatCard, VSkeletonPracticeCard, VLoadingSwap } from '@/components/ui'
+import {
+  VButton,
+  VBadge,
+  VStatCard,
+  VSkeletonPracticeCard,
+  VLoadingSwap,
+  VEmptyState,
+} from '@/components/ui'
 import { useQuery } from '@pinia/colada'
 import { myStatsQuery } from '@/composables/queries/stats'
 import { screenQueryState } from '@/composables/queries/screenState'

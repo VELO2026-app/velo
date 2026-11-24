@@ -35,12 +35,7 @@
 
     <div v-if="loading" class="waitlist-confirm__state" role="status"><VLoader /></div>
 
-    <VEmptyState
-      v-else-if="loadFailed"
-      icon="warning"
-      :title="t('common.loadError')"
-      data-testid="screen-error"
-    >
+    <VEmptyState v-else-if="loadFailed" icon="warning" :title="t('common.loadError')">
       <template #action>
         <VButton size="sm" @click="load">{{ t('common.retry') }}</VButton>
       </template>

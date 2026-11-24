@@ -554,9 +554,7 @@ describe('PracticeLiveView', () => {
       expect(emptyState()?.textContent).not.toContain('Практика не найдена')
 
       resolveZoomEntry.mockResolvedValue({ kind: 'personal' })
-      Array.from(host!.querySelectorAll('button'))
-        .find((b) => b.textContent?.includes('Повторить'))!
-        .click()
+      buttonByText('Повторить')!.click()
       await flush()
 
       expect(emptyState()).toBeNull()
