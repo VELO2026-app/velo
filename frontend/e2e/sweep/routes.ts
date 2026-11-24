@@ -325,6 +325,11 @@ export const SWEEP: Record<string, SweepRow> = {
   // stub (views/console/consoleAccess.ts) -- that is the screen checked.
   'console-dashboard': { path: '/console/dashboard', roles: A },
   'console-masters': { path: '/console/masters', roles: A },
+  'console-masters-detail': {
+    path: '/console/masters/:id',
+    roles: A,
+    params: { id: 'masterUserId' },
+  },
   'console-users': { path: '/console/users', roles: A },
   'console-schools': { path: '/console/schools', roles: A },
   'console-practices': { path: '/console/practices', roles: A },
