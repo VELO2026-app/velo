@@ -41,6 +41,11 @@
 //                                at all -- without it the app shows the
 //                                brand's favicon.svg in the logo places
 //                                (contract "2.1", FE-230)
+//   assets/mood/<key>.svg        the mood icon set (contract "2.3", FE-273):
+//                                bad, low, neutral, good, fire -- whole or
+//                                not at all; without it the app draws the
+//                                core faces. A closed SVG subset, read by
+//                                parseMoodSvg() below and drawn inline
 //   assets/bg/, assets/onboarding/   optional, replace the public/ ones
 //   assets/fonts/<name>.woff2    self-hosted webfonts (no external request
 //                                from a package -- tz-whitelabel §7)
@@ -80,8 +85,9 @@ export const SKIN_CONTRACT_MAJOR = 2
 /** The contract a package written by this product's tools declares.
  *  2.1 (FE-230): the brand record may carry contrastExceptions.
  *  2.2 (FE-251): the brand record may carry supportEmail.
- *      2.2 (FE-261): ... and supportMark (one minor, two fields). */
-export const SKIN_CONTRACT = '2.2'
+ *      2.2 (FE-261): ... and supportMark (one minor, two fields).
+ *  2.3 (FE-273): the package may carry the mood icon set (assets/mood/). */
+export const SKIN_CONTRACT = '2.3'
 /** Optional brand-record fields and the first minor of contract 2 that
  *  knows each: a reader of an older minor refuses the field as unknown, so
  *  a package that carries it must declare that minor or later. */
@@ -157,6 +163,216 @@ export function shipsLogo(files) {
 /** Optional asset directories: each replaces the public/ one of its name. */
 export const ASSET_DIRS = ['bg', 'onboarding']
 
+// -- the mood icon set (contract 2.3, FE-273) -------------------------------------
+/** The five mood keys, worst to best: the file names of the set
+ *  (assets/mood/<key>.svg). The same list as MoodScaleKey in
+ *  utils/moodScale.ts; this module reads node:fs and never reaches the
+ *  bundle, so it cannot import it -- skin-package.test.ts pins the two. */
+export const MOOD_KEYS = ['bad', 'low', 'neutral', 'good', 'fire']
+/** The first minor of contract 2 that knows the mood icon set. */
+const MOOD_ICONS_MINOR = 3
+/** One icon, in bytes: the trees travel in a JS chunk, so a cap tighter than
+ *  the generic SVG one (the Goodo set is about 60 KB an icon). */
+const MOOD_SVG_MAX_BYTES = 128 * 1024
+const MOOD_MAX_ELEMENTS = 2000
+const MOOD_MAX_DEPTH = 8
+
+/** Does the package (its file list) ship any file of the mood icon set? */
+export function shipsMoodIcons(files) {
+  return files.some((file) => file.startsWith('assets/mood/'))
+}
+
+// The package is data, and a mood icon is DRAWN from its tree by the client
+// (no <img>: an image would not inherit currentColor), so the file is read
+// through a closed vocabulary instead of being injected as markup. Nothing
+// outside the lists below survives into the tree; a file with anything else
+// is refused, not trimmed.
+const MOOD_ELEMENTS = new Set([
+  'svg',
+  'g',
+  'path',
+  'circle',
+  'ellipse',
+  'rect',
+  'line',
+  'polyline',
+  'polygon',
+  'defs',
+  'linearGradient',
+  'radialGradient',
+  'stop',
+  'clipPath',
+])
+const MOOD_DRAWN = new Set(['path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon'])
+const MOOD_ID = /^[A-Za-z][A-Za-z0-9_.-]*$/
+const MOOD_NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?%?$/i
+/** Path data, a point list, a transform, a viewBox: no quote, colon or brace. */
+const MOOD_GEOMETRY = /^[A-Za-z0-9.,+\-\s()]*$/
+const MOOD_HEX = '#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})'
+const MOOD_URL = '\\(#[A-Za-z][A-Za-z0-9_.-]*\\)'
+/** The attributes a mood icon may carry, each with the shape of its value.
+ *  @type {Map<string, RegExp>} */
+const MOOD_ATTRS = new Map()
+/** @param {string[]} names @param {RegExp} shape */
+function allow(names, shape) {
+  for (const name of names) MOOD_ATTRS.set(name, shape)
+}
+allow(['d', 'points', 'transform', 'gradientTransform', 'viewBox'], MOOD_GEOMETRY)
+allow(
+  [
+    'x',
+    'y',
+    'width',
+    'height',
+    'cx',
+    'cy',
+    'r',
+    'rx',
+    'ry',
+    'x1',
+    'y1',
+    'x2',
+    'y2',
+    'fx',
+    'fy',
+    'offset',
+    'opacity',
+    'fill-opacity',
+    'stroke-opacity',
+    'stop-opacity',
+    'stroke-width',
+    'stroke-miterlimit',
+  ],
+  MOOD_NUMBER,
+)
+// Paint: nothing, the text color (the line color of the app -- the one the
+// core faces use), a hex, or a gradient of this file.
+allow(['fill', 'stroke'], new RegExp(`^(none|currentColor|${MOOD_HEX}|url${MOOD_URL})$`))
+allow(['stop-color'], new RegExp(`^(currentColor|${MOOD_HEX})$`))
+allow(['clip-path'], new RegExp(`^url${MOOD_URL}$`))
+allow(['fill-rule', 'clip-rule'], /^(nonzero|evenodd)$/)
+allow(['stroke-linecap'], /^(butt|round|square)$/)
+allow(['stroke-linejoin'], /^(miter|round|bevel)$/)
+allow(['gradientUnits'], /^(userSpaceOnUse|objectBoundingBox)$/)
+allow(['id'], MOOD_ID)
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+const MOOD_TAG =
+  /<(\/?)([A-Za-z][A-Za-z0-9]*)((?:\s+[^\s=/<>"']+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/y
+
+/** A package string quoted and cut for a message (it is data, never raw). */
+function quoted(text) {
+  const cut = text.length > 24 ? `${text.slice(0, 24)}...` : text
+  return JSON.stringify(cut)
+}
+
+/**
+ * Reads one mood icon file into a tree of the closed vocabulary above.
+ *
+ * @returns `{ tree }` -- `{ tag, attrs?, children? }` nodes, the root an `svg`
+ *   whose attrs are its viewBox (a square: the icon's nominal box, the art may
+ *   run outside it) and `fill`; its width, height and xmlns are dropped, the
+ *   client sizes the icon. Or `{ error }` -- the file is not a well-formed
+ *   SVG of the vocabulary (truncated, mismatched tags, text, an element or
+ *   attribute outside the lists, a gradient that is not there, nothing drawn).
+ */
+export function parseMoodSvg(text) {
+  const src = text
+    .replace(/^\uFEFF/, '')
+    .replace(/^\s*<\?xml[^>]*\?>/, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+  /** @type {any} */
+  let root = null
+  /** @type {any[]} */
+  const stack = []
+  const ids = new Set()
+  const refs = new Set()
+  let count = 0
+  let drawn = 0
+  let at = 0
+  while (at < src.length) {
+    const next = src.indexOf('<', at)
+    const gap = src.slice(at, next === -1 ? src.length : next)
+    if (gap.trim() !== '') return { error: `text outside tags (${quoted(gap.trim())})` }
+    if (next === -1) break
+    MOOD_TAG.lastIndex = next
+    const m = MOOD_TAG.exec(src)
+    if (m === null) return { error: `unreadable markup at ${quoted(src.slice(next, next + 40))}` }
+    at = MOOD_TAG.lastIndex
+    const [, closing, name, rawAttrs, selfClosing] = m
+    if (closing) {
+      if (selfClosing || rawAttrs.trim() !== '')
+        return { error: `a closing tag </${name}> with content` }
+      const top = stack.pop()
+      if (top === undefined) return { error: `</${name}> closes nothing` }
+      if (top.tag !== name) return { error: `</${name}> closes <${top.tag}>` }
+      continue
+    }
+    if (root !== null && stack.length === 0)
+      return { error: `content after the closing </${root.tag}>` }
+    if (!MOOD_ELEMENTS.has(name))
+      return { error: `the element <${name}> is not allowed (${[...MOOD_ELEMENTS].join(', ')})` }
+    if (++count > MOOD_MAX_ELEMENTS) return { error: `more than ${MOOD_MAX_ELEMENTS} elements` }
+    if (stack.length >= MOOD_MAX_DEPTH) return { error: `nested deeper than ${MOOD_MAX_DEPTH}` }
+    if (root === null && name !== 'svg') return { error: 'not an SVG image' }
+    if (root !== null && name === 'svg') return { error: 'a nested <svg>' }
+    /** @type {Record<string, string>} */
+    const attrs = {}
+    for (const [, key, double, single] of rawAttrs.matchAll(
+      /([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g,
+    )) {
+      const value = (double ?? single).trim()
+      if (key in attrs) return { error: `<${name}> has ${quoted(key)} twice` }
+      if (key === 'xmlns') {
+        if (name !== 'svg' || value !== SVG_NAMESPACE)
+          return { error: `xmlns must be ${SVG_NAMESPACE} on <svg>` }
+        continue
+      }
+      const shape = MOOD_ATTRS.get(key)
+      if (shape === undefined)
+        return { error: `<${name}> has the attribute ${quoted(key)}, not allowed` }
+      if (!shape.test(value))
+        return { error: `<${name} ${key}=${quoted(value)}>: not a value of that attribute` }
+      if (key === 'id') {
+        if (ids.has(value)) return { error: `the id ${quoted(value)} is declared twice` }
+        ids.add(value)
+      }
+      for (const [, ref] of value.matchAll(/url\(#([^)]+)\)/g)) refs.add(ref)
+      attrs[key] = value
+    }
+    /** @type {any} */
+    const node = { tag: name }
+    if (MOOD_DRAWN.has(name)) drawn++
+    if (root === null) {
+      root = node
+    } else {
+      const parent = stack[stack.length - 1]
+      parent.children = parent.children ?? []
+      parent.children.push(node)
+    }
+    if (name === 'svg') {
+      // The client sizes the icon: width and height are not read.
+      delete attrs.width
+      delete attrs.height
+    }
+    if (Object.keys(attrs).length > 0) node.attrs = attrs
+    if (!selfClosing) stack.push(node)
+  }
+  if (stack.length > 0) return { error: `<${stack[stack.length - 1].tag}> is never closed` }
+  if (root === null) return { error: 'not an SVG image' }
+  const box = (root.attrs?.viewBox ?? '')
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .map(Number)
+  if (box.length !== 4 || !box.every(Number.isFinite) || box[2] <= 0 || box[3] <= 0)
+    return { error: 'the root <svg> needs a viewBox of four numbers, width and height above 0' }
+  if (Math.abs(box[2] - box[3]) > 0.01 * Math.max(box[2], box[3]))
+    return { error: `the viewBox ${box[2]} x ${box[3]} is not a square` }
+  for (const ref of refs)
+    if (!ids.has(ref)) return { error: `url(#${ref}) points at no element of the file` }
+  if (drawn === 0) return { error: 'draws nothing' }
+  return { tree: root }
+}
+
 const ALLOWED_FILES = [
   /^primer-package\.yaml$/,
   /^README\.md$/,
@@ -164,6 +380,7 @@ const ALLOWED_FILES = [
   /^tokens\/[a-z0-9-]+\.tokens\.json$/,
   /^assets\/[a-z0-9-]+\.(svg|png)$/,
   /^assets\/(bg|onboarding)\/[a-z0-9-]+\.(svg|png|jpg|webp)$/,
+  /^assets\/mood\/(bad|low|neutral|good|fire)\.svg$/,
   /^assets\/fonts\/[a-z0-9-]+\.woff2$/,
 ]
 const MAX_FILES = 256
@@ -636,20 +853,52 @@ function checkAsset(dir, file, problems) {
   }
 }
 
+/** The mood icon set of the package: the five trees, or null when the
+ *  package ships none (the core faces then draw). Whole or not at all, like
+ *  the logo set; any file of it needs contract 2.3. */
+function loadMoodIcons(dir, files, contract, problems) {
+  if (!shipsMoodIcons(files)) return null
+  if (contract !== null && Number(contract.split('.')[1]) < MOOD_ICONS_MINOR)
+    problems.push(
+      `assets/mood/: the mood icon set needs contract "2.${MOOD_ICONS_MINOR}" or later, got "${contract}"`,
+    )
+  /** @type {Record<string, unknown>} */
+  const set = {}
+  for (const key of MOOD_KEYS) {
+    const file = `assets/mood/${key}.svg`
+    if (!files.includes(file)) {
+      problems.push(
+        `${file}: missing -- the mood icon set (${MOOD_KEYS.join(', ')}) ships whole or not at all`,
+      )
+      continue
+    }
+    const path = join(dir, file)
+    if (statSync(path).size > MOOD_SVG_MAX_BYTES) {
+      problems.push(`${file}: larger than ${MOOD_SVG_MAX_BYTES} bytes`)
+      continue
+    }
+    const parsed = parseMoodSvg(readFileSync(path, 'utf8'))
+    if (parsed.error) problems.push(`${file}: ${parsed.error}`)
+    else set[key] = parsed.tree
+  }
+  return MOOD_KEYS.every((key) => key in set) ? set : null
+}
+
 // -- the package -----------------------------------------------------------------------
 
 /**
  * Reads and checks the skin package at `dir` against the golden token map.
  *
- * @returns `{ problems, contract, brand, decls, files }` -- `problems` empty
+ * @returns `{ problems, contract, brand, decls, files, moodIcons }` -- `problems` empty
  *   means the package is well-formed (validate-skin.mjs adds the content
  *   checks: contrast, PNG facts, the single header-color source). `decls` is
- *   `[cssName, cssValue][]` in the golden cascade order.
+ *   `[cssName, cssValue][]` in the golden cascade order; `moodIcons` is the
+ *   five icon trees of assets/mood/ (parseMoodSvg), or null without the set.
  */
 export function loadSkinPackage(dir, tokensDoc) {
   dir = resolve(dir)
   const problems = []
-  const empty = { problems, contract: null, brand: null, decls: [], files: [] }
+  const empty = { problems, contract: null, brand: null, decls: [], files: [], moodIcons: null }
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     problems.push(`${dir}: no package directory`)
     return empty
@@ -661,6 +910,7 @@ export function loadSkinPackage(dir, tokensDoc) {
   const tokens = new Map()
   const brands = []
   for (const file of files.filter((f) => f.startsWith('assets/'))) checkAsset(dir, file, problems)
+  const moodIcons = loadMoodIcons(dir, files, contract, problems)
 
   for (const file of files.filter((f) => f.startsWith('tokens/'))) {
     if (statSync(join(dir, file)).size > JSON_MAX_BYTES) {
@@ -808,6 +1058,7 @@ export function loadSkinPackage(dir, tokensDoc) {
     brand,
     decls: decls.map((d) => [d.name, d.value]),
     files,
+    moodIcons,
   }
 }
 

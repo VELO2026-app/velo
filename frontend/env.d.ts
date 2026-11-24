@@ -135,3 +135,8 @@ declare module 'virtual:skin-brand' {
   export const SKIN_SUPPORT_EMAIL: string | null
   export const SKIN_SUPPORT_MARK: 'logo' | 'icon'
 }
+/** The skin's mood icon set (contract 2.3, FE-273): five SVG trees, or null =
+ *  the package ships none, the mood places draw the core faces. */
+declare module 'virtual:skin-mood' {
+  export const SKIN_MOOD_ICONS: import('./scripts/lib/skin-package.mjs').MoodIconSet | null
+}
