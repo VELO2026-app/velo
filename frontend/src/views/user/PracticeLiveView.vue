@@ -88,13 +88,8 @@
       />
 
       <!-- Network / 5xx: not "no such practice" (FE-242) -- retryable. -->
-      <VEmptyState
-        v-else-if="resolveFailed"
-        icon="warning"
-        :title="t('common.loadError')"
-        data-testid="screen-error"
-      >
-        <VButton size="sm" @click="loadEntry">{{ t('common.retry') }}</VButton>
+      <VEmptyState v-else-if="resolveFailed" icon="warning" :title="t('common.loadError')">
+        <VButton size="sm" :loading="resolving" @click="loadEntry">{{ t('common.retry') }}</VButton>
       </VEmptyState>
 
       <!-- F4: the server has no Meeting SDK keys (or runs the Zoom stub).
@@ -228,7 +223,7 @@ import { useSafeArea } from '@/composables/useSafeArea'
 import { VButton, VBackButton, VCard, VBadge, VEmptyState } from '@/components/ui'
 import PracticePlaceholder from '@/components/shared/PracticePlaceholder.vue'
 import { joinZoomSdk, resolveZoomEntry } from '@/api/practices'
-import { ApiResponseError } from '@/api/client'
+import { ApiResponseError, isGoneError } from '@/api/client'
 import type { ZoomEntryResolveResponse } from '@/api/types'
 
 /** Owner decision 11, verbatim. */
@@ -294,6 +289,8 @@ const zoomEntry = ref<ZoomEntryResolveResponse | null>(null)
 const resolveFailed = ref(false)
 /** The failure is a 404/403: the practice is gone, a retry cannot help. */
 const resolveGone = ref(false)
+/** The resolve call is in flight (a retry shows it on the button). */
+const resolving = ref(false)
 /** F4: sdk-join answered zoom_sdk_not_configured -- no SDK keys here. */
 const sdkNotConfigured = ref(false)
 
@@ -428,12 +425,15 @@ function goBack(): void {
 /** T-35: how THIS user enters. Failure here is not a toast -- this screen's
  * whole purpose is entering the practice, so it becomes the screen's state. */
 async function loadEntry(): Promise<void> {
+  resolving.value = true
   try {
     zoomEntry.value = await resolveZoomEntry(practiceId)
     resolveFailed.value = false
   } catch (e) {
     resolveFailed.value = true
-    resolveGone.value = e instanceof ApiResponseError && (e.status === 404 || e.status === 403)
+    resolveGone.value = isGoneError(e)
+  } finally {
+    resolving.value = false
   }
 }
 

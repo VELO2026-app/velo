@@ -670,7 +670,9 @@ describe('MasterPublicView', () => {
       mount()
       await flush()
 
-      expect(emptyState()).toBeNull() // NOT the error rung
+      // NOT the page-level error rung: the only error state is the section's own.
+      expect(host?.querySelectorAll('.v-empty')).toHaveLength(1)
+      expect(upcomingSection()?.querySelector('.v-empty')).not.toBeNull()
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Анна Соколова')
       // Owner 2026-09-30: the title never disappears -- without data it says why.

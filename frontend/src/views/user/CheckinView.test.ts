@@ -632,13 +632,19 @@ describe('CheckinView', () => {
       expect(submitBtn()).toBeUndefined()
 
       getMyBookingsMock.mockResolvedValue(bookingsPage([booking({ has_checkin: false })]))
-      const retry = Array.from(host?.querySelectorAll('button') ?? []).find((b) =>
-        b.textContent?.includes('Повторить'),
-      )
-      retry!.click()
+      button('Повторить')!.click()
       await flush()
 
       expect(submitBtn()).toBeDefined()
+    })
+
+    it('submit is held while the bookings list is in flight: has_checkin is unknown (FE-242)', async () => {
+      getMyBookingsMock.mockReturnValue(new Promise(() => {}))
+      mount()
+      await flush()
+
+      expect(submitBtn()?.disabled).toBe(true)
+      expect(disabledHint()).toBe('')
     })
 
     it('a check-in on a DIFFERENT practice does not lock this one', async () => {

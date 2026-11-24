@@ -175,16 +175,30 @@ describe('UserProfileView', () => {
       expect(statValue('Часов')).toBe('12')
     })
 
-    it('failure: does not throw, screen still renders, both cards show a dash, not a real-looking 0 (FE-242)', async () => {
-      vi.mocked(bookingsApi.getMyStats).mockRejectedValue(new Error('ECONNRESET'))
+    it('failure: the screen still renders, the stats block says «Ошибка загрузки» with Retry, not a real-looking 0 (FE-242)', async () => {
+      vi.mocked(bookingsApi.getMyStats).mockRejectedValueOnce(new Error('ECONNRESET'))
 
       expect(() => mount()).not.toThrow()
       await flush()
 
-      expect(statValue('Практик')).toBe('—')
-      expect(statValue('Часов')).toBe('—')
-      // No error text: the dash alone says "unknown".
-      expect(host?.textContent).not.toMatch(/ошибк/i)
+      expect(host?.querySelector('.profile__stats')).toBeNull()
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+      expect(host?.textContent).toContain('Ошибка загрузки')
+      expect(menuRowByLabel('Сообщения')).toBeDefined()
+
+      vi.mocked(bookingsApi.getMyStats).mockResolvedValue({
+        practices_attended: 7,
+        hours_attended: 12,
+        has_unread_messages: false,
+      })
+      Array.from(host!.querySelectorAll('button'))
+        .find((b) => b.textContent?.includes('Повторить'))!
+        .click()
+      await flush()
+
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+      expect(statValue('Практик')).toBe('7')
+      expect(statValue('Часов')).toBe('12')
     })
   })
 
@@ -234,7 +248,7 @@ describe('UserProfileView', () => {
       expect(menuRowByLabel('Сообщения')?.querySelector('.v-menu-row__dot')).toBeNull()
     })
 
-    it('a failed stats fetch leaves the dot off, same as the stat cards degrading to 0', async () => {
+    it('a failed stats fetch leaves the dot off, the stats block shows the error', async () => {
       vi.mocked(bookingsApi.getMyStats).mockRejectedValue(new Error('ECONNRESET'))
       mount()
       await flush()

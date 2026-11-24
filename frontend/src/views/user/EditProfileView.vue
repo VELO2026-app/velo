@@ -74,17 +74,15 @@
       <!-- Practice methods (master): flat set + admin-approved change-request (M3).
            Order (L2): below name/surname/e-mail, above languages/about. -->
       <!-- The master profile could not be read: empty methods and languages would
-           look real and be editable (FE-242) -- an error with Retry instead. -->
-      <div
-        v-if="isMaster && masterProfileFailed"
-        class="edit-profile__methods"
-        data-testid="screen-error"
+           look real and be editable, and "Save languages" would overwrite the
+           real ones (FE-242) -- an error with Retry instead. -->
+      <VEmptyState
+        v-if="isMaster && masterProfileUnread"
+        icon="warning"
+        :title="t('common.loadError')"
       >
-        <p class="edit-profile__methods-note">{{ t('common.loadError') }}</p>
-        <VButton variant="secondary" block @click="reloadMasterProfile">{{
-          t('common.retry')
-        }}</VButton>
-      </div>
+        <VButton size="sm" @click="reloadMasterProfile">{{ t('common.retry') }}</VButton>
+      </VEmptyState>
       <div v-else-if="isMaster" class="edit-profile__methods">
         <label class="edit-profile__methods-label">{{
           t('user.screens.editProfile.methods.title')
@@ -134,7 +132,7 @@
 
       <!-- Practice languages (master, i18n:user.screens.editProfile.languages.title):
            freely editable, no moderation (E16, Q2=A). -->
-      <div v-if="isMaster" class="edit-profile__methods">
+      <div v-if="isMaster && masterLoaded" class="edit-profile__methods">
         <label class="edit-profile__methods-label">{{
           t('user.screens.editProfile.languages.title')
         }}</label>
@@ -259,6 +257,7 @@ import {
   VCheckbox,
   VChip,
   VBadge,
+  VEmptyState,
 } from '@/components/ui'
 import { IconWarning } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
@@ -294,8 +293,11 @@ const isMaster = computed(() => authStore.role === 'master')
 const {
   profile: masterProfile,
   reload: reloadMasterProfile,
-  failed: masterProfileFailed,
+  loaded: masterLoaded,
+  error: masterProfileError,
 } = useMasterProfile(isMaster)
+/** No profile held and the last request failed (stays true while a retry runs). */
+const masterProfileUnread = computed(() => !masterLoaded.value && masterProfileError.value != null)
 
 // -- Master methods: two-level direction→kind picker gated by admin approval
 // (batch L). Selection is held as the flat "Direction — Kind" methods[] the
