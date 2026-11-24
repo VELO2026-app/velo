@@ -59,7 +59,7 @@
       >
         <template #icon><IconWarning :size="28" /></template>
         <template #body>
-          <VButton size="sm" variant="outline" @click="adminStats.query.refetch()">{{
+          <VButton size="sm" variant="outline" @click="adminStats.reload()">{{
             t('common.retry')
           }}</VButton>
         </template>
@@ -315,7 +315,8 @@ const canStepNext = computed((): boolean => periodOffset.value < 0)
 
 // The counters (queries/admin.ts, shared with the shell's badges): the
 // loader stands only until their first answer; a failure is the shell's
-// toast, not this screen's.
+// toast AND this screen's banner with Retry (an absent banner would read as
+// "nothing pending", FE-242).
 const loading = adminStats.loading
 const countersFailed = adminStats.failed
 

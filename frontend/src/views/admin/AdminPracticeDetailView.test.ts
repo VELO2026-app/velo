@@ -70,6 +70,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createApp, nextTick, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { PiniaColada, useQueryCache } from '@pinia/colada'
+import { adminKeys } from '@/composables/queries/adminKeys'
 import { coladaOptions } from '@/composables/queries/setup'
 import AdminPracticeDetailView from '@/views/admin/AdminPracticeDetailView.vue'
 import * as adminApi from '@/api/admin'
@@ -541,20 +542,40 @@ describe('AdminPracticeDetailView', () => {
       await flush()
 
       expect(text()).not.toContain('Статус встречи')
-      expect(host?.querySelector('[data-testid="zoom-error"]')).not.toBeNull()
+      expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
       // the rest of the page is unaffected
       expect(statValue('Записалось')).not.toBe('')
 
       vi.mocked(adminApi.getAdminZoomAttendance).mockResolvedValue(
         zoomAttendance({ zoom_meeting_status: 'active' }),
       )
-      Array.from(host!.querySelectorAll('[data-testid="zoom-error"] button'))
+      Array.from(host!.querySelectorAll('[data-testid="screen-error"] button'))
         .find((b) => b.textContent?.includes('Повторить'))!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await flush()
 
-      expect(host?.querySelector('[data-testid="zoom-error"]')).toBeNull()
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
       expect(text()).toContain('Статус встречи')
+    })
+
+    it('a background refetch that fails keeps the Zoom card on its last answer (FE-242)', async () => {
+      vi.mocked(adminApi.getAdminZoomAttendance).mockResolvedValue(
+        zoomAttendance({ zoom_meeting_status: 'active' }),
+      )
+      mount('p_upcoming')
+      await flush()
+      expect(text()).toContain('Активна')
+
+      vi.mocked(adminApi.getAdminZoomAttendance).mockRejectedValue(new Error('ECONNRESET'))
+      useQueryCache()
+        .invalidateQueries({ key: adminKeys.practiceAttendance('p_upcoming') })
+        .catch(() => {})
+      await flush()
+
+      // Not a vanished card (it would read as "no Zoom data"), and not an error
+      // card over data that is still on screen.
+      expect(text()).toContain('Активна')
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
     })
 
     it('active meeting: shows the "Активна" badge', async () => {

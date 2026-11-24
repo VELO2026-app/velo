@@ -1027,7 +1027,7 @@ describe('AdminMasterReviewView', () => {
 
       expect(modalIsOpen()).toBe(true)
       expect(modalOverlay()?.textContent).toContain('снова станет обычным пользователем')
-      expect(modalOverlay()?.textContent).toContain('Ошибка загрузки')
+      expect(modalOverlay()?.textContent).toContain('Проверка активных практик')
 
       modalBtn('Отозвать')?.click()
       await flush()

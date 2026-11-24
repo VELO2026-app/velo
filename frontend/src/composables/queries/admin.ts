@@ -453,6 +453,7 @@ export const adminStatsQuery = defineQueryOptions(() => ({
  */
 export function useAdminStats() {
   const query = useQuery(adminStatsQuery)
+  const { loading, failed } = screenQueryState(query)
   const stats = computed<AdminStatsResponse | null>(() => query.data.value?.stats ?? null)
   return {
     /** The platform totals, or null until an answer. */
@@ -464,9 +465,11 @@ export function useAdminStats() {
     /** Reports awaiting moderation. */
     pendingModeration: computed(() => query.data.value?.pendingReports ?? 0),
     /** Nothing held and a request in flight. */
-    loading: screenQueryState(query).loading,
+    loading,
     /** Nothing held and the last request failed: the counters are unknown, not zero. */
-    failed: screenQueryState(query).failed,
+    failed,
+    /** Ask again (the screen's Retry). */
+    reload: () => query.refetch(),
     /** The raw error of the last request, or null. */
     error: query.error,
     /** The query itself, for onFailedRequest. */

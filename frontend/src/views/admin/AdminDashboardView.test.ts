@@ -234,7 +234,7 @@ describe('AdminDashboardView', () => {
       await flush()
 
       expect(host?.querySelector('[data-testid="counters-error"]')).toBeNull()
-      expect(host?.textContent).toContain('2')
+      expect(host?.textContent).toContain('2 мастера на верификации')
     })
 
     it('a background refetch of the counters keeps the dashboard, no loader', async () => {
