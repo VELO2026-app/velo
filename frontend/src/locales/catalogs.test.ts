@@ -29,7 +29,7 @@ const heldRoots = (mod: LocalesModule, locale: string): string[] =>
 // dropMessageCompiler); the unit suite does. core-base reads this global at
 // every compile, so flipping it makes the suite's composer behave like the
 // bundle's: a string message then renders as raw text.
-type DropFlag = { __INTLIFY_DROP_MESSAGE_COMPILER__?: boolean }
+type DropFlag = { __INTLIFY_DROP_MESSAGE_COMPILER__?: boolean | undefined }
 function withoutCompiler<T>(run: () => T): T {
   const flag = globalThis as DropFlag
   const before = flag.__INTLIFY_DROP_MESSAGE_COMPILER__

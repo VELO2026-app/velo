@@ -47,6 +47,8 @@ describe('checkinLabel', () => {
   })
 
   it('returns null when checkin_count is entirely absent (undefined)', () => {
-    expect(checkinLabel(basePractice({ checkin_count: undefined }))).toBeNull()
+    const practice = basePractice()
+    delete practice.checkin_count
+    expect(checkinLabel(practice)).toBeNull()
   })
 })

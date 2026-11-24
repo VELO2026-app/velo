@@ -35,7 +35,7 @@ function start(
   })
   const app = createApp(Screen)
     .use(createPinia())
-    .use(PiniaColada, { ...coladaOptions, plugins: coladaOptions.plugins })
+    .use(PiniaColada, { ...coladaOptions })
   app.mount(document.createElement('div'))
   apps.push(app)
   return query

@@ -29,7 +29,7 @@ export interface CrashSignal {
   kind: SignalKind
   message: string
   /** The page URL path when it happened. */
-  path?: string
+  path?: string | undefined
   /** How many times the same signal was seen (a retried request, a re-render). */
   count?: number
 }

@@ -61,7 +61,7 @@ export interface SubmitResult {
    *  caller (CheckinView.vue) can switch on it for a specific message
    *  instead of the generic `error` string. Undefined on success or a
    *  non-ApiResponseError failure. */
-  code?: string
+  code?: string | undefined
 }
 
 /** The request fields POST /diary/external-activities can attach a 422 to. */
@@ -218,7 +218,7 @@ export const useDiaryStore = defineStore('diary', () => {
    */
   async function submitExternalActivity(
     body: CreateExternalActivityRequest,
-  ): Promise<SubmitResult & { fieldErrors?: ExternalActivityFieldErrors }> {
+  ): Promise<SubmitResult & { fieldErrors?: ExternalActivityFieldErrors | undefined }> {
     if (externalActivitySubmitting.value) return { ok: false, error: '' }
     externalActivitySubmitting.value = true
     const gen = generation
