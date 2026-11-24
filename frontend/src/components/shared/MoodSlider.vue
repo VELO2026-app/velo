@@ -291,7 +291,7 @@ function cardStyle(index: number): Record<string, string | number> {
       : TIER_SCALE[1] + (TIER_SCALE[2] - TIER_SCALE[1]) * (a - 1)
   return {
     transform: `translate(-50%, -50%) translateX(${(dist < 0 ? -1 : 1) * slide}px) scale(${scale})`,
-    zIndex: TIER_Z[0] + Math.min(2, Math.round(a)),
+    zIndex: TIER_Z[Math.min(2, Math.round(a)) as 0 | 1 | 2],
   }
 }
 
