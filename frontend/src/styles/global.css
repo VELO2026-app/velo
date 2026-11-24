@@ -70,24 +70,12 @@ body {
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* [FE-36 follow-up] THE COLUMN MUST NEVER BE CONTENT-SIZED. Measured live
-     (Chromium probe): in some sessions html computes to display:flex and body
-     then becomes a flex ITEM with auto basis -- it sizes to the CONTENT's
-     max-content instead of filling the viewport. A short results list (one
-     narrow city row) shrank the whole app column to 348 of 390px, with an
-     empty gap on the right -- the owner-visible "narrowed view, huge right
-     padding". Source (found in FE-261): the keyboard-open empty-hint rule in
-     TimezoneCityPicker.vue was written `:global(html.is-keyboard-open)
-     .tz-picker__empty`, which the scoped compiler turned into a plain
-     `html.is-keyboard-open { display:flex; align-items:center;
-     justify-content:center; margin-top:8px; height:calc(var(--tz-row-h) +
-     2px) }`. It shipped with FE-36 and applied on EVERY screen while the
-     keyboard was open, once the lazy picker chunk had loaded. --tz-row-h is
-     undefined on html, so that height became auto and also overrode the
-     FE-7 html height (--velo-vvh). The rule is scoped properly now, so the
-     flex no longer reaches html. width:100% stays as a cheap fill-guarantee:
-     it pins body to the containing block under EITHER display and is inert
-     while html is block; it was not re-proven removable, so it is kept. */
+  /* [FE-36 follow-up] The column must never be content-sized: if html turns
+     display:flex, body becomes a flex item with an auto basis and shrinks to
+     its content (a short list once narrowed the app to 348 of 390px). The
+     flex came from a scoped keyboard rule that leaked onto <html> (FE-261,
+     guarded by scoped-global.test.ts). width:100% pins body to the containing
+     block under either display and stays as a cheap fill-guarantee. */
   width: 100%;
   height: 100vh;
   height: 100lvh;

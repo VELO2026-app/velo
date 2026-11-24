@@ -196,11 +196,8 @@ function select(iana: string): void {
    step (the 1-match collapse was breathing the layout) nor visibly clamp a
    stale scroll offset. The rest of the matches stay reachable by scrolling
    the one-row window; the watch in the script re-tops it on every keystroke.
-   (+2px = the list's own 1px top/bottom borders.) This rule and the
-   empty-hint one at the end of the block are written WITHOUT `:global()`: in
-   a scoped block that form drops the trailing class and styles <html>
-   instead (FE-261, scoped-global.test.ts); the scoped compiler tags the last
-   compound of a plain selector. */
+   (+2px = the list's own 1px top/bottom borders.) No `:global()` here:
+   scoped-global.test.ts forbids it with a descendant in a scoped style. */
 html.is-keyboard-open .tz-picker__list {
   height: calc(var(--tz-row-h) + 2px);
   max-height: none;

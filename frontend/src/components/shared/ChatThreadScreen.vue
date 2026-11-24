@@ -673,10 +673,8 @@ onBeforeUnmount(() => {
    keyboard-ONLY. This screen copied the diary formula verbatim (B39), so it
    inherited the same staleness defect -- a missed close-resize left the chat
    capped at the keyboard-open height. The class gate makes the at-rest
-   height structural (100% of the frozen ancestor). Both keyboard rules are
-   written WITHOUT `:global()`: in a scoped block that form drops the trailing
-   `.chat-thread` and styles <html> instead (FE-261, scoped-global.test.ts);
-   the scoped compiler tags the last compound of a plain selector. */
+   height structural (100% of the frozen ancestor). No `:global()` here:
+   scoped-global.test.ts forbids it with a descendant in a scoped style. */
 html.is-keyboard-open .chat-thread {
   height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
 }

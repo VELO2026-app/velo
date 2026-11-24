@@ -1182,10 +1182,8 @@ onBeforeUnmount(() => {
    navigation, or the focusout recheck useViewportGeometry now runs), full
    height returns even if no closing resize event ever fires. No masking
    white blocks anywhere -- the background layer regains the full viewport
-   on the same class removal. Both keyboard rules are written WITHOUT
-   `:global()`: in a scoped block that form drops the trailing `.diary-feed`
-   and styles <html> instead (FE-261, scoped-global.test.ts); the scoped
-   compiler tags the last compound of a plain selector. */
+   on the same class removal. No `:global()` here: scoped-global.test.ts
+   forbids it with a descendant in a scoped style. */
 html.is-keyboard-open .diary-feed {
   height: calc(var(--velo-vvh, 100%) - var(--velo-content-safe-top, 0px));
 }
