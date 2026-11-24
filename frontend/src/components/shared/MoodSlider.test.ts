@@ -66,6 +66,12 @@ function cards(): HTMLElement[] {
   return Array.from(host?.querySelectorAll<HTMLElement>('.mood-slider__card') ?? [])
 }
 
+function card(index: number): HTMLElement {
+  const el = cards()[index]
+  if (!el) throw new Error(`card ${index} did not render`)
+  return el
+}
+
 function activeCardIndex(): number {
   const i = cards().findIndex((c) => c.getAttribute('aria-checked') === 'true')
   if (i === -1) throw new Error('no card is aria-checked')
@@ -118,6 +124,21 @@ describe('MoodSlider -- the five-emotion strip', () => {
     expect(range().getAttribute('aria-valuetext')).toBe('5 из 10 — Нормально')
   })
 
+  it('stacks the deck with the active card on top; the far cards stay above the nearest', () => {
+    mountSlider(5)
+
+    // The neighbors lie 14 px under the active card on purpose; a skin whose
+    // face art runs out of its box (the glow of a skin icon) must not be cut
+    // by them -- the active card paints last. A far card keeps its cropped
+    // outer part as a tap target, so it stays above the nearest cards (the
+    // layout detector reads a far card under a neighbor as covered).
+    const [far1, near1, active, near2, far2] = cards().map((c) => Number(c.style.zIndex))
+    expect(active).toBeGreaterThan(far1 ?? 0)
+    expect(far1).toBeGreaterThan(near1 ?? 0)
+    expect(near1).toBe(near2)
+    expect(far1).toBe(far2)
+  })
+
   it('every score 1..10 maps to its strict pair (the four borders must flip the card)', () => {
     const expected = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4]
     expected.forEach((want, i) => {
@@ -151,7 +172,7 @@ describe('MoodSlider -- a card tap picks the pair TOP score', () => {
   ])('tapping card %i selects %i', (index, want) => {
     const { changes } = mountSlider(5)
 
-    cards()[index]!.click()
+    card(index).click()
 
     expect(changes).toEqual([want])
   })
@@ -159,7 +180,7 @@ describe('MoodSlider -- a card tap picks the pair TOP score', () => {
   it('re-tapping the active card is a NO-OP when the score already matches', () => {
     const { changes } = mountSlider(6) // 6 IS neutral's click value
 
-    cards()[2]!.click()
+    card(2).click()
 
     expect(changes).toEqual([])
   })
@@ -169,7 +190,7 @@ describe('MoodSlider -- a card tap picks the pair TOP score', () => {
     // must land on the pair's top score 6, not swallow the tap.
     const { changes } = mountSlider(5)
 
-    cards()[2]!.click()
+    card(2).click()
 
     expect(changes).toEqual([6])
   })
@@ -189,13 +210,13 @@ describe('MoodSlider -- a card tap picks the pair TOP score', () => {
 
     const tabbable = cards().filter((c) => c.getAttribute('tabindex') === '0')
     expect(tabbable).toHaveLength(1)
-    expect(tabbable[0]!.textContent).toContain('Нормально')
+    expect(tabbable[0]?.textContent).toContain('Нормально')
   })
 
   it('ArrowRight walks the radiogroup and selects the NEXT card value', () => {
     const { changes } = mountSlider(5)
 
-    const active = cards()[2]!
+    const active = card(2)
     active.focus()
     active.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
 
@@ -206,7 +227,7 @@ describe('MoodSlider -- a card tap picks the pair TOP score', () => {
   it('Home / End jump to the scale ends', () => {
     const { changes } = mountSlider(5)
 
-    const active = cards()[2]!
+    const active = card(2)
     active.focus()
     active.dispatchEvent(new KeyboardEvent('keydown', { key: 'End' }))
     expect(changes).toEqual([10])
@@ -238,7 +259,7 @@ describe('MoodSlider -- the horizontal swipe (tz §2.2)', () => {
     point('pointermove', strip(), 100, 300)
     point('pointerup', strip(), 100, 300)
     // The browser still fires a click on whatever card sits under the finger:
-    cards()[3]!.click()
+    card(3).click()
 
     expect(changes).toEqual([8]) // the swipe's own emit -- nothing from the click
   })
@@ -249,7 +270,7 @@ describe('MoodSlider -- the horizontal swipe (tz §2.2)', () => {
     // tap resolves on pointerup against the card the pointer went down on.
     const { changes } = mountSlider(5)
 
-    const face = cards()[0]!
+    const face = card(0)
     point('pointerdown', face, 30, 60)
     point('pointerup', face, 32, 61) // inside the slop: a tap, not a drag
     await nextTick() // let the emit round-trip repaint the deck
@@ -261,10 +282,10 @@ describe('MoodSlider -- the horizontal swipe (tz §2.2)', () => {
   it('a drag STARTING on a face emits ONCE -- the release-click adds nothing', () => {
     const { changes } = mountSlider(5)
 
-    point('pointerdown', cards()[2]!, 200, 60)
-    point('pointermove', cards()[2]!, 100, 60) // horizontal lock, dx -100
-    point('pointerup', cards()[2]!, 100, 60)
-    cards()[2]!.click() // the browser's release-click lands back on this card
+    point('pointerdown', card(2), 200, 60)
+    point('pointermove', card(2), 100, 60) // horizontal lock, dx -100
+    point('pointerup', card(2), 100, 60)
+    card(2).click() // the browser's release-click lands back on this card
 
     expect(changes).toEqual([8]) // the drag's own emit -- the click is swallowed
   })
@@ -289,7 +310,7 @@ describe('MoodSlider -- the horizontal swipe (tz §2.2)', () => {
     point('pointerdown', strip(), 200, 300)
     point('pointermove', strip(), 203, 301) // inside DRAG_SLOP
     point('pointerup', strip(), 203, 301)
-    cards()[4]!.click() // a real tap on the fire card (i18n:mood.fire)
+    card(4).click() // a real tap on the fire card (i18n:mood.fire)
 
     expect(changes).toEqual([10])
   })
@@ -299,7 +320,7 @@ describe('MoodSlider -- while the form submits everything is inert (tz §8)', ()
   it('cards are disabled, the range is disabled, and nothing emits', () => {
     const { changes } = mountSlider(5, true)
 
-    cards()[2]!.click()
+    card(2).click()
     const r = range()
     r.value = '9'
     r.dispatchEvent(new Event('input'))

@@ -35,6 +35,20 @@ export interface SkinContrastException {
   reason: string
 }
 
+/** One node of a mood icon tree (contract 2.3): the closed SVG vocabulary of
+ *  `parseMoodSvg`. The root is the `svg`, its attrs the viewBox and fill. */
+export interface MoodSvgNode {
+  tag: string
+  attrs?: Record<string, string>
+  children?: MoodSvgNode[]
+}
+
+/** The five mood keys, worst to best (utils/moodScale.ts MoodScaleKey). */
+export type MoodKey = 'bad' | 'low' | 'neutral' | 'good' | 'fire'
+
+/** The mood icon set of a package: the five trees. */
+export type MoodIconSet = Record<MoodKey, MoodSvgNode>
+
 export interface LoadedSkinPackage {
   problems: string[]
   contract: string | null
@@ -42,6 +56,8 @@ export interface LoadedSkinPackage {
   /** `[cssName, cssValue]` in the golden cascade order. */
   decls: Array<[string, string]>
   files: string[]
+  /** Contract 2.3: the package's mood icons; null = it ships none. */
+  moodIcons: MoodIconSet | null
 }
 
 export const SKIN_CONTRACT_MAJOR: number
@@ -56,6 +72,9 @@ export const LOGO_ASSETS: string[]
 export const SKIN_ASSETS: string[]
 export const PRECACHED_ICONS: string[]
 export function shipsLogo(files: string[]): boolean
+export const MOOD_KEYS: MoodKey[]
+export function shipsMoodIcons(files: string[]): boolean
+export function parseMoodSvg(text: string): { tree: MoodSvgNode } | { error: string }
 export const ASSET_DIRS: string[]
 export const IGNORED_FILES: Set<string>
 export function goldenTokenMap(
