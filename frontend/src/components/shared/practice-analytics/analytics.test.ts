@@ -123,15 +123,15 @@ describe('practice screen', () => {
     expect(wrapper.get('.practice-analytics__reviews').text()).toContain('1 из 22')
     const pairs = wrapper.findAll('.practice-analytics__pair')
     expect(pairs).toHaveLength(4)
-    expect(pairs[0]!.text()).toContain('Плохо')
-    expect(pairs[0]!.text()).toContain('Огонь')
+    expect(pairs[0]?.text()).toContain('Плохо')
+    expect(pairs[0]?.text()).toContain('Огонь')
     // Owner (FE-96): the pair row is faces + name + transition, no avatar.
-    expect(pairs[0]!.find('.v-avatar').exists()).toBe(false)
+    expect(pairs[0]?.find('.v-avatar').exists()).toBe(false)
     const rv = wrapper.get('.practice-analytics__review')
     expect(rv.text()).toContain('«Спасибо!»')
     expect(rv.find('time').attributes('datetime')).toBe('2026-08-14T20:00:00Z')
     // 4 loaded of 13 -> a show-more pager (i18n:common.showMore) that asks the container for a page.
-    await wrapper.get('.practice-analytics__pairs button').trigger('click')
+    await wrapper.get('.practice-analytics__pairs .v-show-more').trigger('click')
     expect(wrapper.emitted('morePairs')).toHaveLength(1)
     // All reviews loaded (1 of 1) -> no reviews pager.
     expect(wrapper.get('.practice-analytics__reviews').find('button').exists()).toBe(false)
@@ -141,7 +141,7 @@ describe('practice screen', () => {
     const wrapper = mount(Analytics, {
       props: { summary: summary(), pairs: [pair(0)], loadingMorePairs: true },
     })
-    await wrapper.get('.practice-analytics__pairs button').trigger('click')
+    await wrapper.get('.practice-analytics__pairs .v-show-more').trigger('click')
     expect(wrapper.emitted('morePairs')).toBeUndefined()
     wrapper.unmount()
   })
@@ -157,15 +157,15 @@ describe('practice screen', () => {
       },
     })
     expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
-    const pill = wrapper.get('.practice-analytics__pairs button')
+    const pill = wrapper.get('.practice-analytics__pairs .v-show-more')
     expect(pill.text()).toBe('+ ещё 2 пары')
     await pill.trigger('click')
     expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(7)
     // everything loaded is on screen: the hide pill (i18n:common.hide) alone, no server pager beside it
-    const buttons = wrapper.findAll('.practice-analytics__pairs button')
+    const buttons = wrapper.findAll('.practice-analytics__pairs .v-show-more')
     expect(buttons).toHaveLength(1)
-    expect(buttons[0]!.text()).toBe('Скрыть')
-    await buttons[0]!.trigger('click')
+    expect(buttons[0]?.text()).toBe('Скрыть')
+    await buttons[0]?.trigger('click')
     expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
     // a practice switch resets the reveal (the mockup's collapse-on-change)
     await wrapper.setProps({ summary: summary({ pairs_total: 7, practice_id: 'p2' }) })
@@ -180,7 +180,7 @@ describe('practice screen', () => {
       },
     })
     expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
-    const pager = wrapper.get('.practice-analytics__pairs button')
+    const pager = wrapper.get('.practice-analytics__pairs .v-show-more')
     expect(pager.text()).toBe('Показать ещё')
     await pager.trigger('click')
     expect(wrapper.emitted('morePairs')).toHaveLength(1)
@@ -190,10 +190,10 @@ describe('practice screen', () => {
       pairs: Array.from({ length: 25 }, (_, i) => pair(i)),
     })
     expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(5)
-    const buttons = wrapper.findAll('.practice-analytics__pairs button')
+    const buttons = wrapper.findAll('.practice-analytics__pairs .v-show-more')
     expect(buttons).toHaveLength(1)
-    expect(buttons[0]!.text()).toBe('+ ещё 20 пар')
-    await buttons[0]!.trigger('click')
+    expect(buttons[0]?.text()).toBe('+ ещё 20 пар')
+    await buttons[0]?.trigger('click')
     expect(wrapper.findAll('.practice-analytics__pair')).toHaveLength(25)
     wrapper.unmount()
   })
@@ -202,8 +202,8 @@ describe('practice screen', () => {
     expect(wrapper.get('[role="status"]').text()).toContain('Загружаем')
     expect(wrapper.find('.distribution').exists()).toBe(false)
     await wrapper.setProps({ loading: false, error: 'Сеть недоступна' })
-    const retry = wrapper.findAll('button').find((button) => button.text() === 'Повторить')!
-    await retry.trigger('click')
+    const retry = wrapper.findAll('button').find((button) => button.text() === 'Повторить')
+    await retry?.trigger('click')
     expect(wrapper.emitted('retry')).toHaveLength(1)
     wrapper.unmount()
   })
@@ -236,7 +236,7 @@ describe('personTarget -- what a tap on a person opens', () => {
       expect(personTarget(s, p)).toEqual({ kind: 'chat', studentId: p.user_id, name: p.name })
     }
   })
-  it('a row with no target is plain text: no button role, a click emits nothing', async () => {
+  it('a row with no target is plain text: a tap emits nothing', async () => {
     const wrapper = mount(Analytics, {
       props: {
         summary: summary({ viewer_role: 'curator', school_id: 'g1', pairs_total: 1 }),
@@ -245,13 +245,24 @@ describe('personTarget -- what a tap on a person opens', () => {
       },
     })
     const row = wrapper.get('.practice-analytics__pair')
-    expect(row.attributes('role')).toBeUndefined()
-    await row.trigger('click')
+    await row.get('.practice-analytics__pair-row').trigger('click')
     expect(wrapper.emitted('person')).toBeUndefined()
     const rv = wrapper.get('.practice-analytics__review')
     expect(rv.attributes('role')).toBe('button')
     await rv.trigger('click')
     expect(wrapper.emitted('person')?.[0]?.[0]).toMatchObject({ user_id: 'u0' })
+    wrapper.unmount()
+  })
+  it('a tap on a pair row asks for THAT person', async () => {
+    const wrapper = mount(Analytics, {
+      props: {
+        summary: summary({ viewer_role: 'leader', school_id: null, pairs_total: 2 }),
+        pairs: [pair(0), pair(1)],
+      },
+    })
+    await wrapper.findAll('.practice-analytics__pair-row')[1]?.trigger('click')
+    expect(wrapper.emitted('person')).toHaveLength(1)
+    expect(wrapper.emitted('person')?.[0]?.[0]).toMatchObject({ user_id: 'u1' })
     wrapper.unmount()
   })
 })

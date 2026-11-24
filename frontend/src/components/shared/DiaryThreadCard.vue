@@ -37,13 +37,7 @@
   </div>
 
   <!-- ===================== CHECK-IN (bubble, lobe left) ===================== -->
-  <button
-    v-else-if="form === 'checkin'"
-    type="button"
-    class="tcard tcard--checkin"
-    :aria-label="bubbleA11y"
-    @click="onTap"
-  >
+  <button v-else-if="form === 'checkin'" type="button" class="tcard tcard--checkin" @click="onTap">
     <DiaryBubbleShape side="left" />
     <span class="tcard__slot" aria-hidden="true">
       <component :is="standardIcon" :size="40" />
@@ -59,7 +53,6 @@
     v-else-if="form === 'feedback'"
     type="button"
     class="tcard tcard--feedback"
-    :aria-label="bubbleA11y"
     @click="onTap"
   >
     <DiaryBubbleShape side="right" />
@@ -80,7 +73,6 @@
     v-else-if="form === 'practice'"
     type="button"
     class="tcard tcard--practice"
-    :aria-label="practiceA11y"
     @click="onTap"
   >
     <span class="tcard__prac-icon" aria-hidden="true">
@@ -119,13 +111,7 @@
   </button>
 
   <!-- ===================== NOTE / DREAM (split entry) ===================== -->
-  <button
-    v-else-if="form === 'entry'"
-    type="button"
-    class="tcard tcard--entry"
-    :aria-label="entryA11y"
-    @click="onTap"
-  >
+  <button v-else-if="form === 'entry'" type="button" class="tcard tcard--entry" @click="onTap">
     <span class="tcard__entry-icon" aria-hidden="true">
       <component :is="standardIcon" :size="28" />
     </span>
@@ -253,6 +239,9 @@ const bannerLine2 = computed(() =>
   kind.value === 'booking_confirmed' ? bannerConfirmedRef.value : bannerSubtitle.value,
 )
 
+// Button forms carry no aria-label: the accessible name is the visible title and
+// preview themselves, so the name always contains the visible text (WCAG 2.5.3).
+
 // -- bubble copy (check-in / feedback) -----------------------------------------
 // Line 2 is the user's comment preview; the mood/rating LABEL is only the
 // no-comment fallback (and picks the icon) -- never a heading suffix here.
@@ -261,25 +250,10 @@ const bubblePreview = computed(() => {
   return form.value === 'checkin' ? moodLabel.value : ratingLabel.value
 })
 
-const bubbleA11y = computed(() =>
-  bubblePreview.value ? `${baseTitle.value}: ${bubblePreview.value}` : baseTitle.value,
-)
-
 // -- practice outcome ----------------------------------------------------------
 const outcomeAttended = computed(() => outcomeStatus.value === 'attended')
 
-const practiceA11y = computed(() => {
-  const when = [practiceTime.value, practiceDuration.value].filter(Boolean).join(', ')
-  return [practiceTitle.value, masterName.value, when, outcomeLabel.value]
-    .filter(Boolean)
-    .join(', ')
-})
-
 // -- note / dream ---------------------------------------------------------------
-const entryA11y = computed(() =>
-  preview.value ? `${baseTitle.value}: ${preview.value}` : baseTitle.value,
-)
-
 function onTap(): void {
   emit('tap', { item: props.item, editable: editable.value })
 }

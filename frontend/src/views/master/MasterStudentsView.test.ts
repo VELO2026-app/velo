@@ -31,6 +31,18 @@ import type { StudentListItem } from '@/api/types'
 
 vi.mock('@/api/masters')
 
+// The message sheet is its own component; here only WHAT it is opened with.
+vi.mock('@/components/shared/SendMessageModal.vue', async () => {
+  const { defineComponent, h } = await import('vue')
+  return {
+    default: defineComponent({
+      props: { open: Boolean, studentId: String, name: String },
+      setup: (props) => () =>
+        props.open ? h('div', { class: 'dm-stub', 'data-id': props.studentId }, props.name) : null,
+    }),
+  }
+})
+
 const push = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
@@ -209,9 +221,9 @@ describe('MasterStudentsView', () => {
       await flush()
 
       const input = host?.querySelector<HTMLInputElement>('input')
-      expect(input).not.toBeNull()
-      input!.value = 'анн'
-      input!.dispatchEvent(new Event('input'))
+      if (!input) throw new Error('no search input')
+      input.value = 'анн'
+      input.dispatchEvent(new Event('input'))
       await flush()
 
       expect(text()).toContain('Анна')
@@ -228,8 +240,9 @@ describe('MasterStudentsView', () => {
       await flush()
 
       const input = host?.querySelector<HTMLInputElement>('input')
-      input!.value = 'zzz'
-      input!.dispatchEvent(new Event('input'))
+      if (!input) throw new Error('no search input')
+      input.value = 'zzz'
+      input.dispatchEvent(new Event('input'))
       await flush()
 
       expect(text()).toContain('Никого не найдено')
@@ -245,7 +258,7 @@ describe('MasterStudentsView', () => {
       mount()
       await flush()
 
-      rows()[0]?.click()
+      host?.querySelector<HTMLElement>('.students__open')?.click()
       await flush()
 
       expect(push).toHaveBeenCalledWith({
@@ -255,14 +268,19 @@ describe('MasterStudentsView', () => {
       })
     })
 
-    it('the message button does NOT navigate (@click.stop)', async () => {
-      vi.mocked(mastersApi.getStudents).mockResolvedValue(page([student('s1', { name: 'Анна' })]))
+    it('the message button opens the message sheet for THAT student, not the profile', async () => {
+      vi.mocked(mastersApi.getStudents).mockResolvedValue(
+        page([student('s1', { name: 'Анна' }), student('s2', { name: 'Борис' })]),
+      )
       mount()
       await flush()
 
-      host?.querySelector<HTMLElement>('.students__msg')?.click()
+      host?.querySelectorAll<HTMLElement>('.students__msg')[1]?.click()
       await flush()
 
+      const sheet = host?.querySelector<HTMLElement>('.dm-stub')
+      expect(sheet?.dataset.id).toBe('s2')
+      expect(sheet?.textContent).toBe('Борис')
       expect(push).not.toHaveBeenCalled()
     })
   })

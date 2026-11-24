@@ -26,6 +26,7 @@
 //   GET  /api/v1/admin/practices/{id}/zoom-attendance -- Zoom meeting status +
 //                                              unmatched bucket (T21-1, PROMPT №541)
 //   GET  /api/v1/admin/revenue              -- revenue/commission/payout (E9)
+//   POST /api/v1/admin/announcements        -- one announcement to an audience (FE-268)
 // =============================================================================
 
 import { api } from '@/api/client'
@@ -70,9 +71,12 @@ import type { AdminPromoResponse, AdminPaginatedPromosResponse } from '@/api/gen
 // generated.ts as of the 9e1a309 regen -- same T5 convention as the promo
 // types above, imported directly rather than via api/types.
 import type { AdminZoomAttendanceResponse } from '@/api/generated'
+// FE-268: the announcement body comes from the generated contract.
+import type { AnnouncementRequest } from '@/api/generated'
 
 export type { AdminPromoResponse, AdminPaginatedPromosResponse }
 export type { AdminZoomAttendanceResponse }
+export type { AnnouncementRequest }
 
 /** Promo issuer filter for the admin promo list: company-wide or master promos. */
 export type AdminPromoTypeFilter = 'company' | 'master'
@@ -151,15 +155,17 @@ export function getMastersList(
 // ============================================================================
 
 /**
- * List all users (any role). No server-side search — the screen filters the
- * fetched page client-side. Limit clamped to the backend cap (le=100).
+ * List all users (any role), optionally only the active or only the inactive
+ * ones. No server-side search — the screen filters the fetched page
+ * client-side. Limit clamped to the backend cap (le=100).
  */
 export function getUsersList(
   role?: 'user' | 'master' | 'admin',
   limit = 100,
   offset = 0,
+  isActive?: boolean,
 ): Promise<PaginatedUsersResponse> {
-  const query = buildQuery({ limit, offset, role })
+  const query = buildQuery({ limit, offset, role, is_active: isActive })
   return api.get<PaginatedUsersResponse>(`/api/v1/admin/users${query}`)
 }
 
@@ -520,4 +526,23 @@ export function deactivateAdminPromo(promoId: string): Promise<PromoResponse> {
 /** Create a company-wide promo (platform-paid discount; the code is uppercased by the server). */
 export function createCompanyPromo(body: CreateCompanyPromoRequest): Promise<PromoResponse> {
   return api.post<PromoResponse>('/api/v1/admin/promos', body)
+}
+
+// ============================================================================
+// Announcements (FE-268)
+// ============================================================================
+
+/** The answer of `POST /admin/announcements`: handed to comms, and to whom. */
+export interface AnnouncementQueued {
+  queued: boolean
+  audience: NonNullable<AnnouncementRequest['audience']>
+}
+
+/**
+ * Send one announcement (title, text, audience) through comms. The server
+ * keeps no row of it and takes no idempotency key: two requests are two
+ * announcements, so the caller must never send one twice by accident.
+ */
+export function sendAnnouncement(body: AnnouncementRequest): Promise<AnnouncementQueued> {
+  return api.post<AnnouncementQueued>('/api/v1/admin/announcements', body)
 }

@@ -55,7 +55,16 @@
 -->
 
 <template>
-  <div class="edit-practice">
+  <!-- A locked practice (completed / cancelled / deleted) is read-only: its
+       fields are disabled and take no focus, so the screen itself is the one
+       keyboard stop, named by the banner -- arrow keys scroll it (WCAG 2.1.1,
+       axe scrollable-region-focusable). -->
+  <div
+    class="edit-practice"
+    :tabindex="isTerminal ? 0 : undefined"
+    :role="isTerminal ? 'group' : undefined"
+    :aria-labelledby="isTerminal ? lockedTextId : undefined"
+  >
     <!-- Back returns to the practice screen; that screen decides where to go next
          (dashboard or practices, depending on origin) — operator 2026-06-17.
          Deep-link-safe: pop the existing detail entry (router.back) instead of
@@ -100,7 +109,7 @@
         >
           {{ masterPracticeBadge(practice.status)!.label }}
         </VBadge>
-        <span class="edit-practice__readonly-text">{{
+        <span :id="lockedTextId" class="edit-practice__readonly-text">{{
           t('masterScreens.editPractice.editLocked')
         }}</span>
       </div>
@@ -357,7 +366,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { historyHasBack } from '@/platform/history'
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { routeParam } from '@/router/routeParam'
 import { VHeader } from '@/components/layout'
@@ -435,6 +444,7 @@ const refreshing = ref(false)
 
 // -- Action loading states --
 const saving = ref(false)
+const lockedTextId = useId()
 const transitioning = ref(false)
 const cancelling = ref(false)
 const deleting = ref(false)
@@ -874,6 +884,12 @@ async function remove(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* Keyboard ring of a locked screen (see the template note on the root). */
+.edit-practice:focus-visible {
+  outline: 2px solid var(--velo-border-input-focus);
+  outline-offset: -2px;
 }
 
 .edit-practice__fieldset:disabled {

@@ -2,8 +2,10 @@
   VELO Frontend -- ConsoleTable (FE-262)
 
   The data table of the web console: a header row, then one row per item.
-  A column is a key, a header label, an optional fixed width and alignment;
-  a cell shows `row[key]` as text unless the screen fills it through the
+  A column is a key, a header label, an optional fixed width and alignment,
+  and may be `secondary`: below 1200 px (where the menu folds to icons) a
+  secondary column is hidden, header and cells, so a tablet keeps the columns
+  that identify a row; a cell shows `row[key]` as text unless the screen fills it through the
   `cell-<key>` slot. With `clickable` a row is a focusable control that
   emits `row-click` (mouse, or Enter / Space on the focused row); `selected`
   marks the row whose detail is open next to the table.
@@ -18,7 +20,7 @@
         v-for="col in columns"
         :key="col.key"
         class="console-table__cell"
-        :class="`console-table__cell--${col.align ?? 'start'}`"
+        :class="cellClass(col)"
         :style="cellStyle(col)"
         role="columnheader"
       >
@@ -43,7 +45,7 @@
         v-for="col in columns"
         :key="col.key"
         class="console-table__cell"
-        :class="`console-table__cell--${col.align ?? 'start'}`"
+        :class="cellClass(col)"
         :style="cellStyle(col)"
         role="cell"
       >
@@ -69,6 +71,8 @@ export interface ConsoleTableColumn {
   width?: number
   /** Cell alignment (numbers and money: end). */
   align?: 'start' | 'end'
+  /** Hidden below 1200 px: a column a row can be told apart without. */
+  secondary?: boolean
 }
 
 const props = defineProps<{
@@ -91,6 +95,13 @@ const key = computed(() => props.rowKey ?? 'id')
 const emit = defineEmits<{
   'row-click': [row: Row]
 }>()
+
+function cellClass(col: ConsoleTableColumn): string[] {
+  return [
+    `console-table__cell--${col.align ?? 'start'}`,
+    ...(col.secondary ? ['console-table__cell--secondary'] : []),
+  ]
+}
 
 function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined {
   return col.width === undefined ? undefined : { flex: `0 0 ${col.width}px` }
@@ -156,10 +167,17 @@ function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined 
   text-align: right;
 }
 
+/* The breakpoint where the menu folds to icons (ConsoleSidebar.vue). */
+@media (max-width: 1199px) {
+  .console-table__cell--secondary {
+    display: none;
+  }
+}
+
 .console-table__empty {
   padding: var(--space-5) var(--space-4);
   font-size: var(--velo-fs-14);
-  /* Small text on a white card: the skin's declared pair; the muted color is under 4.5:1 on gold. */
+  /* Secondary, not muted: the muted text is 2.14:1 on a white card in gold. */
   color: var(--velo-text-secondary);
 }
 </style>

@@ -47,6 +47,7 @@ import {
   readGoldenTokens,
   goldenTokenMap,
   shipsLogo,
+  shipsMoodIcons,
 } from './lib/skin-package.mjs'
 
 /** sha256 -> asset path of every file of the golden VELO skin (velo-brand,
@@ -378,6 +379,10 @@ export function validateSkin(skinDir, frontendDir, veloHashes = VELO_ASSET_HASHE
   const logo = shipsLogo(pkg.files)
   if (logo) ok(out, 'logo set present (mandala rings, wordmarks, logo-white)')
   else ok(out, 'no logo set: the app shows the brand icon (favicon.svg) where the logo goes')
+  // The mood icon set (contract 2.3, FE-273): the engine has read every icon
+  // (loadSkinPackage -> parseMoodSvg); without the set the core faces draw.
+  if (shipsMoodIcons(pkg.files)) ok(out, 'mood icon set present (bad, low, neutral, good, fire)')
+  else ok(out, 'no mood icon set: the app draws the core faces')
   const svgs = ['favicon.svg', ...(logo ? ['velo-word-filled.svg', 'velo-word-blue.svg'] : [])]
   for (const asset of svgs) {
     const head = readFileSync(join(assets, asset), 'utf8').slice(0, 200)

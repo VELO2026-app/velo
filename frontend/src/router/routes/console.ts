@@ -46,6 +46,11 @@ export function consoleRoutes(): RouteRecordRaw[] {
         // A screen inside a module is named console-<module>-<what>, so the
         // menu keeps the module lit (consoleModuleOf).
         {
+          path: 'masters/:id',
+          name: 'console-masters-detail',
+          component: screen('console-masters-detail'),
+        },
+        {
           path: 'practices/:id',
           name: 'console-practices-detail',
           component: screen('console-practices-detail'),

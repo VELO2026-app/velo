@@ -35,6 +35,8 @@ const DOM_TESTS = [
   'src/utils/keyboardViewportState.test.ts',
   'src/utils/methodTaxonomy.overlay.test.ts',
   'src/utils/practiceOptions.test.ts',
+  'src/utils/ratingIcons.test.ts',
+  'src/utils/skinMoodIcon.test.ts',
 ]
 
 // Every utils/platform test file that is NOT in DOM_TESTS runs in node only.

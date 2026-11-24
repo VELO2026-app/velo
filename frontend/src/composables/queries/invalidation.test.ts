@@ -61,9 +61,10 @@ const SAMPLE = {
   adminReports: adminKeys.reports('pending') as EntryKey,
   adminReport: adminKeys.report('r1') as EntryKey,
   adminWithdrawals: adminKeys.withdrawals() as EntryKey,
-  // The web console's payout table and its pending counter, FE-267.
+  // The web console's payout table (one entry per status and page), FE-267.
   adminWithdrawalsPage: adminKeys.withdrawalsPage('approved', 3) as EntryKey,
-  adminWithdrawalsPending: adminKeys.withdrawalsPendingCount() as EntryKey,
+  adminPendingWithdrawals: adminKeys.withdrawalsPending() as EntryKey,
+  adminOpenTickets: adminKeys.openTickets() as EntryKey,
   adminSupportTickets: adminKeys.supportTickets({ status: 'open' }) as EntryKey,
   adminSupportTicket: adminKeys.supportTicket('t1') as EntryKey,
   adminSupportMessages: adminKeys.supportMessages('t1') as EntryKey,
@@ -189,16 +190,17 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
   decideWithdrawal: [
     'adminWithdrawals',
     'adminWithdrawalsPage',
-    'adminWithdrawalsPending',
+    'adminPendingWithdrawals',
     'adminMasters',
     'adminMaster',
     'adminRevokePreview',
     'adminRevenue',
   ],
-  changeTicketStatus: ['adminSupportTickets', 'adminSupportStats'],
+  changeTicketStatus: ['adminSupportTickets', 'adminSupportStats', 'adminOpenTickets'],
   changeTicketTaker: ['adminSupportTickets'],
   replySupport: [],
   retryTranslation: [],
+  sendAnnouncement: [],
 }
 
 describe('ADMIN_INVALIDATES', () => {

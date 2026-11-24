@@ -121,7 +121,6 @@ describe('DiaryThreadCard -- check-in bubble', () => {
 
     const btn = q<HTMLButtonElement>('.tcard--checkin')
     expect(btn).not.toBeNull()
-    expect(btn?.getAttribute('aria-label')).toContain('Check-in')
     expect(q('.tcard__bubble-title')?.textContent?.trim()).toBe('Check-in')
     expect(q('.tcard__bubble-preview')?.textContent?.trim()).toBe('Спокойно, как всегда')
   })
@@ -213,8 +212,6 @@ describe('DiaryThreadCard -- practice outcome', () => {
     expect(status).not.toBeNull()
     expect(status?.querySelector('svg')).not.toBeNull() // the check half of «✓ Done»
     expect(status?.textContent?.trim()).toBe('Вы пришли') // ...and the word half
-    const label = q('.tcard--practice')?.getAttribute('aria-label') ?? ''
-    expect(label).toContain('Вы пришли')
   })
 
   it('no_show: «Вы не пришли», neutral status', () => {
