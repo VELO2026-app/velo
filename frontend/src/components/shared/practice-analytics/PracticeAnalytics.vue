@@ -173,26 +173,27 @@ const showPairsPager = computed(
           {{ t('shared.analytics.noPairs') }}
         </p>
         <ul v-else class="practice-analytics__pair-list">
-          <li
-            v-for="pair in visiblePairs"
-            :key="pair.user_id"
-            class="practice-analytics__pair"
-            :class="{ 'practice-analytics__person--opens': opens(pair) }"
-            :role="opens(pair) ? 'button' : undefined"
-            :tabindex="opens(pair) ? 0 : undefined"
-            @click="onPerson(pair)"
-            @keydown.enter="onPerson(pair)"
-          >
-            <span class="practice-analytics__faces" aria-hidden="true">
-              <component :is="MOOD_SCALE_ICON[pair.before_zone]" :size="22" />
-              <span>→</span>
-              <component :is="MOOD_SCALE_ICON[pair.after_zone]" :size="22" />
-            </span>
-            <span class="practice-analytics__name">{{ pair.name }}</span>
-            <span class="practice-analytics__transition">
-              {{ MOOD_SCALE_LABELS[pair.before_zone] }} →
-              {{ MOOD_SCALE_LABELS[pair.after_zone] }}
-            </span>
+          <li v-for="pair in visiblePairs" :key="pair.user_id" class="practice-analytics__pair">
+            <!-- The <li> stays the list item: a button role on it would drop it
+                 from the list. The tap target is a button inside it, and only
+                 when the reader may open the person. -->
+            <component
+              :is="opens(pair) ? 'button' : 'div'"
+              :type="opens(pair) ? 'button' : undefined"
+              class="practice-analytics__pair-row velo-btn-reset"
+              @click="onPerson(pair)"
+            >
+              <span class="practice-analytics__faces" aria-hidden="true">
+                <component :is="MOOD_SCALE_ICON[pair.before_zone]" :size="22" />
+                <span>→</span>
+                <component :is="MOOD_SCALE_ICON[pair.after_zone]" :size="22" />
+              </span>
+              <span class="practice-analytics__name">{{ pair.name }}</span>
+              <span class="practice-analytics__transition">
+                {{ MOOD_SCALE_LABELS[pair.before_zone] }} →
+                {{ MOOD_SCALE_LABELS[pair.after_zone] }}
+              </span>
+            </component>
           </li>
         </ul>
         <VShowMore
@@ -342,14 +343,18 @@ const showPairsPager = computed(
   list-style: none;
 }
 .practice-analytics__pair {
+  border-bottom: 1px solid var(--velo-border);
+}
+.practice-analytics__pair-row {
   display: grid;
   /* Owner (FE-96): no avatar in the pair -- faces, name, transition label,
      ONE grid row at every width; the auto label column hugs the right edge. */
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
+  /* The row's own padding is its tap area when it is a button (44 px minimum). */
   padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--velo-border);
+  width: 100%;
 }
 .practice-analytics__faces {
   display: flex;

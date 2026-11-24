@@ -3,6 +3,10 @@
 
   Settings/profile list row: white plate, optional leading icon, label, optional
   trailing arrow. Variants: default | primary (accent text) | danger.
+  The root is a <button type="button">: the row takes keyboard focus and
+  activates on Enter and Space. A screen built only from these rows has nothing
+  else to focus, so a non-focusable row would leave its scroll area without a
+  keyboard stop (WCAG 2.1.1).
 
   Usage:
     <VMenuRow label="Edit profile" @click="onEdit">
@@ -17,7 +21,8 @@
 -->
 
 <template>
-  <div
+  <button
+    type="button"
     class="v-menu-row"
     :class="{
       'v-menu-row--primary': variant === 'primary',
@@ -35,7 +40,7 @@
     <span v-if="dot" class="v-menu-row__dot" aria-hidden="true" />
     <span v-if="badge != null && badge !== ''" class="v-menu-row__badge">{{ badge }}</span>
     <span v-if="showArrow" class="v-menu-row__arrow"><IconArrowRight :size="16" /></span>
-  </div>
+  </button>
 </template>
 
 <script setup lang="ts">
@@ -64,6 +69,13 @@ defineEmits<{
 
 <style scoped>
 .v-menu-row {
+  /* A button gets its own line height, letter spacing and centred text; the row
+     takes them from its parent instead, like the plain plate it is drawn as. */
+  width: 100%;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: var(--space-3);

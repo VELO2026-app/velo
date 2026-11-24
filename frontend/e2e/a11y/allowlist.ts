@@ -17,8 +17,6 @@ const REASON = {
     'A status color pair (badge, tag, danger button, toast, delta) is under 4.5:1; the colors are a design decision.',
   GOLD_PRIMARY:
     'The gold primary color #627a9c is 4.39:1 against white text and the tints of its family; the color belongs to the velo-brand package.',
-  MARKUP:
-    'Markup: a nested control, a list item with a button role, or a scroll area without focus.',
 } as const
 
 export const A11Y_ALLOWLIST: A11yAllowance[] = [
@@ -189,27 +187,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
     skins: ['gold'],
     reason: REASON.STATUS_COLORS,
     task: 'FE-245',
-  },
-  {
-    rule: 'list',
-    routes: ['master-practice-reviews'],
-    target: 'ul',
-    reason: REASON.MARKUP,
-    task: 'FE-248',
-  },
-  {
-    rule: 'nested-interactive',
-    routes: ['master-students'],
-    target: '.students__row[role="button"]',
-    reason: REASON.MARKUP,
-    task: 'FE-248',
-  },
-  {
-    rule: 'scrollable-region-focusable',
-    routes: ['master-practice-edit', 'master-profile', 'user-profile'],
-    target: 'main',
-    reason: REASON.MARKUP,
-    task: 'FE-248',
   },
   {
     rule: 'color-contrast',
