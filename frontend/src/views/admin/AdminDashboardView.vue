@@ -395,7 +395,7 @@ onFailedRequest(overviewQuery, (error) =>
      layout's too. Only the vertical rhythm between blocks lives here. */
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-8);
 }
 
 /* -- Header -- */
