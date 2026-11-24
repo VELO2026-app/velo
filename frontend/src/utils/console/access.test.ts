@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { consoleBlock } from '@/views/console/consoleAccess'
+import { consoleBlock } from '@/utils/console/access'
 
 describe('consoleBlock', () => {
   it.each([

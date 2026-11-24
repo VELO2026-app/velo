@@ -4,7 +4,7 @@
 //
 // The desktop web version of the instance admin. It lives next to the mobile
 // /admin zone until it is tested; then /admin moves here and the mobile
-// screens go. One route per module (views/console/consoleNav.ts); a module
+// screens go. One route per module (utils/console/modules.ts); a module
 // that has not moved yet shows ConsolePlaceholderView with a way to its
 // mobile screen. The records of an instance option carry meta.option, as in
 // routes/user.ts.
@@ -12,11 +12,7 @@
 
 import type { Component } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
-import {
-  CONSOLE_MODULES,
-  consoleRouteName,
-  type ConsoleModuleKey,
-} from '@/views/console/consoleNav'
+import { CONSOLE_MODULES, consoleRouteName, type ConsoleModuleKey } from '@/utils/console/modules'
 
 declare module 'vue-router' {
   interface RouteMeta {

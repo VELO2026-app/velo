@@ -2,8 +2,8 @@
   VELO Frontend -- ConsoleDeviceStub (FE-262)
 
   What the web console shows where it does not open (views/console/
-  consoleAccess.ts): inside Telegram, or in a browser window narrower than a
-  computer screen. It names the reason, gives the console link (open it in
+  utils/console/access.ts): inside Telegram, or in a browser window smaller
+  than a tablet. It names the reason, gives the console link (open it in
   the browser from Telegram, or copy it) and the way back to the user mode.
   Same look as the sign-in stubs: logo, title, pill buttons.
 -->
@@ -20,10 +20,15 @@
       <VButton v-if="reason === 'telegram'" block @click="platform.openLink(consoleUrl)">
         {{ t('console.stub.openBrowser') }}
       </VButton>
-      <VButton :variant="reason === 'telegram' ? 'secondary' : 'primary'" block @click="copy">
-        {{ copied ? t('console.stub.copied') : t('console.stub.copy') }}
+      <VButton
+        :variant="reason === 'telegram' ? 'secondary' : 'primary'"
+        block
+        data-testid="console-stub-copy"
+        @click="copy"
+      >
+        {{ copyLabel }}
       </VButton>
-      <VButton variant="secondary" block @click="router.push({ name: 'user-dashboard' })">
+      <VButton variant="secondary" block data-testid="console-stub-user-mode" @click="toUserMode">
         {{ t('console.stub.userMode') }}
       </VButton>
     </div>
@@ -32,12 +37,13 @@
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import { ref } from 'vue'
+import { computed, onScopeDispose, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { VButton, VeloLogo } from '@/components/ui'
 import { platform } from '@/platform'
 import { host } from '@/platform/host'
-import type { ConsoleBlock } from '@/views/console/consoleAccess'
+import { useUiStore } from '@/stores/ui'
+import type { ConsoleBlock } from '@/utils/console/access'
 
 defineProps<{
   /** Why the console does not open here. */
@@ -45,18 +51,38 @@ defineProps<{
 }>()
 
 const router = useRouter()
+const uiStore = useUiStore()
 const consoleUrl = new URL('/console', host.location.origin).toString()
-const copied = ref(false)
+
+/** How long the copy button says what happened before it reads «Copy» again. */
+const COPY_FEEDBACK_MS = 2500
+const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
+const copyLabel = computed(() => {
+  if (copyState.value === 'copied') return t('console.stub.copied')
+  if (copyState.value === 'failed') return t('console.stub.copyFailed')
+  return t('console.stub.copy')
+})
+let resetTimer: ReturnType<typeof setTimeout> | undefined
+onScopeDispose(() => clearTimeout(resetTimer))
 
 async function copy(): Promise<void> {
   try {
     await host.navigator.clipboard.writeText(consoleUrl)
-    copied.value = true
+    copyState.value = 'copied'
   } catch {
-    // No clipboard (an old WebView, a denied permission): the link stays
-    // on screen to copy by hand.
-    copied.value = false
+    // No clipboard (an old WebView, a denied permission): say so; the link
+    // stays on screen to copy by hand.
+    copyState.value = 'failed'
   }
+  clearTimeout(resetTimer)
+  resetTimer = setTimeout(() => (copyState.value = 'idle'), COPY_FEEDBACK_MS)
+}
+
+// The router sends an admin on a user screen back to the admin zone unless
+// the UI mode is «user» (zoneHomeGuard).
+function toUserMode(): void {
+  uiStore.setUiMode('user')
+  void router.push({ name: 'user-dashboard' })
 }
 </script>
 

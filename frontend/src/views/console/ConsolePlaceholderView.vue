@@ -13,17 +13,16 @@
     :crumbs="crumbs"
     testid="console-placeholder"
   >
-    <div class="console-placeholder">
-      <p class="console-placeholder__title">{{ t('console.placeholder.title') }}</p>
+    <ConsoleCard :title="t('console.placeholder.title')" class="console-placeholder">
       <p class="console-placeholder__text">
         {{ legacy ? t('console.placeholder.legacy') : t('console.placeholder.soon') }}
       </p>
       <div v-if="legacy">
-        <VButton variant="secondary" @click="router.push(legacy)">{{
-          t('console.placeholder.open')
-        }}</VButton>
+        <VButton variant="secondary" @click="router.push(legacy)">
+          {{ t('console.placeholder.open') }}
+        </VButton>
       </div>
-    </div>
+    </ConsoleCard>
   </ConsolePage>
 </template>
 
@@ -32,8 +31,14 @@ import { t } from '@/locales'
 import { computed } from 'vue'
 import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { VButton } from '@/components/ui'
+import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
-import { CONSOLE_MODULES, consoleModuleOf, type ConsoleModuleKey } from '@/views/console/consoleNav'
+import {
+  CONSOLE_MODULES,
+  consoleModuleOf,
+  groupHasCaption,
+  type ConsoleModuleKey,
+} from '@/utils/console/modules'
 
 /** Where each module lives in the mobile admin until it moves (none -- new). */
 const LEGACY: Partial<Record<ConsoleModuleKey, RouteLocationRaw>> = {
@@ -55,27 +60,13 @@ const moduleKey = computed(() => consoleModuleOf(route.name))
 const legacy = computed(() => (moduleKey.value ? LEGACY[moduleKey.value] : undefined))
 const crumbs = computed(() => {
   const group = CONSOLE_MODULES.find((m) => m.key === moduleKey.value)?.group
-  return group && group !== 'overview' ? t(`console.groups.${group}`) : undefined
+  return group && groupHasCaption(group) ? t(`console.groups.${group}`) : undefined
 })
 </script>
 
 <style scoped>
 .console-placeholder {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
   max-width: 560px;
-  padding: var(--space-5);
-  border-radius: var(--velo-radius-22);
-  background: var(--velo-bg-card-solid);
-  box-shadow: var(--velo-shadow-glass);
-}
-
-.console-placeholder__title {
-  margin: 0;
-  font-size: var(--velo-fs-18);
-  color: var(--velo-text-primary);
-  -webkit-text-stroke: var(--velo-text-stroke-strong);
 }
 
 .console-placeholder__text {

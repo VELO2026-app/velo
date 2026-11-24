@@ -4,8 +4,8 @@
   The data table of the web console: a header row, then one row per item.
   A column is a key, a header label, an optional fixed width and alignment;
   a cell shows `row[key]` as text unless the screen fills it through the
-  `cell-<key>` slot. Rows are clickable when the screen listens to
-  `row-click` (keyboard: Enter / Space on the focused row); `selected`
+  `cell-<key>` slot. With `clickable` a row is a focusable control that
+  emits `row-click` (mouse, or Enter / Space on the focused row); `selected`
   marks the row whose detail is open next to the table.
 
   Slots: `cell-<key>` ({ row }), `empty` (no rows).
@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts" generic="Row extends Record<string, unknown>">
-import { computed, getCurrentInstance } from 'vue'
+import { computed } from 'vue'
 
 /** One table column. */
 export interface ConsoleTableColumn {
@@ -82,6 +82,8 @@ const props = defineProps<{
   selected?: unknown
   /** Accessible name of the table. */
   label?: string | undefined
+  /** Rows are controls that emit row-click. */
+  clickable?: boolean
 }>()
 
 const key = computed(() => props.rowKey ?? 'id')
@@ -89,9 +91,6 @@ const key = computed(() => props.rowKey ?? 'id')
 const emit = defineEmits<{
   'row-click': [row: Row]
 }>()
-
-// Rows are interactive only when the screen listens to row-click.
-const clickable = Boolean(getCurrentInstance()?.vnode.props?.onRowClick)
 
 function cellStyle(col: ConsoleTableColumn): Record<string, string> | undefined {
   return col.width === undefined ? undefined : { flex: `0 0 ${col.width}px` }
