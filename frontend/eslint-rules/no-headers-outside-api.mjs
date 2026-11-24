@@ -125,12 +125,16 @@ export default {
             (p.type === 'Property' &&
               ((!p.computed && p.key.type === 'Identifier' && HEADER_METHODS.has(p.key.name)) ||
                 p.computed ||
-                (p.key.type === 'Literal' && HEADER_METHODS.has(p.key.value)))),
+                (p.key.type === 'Literal' && HEADER_METHODS.has(String(p.key.value))))),
         )
         if (takes) context.report({ node, messageId: 'alias' })
       },
       ImportSpecifier(node) {
-        if (node.imported.name === 'api' && node.local.name !== 'api') {
+        if (
+          node.imported.type === 'Identifier' &&
+          node.imported.name === 'api' &&
+          node.local.name !== 'api'
+        ) {
           context.report({ node, messageId: 'rename' })
         }
       },
