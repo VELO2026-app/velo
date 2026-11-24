@@ -17,6 +17,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import noFixedSleep from './no-fixed-sleep.mjs'
 import noFlakeMasking from './no-flake-masking.mjs'
+import noHeadersOutsideApi from './no-headers-outside-api.mjs'
 import noWaitForTimeout from './no-wait-for-timeout.mjs'
 import { ALLOWLIST_PATH, REPO_ROOT } from './ratchet.mjs'
 
@@ -143,6 +144,30 @@ export function e2eRulesConfig(allFiles, testFiles) {
       rules: {
         'velo-tests/no-fixed-sleep': ['error', { allow: allow['no-fixed-sleep'] }],
       },
+    },
+  ]
+}
+
+/** FE-232: the plugin of the API boundary (headers and fetch() in src/api/ only). */
+export const apiPlugin = {
+  meta: { name: 'velo-api', version: sourceHash() },
+  rules: { 'no-headers-outside-api': noHeadersOutsideApi },
+}
+
+/**
+ * The flat-config entry that keeps headers and fetch() inside src/api/.
+ *
+ * @param files - Globs the rule runs on, relative to the config.
+ * @param ignores - Globs the rule skips (src/api/, tests).
+ * @returns Flat-config objects to spread into an eslint.config.js.
+ */
+export function apiBoundaryConfig(files, ignores) {
+  return [
+    {
+      files,
+      ignores,
+      plugins: { 'velo-api': apiPlugin },
+      rules: { 'velo-api/no-headers-outside-api': 'error' },
     },
   ]
 }

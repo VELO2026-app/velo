@@ -4,7 +4,7 @@
 //
 // UPDATED FE-104 (owner ruling BE-162): onSubmit creates a NEW ticket -- the
 // topic as a CODE and the message, one call (@/api/support::createTicket)
-// under the appeal's Idempotency-Key (::createAppealKeys). The other topic
+// under the appeal's Idempotency-Key (::createAttemptKeys). The other topic
 // (i18n:supportTopics.other) has no
 // free text; the master form gains the user complaint
 // (i18n:supportTopics.complaint_user,
@@ -12,7 +12,7 @@
 // upload/storage backend exists) -- their tests below are unchanged, nothing
 // about them sends anywhere.
 //
-// PATTERN: no store; createTicket mocked, createAppealKeys REAL (its key
+// PATTERN: no store; createTicket mocked, createAttemptKeys REAL (its key
 // source, newIdempotencyKey in @/api/chats, is a counter), toast mocked at @/composables/useToast (error path only -- success
 // never toasts, it flips to the terminal screen). vue-router mocked for
 // `back`/`push` only.
@@ -45,8 +45,7 @@ vi.mock('vue-router', () => ({
 }))
 
 const createTicket = vi.fn()
-vi.mock('@/api/support', async (importOriginal) => ({
-  createAppealKeys: (await importOriginal<typeof import('@/api/support')>()).createAppealKeys,
+vi.mock('@/api/support', () => ({
   createTicket: (...args: Parameters<typeof createTicket>) => createTicket(...args),
 }))
 

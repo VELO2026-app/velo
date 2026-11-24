@@ -197,7 +197,7 @@ import { useDiaryStore } from '@/stores/diary'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
-import { ApiResponseError } from '@/api/client'
+import { isGoneError } from '@/api/client'
 import { diaryEntryQuery } from '@/composables/queries/diary'
 import { practiceDetailQuery } from '@/composables/queries/practices'
 import { screenQueryState } from '@/composables/queries/screenState'
@@ -231,11 +231,7 @@ const { loading, failed } = screenQueryState(entryQuery)
 // request settled -- a refetch keeps the previous error on the entry.
 const gone = computed(() => {
   const error = entryQuery.error.value
-  return (
-    entryQuery.asyncStatus.value === 'idle' &&
-    error instanceof ApiResponseError &&
-    (error.status === 404 || error.status === 403)
-  )
+  return entryQuery.asyncStatus.value === 'idle' && isGoneError(error)
 })
 const entry = computed(() => (gone.value ? null : (entryQuery.data.value ?? null)))
 const loadError = computed(() =>

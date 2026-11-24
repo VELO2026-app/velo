@@ -60,10 +60,13 @@
   <VEmptyState
     v-else-if="store.selectedError"
     icon="warning"
-    :title="t('user.screens.practiceDetail.notFound')"
+    :title="store.selectedGone ? t('user.screens.practiceDetail.notFound') : t('common.loadError')"
     :description="store.selectedError"
   >
-    <VButton size="sm" @click="router.back()">{{ t('ui.back') }}</VButton>
+    <VButton v-if="!store.selectedGone" size="sm" @click="retryLoad">{{
+      t('common.retry')
+    }}</VButton>
+    <VButton size="sm" variant="secondary" @click="router.back()">{{ t('ui.back') }}</VButton>
   </VEmptyState>
 
   <!-- Content -->
@@ -366,6 +369,11 @@ const myBookings = useMyBookings()
 const bookings = myBookings.bookings
 
 const practice = computed(() => store.selected)
+
+/** Retry after a transient load failure (a gone practice offers only Back). */
+function retryLoad(): void {
+  void store.fetchPractice(route.params.id as string)
+}
 
 // -- Difficulty indicator (Calendar iteration) --
 // Filled-dot count (0 hides the block) + human label, from data.taxonomy.

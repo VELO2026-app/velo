@@ -44,7 +44,7 @@ function parseLocales(value: string | undefined): Locale[] {
 // env names are primer.yaml's -- API_BASE_URL, TELEGRAM_BOT_URL,
 // DEFAULT_LANGUAGE, LANGUAGES. The brand is NOT a start value: it is a skin
 // property (the skin brand record's displayName, materialized at build --
-// owner 09.11).
+// owner 09.11; virtual:skin-brand, FE-231).
 // launch.ts applies it before `import('./app')`,
 // because i18n and the manifest read the snapshot fields below at module
 // evaluation. An empty/absent value falls through to the build-time VITE_*
@@ -194,11 +194,6 @@ export const INSTANCE = {
   // Live reads are correct: the consumers (i18n's catalog setup, the manifest
   // is build-time) evaluate later, inside the dynamically imported app
   // graph -- after the config is in.
-  // The brand is a skin property (owner 09.11): never read from the runtime
-  // config -- only the build env the skin materializes, then the golden name.
-  get brand(): string {
-    return import.meta.env.VITE_BRAND || 'VELO'
-  },
   get defaultLocale(): Locale {
     return parseLocale(runtimeConfig.defaultLocale || import.meta.env.VITE_DEFAULT_LOCALE, 'ru')
   },

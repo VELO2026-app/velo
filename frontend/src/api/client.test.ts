@@ -17,6 +17,7 @@ import {
   ApiNetworkError,
   ApiResponseError,
   ApiTimeoutError,
+  isGoneError,
   resetClientState,
   setAuthToken,
   setOnUnauthorized,
@@ -82,6 +83,17 @@ describe('request() request id suffix (W29-trimmed)', () => {
     )
     const err = await captureError()
     expect(err.detail).toBe('field required · код 112233')
+  })
+})
+
+describe('isGoneError (FE-242)', () => {
+  it('404 and 403 mean gone; any other failure is retryable', () => {
+    expect(isGoneError(new ApiResponseError(404, 'x'))).toBe(true)
+    expect(isGoneError(new ApiResponseError(403, 'x'))).toBe(true)
+    expect(isGoneError(new ApiResponseError(500, 'x'))).toBe(false)
+    expect(isGoneError(new ApiResponseError(401, 'x'))).toBe(false)
+    expect(isGoneError(new ApiNetworkError())).toBe(false)
+    expect(isGoneError(new TypeError('boom'))).toBe(false)
   })
 })
 

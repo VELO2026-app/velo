@@ -72,6 +72,8 @@ export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from './useBodySc
 // VModal/VBottomSheet register through it; a host layer that also closes on
 // Escape (the app's diary search bar) joins the same stack.
 export { useEscapeLayer } from './escapeStack'
+export { inputKindAttrs } from './inputKind'
+export type { InputKind } from './inputKind'
 export { KEYBOARD_FIELD_SCROLL_INJECTION_KEY, useKeyboardFieldScroll } from './keyboardFieldScroll'
 // The loading system's delayed-flag rule (P8 batch 5): the no-flash hold the
 // swap component and host screens share -- nothing shows before LOADING_DELAY_MS,

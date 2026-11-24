@@ -14,11 +14,11 @@
     back-label="Check-in"
     :practice="practice"
     :practice-loading="practiceLoading"
-    :load-error="practiceLoadError"
+    :load-error="screenError"
     :question-title="t('user.screens.checkin.question.title')"
     :question-subtitle="t('user.screens.checkin.question.subtitle')"
     :submitting="diaryStore.checkinSubmitting"
-    :submit-disabled="windowClosed"
+    :submit-disabled="windowClosed || bookingsLoading"
     :disabled-hint="practice && windowClosed ? t('user.screens.checkin.windowClosedHint') : ''"
     :submit-label="t('common.submitSend')"
     :show-skip="true"
@@ -26,7 +26,7 @@
     :success-title="t('user.screens.checkin.toast.sent')"
     :success-text="t('user.screens.checkin.toast.recorded')"
     @back="onBack"
-    @retry="loadPractice"
+    @retry="reload"
     @submit="onSubmit"
     @skip="onSkip"
   >
@@ -95,7 +95,12 @@ const route = useRoute()
 const router = useRouter()
 const practicesStore = usePracticesStore()
 const bookingsStore = useBookingsStore()
-const { bookings } = useMyBookings()
+const {
+  bookings,
+  loading: bookingsLoading,
+  failed: bookingsFailed,
+  refetch: refetchBookings,
+} = useMyBookings()
 const skipCheckin = useSkipCheckin()
 const diaryStore = useDiaryStore()
 const toast = useToast()
@@ -105,7 +110,14 @@ const viewerTz = useViewerTimezone()
 
 const practice = computed(() => practicesStore.selected)
 const practiceLoading = computed(() => practicesStore.selectedLoading)
-const practiceLoadError = computed(() => practicesStore.selectedError)
+// `has_checkin` lives in the bookings list: while it has not answered (first
+// visit, or a retry in flight) submit is held, and a failed list is an error rung
+// with Retry, like a failed practice -- a form drawn on an unread list would offer
+// a check-in that may already exist, and the upsert would overwrite its mood and
+// comment (FE-242).
+const screenError = computed(
+  () => practicesStore.selectedError ?? (bookingsFailed.value ? t('common.loadError') : null),
+)
 
 // Slider score 1..10. Default is the EXACT 5, the neutral mood label (i18n:mood.neutral,
 // tz-mood-scale §2.4): submitting without touching the scale sends 5, not a zone's click value (6).
@@ -157,7 +169,13 @@ const formattedDate = computed(() =>
 )
 
 async function onSubmit(): Promise<void> {
-  if (diaryStore.checkinSubmitting || windowClosed.value || alreadyCheckedIn.value) return
+  if (
+    diaryStore.checkinSubmitting ||
+    windowClosed.value ||
+    bookingsLoading.value ||
+    alreadyCheckedIn.value
+  )
+    return
 
   const result = await diaryStore.submitCheckin(practiceId, {
     mood: moodScore.value,
@@ -250,13 +268,14 @@ watch(
 // Named so the error rung's retry button (i18n:common.retry) can re-run exactly what onMounted ran.
 // Unconditional: the guard below is a cache check for the mount path, but a retry
 // means the last attempt FAILED, so there is nothing cached to skip for.
-function loadPractice(): void {
+function reload(): void {
   void practicesStore.fetchPractice(practiceId)
+  if (bookingsFailed.value) void refetchBookings()
 }
 
 onMounted(() => {
   if (practicesStore.selected?.id !== practiceId) {
-    loadPractice()
+    reload()
   }
   tickHandle = setInterval(() => {
     nowMs.value = Date.now()

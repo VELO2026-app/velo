@@ -64,6 +64,7 @@
 
       <VTextarea
         v-model="comment"
+        kind="message"
         class="rating-sheet__comment"
         :placeholder="t('chat.rating.commentPlaceholder')"
         :rows="2"

@@ -613,3 +613,12 @@ html.is-keyboard-open .mobile-layout__main--fog {
   white-space: nowrap;
   border: 0;
 }
+
+/* === Listbox keyboard highlight ===
+   The option an arrow key has moved to in a search field with a suggestion
+   list (useListboxNav adds the class). A ring, so it never reads as the
+   selected option's fill. */
+.velo-listbox-active {
+  outline: 2px solid var(--velo-border-input-focus);
+  outline-offset: -2px;
+}

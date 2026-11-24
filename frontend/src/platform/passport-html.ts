@@ -7,9 +7,9 @@
 // share one module.)
 //
 // Two placeholder families:
-//   %VELO_BRAND%, %VELO_DEFAULT_LOCALE%
-//                   -- the instance passport (lang, brand title), valued by
-//                      the VITE_BRAND / VITE_DEFAULT_LOCALE env vars.
+//   %VELO_DEFAULT_LOCALE%
+//                   -- the instance passport (lang), valued by the
+//                      VITE_DEFAULT_LOCALE env var.
 //                      Resolved HERE only: process.env -> .env files ->
 //                      golden. [FE-153] They used to be spelled %VITE_*%,
 //                      which Vite's own html env pass also matches -- and
@@ -18,11 +18,11 @@
 //                      this plugin resolved them correctly. Vite only
 //                      touches (and warns about) placeholders carrying the
 //                      VITE_ env prefix, so the VELO_ spelling is ours alone.
-//   %VELO_THEME_COLOR%, the VELO:FONT block
+//   %VELO_BRAND%, %VELO_THEME_COLOR%, the VELO:FONT block
 //                   -- the skin derivatives (tz-whitelabel §1/§3,
-//                      platform/skin.ts), the core defaults when no skin ships
-//                      (CORE_SKIN). The defaults DUPLICATE the core values on purpose
-//                      (mirror pattern, pinned by passport-html.test.ts).
+//                      platform/skin.ts): the tab title is the skin's
+//                      display name -- no env value names the brand (FE-231);
+//                      the core values (CORE_SKIN) when no skin ships.
 // =============================================================================
 
 import { loadEnv, type Plugin } from 'vite'
@@ -32,12 +32,10 @@ import { CORE_SKIN, type SkinPackage } from './skin'
 /** Placeholder (as written in index.html, between the %) mapped to the env var
  *  that values it. */
 const PASSPORT_PLACEHOLDERS: Record<string, string> = {
-  VELO_BRAND: 'VITE_BRAND',
   VELO_DEFAULT_LOCALE: 'VITE_DEFAULT_LOCALE',
 }
 
 const PASSPORT_HTML_DEFAULTS: Record<string, string> = {
-  VITE_BRAND: CORE_SKIN.displayName,
   VITE_DEFAULT_LOCALE: 'ru',
 }
 
@@ -87,16 +85,13 @@ export function passportHtmlDefaults(skin: SkinPackage | null = null): Plugin {
         })
         // Skin derivatives (§1: the brand record is the single header-color source).
         out = out.replace(/%VELO_THEME_COLOR%/g, skin?.themeColor ?? CORE_SKIN.themeColor)
-        if (skin) {
-          if (skin.fonts.length > 0) out = out.replace(FONT_BLOCK, skinFontBlock(skin))
-          // The tab title follows the skin's display name: a branded build
-          // whose browser tab still said VELO would read as half-skinned.
-          // Escaped and substituted through a function: a display name is
-          // package data -- markup must not reach the document, and `$&`
-          // must not expand as a replacement pattern.
-          const title = `<title>${escapeHtml(skin.displayName)}</title>`
-          out = out.replace(/<title>[^<]*<\/title>/, () => title)
-        }
+        // The tab title is the skin's display name (the core word without a
+        // package). Escaped and substituted through a function: a display
+        // name is package data -- markup must not reach the document, and
+        // `$&` must not expand as a replacement pattern.
+        const title = escapeHtml((skin ?? CORE_SKIN).displayName)
+        out = out.replace(/%VELO_BRAND%/g, () => title)
+        if (skin && skin.fonts.length > 0) out = out.replace(FONT_BLOCK, skinFontBlock(skin))
         return out
       },
     },

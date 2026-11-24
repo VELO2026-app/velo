@@ -49,8 +49,9 @@ export const useBalanceStore = defineStore('balance', () => {
    * Called after purchase, cancel (refund), or topup to ensure
    * displayed balance matches server state.
    */
-  async function refresh(): Promise<void> {
-    await authStore.fetchMe()
+  async function refresh(): Promise<boolean> {
+    // fetchMe resolves false on a transport failure: the shown balance is then stale.
+    return (await authStore.fetchMe()) !== false
   }
 
   /**

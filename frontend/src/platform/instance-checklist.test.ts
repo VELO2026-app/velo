@@ -4,7 +4,7 @@
 // evaluateChecklist() is the §6.4 acceptance table: every dist fact vs its
 // source of record (skin/passport/golden). Pinned here: a matching build is
 // green, every drift fails named, and the rows that cannot be automated
-// (description seam, maskable safe-zone) stay INFO/MANUAL instead of
+// (maskable safe-zone, the bot settings in BotFather) stay MANUAL instead of
 // pretending.
 // =============================================================================
 
@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 
 // Plain ESM module (types loosely declared in env.d.ts).
 // @ts-expect-error -- *.mjs modules carry no type information
-import { evaluateChecklist } from '../../scripts/instance-checklist.mjs'
+import { evaluateChecklist, openButtonLabel } from '../../scripts/instance-checklist.mjs'
 
 const EXPECTED = {
   skin: { displayName: 'НОВА', shortName: 'Нова', themeColor: '#1B1530' },
@@ -23,6 +23,8 @@ const EXPECTED = {
   themeSource: 'skin package',
   defaultLocale: 'ru',
   locales: ['ru'],
+  hasSkin: true,
+  openLabel: 'Открыть',
   botUrl: 'https://telegram.me/veloappbot',
   botUrlSource: 'golden default',
 }
@@ -79,7 +81,30 @@ describe('evaluateChecklist (tz-whitelabel §6)', () => {
     expect(byItem['per-locale manifests']!.status).toBe('PASS')
     // The safe zone needs eyes and says so.
     expect(byItem['maskable safe-zone']!.status).toBe('MANUAL')
+    // So does the bot: BotFather only, named with the brand of the build.
+    for (const item of [
+      'bot name',
+      'bot avatar',
+      'bot description',
+      'bot menu button',
+      'bot sign-in domain',
+    ])
+      expect(byItem[item]!.status).toBe('MANUAL')
+    expect(rows.find((r) => r.item === 'bot name')!.fact).toContain('НОВА')
+    expect(rows.find((r) => r.item === 'bot menu button')!.fact).toContain('«Открыть НОВА»')
+    expect(rows.find((r) => r.item === 'bot avatar')!.fact).toContain('skin assets/icon-512.png')
     expect(byItem['locales']!.status).toBe('INFO')
+  })
+
+  it('without a skin the bot avatar is the core icon', () => {
+    const { rows } = check(GREEN_FACTS, { ...EXPECTED, hasSkin: false })
+    expect(rows.find((r) => r.item === 'bot avatar')!.fact).toContain('public/icons/icon-512.png')
+  })
+
+  it('the menu button verb is the one the app hint names, per locale', () => {
+    expect(openButtonLabel('ru')).toBe('Открыть')
+    expect(openButtonLabel('en')).toBe('Open')
+    expect(openButtonLabel('uk')).toBe('Відкрити')
   })
 
   it('a half-skinned title fails, named', () => {
