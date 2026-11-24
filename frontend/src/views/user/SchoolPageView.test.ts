@@ -60,6 +60,16 @@ vi.mock('@/composables/useViewerTimezone', async () => {
 let app: App | null = null
 let host: HTMLElement | null = null
 
+/** Type a value into a field the test must find on screen. */
+function typeInto(
+  el: HTMLInputElement | HTMLTextAreaElement | null | undefined,
+  value: string,
+): void {
+  if (!el) throw new Error('the field is not on screen')
+  el.value = value
+  el.dispatchEvent(new Event('input'))
+}
+
 function mount(pinia: Pinia = createPinia()): HTMLElement {
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -108,6 +118,12 @@ function rowWith(label: string): HTMLElement | undefined {
   return Array.from(document.body.querySelectorAll<HTMLElement>('.v-menu-row')).find(
     (r) => r.textContent?.trim() === label,
   )
+}
+
+/** An overlay (edit sheet, leave dialog) while it is OPEN: mounted and not on its way out (a closing one lingers with Transition leave classes). */
+function openOverlay(selector: '.v-sheet__overlay' | '.v-modal__overlay'): Element | null {
+  const overlay = document.body.querySelector(selector)
+  return overlay && !overlay.className.includes('leave') ? overlay : null
 }
 
 // -- Fixtures ---------------------------------------------------------------
@@ -412,6 +428,33 @@ describe('SchoolPageView -- leave', () => {
     expect(replace).toHaveBeenCalledWith({ name: 'user-my-schools' })
   })
 
+  it('a failed leave toasts the failure and keeps the page; the dialog stays, so a second tap leaves (FE-259)', async () => {
+    vi.mocked(cgApi.leaveSchool)
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockResolvedValueOnce(undefined)
+    mount()
+    await flush()
+
+    buttonWith('Покинуть школу')?.click()
+    await flush()
+    buttonExact('Покинуть')?.click()
+    await flush()
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось покинуть школу')
+    expect(toastSuccess).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
+    expect(text()).toContain('Тихая школа')
+    expect(text()).not.toContain('Школа не найдена')
+    expect(openOverlay('.v-modal__overlay')).not.toBeNull()
+
+    buttonExact('Покинуть')?.click()
+    await flush()
+
+    expect(cgApi.leaveSchool).toHaveBeenCalledTimes(2)
+    expect(toastSuccess).toHaveBeenCalledWith('Вы покинули школу')
+    expect(replace).toHaveBeenCalledWith({ name: 'user-my-schools' })
+  })
+
   it('FROZEN school (review P2 / I-5): the page itself 404s -- the not-found screen still offers the exit', async () => {
     vi.mocked(cgApi.getSchoolPage).mockRejectedValue(
       new ApiResponseError(404, 'not_found', 'not_found'),
@@ -450,8 +493,8 @@ describe('SchoolPageView -- leave', () => {
 
     // The router leaves the screen; the same app session reopens the school
     // while the server's answer is still on its way.
-    app!.unmount()
-    host!.remove()
+    app?.unmount()
+    host?.remove()
     document.body.innerHTML = ''
     vi.mocked(cgApi.getSchoolPage).mockReturnValue(new Promise(() => {}))
     vi.mocked(cgApi.getSchoolPractices).mockReturnValue(new Promise(() => {}))
@@ -497,10 +540,9 @@ describe('SchoolPageView -- edit', () => {
     const fields = Array.from(
       document.body.querySelectorAll('input, textarea'),
     ) as HTMLInputElement[]
-    expect(fields[0]!.value).toBe('Тихая школа')
+    expect(fields[0]?.value).toBe('Тихая школа')
 
-    fields[0]!.value = '  Новое имя  '
-    fields[0]!.dispatchEvent(new Event('input'))
+    typeInto(fields[0], '  Новое имя  ')
     await flush()
 
     vi.mocked(cgApi.updateSchool).mockResolvedValue({
@@ -526,8 +568,7 @@ describe('SchoolPageView -- edit', () => {
     const fields = Array.from(
       document.body.querySelectorAll('input, textarea'),
     ) as HTMLInputElement[]
-    fields[2]!.value = 'https://CDN.Example.COM/school.png'
-    fields[2]!.dispatchEvent(new Event('input'))
+    typeInto(fields[2], 'https://CDN.Example.COM/school.png')
     await flush()
 
     vi.mocked(cgApi.updateSchool).mockResolvedValue(
@@ -568,9 +609,8 @@ describe('SchoolPageView -- edit', () => {
     const fields = Array.from(
       document.body.querySelectorAll('input, textarea'),
     ) as HTMLInputElement[]
-    expect(fields[2]!.value).toBe('https://cdn.example.com/old.png')
-    fields[2]!.value = ''
-    fields[2]!.dispatchEvent(new Event('input'))
+    expect(fields[2]?.value).toBe('https://cdn.example.com/old.png')
+    typeInto(fields[2], '')
     await flush()
 
     vi.mocked(cgApi.updateSchool).mockResolvedValue(pageFixture('curator'))
@@ -588,6 +628,39 @@ describe('SchoolPageView -- edit', () => {
       ?.getAttribute('src')
     expect(fallbackSrc ?? '').not.toContain('cdn.example.com')
     expect(fallbackSrc ?? '').toContain('data:image/svg')
+  })
+
+  it('a failed save toasts the failure, keeps the old name and the typed sheet; a second save lands (FE-259)', async () => {
+    routeState.name = 'master-school'
+    mockHappyLoad('curator')
+    vi.mocked(cgApi.updateSchool)
+      .mockRejectedValueOnce(new Error('blip'))
+      .mockResolvedValueOnce({ ...pageFixture('curator'), name: 'Новое имя' })
+    mount()
+    await flush()
+
+    rowWith('Редактировать школу')?.click()
+    await flush()
+    const nameField = document.body.querySelector('input') as HTMLInputElement
+    nameField.value = 'Новое имя'
+    nameField.dispatchEvent(new Event('input'))
+    await flush()
+    buttonWith('Сохранить')?.click()
+    await flush()
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось обновить школу')
+    expect(toastSuccess).not.toHaveBeenCalled()
+    // The page still carries the saved name; the sheet is open with what was typed.
+    expect(document.body.querySelector('.school-hero__name')?.textContent).toContain('Тихая школа')
+    expect(openOverlay('.v-sheet__overlay')).not.toBeNull()
+    expect((document.body.querySelector('input') as HTMLInputElement).value).toBe('Новое имя')
+
+    buttonWith('Сохранить')?.click()
+    await flush()
+
+    expect(cgApi.updateSchool).toHaveBeenCalledTimes(2)
+    expect(toastSuccess).toHaveBeenCalledWith('Школа обновлена')
+    expect(document.body.querySelector('.school-hero__name')?.textContent).toContain('Новое имя')
   })
 })
 
@@ -861,7 +934,7 @@ describe('FE-78.4 -- a superseded load is a no-op', () => {
   it('a slow answer for the previous school never repaints the current one', async () => {
     // Navigation #1 resolves slowly; navigation #2 (same instance, id flipped)
     // resolves fast and wins.
-    let resolveSlow!: (page: SchoolPageResponse) => void
+    let resolveSlow: (page: SchoolPageResponse) => void = () => {}
     vi.mocked(cgApi.getSchoolPage)
       .mockImplementationOnce(
         () =>
@@ -882,7 +955,7 @@ describe('FE-78.4 -- a superseded load is a no-op', () => {
     expect(text()).toContain('Вторая школа')
 
     // The stale answer lands AFTER the newer one -- it must be dropped.
-    resolveSlow!({ ...pageFixture('curator'), name: 'Тихая школа' })
+    resolveSlow({ ...pageFixture('curator'), name: 'Тихая школа' })
     await flush()
 
     expect(text()).toContain('Вторая школа')

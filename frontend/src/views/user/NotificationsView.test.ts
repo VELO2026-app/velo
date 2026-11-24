@@ -345,33 +345,41 @@ describe('NotificationsView -- one category, two controls', () => {
 })
 
 describe('NotificationsView -- unsynced recipient / comms down', () => {
-  it('shows defaults, DISABLES every switch, and says so', async () => {
-    prefsGet.mockRejectedValue(new Error('404 recipient not synced'))
+  // FE-258: a default drawn after a failed read passes for the user's own setting,
+  // and a flip of it overwrites the real one -- so no switch is drawn at all.
+  it('says «Ошибка загрузки» with Retry and draws no switch; Retry brings the SERVER values (FE-242, FE-258)', async () => {
+    prefsGet.mockRejectedValueOnce(new Error('404 recipient not synced'))
     mount()
     await flush()
 
     expect(toastError).toHaveBeenCalledWith('Не удалось загрузить настройки уведомлений')
-    expect(isDisabled(LABEL.master)).toBe(true)
-    expect(isDisabled(LABEL.reminders)).toBe(true)
-    expect(isDisabled(LABEL.bookings)).toBe(true)
-    expect(isDisabled(LABEL.msg_participants)).toBe(true)
-    expect(isDisabled(LABEL.finance)).toBe(true)
-  })
-
-  it('says «Ошибка загрузки» with Retry, and Retry restores live switches (FE-242)', async () => {
-    prefsGet.mockRejectedValueOnce(new Error('502'))
-    mount()
-    await flush()
-
     expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
+    expect(host?.querySelector('.v-switch')).toBeNull()
 
-    prefsGet.mockResolvedValue(prefs())
-    Array.from(host!.querySelectorAll('button'))
-      .find((b) => b.textContent?.includes('Повторить'))!
-      .click()
+    // The server answer differs from the defaults, so a screen that kept them would show them.
+    prefsGet.mockResolvedValue(prefs({ bookings: false }))
+    Array.from(host?.querySelectorAll('button') ?? [])
+      .find((b) => b.textContent?.includes('Повторить'))
+      ?.click()
     await flush()
 
     expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+    expect(isDisabled(LABEL.reminders)).toBe(false)
+    expect(isOn(LABEL.bookings)).toBe(false)
+  })
+
+  it('draws no switch until the first read answers', async () => {
+    let answer: (v: ReturnType<typeof prefs>) => void = () => {}
+    prefsGet.mockReturnValueOnce(new Promise((r) => (answer = r)))
+    mount()
+    await flush()
+
+    expect(host?.querySelector('.v-switch')).toBeNull()
+    expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+
+    answer(prefs())
+    await flush()
+
     expect(isDisabled(LABEL.reminders)).toBe(false)
   })
 

@@ -42,14 +42,6 @@ export const LAYOUT_ALLOWLIST: LayoutAllowance[] = [
     element: /^span\.mood-slider__label(\.|\s|$)/,
     widths: [320],
   },
-  {
-    task: 'FE-250',
-    reason: 'seven VBarChart labels do not fit a 320 px screen; the last one runs past its edge',
-    rules: ['overflow'],
-    routes: ['admin-checkin-rate', 'admin-feedback-rate', 'admin-return-rate'],
-    element: /^span\.v-bar-chart__label(\.|\s|$)/,
-    widths: [320],
-  },
 ]
 
 checkAllowances(LAYOUT_ALLOWLIST)
