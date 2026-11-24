@@ -285,16 +285,6 @@ const resolverRows = computed(() =>
   gap: var(--space-4);
 }
 
-@media (max-width: 1199px) {
-  .support-stats__tiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .support-stats__cards {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .support-stats__tile {
   gap: var(--space-1);
 }
@@ -370,5 +360,16 @@ const resolverRows = computed(() =>
   padding: var(--space-4);
   font-size: var(--velo-fs-14);
   color: var(--velo-text-muted);
+}
+
+/* Last, so it overrides the desktop columns above: tiles two by two and the cards one under the other on a tablet. */
+@media (max-width: 1199px) {
+  .support-stats__tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .support-stats__cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

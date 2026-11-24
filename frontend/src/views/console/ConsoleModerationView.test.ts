@@ -420,3 +420,49 @@ describe('ConsoleModerationView: method changes', () => {
     expect(host?.querySelector('[data-testid="method-request"]')).not.toBeNull()
   })
 })
+
+describe('ConsoleModerationView: empty and failed lists', () => {
+  it('says there are no new complaints, and nothing to pick', async () => {
+    server.reports.pending = []
+    await mount()
+
+    expect(rows()).toHaveLength(0)
+    expect(host?.textContent).toContain('Новых жалоб нет')
+    expect(host?.textContent).toContain('Жалоба не выбрана')
+  })
+
+  it('shows the list error with a retry that asks again', async () => {
+    vi.mocked(adminApi.getReports).mockRejectedValueOnce(new ApiResponseError(500, 'boom'))
+    await mount()
+    expect(host?.textContent).toContain('Не удалось загрузить')
+
+    await click(button('Повторить'))
+
+    expect(rows()).toHaveLength(2)
+  })
+
+  it('says the complaint named in the URL is not found when nothing answers to it', async () => {
+    await mount('/console/moderation?id=r_missing')
+
+    expect(host?.textContent).toContain('Жалоба не найдена')
+  })
+
+  it('says there are no method change requests', async () => {
+    server.requests = []
+    await mount('/console/moderation?tab=methods')
+
+    expect(host?.textContent).toContain('Заявок нет')
+  })
+
+  it('shows the requests error with a retry that asks again', async () => {
+    vi.mocked(adminApi.getMethodChangeRequests).mockRejectedValueOnce(
+      new ApiResponseError(500, 'boom'),
+    )
+    await mount('/console/moderation?tab=methods')
+    expect(host?.querySelector('[data-testid="method-request"]')).toBeNull()
+
+    await click(button('Повторить'))
+
+    expect(host?.querySelector('[data-testid="method-request"]')).not.toBeNull()
+  })
+})

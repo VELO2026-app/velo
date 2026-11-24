@@ -677,3 +677,134 @@ describe('ConsoleSupportView: narrow window', () => {
     expect(byId('ticket-detail')).toBeNull()
   })
 })
+
+describe('ConsoleSupportView: empty and failed reads', () => {
+  it('says there are no tickets when the list is empty', async () => {
+    server.tickets = {}
+    await mount()
+
+    expect(rows()).toHaveLength(0)
+    expect(host?.textContent).toContain('Обращений нет')
+    expect(host?.textContent).toContain('Обращение не выбрано')
+  })
+
+  it('shows the list error with a retry that asks again', async () => {
+    vi.mocked(supportApi.listAdminTickets).mockRejectedValueOnce(new ApiResponseError(500, 'boom'))
+    await mount()
+    expect(rows()).toHaveLength(0)
+    expect(host?.textContent).toContain('Не удалось загрузить')
+
+    await click(button('Повторить'))
+
+    expect(rows()).toHaveLength(3)
+  })
+
+  it('shows the ticket error with a retry that reads the ticket again', async () => {
+    vi.mocked(supportApi.getAdminTicket).mockRejectedValueOnce(new ApiResponseError(500, 'boom'))
+    await mount('/console/support?ticket=t_done_0004')
+    expect(byId('ticket-detail')?.textContent).toContain('Ошибка загрузки')
+
+    await click(button('Повторить'))
+
+    expect(byId('ticket-detail')?.textContent).toContain('Вопрос по практикам')
+  })
+
+  it('shows the feed error with a retry while the ticket itself stays on screen', async () => {
+    vi.mocked(supportApi.getAdminSupportMessages).mockRejectedValueOnce(
+      new ApiResponseError(500, 'boom'),
+    )
+    await mount()
+    expect(feedText()).toContain('Не удалось загрузить сообщения')
+    expect(byId('ticket-detail')?.textContent).toContain(TOPIC_TECH)
+
+    await click(button('Повторить'))
+
+    expect(feedText()).toContain('The Zoom link did not arrive')
+  })
+})
+
+describe('ConsoleSupportView: handover conflicts', () => {
+  it('tells that the ticket changed hands meanwhile and reads it again', async () => {
+    vi.mocked(supportApi.assignTicket).mockRejectedValueOnce(new ApiResponseError(409, 'moved'))
+    await mount('/console/support?tab=mine&ticket=t_mine_0002')
+    await click(button('Назначить'))
+    const reads = vi.mocked(supportApi.getAdminTicket).mock.calls.length
+
+    await click(document.body.querySelector('.v-menu-row') as HTMLElement)
+
+    expect(toastError).toHaveBeenCalledWith('Обращение изменилось — проверьте, у кого оно')
+    expect(vi.mocked(supportApi.getAdminTicket).mock.calls.length).toBeGreaterThan(reads)
+  })
+
+  it('keeps the roster open and reads it again when the chosen admin stopped being one', async () => {
+    vi.mocked(supportApi.assignTicket).mockRejectedValueOnce(new ApiResponseError(422, 'no'))
+    await mount('/console/support?tab=mine&ticket=t_mine_0002')
+
+    await click(button('Назначить'))
+    const reads = getUsersList.mock.calls.length
+    await click(document.body.querySelector('.v-menu-row') as HTMLElement)
+
+    expect(toastError).toHaveBeenCalledWith('Выбранный пользователь не администратор')
+    expect(getUsersList.mock.calls.length).toBeGreaterThan(reads)
+    expect(document.body.querySelector('.v-menu-row')).not.toBeNull()
+  })
+
+  it('tells that a release met a change and reads the ticket again', async () => {
+    vi.mocked(supportApi.releaseTicket).mockRejectedValueOnce(new ApiResponseError(409, 'moved'))
+    await mount('/console/support?tab=mine&ticket=t_mine_0002')
+
+    const reads = vi.mocked(supportApi.getAdminTicket).mock.calls.length
+    await click(button('Освободить'))
+
+    expect(toastError).toHaveBeenCalledWith('Обращение изменилось — проверьте, у кого оно')
+    expect(vi.mocked(supportApi.getAdminTicket).mock.calls.length).toBeGreaterThan(reads)
+  })
+
+  it('shows the not-found state, with no toast, when the spam bin emptied a ticket under a reopen', async () => {
+    vi.mocked(supportApi.reopenTicket).mockRejectedValueOnce(new ApiResponseError(404, 'gone'))
+    await mount('/console/support?tab=closed&ticket=t_done_0004')
+
+    await click(button('Вернуть в работу'))
+
+    expect(byId('ticket-detail')?.textContent).toContain('Обращение не найдено')
+    expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('tells that a retry of a translation met nothing to retry, and reads the feed again', async () => {
+    server.feeds.t_free_0001 = [
+      message('t_free_0001', {
+        translation: { locale: 'ru', state: 'impossible', source_locale: 'en', retryable: true },
+      }),
+    ]
+    vi.mocked(supportApi.retrySupportTranslation).mockRejectedValueOnce(
+      new ApiResponseError(409, 'running'),
+    )
+    await mount()
+    const reads = vi.mocked(supportApi.getAdminSupportMessages).mock.calls.length
+
+    await click(button('Повторить'))
+
+    expect(toastError).toHaveBeenCalledWith('Повторять нечего — перевод уже идёт или готов')
+    expect(vi.mocked(supportApi.getAdminSupportMessages).mock.calls.length).toBeGreaterThan(reads)
+  })
+})
+
+describe('ConsoleSupportView: statistics failure', () => {
+  it('shows the error with a retry that asks the month again', async () => {
+    vi.mocked(supportApi.getSupportStats).mockRejectedValueOnce(new ApiResponseError(500, 'boom'))
+    vi.mocked(supportApi.getSupportStats).mockResolvedValue({
+      period: { created_from: '', created_to: '' },
+      categories: [],
+      total: 5,
+      spam: 1,
+      resolvers: [],
+    })
+    await mount('/console/support?tab=stats')
+    expect(byId('stats-tile-total')).toBeNull()
+    expect(host?.textContent).toContain('Не удалось загрузить')
+
+    await click(button('Повторить'))
+
+    expect(byId('stats-tile-total')?.textContent).toContain('5')
+  })
+})
