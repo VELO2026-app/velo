@@ -67,6 +67,12 @@
       "moodOf": "{n} из {total}",
       "masterFallback": "Мастер",
       "temporarilyHidden": "Временно недоступен"
+    },
+    "discardChanges": {
+      "title": "Сбросить изменения?",
+      "message": "Введённые данные не сохранятся.",
+      "confirm": "Сбросить",
+      "keepEditing": "Продолжить"
     }
   },
   "methodPicker": {

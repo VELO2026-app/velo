@@ -67,6 +67,12 @@
       "moodOf": "{n} of {total}",
       "masterFallback": "Master",
       "temporarilyHidden": "Temporarily hidden"
+    },
+    "discardChanges": {
+      "title": "Discard changes?",
+      "message": "What you entered will not be saved.",
+      "confirm": "Discard",
+      "keepEditing": "Keep editing"
     }
   },
   "methodPicker": {

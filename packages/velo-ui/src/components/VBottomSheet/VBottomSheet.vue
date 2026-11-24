@@ -90,6 +90,10 @@
           role="dialog"
           aria-modal="true"
           tabindex="-1"
+          @touchstart="onTouchStart"
+          @touchmove="onTouchMove"
+          @touchend="onTouchEnd"
+          @touchcancel="onTouchCancel"
         >
           <div
             class="v-sheet__handle"
@@ -124,7 +128,7 @@
               class="v-sheet__cancel"
               :class="{ 'v-sheet__cancel--danger': cancelVariant === 'danger' }"
               :data-velo-variant="cancelVariant"
-              @click="$emit('close')"
+              @click="requestDismiss"
             >
               {{ cancelLabel }}
             </button>
@@ -161,6 +165,7 @@ import { ref, watch, onUnmounted, onDeactivated, useAttrs } from 'vue'
 import { lockBodyScroll, unlockBodyScroll } from '../../useBodyScrollLock'
 import { useEscapeLayer } from '../../escapeStack'
 import { useBackdropDismiss, useOverlayLayer } from '../../overlayA11y'
+import { useSheetDrag } from '../../useSheetDrag'
 
 defineOptions({ inheritAttrs: false })
 const attrs = useAttrs()
@@ -193,6 +198,10 @@ const props = withDefaults(
     /** Hairline-stroke title weight (T24-25/32, PROMPT №634) -- see the
      *  file header. Default false = byte-identical to before. */
     titleStrong?: boolean
+    /** False: every way to leave (scrim, Escape, swipe, cancel button) emits
+     *  `dismissAttempt` instead of `close` -- for a form with unsaved edits
+     *  (FE-233). Default true = byte-identical to before. */
+    dismissible?: boolean
   }>(),
   {
     title: '',
@@ -204,12 +213,15 @@ const props = withDefaults(
     cancelVariant: 'primary',
     saveVariant: 'danger',
     titleStrong: false,
+    dismissible: true,
   },
 )
 
 const emit = defineEmits<{
   close: []
   save: []
+  /** A dismissal was asked for while `dismissible` is false. */
+  dismissAttempt: []
 }>()
 
 // Its screen kept alive off-stage (TabRouterView, a dock tap while open):
@@ -221,9 +233,25 @@ onDeactivated(() => {
 const overlayEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
 
+/**
+ * A person asked to leave: scrim tap, Escape, swipe, cancel button. A
+ * dismissible sheet closes; otherwise the parent hears `dismissAttempt` and
+ * decides (a form with unsaved edits asks first).
+ *
+ * @returns True when the sheet is closing.
+ */
+function requestDismiss(): boolean {
+  if (props.dismissible) {
+    emit('close')
+    return true
+  }
+  emit('dismissAttempt')
+  return false
+}
+
 // A backdrop tap closes only if the press began on the backdrop too (FE-233).
 const backdrop = useBackdropDismiss(() => {
-  if (props.closeOnOverlay) emit('close')
+  if (props.closeOnOverlay) requestDismiss()
 })
 
 // Focus moves into the sheet and returns to the opener; the page under it is
@@ -237,78 +265,25 @@ useOverlayLayer(
 // Escape closes only the top open overlay, not every open one (FE-215).
 useEscapeLayer(
   () => props.open,
-  () => emit('close'),
+  () => void requestDismiss(),
 )
 
-// Swipe-to-close from the grab zone (handle + title). The zone is
-// touch-action:none, so the gesture never competes with the body's own
-// scroll; the panel follows the finger 1:1 via transform. Released past a
-// quarter of the panel (capped) or flicked down -> it keeps going and the
-// sheet closes; otherwise it settles back. Only with Telegram's vertical
-// swipes disabled (platform/telegram.ts) does the host leave this drag to us.
-const CLOSE_DISTANCE_MAX_PX = 160
-const CLOSE_VELOCITY_PX_PER_MS = 0.5
-let dragPointer: number | null = null
-let dragStartY = 0
-let dragDy = 0
-let lastY = 0
-let lastT = 0
-let velocity = 0
-
-function setPanelMotion(transform: string, transition: string): void {
-  const el = panelEl.value
-  if (!el) return
-  el.style.transition = transition
-  el.style.transform = transform
-}
-
-function onGrabDown(e: PointerEvent): void {
-  if (dragPointer !== null || (e.pointerType === 'mouse' && e.button !== 0)) return
-  dragPointer = e.pointerId
-  dragStartY = lastY = e.clientY
-  lastT = e.timeStamp
-  dragDy = 0
-  velocity = 0
-  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-}
-
-function onGrabMove(e: PointerEvent): void {
-  if (e.pointerId !== dragPointer) return
-  dragDy = Math.max(0, e.clientY - dragStartY)
-  const dt = e.timeStamp - lastT
-  if (dt > 0) velocity = (e.clientY - lastY) / dt
-  lastY = e.clientY
-  lastT = e.timeStamp
-  setPanelMotion(`translate3d(0, ${dragDy}px, 0)`, 'none')
-}
-
-function onGrabEnd(e: PointerEvent): void {
-  if (e.pointerId !== dragPointer) return
-  dragPointer = null
-  const height = panelEl.value?.offsetHeight ?? 0
-  const closeAt = Math.min(CLOSE_DISTANCE_MAX_PX, height * 0.25)
-  if (dragDy > 0 && (dragDy > closeAt || velocity > CLOSE_VELOCITY_PX_PER_MS)) {
-    setPanelMotion(
-      'translate3d(0, 100%, 0)',
-      'transform var(--velo-dur-sheet-exit) var(--velo-ease-in)',
-    )
-    emit('close')
-    return
-  }
-  settleBack()
-}
-
-function onGrabCancel(e: PointerEvent): void {
-  if (e.pointerId !== dragPointer) return
-  dragPointer = null
-  settleBack()
-}
-
-function settleBack(): void {
-  if (dragDy === 0) return
-  dragDy = 0
-  setPanelMotion('', 'transform var(--velo-dur-sheet-exit) var(--velo-ease-out)')
-}
+// Swipe-to-close: from the grab zone (handle + title) always, and from the
+// rest of the panel when its content is scrolled to the top. The panel follows
+// the finger, resists a pull upward, and springs back with the finger's own
+// velocity when released short of the threshold (src/useSheetDrag.ts). Only
+// with Telegram's vertical swipes disabled (platform/telegram.ts) does the host
+// leave this drag to us.
+const {
+  onGrabDown,
+  onGrabMove,
+  onGrabEnd,
+  onGrabCancel,
+  onTouchStart,
+  onTouchMove,
+  onTouchEnd,
+  onTouchCancel,
+} = useSheetDrag({ panel: panelEl, onRelease: requestDismiss })
 
 // Lock body scroll while open. Ref-counted (W16, PROMPT №409) -- see
 // VModal.vue's identical comment for why (two overlays open at once, whoever
