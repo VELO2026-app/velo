@@ -418,7 +418,7 @@ function mount(): HTMLElement {
 //   (3) await getMyPractices inside the Colada infinite query
 //   (4)-(6) the entry's state lands -> the computed lists
 //   (7) the final re-render.
-// The fire-and-forget loadStats() runs alongside and is 2 deep. Seven counted;
+// loadStats() runs alongside and is 2 deep. Seven counted;
 // ten written. Over-counting is free, under-counting fails loudly, and this
 // chain grows the moment anything joins that onMounted.
 async function flush(): Promise<void> {
@@ -628,6 +628,7 @@ describe('MasterDashboardView', () => {
       expect(createCta()).toBeDefined()
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe(EMPTY_NEW)
       expect(sectionTitles()).toEqual(['Ближайшая практика'])
+      expect(text()).not.toContain('Не удалось загрузить')
     })
 
     it('content: renders each upcoming practice with its own date, time and duration', async () => {
@@ -690,7 +691,7 @@ describe('MasterDashboardView', () => {
       // (i18n:masterScreens.masterDashboard.emptyUpcoming) + the create CTA
       // -- worse than the stale figures
       // it replaced. The freshness check is passive: on failure the old page
-      // stays, exactly like loadStats keeps its previous values.
+      // stays (the stats row, by contrast, shows its error: FE-257).
       mount()
       await flush()
       expect(metaOf(blockAt(0))).toEqual(['5/20', '3/20'])
@@ -784,6 +785,8 @@ describe('MasterDashboardView', () => {
       expect(text()).not.toContain(EMPTY_NEW)
       expect(nearestEmptyCard()).toBeFalsy()
       expect(retryButtons()).toHaveLength(1)
+      // The error is about the past list: it must not stand under the nearest-practice heading.
+      expect(sectionTitles()).toEqual([])
 
       mockBucketedPractices([P_COMPLETED])
       retryButtons()[0]?.click()
@@ -791,6 +794,7 @@ describe('MasterDashboardView', () => {
 
       expect(text()).not.toContain('Не удалось загрузить')
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
+      expect(sectionTitles()).toEqual(['Ближайшая практика'])
     })
 
     it('the zero state waits for the past list: a loader, never «new master» in the meantime (FE-257)', async () => {
@@ -805,12 +809,14 @@ describe('MasterDashboardView', () => {
       expect(host?.querySelector('.master-dashboard__loading-row')).not.toBeNull()
       expect(text()).not.toContain(EMPTY_NEW)
       expect(text()).not.toContain('Нет предстоящих практик')
+      expect(sectionTitles()).toEqual([])
 
       answerPast(page([P_COMPLETED]))
       await flush()
 
       expect(host?.querySelector('.master-dashboard__loading-row')).toBeNull()
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
+      expect(sectionTitles()).toEqual(['Ближайшая практика'])
     })
 
     it('a 403 on the profile keeps the screen as before: retrying cannot change it (FE-200)', async () => {
@@ -916,6 +922,7 @@ describe('MasterDashboardView', () => {
       // (i18n:masterScreens.masterDashboard.emptyUpcoming), not a generic
       // no-data wording.
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe('Нет предстоящих практик')
+      expect(text()).not.toContain('Не удалось загрузить')
     })
 
     it('past practices alone (nothing upcoming at all) still make the master NOT new', async () => {
@@ -944,6 +951,7 @@ describe('MasterDashboardView', () => {
       await flush()
 
       expect(norm(nearestEmptyCard()?.textContent).trim()).toBe(EMPTY_NEW)
+      expect(text()).not.toContain('Не удалось загрузить')
     })
 
     it('hides the CTA once something is upcoming', async () => {
@@ -1057,6 +1065,8 @@ describe('MasterDashboardView', () => {
       expect(statDelta('Практик')).toBeNull()
       expect(statValue('Участников')).toBe('0')
       expect(statDelta('Участников')).toBeNull()
+      // An empty period is zeros, not a failed read.
+      expect(text()).not.toContain('Не удалось загрузить')
     })
 
     it('a FAILED stats fetch is an error with «Повторить», not a row of dashes; the rest stays alive (FE-257)', async () => {

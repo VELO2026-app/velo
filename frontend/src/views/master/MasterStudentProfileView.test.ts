@@ -1383,15 +1383,24 @@ describe('MasterStudentProfileView', () => {
       expect(sheetOverlay()?.textContent).not.toContain('Пока нет ни одной группы')
       expect(sheetOverlay()?.querySelector('.v-chip')).toBeNull()
 
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null }],
-      })
+      // The retry is slow: a loader stands in for the list, neither «no groups» nor the error.
+      let answer: (page: Awaited<ReturnType<typeof groupsApi.getGroups>>) => void = () => {}
+      vi.mocked(groupsApi.getGroups).mockReturnValueOnce(new Promise((r) => (answer = r)))
       Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('button') ?? [])
         .find((b) => b.textContent?.includes('Повторить'))
         ?.click()
       await flush()
 
+      expect(sheetOverlay()?.querySelector('.v-loader')).not.toBeNull()
       expect(sheetOverlay()?.textContent).not.toContain('Ошибка загрузки')
+      expect(sheetOverlay()?.textContent).not.toContain('Пока нет ни одной группы')
+
+      answer({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null }],
+      })
+      await flush()
+
+      expect(sheetOverlay()?.querySelector('.v-loader')).toBeNull()
       expect(sheetOverlay()?.querySelector('.v-chip')?.textContent).toContain('VIP')
     })
 
@@ -1409,16 +1418,39 @@ describe('MasterStudentProfileView', () => {
       expect(sheetOverlay()?.textContent).toContain('Ошибка загрузки')
       expect(sheetOverlay()?.querySelector('.v-chip')).toBeNull()
 
-      vi.mocked(groupsApi.getGroups).mockResolvedValue({
-        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null }],
-      })
+      // The retry is slow: a loader stands in for the list, neither «no groups» nor the error.
+      let answer: (page: Awaited<ReturnType<typeof groupsApi.getGroups>>) => void = () => {}
+      vi.mocked(groupsApi.getGroups).mockReturnValueOnce(new Promise((r) => (answer = r)))
       Array.from(sheetOverlay()?.querySelectorAll<HTMLElement>('button') ?? [])
         .find((b) => b.textContent?.includes('Повторить'))
         ?.click()
       await flush()
 
+      expect(sheetOverlay()?.querySelector('.v-loader')).not.toBeNull()
       expect(sheetOverlay()?.textContent).not.toContain('Ошибка загрузки')
+      expect(sheetOverlay()?.textContent).not.toContain('Пока нет ни одной группы')
+
+      answer({
+        items: [{ id: 'g1', kind: 'custom', name: 'VIP', members_count: 1, description: null }],
+      })
+      await flush()
+
+      expect(sheetOverlay()?.querySelector('.v-loader')).toBeNull()
       expect(sheetOverlay()?.querySelector('.v-chip')?.textContent).toContain('VIP')
+    })
+
+    it('an EMPTY groups answer is «no groups» in the add sheet, not an error (FE-257)', async () => {
+      vi.mocked(groupsApi.getGroups).mockResolvedValue({ items: [] })
+      mount()
+      await flush()
+
+      menuTrigger()?.click()
+      await flush()
+      menuItems()[1]?.click()
+      await flush()
+
+      expect(sheetOverlay()?.textContent).toContain('Пока нет ни одной группы')
+      expect(sheetOverlay()?.textContent).not.toContain('Ошибка загрузки')
     })
 
     it('"Удалить из всех групп" (default-less mode, no current group) loops every custom group', async () => {

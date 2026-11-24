@@ -31,9 +31,7 @@
     <div v-if="feedbackGate === 'loading'" class="feedback-gate__loader">
       <VLoader />
     </div>
-    <VEmptyState v-else-if="feedbackGate === 'error'" icon="warning" :title="t('common.loadError')">
-      <VButton size="sm" @click="retryBookings">{{ t('common.retry') }}</VButton>
-    </VEmptyState>
+    <LoadErrorState v-else-if="feedbackGate === 'error'" variant="primary" @retry="retryBookings" />
     <VEmptyState
       v-else-if="feedbackGate === 'waiting'"
       icon="calendar"
@@ -134,6 +132,7 @@ import { useToast } from '@/composables/useToast'
 import { platform } from '@/platform'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import { VHeader } from '@/components/layout'
+import LoadErrorState from '@/components/shared/LoadErrorState.vue'
 import { IconHeart, IconCalendar } from '@/components/icons'
 import FormShell from '@/components/shared/FormShell.vue'
 import MoodSlider from '@/components/shared/MoodSlider.vue'

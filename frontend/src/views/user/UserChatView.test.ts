@@ -177,7 +177,7 @@ describe('UserChatView -- which row a route id opens', () => {
     expect(stub()?.dataset.peerName).toBe('Анна')
   })
 
-  it('a failed row lookup only costs the header name: the thread still opens, titled by the role fallback (FE-259)', async () => {
+  it('a failed row lookup does not hide the thread: it opens as a plain chat titled by the role fallback (the row carries the name and the support mode, so both are lost) (FE-259)', async () => {
     listChats.mockRejectedValue(new Error('Failed to fetch'))
     mount('dm_1')
     await flush()

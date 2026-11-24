@@ -77,7 +77,7 @@
 
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createApp, nextTick, type App } from 'vue'
+import { createApp, nextTick, reactive, type App } from 'vue'
 import EditPracticeView from '@/views/master/EditPracticeView.vue'
 import * as practicesApi from '@/api/practices'
 import * as groupsApi from '@/api/groups'
@@ -126,12 +126,12 @@ vi.mock('@/composables/useToast', () => ({
 // A4 V3 (PROMPT №571): profile/profileLoaded added -- directionOptions/
 // styleOptionsForForm now filter to the master's own confirmed methods,
 // same as CreatePracticeView.test.ts's masterState.
-const masterState: {
+const masterState = reactive<{
   practices: PracticeResponse[]
   profile: MasterProfileResponse | null
   profileLoaded: boolean
   profileFailed: boolean
-} = { practices: [], profile: null, profileLoaded: true, profileFailed: false }
+}>({ practices: [], profile: null, profileLoaded: true, profileFailed: false })
 const reloadProfile = vi.fn()
 // The master's queries (composables/queries/master.ts), getters over the
 // same object: the profile (its confirmed methods; whether it has answered --
@@ -612,8 +612,19 @@ describe('EditPracticeView', () => {
       expect(selectByLabel('Направление')).toBeUndefined()
       expect(text()).toContain('Ошибка загрузки')
 
+      // The retry brings the profile: the picker is back with the master's methods.
+      reloadProfile.mockImplementation(() => {
+        masterState.profile = { methods: ['Йога', 'Йога — Хатха-йога'] } as MasterProfileResponse
+        masterState.profileLoaded = true
+        masterState.profileFailed = false
+      })
       button('Повторить')?.click()
-      expect(reloadProfile).toHaveBeenCalledTimes(1)
+      await flush()
+
+      expect(text()).not.toContain('Ошибка загрузки')
+      expect(
+        Array.from(selectByLabel('Направление')?.options ?? []).map((o) => o.textContent?.trim()),
+      ).toContain('Йога')
     })
 
     it("a failed profile read is the error even when the practice carries its owner's methods: the options wait for the profile either way (FE-256)", async () => {
@@ -1630,6 +1641,35 @@ describe('EditPracticeView', () => {
 
       expect(text()).toContain('Пока нет ни одной группы')
       expect(text()).not.toContain('Ошибка загрузки')
+    })
+
+    it('a failed groups read does not block saving an unrelated edit of a groups practice; the PATCH carries no audience (FE-256)', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValue(new Error('boom'))
+      mountCached(practice({ audience_kind: 'groups', audience_group_names: ['Утро'] }))
+      await flush()
+
+      await editTitle('Новое имя')
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(text()).not.toContain('Выберите хотя бы одну группу')
+      expect(practicesApi.previewAudienceChange).not.toHaveBeenCalled()
+      expect(practicesApi.updatePractice).toHaveBeenCalledTimes(1)
+      expect(sentBody()).toEqual({ title: 'Новое имя' })
+    })
+
+    it('a failed groups read still refuses a switch TO «Конкретные группы»: nothing can be picked (FE-256)', async () => {
+      vi.mocked(groupsApi.getGroups).mockRejectedValue(new Error('boom'))
+      mountCached(practice({ audience_kind: 'public' }))
+      await flush()
+
+      button('Конкретные группы')?.click()
+      await flush()
+      button('Сохранить')?.click()
+      await flush()
+
+      expect(practicesApi.updatePractice).not.toHaveBeenCalled()
+      expect(text()).toContain('Выберите хотя бы одну группу')
     })
 
     it('the group multi-select renders ONLY for «Конкретные группы»', async () => {

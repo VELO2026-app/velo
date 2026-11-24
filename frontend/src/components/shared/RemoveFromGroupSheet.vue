@@ -58,11 +58,10 @@
     <template v-if="mode === 'selected'">
       <!-- The list of groups could not be read: an empty palette would read as
            "no groups" (FE-257). -->
-      <VEmptyState v-if="groupsFailed" icon="warning" :title="t('common.loadError')">
-        <VButton size="sm" variant="outline" @click="emit('retryGroups')">{{
-          t('common.retry')
-        }}</VButton>
-      </VEmptyState>
+      <LoadErrorState v-if="groupsFailed" @retry="emit('retryGroups')" />
+      <div v-else-if="groupsLoading" class="remove-from-group__loading">
+        <VLoader size="sm" />
+      </div>
       <div v-else class="remove-from-group__chips">
         <VChip
           v-for="g in customGroups"
@@ -86,8 +85,9 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
-import { VBottomSheet, VButton, VRadioGroup, VChip, VEmptyState } from '@/components/ui'
+import { VBottomSheet, VRadioGroup, VChip, VLoader } from '@/components/ui'
 import TargetUserCard from './TargetUserCard.vue'
+import LoadErrorState from './LoadErrorState.vue'
 import { removeGroupMember } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -107,6 +107,9 @@ const props = defineProps<{
   /** The read of `customGroups` failed: the "selected" mode offers Retry
    *  (`retryGroups`) instead of an empty palette (FE-257). */
   groupsFailed?: boolean
+  /** The read of `customGroups` is running: a loader stands in for the palette
+   *  (FE-257). */
+  groupsLoading?: boolean
 }>()
 
 const emit = defineEmits<{ close: []; saved: []; retryGroups: [] }>()
@@ -193,6 +196,12 @@ async function onSave(): Promise<void> {
 <style scoped>
 .remove-from-group__card {
   margin-bottom: var(--space-4);
+}
+
+.remove-from-group__loading {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-3);
 }
 
 .remove-from-group__chips {

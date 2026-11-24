@@ -125,11 +125,7 @@
           />
 
           <!-- Direction — options catalog-first (T2 stage 2), see CreatePracticeView. -->
-          <VEmptyState v-if="methodsFailed" icon="warning" :title="t('common.loadError')">
-            <VButton size="sm" variant="outline" @click="retryMethods">{{
-              t('common.retry')
-            }}</VButton>
-          </VEmptyState>
+          <LoadErrorState v-if="methodsFailed" @retry="retryMethods" />
           <VSelect
             v-else
             v-model="form.direction"
@@ -229,6 +225,7 @@
               :groups="customGroups"
               :schools="[]"
               :groups-failed="customGroupsFailed"
+              :groups-loading="customGroupsLoading"
               :error="errors.audience_group_ids"
               @retry-groups="reloadCustomGroups"
             />
@@ -376,6 +373,7 @@ import {
 } from '@/components/ui'
 import CancelPracticeDialog from '@/components/shared/CancelPracticeDialog.vue'
 import PracticeAudiencePicker from '@/components/shared/PracticeAudiencePicker.vue'
+import LoadErrorState from '@/components/shared/LoadErrorState.vue'
 import PracticeSchedulePicker from '@/components/shared/PracticeSchedulePicker.vue'
 import type { AudienceSchoolOption } from '@/components/shared/practiceAudience'
 import { useToast } from '@/composables/useToast'
@@ -471,6 +469,17 @@ const confirmDialog = reactive({
  */
 let baseline: PracticeFormValues | null = null
 
+// P5 port (PROMPT №606): this master's own custom groups, for the
+// specific-groups (i18n:practice.audience.groups) multi-select. Re-resolves
+// the name->id selection once they land, in case populateForm() already ran
+// against an empty list.
+const {
+  groups: customGroups,
+  loading: customGroupsLoading,
+  failed: customGroupsFailed,
+  reload: reloadCustomGroups,
+} = usePracticeCustomGroups(() => resolveAudienceGroupIds())
+
 // -- Form state (populated from the practice on load) and validation: the
 // shared practice-form model (usePracticeForm), the same rules as create.
 // The start must lie in the future only when the schedule itself changed:
@@ -479,17 +488,12 @@ let baseline: PracticeFormValues | null = null
 // that has already started stays editable in every other field.
 const { form, errors, validate } = usePracticeForm(emptyPracticeForm(), (v) => ({
   checkFuture: scheduleChanged(v, baseline),
+  // While the groups are unread (running or failed), the saved "groups" audience
+  // cannot be resolved to ids: that must not block saving an unrelated edit.
+  groupsUnread:
+    (customGroupsFailed.value || customGroupsLoading.value) &&
+    v.audience_kind === (practice.value?.audience_kind ?? 'public'),
 }))
-
-// P5 port (PROMPT №606): this master's own custom groups, for the
-// specific-groups (i18n:practice.audience.groups) multi-select. Re-resolves
-// the name->id selection once they land, in case populateForm() already ran
-// against an empty list.
-const {
-  groups: customGroups,
-  failed: customGroupsFailed,
-  reload: reloadCustomGroups,
-} = usePracticeCustomGroups(() => resolveAudienceGroupIds())
 
 // BE-74 + FE-92: a school practice's KIND is editable, but only within the
 // pair the backend accepts (SCHOOL_AUDIENCE_KINDS) -- the same pair the

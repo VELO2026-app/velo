@@ -98,14 +98,12 @@
       <!-- Income card removed from the dashboard (operator tester-fix 2026-06-17). -->
       <!-- A failed read must not pass for a stat row of dashes: "—" reads as "still
            loading" (FE-257). -->
-      <VEmptyState
+      <LoadErrorState
         v-if="statsFailed"
-        icon="warning"
         :title="t('common.loadFailed')"
         :description="statsErrorText"
-      >
-        <VButton size="sm" variant="outline" @click="loadStats">{{ t('common.retry') }}</VButton>
-      </VEmptyState>
+        @retry="loadStats"
+      />
       <div v-else class="master-dashboard__stats-grid">
         <VStatCard
           :value="practicesStat"
@@ -145,7 +143,7 @@
       <!-- ================================================================
            NEAREST PRACTICES (up to 2)
            ================================================================ -->
-      <h2 class="velo-section-title">
+      <h2 v-if="!pastUnsettled" class="velo-section-title">
         {{
           nearestPractices.length > 1
             ? t('masterScreens.masterDashboard.nearest')
@@ -275,16 +273,12 @@
       <div v-else-if="past.loading.value" class="master-dashboard__loading-row">
         <VLoader size="sm" />
       </div>
-      <VEmptyState
+      <LoadErrorState
         v-else-if="pastRetryable"
-        icon="warning"
         :title="t('common.loadFailed')"
         :description="pastErrorText"
-      >
-        <VButton size="sm" variant="outline" @click="retryPast">
-          {{ t('common.retry') }}
-        </VButton>
-      </VEmptyState>
+        @retry="retryPast"
+      />
 
       <template v-else>
         <VCard>
@@ -349,6 +343,7 @@ import { useQueryCache } from '@pinia/colada'
 import { useAuthStore } from '@/stores/auth'
 import { useSafeArea } from '@/composables/useSafeArea'
 import MasterOnboardingView from '@/views/master/MasterOnboardingView.vue'
+import LoadErrorState from '@/components/shared/LoadErrorState.vue'
 import { isMasterOnboardingCompleted, shouldShowMasterOnboarding } from '@/utils/masterOnboarding'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -390,9 +385,9 @@ const toast = useToast()
 
 // -- Period toggle. Drives the period-scoped stats row (E7). `quarter` went
 //    live with the backend's third calendar period (BE-28; FE-66 unblocked the
-//    segment -- before that the endpoint would 422 it, and a failed refetch
-//    would silently keep the WEEK figures under a quarter label
-//    (i18n:masterScreens.masterDashboard.period.quarter)). --
+//    segment -- before that the endpoint would 422 it). A failed read of any
+//    period is the stats error state, never the previous period's figures under
+//    the new label (i18n:masterScreens.masterDashboard.period.quarter). --
 const period = ref<'week' | 'month' | 'quarter'>('week')
 const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label: string }> = [
   { value: 'week', label: t('common.periodWeek') },
@@ -404,10 +399,10 @@ const PERIOD_OPTIONS: ReadonlyArray<{ value: 'week' | 'month' | 'quarter'; label
 // are the one section whose numbers move by ANOTHER actor's hand (a
 // student's booking bumps current_participants, their PRE check-in bumps
 // checkin_count) and no push exists, so the upcoming list is asked again on
-// EVERY mount -- the same per-mount contract loadStats() / loadUnreadCount()
-// follow, with the same failure disposition: a failed refetch keeps the
-// cards already on screen. Past only feeds the zero state's total: the
-// staleness window is enough there.
+// EVERY mount, as loadStats() and loadUnreadCount() are. A failed refetch of
+// this list keeps the cards already on screen (Colada keeps the data on error);
+// a failed stats read, by contrast, is the error state (FE-257). Past only
+// feeds the zero state's total: the staleness window is enough there.
 const queryCache = useQueryCache()
 const upcoming = useMyPractices('upcoming', { refetchOnMount: 'always' })
 const past = useMyPractices('past')
@@ -539,6 +534,19 @@ const nearestPractices = computed((): PracticeResponse[] =>
       (p) => (p.status === 'scheduled' || p.status === 'live') && !practiceHasEnded(p, now.value),
     )
     .slice(0, 2),
+)
+
+/**
+ * The zero-state card waits for the PAST list (FE-257). Its loader or error is
+ * not about the nearest practices, so it stands without the "Nearest practice"
+ * heading: under that heading it would read as a failure of the upcoming list.
+ */
+const pastUnsettled = computed(
+  () =>
+    !upcoming.loading.value &&
+    !upcomingRetryable.value &&
+    nearestPractices.value.length === 0 &&
+    (past.loading.value || pastRetryable.value),
 )
 
 // t('masterScreens.masterDashboard.nextSession.example') — rendered in the practice's own timezone (the master
@@ -675,8 +683,8 @@ async function persistMasterOnboarding(): Promise<void> {
 onMounted(() => {
   // Period-scoped stats row (E7); independent of the practices list fetch.
   void loadStats()
-  // Bell badge (T-26, PROMPT №704); same fire-and-forget disposition as
-  // loadStats above -- a failed fetch leaves the badge at 0 rather than
+  // Bell badge (T-26, PROMPT №704); fire-and-forget, unlike loadStats above
+  // (whose failure is shown) -- a failed fetch leaves the badge at 0 rather than
   // blocking the dashboard on a courtesy count.
   void loadUnreadCount().catch(() => {
     /* leave the badge at 0 if the fetch fails */

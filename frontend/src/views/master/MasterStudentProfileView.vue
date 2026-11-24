@@ -300,6 +300,7 @@
       :avatar-url="avatarUrl"
       :custom-groups="customGroups"
       :groups-failed="customGroupsFailed"
+      :groups-loading="customGroupsLoading"
       :existing-group-ids="groupChips.map((g) => g.id)"
       :current-group-id="null"
       @close="addToGroupSheetOpen = false"
@@ -315,6 +316,7 @@
       :current-group-id="null"
       :custom-groups="customGroups"
       :groups-failed="customGroupsFailed"
+      :groups-loading="customGroupsLoading"
       @close="removeFromGroupSheetOpen = false"
       @saved="loadGroups"
       @retry-groups="loadCustomGroups"
@@ -422,13 +424,17 @@ onMounted(loadGroups)
 const allGroups = ref<GroupListItem[]>([])
 const customGroups = computed(() => allGroups.value.filter((g) => g.kind === 'custom'))
 const customGroupsFailed = ref(false)
+const customGroupsLoading = ref(false)
 async function loadCustomGroups(): Promise<void> {
+  customGroupsLoading.value = true
   customGroupsFailed.value = false
   try {
     const res = await getGroups()
     allGroups.value = res.items
   } catch {
     customGroupsFailed.value = true
+  } finally {
+    customGroupsLoading.value = false
   }
 }
 onMounted(loadCustomGroups)

@@ -41,9 +41,7 @@
 
     <!-- A failed read must not pass for "no practices yet" (FE-256); during the
          Retry the loader holds the place, so the empty hint cannot flash. -->
-    <VEmptyState v-if="open && failed" icon="warning" :title="t('common.loadError')">
-      <VButton size="sm" variant="outline" @click="emit('retry')">{{ t('common.retry') }}</VButton>
-    </VEmptyState>
+    <LoadErrorState v-if="open && failed" @retry="emit('retry')" />
 
     <div v-else-if="open && loading" class="use-template__loading">
       <VLoader size="sm" />
@@ -86,8 +84,9 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { ref, computed, watch, nextTick, onBeforeUnmount, type Component } from 'vue'
-import { VButton, VEmptyState, VLoader } from '@/components/ui'
+import { VLoader } from '@/components/ui'
 import { practiceIconFor } from '@/utils/displayHelpers'
+import LoadErrorState from './LoadErrorState.vue'
 import { formatShortDate, formatTime } from '@/utils/format'
 import type { PracticeResponse } from '@/api/types'
 

@@ -1168,6 +1168,7 @@ describe('FeedbackView', () => {
       await flush()
 
       expect(text()).toContain('Как прошла практика?')
+      expect(text()).not.toContain('Ошибка загрузки')
     })
 
     it('before the list arrives: neither a form nor a verdict', async () => {
