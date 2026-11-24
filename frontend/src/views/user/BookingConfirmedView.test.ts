@@ -80,6 +80,7 @@ import { getPractice } from '@/api/practices'
 import { ApiResponseError } from '@/api/client'
 import * as chatsApi from '@/api/chats'
 import type { PracticeResponse, UserResponse } from '@/api/types'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 vi.mock('@/api/practices', async () => {
   const actual = await vi.importActual<typeof import('@/api/practices')>('@/api/practices')
@@ -274,7 +275,7 @@ describe('BookingConfirmedView', () => {
       expect(content()).not.toBeNull()
       expect(content()?.textContent).toContain('Практика забронирована!')
       expect(content()?.textContent).toContain(
-        'Войти в Zoom можно будет прямо в VELO — на экране практики.',
+        `Войти в Zoom можно будет прямо в ${SKIN_BRAND} — на экране практики.`,
       )
     })
 

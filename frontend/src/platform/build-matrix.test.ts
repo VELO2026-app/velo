@@ -309,6 +309,8 @@ describe('brand/token grep helpers', () => {
     expect(bundleHas('const b="НОВА"', 'НОВА')).toBe(true)
     expect(bundleHas('const b="\\u041D\\u041E\\u0412\\u0410"', 'НОВА')).toBe(true)
     expect(bundleHas('const b="VELO"', 'НОВА')).toBe(false)
+    // A substring of an identifier is not the name: every --velo-* has it.
+    expect(bundleHas('a.style.setProperty("--velo-primary",c)', 'velo')).toBe(false)
   })
 })
 
@@ -379,7 +381,7 @@ describe('real-brand cells (FE-234)', () => {
   const GOLD = { displayName: 'VELO' }
   const decls = ['--velo-primary:#334d6e', '--velo-dur-pulse:1800ms']
   const core = new Set(['--velo-dur-pulse:1800ms'])
-  const leak = (css: string, js = '', coreName = 'VELO') =>
+  const leak = (css: string, js = '', coreName = 'App') =>
     skinLeaks({
       label: 'velo-brand',
       brand: GOLD,
@@ -403,7 +405,8 @@ describe('real-brand cells (FE-234)', () => {
   })
 
   it('a brand named like the core is not told by its name; another name is', () => {
-    expect(leak(':root{}', 'const n="VELO"')).toEqual([])
+    expect(leak(':root{}', 'const n="VELO"', 'VELO')).toEqual([])
+    expect(leak(':root{}', 'const n="VELO"')).toEqual(['velo-brand displayName'])
     const named = skinLeaks({
       label: 'goodo-brand',
       brand: { displayName: 'Goodo' },

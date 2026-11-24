@@ -4,7 +4,7 @@
 // evaluateChecklist() is the §6.4 acceptance table: every dist fact vs its
 // source of record (skin/passport/golden). Pinned here: a matching build is
 // green, every drift fails named, and the rows that cannot be automated
-// (description seam, maskable safe-zone) stay INFO/MANUAL instead of
+// (maskable safe-zone, the bot settings in BotFather) stay MANUAL instead of
 // pretending.
 // =============================================================================
 
@@ -79,6 +79,16 @@ describe('evaluateChecklist (tz-whitelabel §6)', () => {
     expect(byItem['per-locale manifests']!.status).toBe('PASS')
     // The safe zone needs eyes and says so.
     expect(byItem['maskable safe-zone']!.status).toBe('MANUAL')
+    // So does the bot: BotFather only, named with the brand of the build.
+    for (const item of [
+      'bot name',
+      'bot avatar',
+      'bot description',
+      'bot menu button',
+      'bot sign-in domain',
+    ])
+      expect(byItem[item]!.status).toBe('MANUAL')
+    expect(rows.find((r) => r.item === 'bot name')!.fact).toContain('НОВА')
     expect(byItem['locales']!.status).toBe('INFO')
   })
 

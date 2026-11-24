@@ -39,6 +39,7 @@ export interface LoadedSkinPackage {
 
 export const SKIN_CONTRACT_MAJOR: number
 export const SKIN_CONTRACT: string
+export const CORE_DISPLAY_NAME: string
 export const MANIFEST: string
 export const BRAND_EXTENSION: string
 export const MANDATORY_ASSETS: string[]

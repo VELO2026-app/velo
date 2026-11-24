@@ -30,6 +30,7 @@ import { createApp, nextTick, type App } from 'vue'
 import UserMessagesView from '@/views/user/UserMessagesView.vue'
 import * as chatsApi from '@/api/chats'
 import type { ChatThread } from '@/api/chats'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 vi.mock('@/api/chats')
 
@@ -147,7 +148,7 @@ describe('UserMessagesView', () => {
   // FE-103 / BE-163: the caller's own support conversation rides the same
   // list -- VELO logo instead of the avatar, the support title instead of
   // the role fallback, and the newest-message line with its time.
-  it('a support row renders the VELO logo, «Поддержка VELO» and the last message, not «Мастер»', async () => {
+  it('a support row renders the brand logo, «Поддержка <brand>» and the last message, not «Мастер»', async () => {
     vi.mocked(chatsApi.listChats).mockResolvedValue({
       threads: [
         supportThread({
@@ -166,7 +167,9 @@ describe('UserMessagesView', () => {
     mount()
     await flush()
 
-    expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe('Поддержка VELO')
+    expect(row(0).querySelector('.chat-row__name')?.textContent?.trim()).toBe(
+      `Поддержка ${SKIN_BRAND}`,
+    )
     expect(row(0).querySelector('.chat-row__logo')).not.toBeNull()
     expect(row(0).querySelector('.v-avatar')).toBeNull()
     expect(row(0).querySelector('.chat-row__preview')?.textContent?.trim()).toBe('Ответ поддержки')

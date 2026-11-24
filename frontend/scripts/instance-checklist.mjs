@@ -12,7 +12,10 @@
 // source column.
 //
 // The maskable safe-zone needs pixel inspection and stays MANUAL (owner's
-// acceptance, same as in validate-skin.mjs).
+// acceptance, same as in validate-skin.mjs). So do the bot's settings in
+// @BotFather (FE-231): name, avatar, description, the menu button and the
+// sign-in domain. Neither comms nor velo sets them (comms, 22.11) -- only a
+// person in BotFather; the rows name the values the build already knows.
 //
 // Runs against an EXISTING dist/ produced from the current working tree
 // (public/skin/ + .env / process.env are read as the build read them):
@@ -26,14 +29,21 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadEnv } from 'vite'
 import { pngInfo } from './validate-skin.mjs'
-import { isSkinPackage, loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
+import {
+  CORE_DISPLAY_NAME,
+  isSkinPackage,
+  loadSkinPackage,
+  readGoldenTokens,
+} from './lib/skin-package.mjs'
 
 // Lazy: under vitest import.meta.url is not file:// (see build-matrix.mjs);
 // the unit suite imports this module for evaluateChecklist() only.
 const frontendDir = () => resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-/** The §1 priority order the build itself uses: skin brand record > passport
- *  env (process.env > .env files) > golden default. Returns the expected
+/** The sources the build itself uses: the skin brand record for the brand
+ *  (name and colours -- no env value names the brand, FE-231), the passport
+ *  env (process.env > .env files) for the rest, then the core defaults.
+ *  Returns the expected
  *  values (and, per field, the winning source) every dist fact is checked
  *  against. Pure data -- the unit suite feeds evaluateChecklist() directly. */
 export function expectedFromSources() {
@@ -51,13 +61,12 @@ export function expectedFromSources() {
       : env[envKey] !== undefined
         ? { value: env[envKey], source: 'passport env' }
         : { value: golden, source: 'golden default' }
-  const brand =
-    skin?.displayName !== undefined ? pick(skin.displayName) : pick(undefined, 'VITE_BRAND', 'VELO')
+  const brand = pick(skin?.displayName, undefined, CORE_DISPLAY_NAME)
   return {
     skin,
     brand: brand.value,
     brandSource: brand.source,
-    shortBrand: (skin ? pick(skin.shortName) : pick(undefined, 'VITE_BRAND', 'VELO')).value,
+    shortBrand: pick(skin?.shortName, undefined, CORE_DISPLAY_NAME).value,
     themeColor: pick(skin?.themeColor, undefined, '#4c4c4c').value,
     themeSource: pick(skin?.themeColor, undefined, '#4c4c4c').source,
     defaultLocale: pick(undefined, 'VITE_DEFAULT_LOCALE', 'ru').value,
@@ -208,6 +217,18 @@ export function evaluateChecklist({ facts, expected }) {
     expect: '-',
     source: "owner's acceptance",
   })
+  // The bot of the instance (FE-231): set by hand in @BotFather, nothing
+  // here can read it back. The Mini App URL and the sign-in domain are the
+  // frontend host of the instance (passport `domains`).
+  const botfather = [
+    ['bot name', `/setname: ${expected.brand}`],
+    ['bot avatar', '/setuserpic: skin assets/icon-512.png'],
+    ['bot description', '/setdescription, /setabouttext: brand text'],
+    ['bot menu button', '/setmenubutton: the Mini App URL (frontend)'],
+    ['bot sign-in domain', '/setdomain: frontend host (browser sign-in)'],
+  ]
+  for (const [item, fact] of botfather)
+    rows.push({ item, status: 'MANUAL', fact, expect: '-', source: '@BotFather, by hand' })
   return { rows, fails }
 }
 
@@ -286,5 +307,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     for (const f of fails) console.error('  FAIL ' + f)
     process.exit(1)
   }
-  console.log('\ninstance-checklist: green (maskable safe-zone stays MANUAL)')
+  console.log('\ninstance-checklist: green (maskable safe-zone and BotFather stay MANUAL)')
 }

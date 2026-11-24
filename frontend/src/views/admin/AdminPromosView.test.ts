@@ -35,6 +35,7 @@ import AdminPromosView from '@/views/admin/AdminPromosView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import type { AdminPromoResponse } from '@/api/admin'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 vi.mock('@/api/admin')
 
@@ -299,7 +300,7 @@ describe('AdminPromosView', () => {
       expect(host?.querySelector('.pcard__owner-name')?.textContent?.trim()).toBe('Анна Петрова')
     })
 
-    it('a company promo is «VELO», ignoring any name fields', async () => {
+    it('a company promo is the brand, ignoring any name fields', async () => {
       // Company promos come back with master_id=null and both name parts null
       // (generated.ts:161). Labelling one as a master's would blame a master for
       // a discount VELO is paying for.
@@ -317,7 +318,7 @@ describe('AdminPromosView', () => {
       await flush()
 
       expect(host?.querySelector('.pcard__owner-label')?.textContent?.trim()).toBe('Компания')
-      expect(host?.querySelector('.pcard__owner-name')?.textContent?.trim()).toBe('VELO')
+      expect(host?.querySelector('.pcard__owner-name')?.textContent?.trim()).toBe(SKIN_BRAND)
     })
 
     it('a master with only a first name renders just that, with no stray space', async () => {

@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import TelegramStubView from '@/views/auth/TelegramStubView.vue'
 import i18n, { setLocale } from '@/locales'
-import { INSTANCE } from '@/platform/instance'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 afterEach(async () => {
   await setLocale('ru')
@@ -23,13 +23,13 @@ describe('TelegramStubView', () => {
     async (locale) => {
       await setLocale(locale)
       const hint = mount(TelegramStubView).find('.stub__hint').text()
-      expect(hint).toContain(INSTANCE.brand)
+      expect(hint).toContain(SKIN_BRAND)
       expect(i18n.global.locale.value).toBe(locale)
     },
   )
 
   it('the closing quote survives right after the brand', () => {
     const hint = mount(TelegramStubView).find('.stub__hint').text()
-    expect(hint).toContain(`${INSTANCE.brand}\u00bb`)
+    expect(hint).toContain(`${SKIN_BRAND}\u00bb`)
   })
 })

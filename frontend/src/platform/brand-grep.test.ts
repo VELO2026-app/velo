@@ -1,8 +1,8 @@
 // =============================================================================
 // VELO Frontend -- brand-grep gate tests (tz-whitelabel §6, FE-114)
 // =============================================================================
-// brandGrepReport() is the pnpm lint grep gate: the brand word outside the
-// reference set, and feature-flag sources outside the registry. Pinned here:
+// brandGrepReport() is the pnpm lint grep gate: the brand word in any user
+// string, and feature-flag sources outside the registry. Pinned here:
 // synthetic violations fire, the sanctioned carriers stay clean, and the
 // repo's own tree passes (same philosophy as validate-skin.test.ts pinning
 // the reference skins).
@@ -52,17 +52,13 @@ describe('brand-grep: the brand word (tz-i18n §7.2)', () => {
     expect(report.brand).toEqual([])
   })
 
-  it('the reference set carries the brand by contract', () => {
+  it('no file carries the brand by contract: the core defaults are hits too (FE-231)', () => {
     const report = scan([
-      [
-        'src/locales/ru/common.json',
-        '{ "brandName": "@:brand", "_comment": "VELO Frontend -- ru" }',
-      ],
-      ['src/pwa/manifest.ts', "export const pwaManifest = { name: 'VELO', short_name: 'VELO' }"],
+      ['src/pwa/manifest.ts', "export const pwaManifest = { name: 'VELO' }"],
       ['src/platform/skin.ts', "export const CORE_SKIN = { displayName: 'VELO' }"],
-      ['src/platform/instance.ts', "brand: import.meta.env.VITE_BRAND ?? 'VELO',"],
+      ['src/locales/index.ts', "const BRAND = 'VELO'"],
     ])
-    expect(report.brand).toEqual([])
+    expect(report.brand).toHaveLength(3)
   })
 
   it('build-seam markers are technical tokens, not brand copy', () => {

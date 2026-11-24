@@ -23,7 +23,7 @@
 // (any FAIL = exit 1), all of it read from dist/:
 //
 //   a. identity: title + theme-color equal the cell's source of record --
-//      the skin's brand record, or the core defaults (VITE_BRAND ?? 'VELO',
+//      the skin's brand record, or the core defaults (CORE_DISPLAY_NAME,
 //      #4c4c4c) for golden cells. "golden" names the cells WITHOUT a skin
 //      package; since FE-230 that build is the neutral core, not VELO;
 //   b. brand grep: a skin cell's bundle carries the skin's displayName and
@@ -72,7 +72,12 @@ import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { findBuildLogWarnings } from './lib/build-log-gate.mjs'
-import { SKIN_ASSETS, loadSkinPackage, readGoldenTokens } from './lib/skin-package.mjs'
+import {
+  CORE_DISPLAY_NAME,
+  SKIN_ASSETS,
+  loadSkinPackage,
+  readGoldenTokens,
+} from './lib/skin-package.mjs'
 
 // Resolved lazily: under vitest import.meta.url is not file:// (the same
 // reason passport-html tests anchor to process.cwd()), and the unit suite
@@ -176,16 +181,23 @@ export function cssHasDecl(css, decl) {
   return false
 }
 
-/** Does the bundle text carry `text` -- verbatim (UTF-8) or as the \uXXXX
- *  escape esbuild may emit for non-ASCII? */
+/** Does the bundle text carry `text` as a whole string literal (any quote)
+ *  -- verbatim (UTF-8) or as the \uXXXX escape esbuild may emit for
+ *  non-ASCII? The brand name reaches the bundle as such a literal
+ *  (virtual:skin-brand); a mere substring is no evidence: "VELO" is part of
+ *  every --velo-* name (FE-231). */
 export function bundleHas(bundle, text) {
-  if (bundle.includes(text)) return true
+  const quotes = ['"', "'", '`']
+  if (quotes.some((q) => bundle.includes(q + text + q))) return true
   const escaped = [...text]
     .map((ch) =>
       ch.charCodeAt(0) > 0x7e ? `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}` : ch,
     )
     .join('')
-  return bundle.toLowerCase().includes(escaped.toLowerCase())
+  if (escaped === text) return false
+  // The hex digits of an escape may come in either case.
+  const lower = bundle.toLowerCase()
+  return quotes.some((q) => lower.includes((q + escaped + q).toLowerCase()))
 }
 
 /** The declarations of a skin cell the dist CSS lacks. A declaration the
@@ -196,14 +208,16 @@ export function missingTokens(decls, css, goldenDecls) {
 }
 
 /** What of one skin leaked into a core (skinless) build, as labels for
- *  facts.leaked. A brand named like the core's own default ("VELO", the gold
- *  skin) cannot be told from the core by its name, so its name is not
- *  probed; its distinctive token declarations still are. Pure. */
+ *  facts.leaked: its name as a bundle literal or the tab title, and its
+ *  distinctive token declarations. A brand named like the core's own word
+ *  (CORE_DISPLAY_NAME) cannot be told from the core by its name, so its name
+ *  is not probed. Pure. */
 export function skinLeaks({ label, brand, decls, js, html, css, goldenDecls, coreName }) {
   const leaked = []
+  const title = html.match(/<title>([^<]*)<\/title>/)?.[1]
   if (
     brand.displayName !== coreName &&
-    (bundleHas(js, brand.displayName) || html.includes(brand.displayName))
+    (bundleHas(js, brand.displayName) || title === brand.displayName)
   )
     leaked.push(`${label} displayName`)
   const foreign = decls.filter((d) => !goldenDecls.has(d) && cssHasDecl(css, d))
@@ -485,17 +499,8 @@ function snapshot(cell, skins, goldenDecls, coreName) {
   return facts
 }
 
-/** The skinless build's identity, resolved EXACTLY as passport-html resolves
- *  %VELO_BRAND% at build time: process.env -> .env files -> 'VELO'. */
-async function coreBrand() {
-  // Lazy: `--list` must run without node_modules.
-  const { loadEnv } = await import('vite')
-  const fromFiles = loadEnv('production', frontendDir(), 'VITE_').VITE_BRAND
-  return process.env.VITE_BRAND ?? fromFiles ?? 'VELO'
-}
-
-async function expectationOf(cell) {
-  if (!cell.skin) return { title: await coreBrand(), theme: CORE_THEME }
+function expectationOf(cell) {
+  if (!cell.skin) return { title: CORE_DISPLAY_NAME, theme: CORE_THEME }
   const { brand } = skinRecord(cell.skin)
   return { title: brand.displayName, theme: brand.themeColor }
 }
@@ -641,8 +646,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       console.log(`\n== build-matrix: ${cell.name} (PRIMER_EDITION=${cell.edition}) ==`)
       await stageSkin(cell.skin)
       build(cell.edition)
-      facts[cell.name] = snapshot(cell, skins, goldenDecls, await coreBrand())
-      expected[cell.name] = await expectationOf(cell)
+      facts[cell.name] = snapshot(cell, skins, goldenDecls, CORE_DISPLAY_NAME)
+      expected[cell.name] = expectationOf(cell)
       if (args.factsOut)
         writeFileSync(
           args.factsOut,
