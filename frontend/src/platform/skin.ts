@@ -19,6 +19,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  CORE_DISPLAY_NAME,
+  CORE_THEME_COLOR,
   isSkinPackage,
   loadSkinPackage,
   readGoldenTokens,
@@ -32,7 +34,8 @@ export type { SkinFont }
 
 /** A skin package's brand identity, materialized into the build's derivatives. */
 export interface SkinPackage {
-  /** Manifest name + short_name + the `{brand}` text source of record. */
+  /** Manifest name + short_name + `<title>` + the `@:brand` text: the ONE
+   *  source of the brand name (owner 09.11; FE-231). */
   displayName: string
   /** PWA convention: ≤ 12 chars (validated strictly in the engine). */
   shortName: string
@@ -49,14 +52,14 @@ export interface SkinPackage {
   hasLogo: boolean
 }
 
-/** The no-skin build: the neutral core (FE-230). Values mirror
- *  manifest.ts/variables.css (--velo-tg-header) — the same mirror-and-pin
- *  discipline as telegram.ts ↔ variables.css. The name stays until FE-231
- *  moves it into the brand package. */
+/** The no-skin build: the neutral core (FE-230). Colors mirror
+ *  variables.css (--velo-tg-header) — the same mirror-and-pin discipline as
+ *  telegram.ts ↔ variables.css. The name is the neutral core word (FE-231):
+ *  a brand name ships only in the brand's skin package. */
 export const CORE_SKIN: SkinPackage = {
-  displayName: 'VELO',
-  shortName: 'VELO',
-  themeColor: '#4c4c4c',
+  displayName: CORE_DISPLAY_NAME,
+  shortName: CORE_DISPLAY_NAME,
+  themeColor: CORE_THEME_COLOR,
   backgroundColor: '#f2f2f2',
   fonts: [],
   hasLogo: true,

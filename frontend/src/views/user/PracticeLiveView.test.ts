@@ -88,6 +88,7 @@ import { setActivePinia, createPinia, type Pinia } from 'pinia'
 import PracticeLiveView from '@/views/user/PracticeLiveView.vue'
 import type { BookingWithPracticeResponse, PracticeResponse } from '@/api/types'
 import { ApiResponseError } from '@/api/client'
+import { SKIN_BRAND } from 'virtual:skin-brand'
 
 const push = vi.fn()
 const back = vi.fn()
@@ -791,7 +792,7 @@ describe('PracticeLiveView', () => {
       mount()
       await flush()
 
-      expect(text()).toContain('Чтобы включить камеру, откройте VELO с рабочего стола')
+      expect(text()).toContain(`Чтобы включить камеру, откройте ${SKIN_BRAND} с рабочего стола`)
     })
 
     it('camera hint: the host too -- the master needs the camera most', async () => {
@@ -801,7 +802,7 @@ describe('PracticeLiveView', () => {
       mount()
       await flush()
 
-      expect(text()).toContain('Чтобы включить камеру, откройте VELO с рабочего стола')
+      expect(text()).toContain(`Чтобы включить камеру, откройте ${SKIN_BRAND} с рабочего стола`)
     })
 
     it('camera hint: NOT shown where the camera works, nor where there is no entry at all', async () => {
