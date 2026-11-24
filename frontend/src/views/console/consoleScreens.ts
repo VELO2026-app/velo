@@ -20,6 +20,10 @@ type Loader = () => Promise<{ default: Component }>
 
 /** The screens that have replaced the placeholder. */
 const SCREENS: Partial<Record<ConsoleRouteName, Loader>> = {
+  'console-masters': () => import('@/views/console/people/ConsoleMastersView.vue'),
+  'console-masters-detail': () => import('@/views/console/people/ConsoleMasterDetailView.vue'),
+  'console-users': () => import('@/views/console/people/ConsoleUsersView.vue'),
+  'console-schools': () => import('@/views/console/people/ConsoleSchoolsView.vue'),
   'console-practices': () => import('@/views/console/ConsolePracticesView.vue'),
   'console-practices-detail': () => import('@/views/console/ConsolePracticeDetailView.vue'),
   'console-catalog': () => import('@/views/console/ConsoleCatalogView.vue'),

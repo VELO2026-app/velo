@@ -57,14 +57,26 @@ export const adminKeys = {
   taxonomy: () => ['admin', 'taxonomy'] as const,
   /** `GET /admin/schools` -- every school of the platform, every page loaded so far. */
   schools: () => ['admin', 'schools'] as const,
+  /** `GET /admin/schools` -- one page of the web console's schools table. Under the schools prefix. */
+  schoolsPage: (page: number) => ['admin', 'schools', { page }] as const,
   /** Prefix of every promo list. */
   promosAll: () => ['admin', 'promos'] as const,
   /** `GET /admin/promos?type=&is_active=` -- one tab of the promo oversight list, every page loaded so far. */
   promos: (filter: string) => ['admin', 'promos', { filter }] as const,
   /** `GET /admin/users` -- every user of the platform (any role), every page loaded so far. */
   users: () => ['admin', 'users'] as const,
+  /** `GET /admin/users?role=&is_active=` -- one page of one tab of the web console's users table. Under the users prefix. */
+  usersPage: (tab: string, active: string, page: number) =>
+    ['admin', 'users', { tab, active, page }] as const,
+  /** The total of one tab of the web console's users table (a one-row request). Under the users prefix. */
+  usersCount: (tab: string, active: string) =>
+    ['admin', 'users', { tab, active, count: true }] as const,
   /** `GET /admin/masters/list` -- every master with its status, counts and methods. */
   masters: () => ['admin', 'masters'] as const,
+  /** `GET /admin/masters/list?status=` -- one page of one tab of the web console's masters table. Under the masters prefix. */
+  mastersPage: (tab: string, page: number) => ['admin', 'masters', { tab, page }] as const,
+  /** The total of one tab of the web console's masters table (a one-row request). Under the masters prefix. */
+  mastersCount: (tab: string) => ['admin', 'masters', { tab, count: true }] as const,
   /** Prefix of every master's detail (and what hangs under it). */
   masterAll: () => ['admin', 'master'] as const,
   /** `GET /admin/masters/{id}` -- one master's full application / profile. */

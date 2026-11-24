@@ -893,6 +893,100 @@ export const adminRevokePreviewQuery = defineQueryOptions(
   }),
 )
 
+// =============================================================================
+// The web console's people tables (FE-262): numbered pages, one tab each
+// =============================================================================
+//
+// The /console tables page by number, the server pages by offset: one entry
+// per (tab, page), all under the prefix of the list they show, so the
+// verdicts of ADMIN_INVALIDATES refetch the page on screen and make the
+// others stale. A tab's total is its own one-row request, so the tab labels
+// carry counts without loading the tab.
+
+/** Rows per page of the web console's people tables. */
+export const CONSOLE_PAGE_SIZE = 20
+
+/** A tab of the console masters table: every master or one verification status. */
+export type ConsoleMastersTab = 'all' | 'pending' | 'rejected'
+
+/** A tab of the console users table: every user or one role. */
+export type ConsoleUsersTab = 'all' | 'user' | 'master' | 'admin'
+
+/** Offset of a 1-based page. */
+function pageOffset(page: number): number {
+  return (page - 1) * CONSOLE_PAGE_SIZE
+}
+
+/** Query options for one page of one tab of the console masters table (`GET /admin/masters/list`). */
+export const consoleMastersPageQuery = defineQueryOptions(
+  ({ tab, page }: { tab: ConsoleMastersTab; page: number }) => ({
+    key: adminKeys.mastersPage(tab, page),
+    query: async () => {
+      const [res] = await Promise.all([
+        getMastersList(tab === 'all' ? undefined : tab, CONSOLE_PAGE_SIZE, pageOffset(page)),
+        primeTaxonomy(),
+      ])
+      return res
+    },
+    staleTime: 0,
+  }),
+)
+
+/** Query options for the total of one tab of the console masters table. */
+export const consoleMastersCountQuery = defineQueryOptions((tab: ConsoleMastersTab) => ({
+  key: adminKeys.mastersCount(tab),
+  query: async () => (await getMastersList(tab === 'all' ? undefined : tab, 1, 0)).total,
+  staleTime: 0,
+}))
+
+/** The activity filter of the console users table: every user, or only the active or the inactive. */
+export type ConsoleUsersActivity = 'all' | 'active' | 'inactive'
+
+/** The `is_active` value the server takes for an activity filter (none -- every user). */
+function activityParam(activity: ConsoleUsersActivity): boolean | undefined {
+  return activity === 'all' ? undefined : activity === 'active'
+}
+
+/** Query options for one page of one tab of the console users table (`GET /admin/users`). */
+export const consoleUsersPageQuery = defineQueryOptions(
+  ({
+    tab,
+    activity,
+    page,
+  }: {
+    tab: ConsoleUsersTab
+    activity: ConsoleUsersActivity
+    page: number
+  }) => ({
+    key: adminKeys.usersPage(tab, activity, page),
+    query: () =>
+      getUsersList(
+        tab === 'all' ? undefined : tab,
+        CONSOLE_PAGE_SIZE,
+        pageOffset(page),
+        activityParam(activity),
+      ),
+    staleTime: 0,
+  }),
+)
+
+/** Query options for the total of one tab of the console users table. */
+export const consoleUsersCountQuery = defineQueryOptions(
+  ({ tab, activity }: { tab: ConsoleUsersTab; activity: ConsoleUsersActivity }) => ({
+    key: adminKeys.usersCount(tab, activity),
+    query: async () =>
+      (await getUsersList(tab === 'all' ? undefined : tab, 1, 0, activityParam(activity))).total,
+    staleTime: 0,
+  }),
+)
+
+/** Query options for one page of the console schools table (`GET /admin/schools`). */
+export const consoleSchoolsPageQuery = defineQueryOptions((page: number) => ({
+  key: adminKeys.schoolsPage(page),
+  query: () => getAdminSchools(CONSOLE_PAGE_SIZE, pageOffset(page)),
+  staleTime: 0,
+}))
+
 /** Requests per page of `GET /admin/masters/method-change-requests`. */
 export const ADMIN_METHOD_REQUESTS_PAGE_SIZE = 20
 
