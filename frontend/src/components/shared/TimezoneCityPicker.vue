@@ -25,18 +25,22 @@
     <VInput
       v-model="query"
       :placeholder="placeholder ?? t('timezone.placeholder')"
+      kind="search"
+      v-bind="nav.comboboxAttrs.value"
       @focus="onFieldFocus"
+      @keydown="nav.onKeydown"
     >
       <template #suffix><IconSearch :size="18" /></template>
     </VInput>
 
-    <div v-if="filtered.length" ref="listEl" class="tz-picker__list">
+    <div v-if="filtered.length" ref="listEl" class="tz-picker__list" v-bind="nav.listAttrs()">
       <button
-        v-for="c in filtered"
+        v-for="(c, i) in filtered"
         :key="c.iana + c.city"
         type="button"
         class="tz-picker__row"
         :class="{ 'tz-picker__row--active': c.iana === modelValue }"
+        v-bind="nav.optionAttrs(i, c.iana === modelValue)"
         @click="select(c.iana)"
       >
         <span class="tz-picker__main">
@@ -65,6 +69,7 @@ import { timezoneRows } from '@/utils/timezoneCities'
 import { useTimezoneCatalog } from '@/composables/useTimezoneCatalog'
 import { formatUtcOffset } from '@/utils/practiceOptions'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import { useListboxNav } from '@/composables/useListboxNav'
 
 // tz-i18n 2.2a: the empty hint and the placeholder are keys; the SEARCH
 // itself stays data-driven (city names + latin aliases are the data, §3.1).
@@ -121,6 +126,19 @@ const filtered = computed(() => {
 // view instead of a mid-list scroll position.
 watch([query, () => props.modelValue], () => {
   if (listEl.value) listEl.value.scrollTop = 0
+})
+
+// Arrow keys move a virtual highlight through the rows and Enter picks one,
+// while DOM focus stays in the search field (aria-activedescendant).
+const nav = useListboxNav({
+  count: () => filtered.value.length,
+  // The rows also change when the backend catalog arrives or the selection
+  // reorders them: a stale highlight would then sit on another city.
+  resetOn: filtered,
+  onSelect: (i) => {
+    const row = filtered.value[i]
+    if (row) select(row.iana)
+  },
 })
 
 /** Current local time in the given zone ("14:35"), live + DST-aware. */
