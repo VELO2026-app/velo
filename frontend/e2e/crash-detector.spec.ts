@@ -173,6 +173,43 @@ test.describe('crash detector fixture', () => {
   })
 })
 
+// FE-242: an allowance for a request that got no answer (`status: 'network'`)
+// and one for an HTTP status never stand in for each other. The engine's text
+// for a failed request differs (Chromium `net::ERR_...`, WebKit `Load failed`).
+bare.describe('crash detector api allowance: network failure vs HTTP status', () => {
+  const apiSignal = (message: string): CrashSignal => ({ kind: 'api', message })
+  const allowance = (status: number | 'network') => [
+    {
+      reason: 'self-check',
+      api: [{ method: 'GET', path: /^\/api\/v1\/probe$/, status }],
+    },
+  ]
+
+  bare('a network rule accepts a dropped request in any engine wording, and nothing else', () => {
+    const rule = allowance('network')
+    const allowed = (message: string): boolean => isAllowed(apiSignal(message), rule, undefined)
+
+    expect(allowed('GET /api/v1/probe -> net::ERR_CONNECTION_FAILED')).toBe(true)
+    expect(allowed('GET /api/v1/probe -> Load failed')).toBe(true)
+    expect(allowed('GET /api/v1/probe -> The network connection was lost.')).toBe(true)
+    // An HTTP answer is not a dropped request.
+    expect(allowed('GET /api/v1/probe -> 500')).toBe(false)
+    // Another path or method stays a signal.
+    expect(allowed('GET /api/v1/other -> net::ERR_CONNECTION_FAILED')).toBe(false)
+    expect(allowed('POST /api/v1/probe -> net::ERR_CONNECTION_FAILED')).toBe(false)
+  })
+
+  bare('a numeric rule accepts its status only, never a dropped request', () => {
+    const rule = allowance(500)
+    const allowed = (message: string): boolean => isAllowed(apiSignal(message), rule, undefined)
+
+    expect(allowed('GET /api/v1/probe -> 500')).toBe(true)
+    expect(allowed('GET /api/v1/probe -> 503')).toBe(false)
+    expect(allowed('GET /api/v1/probe -> net::ERR_CONNECTION_FAILED')).toBe(false)
+    expect(allowed('GET /api/v1/probe -> Load failed')).toBe(false)
+  })
+})
+
 // FE-188: an allowance scoped to an engine. The global entry for WebKit's
 // viewport warning accepts that exact text, in WebKit, and nothing else.
 bare.describe('crash detector scoped to an engine', () => {

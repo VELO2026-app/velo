@@ -73,7 +73,7 @@ export default defineConfig({
     {
       name: 'smoke',
       testMatch: '*.spec.ts',
-      testIgnore: ['sweep/**', 'stack/**', 'visual/**'],
+      testIgnore: ['sweep/**', 'stack/**', 'visual/**', 'a11y/**'],
       use: { baseURL: PREVIEW_URL },
     },
     {
@@ -95,6 +95,13 @@ export default defineConfig({
       dependencies: ['sweep-setup'],
       use: { viewport: size },
     })),
+    {
+      // FE-241: axe-core on every sweep route, on ONE skin per run
+      // (A11Y_SKIN=gold|goodo, the build of that brand package; CI runs both).
+      name: 'a11y',
+      testMatch: 'a11y/a11y.spec.ts',
+      dependencies: ['sweep-setup'],
+    },
     {
       // FE-162: the key screens from recorded API answers, no backend. Run
       // twice by e2e/visual/run.sh (base build, head build).

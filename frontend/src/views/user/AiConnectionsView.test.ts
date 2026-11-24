@@ -217,6 +217,23 @@ describe('AiConnectionsView', () => {
       await flush()
       expect(host!.querySelector('[data-test="load-error"]')).not.toBeNull()
     })
+
+    it('a load error offers Retry, and Retry loads the connections (FE-242)', async () => {
+      vi.mocked(mcpApi.listMcpTokens)
+        .mockRejectedValueOnce(new ApiResponseError(500, 'boom', 'internal_error'))
+        .mockResolvedValue({ items: [], scope_labels: [] } as never)
+      mount()
+      await flush()
+      expect(host!.querySelector('[data-test="load-error"]')).not.toBeNull()
+
+      Array.from(host!.querySelectorAll('button'))
+        .find((b) => b.textContent?.includes('Повторить'))!
+        .click()
+      await flush()
+
+      expect(host!.querySelector('[data-test="load-error"]')).toBeNull()
+      expect(host!.querySelector('[data-test="connect-block"]')).not.toBeNull()
+    })
   })
 
   describe('create', () => {

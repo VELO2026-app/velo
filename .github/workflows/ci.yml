@@ -26,6 +26,9 @@
 #                  seeded with the `e2e` profile (.github/workflows/e2e-stack.yml,
 #                  which also runs nightly on deploy-machine with WebKit).
 #                  Blocking since FE-222: a red sweep is a red gate.
+#   e2e-a11y     — FE-241: axe-core on the same routes and stack, one cell per
+#                  brand skin (.github/workflows/e2e-a11y.yml). Blocking: a
+#                  violation outside frontend/e2e/a11y/allowlist.ts is a red gate.
 #   matrix-plan, matrix, matrix-gate
 #                — the whitelabel build matrix (FE-114, FE-152) fanned out one
 #                  runner per cell (`build-matrix.mjs --cell`); matrix-gate
@@ -610,6 +613,18 @@ jobs:
           path: frontend/test-results
           retention-days: 7
 
+  # FE-241: axe-core on the sweep's routes, once per brand skin (gold, goodo),
+  # in a workflow of its own: its cells run beside e2e-stack, so the sweep's
+  # wall time does not grow. The brand packages may be private, hence the
+  # explicit secret (not `secrets: inherit`). Same scope as e2e-stack.
+  e2e-a11y:
+    name: e2e-a11y
+    needs: scope
+    if: needs.scope.outputs.frontend == 'full' || needs.scope.outputs.drift == 'true'
+    uses: ./.github/workflows/e2e-a11y.yml
+    secrets:
+      BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
+
   # FE-161: the sweep on a real backend. Runs for frontend changes AND for
   # backend ones (scope `drift`): a renamed response field breaks a screen
   # without touching frontend/. Blocking since FE-222 (burn-in: 60 PR runs,
@@ -890,6 +905,7 @@ jobs:
       - build
       - e2e
       - e2e-stack
+      - e2e-a11y
       - matrix-plan
       - matrix
       - matrix-gate

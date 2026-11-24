@@ -44,8 +44,12 @@
       <h1 class="profile__name">{{ displayName }}</h1>
     </VCard>
 
-    <!-- Stats: practices + hours -->
-    <div class="profile__stats">
+    <!-- Stats: practices + hours. A failed read is an error with Retry, never a
+         real-looking 0 (FE-242). -->
+    <VEmptyState v-if="statsFailed" icon="warning" :title="t('common.loadError')">
+      <VButton size="sm" @click="statsQuery.refetch()">{{ t('common.retry') }}</VButton>
+    </VEmptyState>
+    <div v-else class="profile__stats">
       <VStatCard
         class="profile__stat"
         :value="practicesAttended"
@@ -189,7 +193,7 @@ import { useAuthStore } from '@/stores/auth'
 import { featureEnabled } from '@/platform/features'
 import { isOptionEnabled } from '@/platform/instance'
 import { useUiStore } from '@/stores/ui'
-import { VAvatar, VStatCard, VCard, VMenuRow } from '@/components/ui'
+import { VAvatar, VStatCard, VCard, VMenuRow, VEmptyState, VButton } from '@/components/ui'
 import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
 import {
   IconPen,
@@ -206,6 +210,7 @@ import {
 import { useToast } from '@/composables/useToast'
 import { useQuery } from '@pinia/colada'
 import { myStatsQuery } from '@/composables/queries/stats'
+import { screenQueryState } from '@/composables/queries/screenState'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -240,6 +245,8 @@ let activations = 0
 onActivated(() => {
   if (activations++ > 0) void statsQuery.refetch()
 })
+// No data and a failed request: the stats block says so (FE-242).
+const statsFailed = screenQueryState(statsQuery).failed
 const practicesAttended = computed(() => statsQuery.data.value?.practices_attended ?? 0)
 const hoursAttended = computed(() => statsQuery.data.value?.hours_attended ?? 0)
 // B52: colour indicator on the t('user.screens.userProfile.messages') row, same request, no new call.

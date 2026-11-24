@@ -106,6 +106,35 @@ export function makePractice(overrides: Record<string, unknown> = {}): Record<st
   }
 }
 
+/**
+ * A confirmed booking of `practice`, in the shape of GET /bookings/me (the
+ * booking plus its practice and the has_* flags).
+ */
+export function makeBooking(
+  practice: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: '00000000-0000-4000-8000-0000000000c1',
+    practice_id: practice.id,
+    user_id: '00000000-0000-4000-8000-000000000001',
+    status: 'confirmed',
+    purchase_id: null,
+    cancelled_at: null,
+    cancellation_reason: null,
+    joined_at: null,
+    left_at: null,
+    checkin_skipped: false,
+    created_at: '2026-11-10T08:00:00Z',
+    updated_at: null,
+    has_feedback: false,
+    has_checkin: false,
+    has_reflection: false,
+    practice,
+    ...overrides,
+  }
+}
+
 /** A paginated list envelope as the backend returns it. */
 export function paged<T>(items: T[]): Record<string, unknown> {
   return { items, total: items.length, limit: 20, offset: 0 }

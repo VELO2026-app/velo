@@ -253,7 +253,7 @@ export function isAllowed(
       case 'reported':
         return a.errors?.some((re) => re.test(signal.message)) ?? false
       case 'api': {
-        const m = /^(\S+) (\S+) -> (\d+)$/.exec(signal.message)
+        const m = /^(\S+) (\S+) -> (.+)$/.exec(signal.message)
         if (!m) return false
         const [, method, path, status] = m
         return (
@@ -261,7 +261,7 @@ export function isAllowed(
             (rule) =>
               rule.method.toUpperCase() === method &&
               rule.path.test(path!) &&
-              rule.status === Number(status),
+              (/^\d+$/.test(status!) ? rule.status === Number(status) : rule.status === 'network'),
           ) ?? false
         )
       }
