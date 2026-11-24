@@ -187,6 +187,7 @@
 import { t } from '@/locales'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { useQuery } from '@pinia/colada'
 import {
   VBackButton,
@@ -215,7 +216,7 @@ import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const practiceId = route.params.id as string
+const practiceId = routeParam(route, 'id')
 
 // Pinia Colada queries (composables/queries/admin.ts, FE-181).
 const practiceQuery = useQuery(() => adminPracticeQuery(practiceId))

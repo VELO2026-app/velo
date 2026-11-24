@@ -183,6 +183,7 @@ import { t } from '@/locales'
 import { decodeReportReason } from '@/utils/reportReasons'
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { routeParam } from '@/router/routeParam'
 import { useQuery } from '@pinia/colada'
 import type { RouteLocationRaw } from 'vue-router'
 import { VHeader } from '@/components/layout'
@@ -203,7 +204,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const reportId = route.params.id as string
+const reportId = routeParam(route, 'id')
 
 // The list hands its row via router state: rendered as is, no request. A
 // deep link (nothing handed) asks for the report (Pinia Colada,

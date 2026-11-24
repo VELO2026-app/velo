@@ -286,6 +286,7 @@
 import { t } from '@/locales'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { optionalRouteParam } from '@/router/routeParam'
 import { useQuery, useQueryCache } from '@pinia/colada'
 import { getSchoolLeavePreview, leaveSchool, updateSchool } from '@/api/schools'
 import { ApiResponseError } from '@/api/client'
@@ -312,7 +313,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 
-const schoolId = computed(() => String(route.params.id ?? ''))
+const schoolId = computed(() => optionalRouteParam(route, 'id') ?? '')
 
 /** The zone decides only the back target -- the action set comes from the
  *  server's viewer.relation, so both zones mount this same component. */

@@ -276,18 +276,12 @@ describe('MasterInviteClaimView', () => {
   })
 
   describe('a missing route token', () => {
-    it('an absent token param claims the literal empty string rather than crashing', async () => {
-      // route.params.token ?? '' (.vue:74) -- a malformed deeplink still
-      // reaches the same POST, coercing to ''; the backend is the one that
-      // decides that hash is invite_invalid, not the frontend guessing early.
+    it('an absent token param shows the dead-link state without calling the backend', async () => {
       delete routeParams.token
-      vi.mocked(mastersApi.claimMasterInvite).mockRejectedValue(
-        new ApiResponseError(404, 'Invite link is invalid or already used', 'invite_invalid'),
-      )
       mount()
       await flush()
 
-      expect(mastersApi.claimMasterInvite).toHaveBeenCalledWith('')
+      expect(mastersApi.claimMasterInvite).not.toHaveBeenCalled()
       expect(text()).toContain('Ссылка недействительна')
     })
   })
