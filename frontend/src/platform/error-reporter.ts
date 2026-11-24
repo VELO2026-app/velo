@@ -42,9 +42,9 @@ export interface ClientErrorEvent {
   /** Error class name, e.g. "TypeError". */
   name: string
   message: string
-  stack?: string
+  stack?: string | undefined
   source: ErrorSource
-  info?: string
+  info?: string | undefined
   /** location.pathname at the moment of the report. */
   path: string
   /** Epoch milliseconds. */

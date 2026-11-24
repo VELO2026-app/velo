@@ -25,7 +25,11 @@ import {
 function stubFetch(status: number, body: unknown, headers?: Record<string, string>) {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status, headers })),
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(body), { status, ...(headers ? { headers } : {}) }),
+      ),
   )
 }
 

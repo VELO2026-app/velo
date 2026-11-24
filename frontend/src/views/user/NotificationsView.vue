@@ -199,7 +199,10 @@ async function persist(
 
 function snapshot(rows: readonly { key: CategoryKey }[]): Partial<Record<CategoryKey, boolean>> {
   const out: Partial<Record<CategoryKey, boolean>> = {}
-  for (const row of rows) out[row.key] = categories[row.key]
+  for (const row of rows) {
+    const v = categories[row.key]
+    if (v !== undefined) out[row.key] = v
+  }
   return out
 }
 

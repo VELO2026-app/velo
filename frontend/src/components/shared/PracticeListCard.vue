@@ -111,10 +111,7 @@ const props = withDefaults(
     clickable?: boolean
   }>(),
   {
-    title: undefined,
     when: '',
-    duration: undefined,
-    whenTime: undefined,
     clickable: true,
   },
 )

@@ -60,7 +60,7 @@ import type { TabItem } from '@/router/tabs'
 
 const props = defineProps<{
   items: TabItem[]
-  active?: string
+  active?: string | undefined
 }>()
 
 const emit = defineEmits<{

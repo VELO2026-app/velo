@@ -143,7 +143,7 @@ export const schoolMembersQuery = defineInfiniteQueryOptions(
     query: ({ pageParam }: { pageParam: number }): Promise<SchoolMembersPage> => {
       const window = { limit: SCHOOL_MEMBERS_PAGE_SIZE, offset: pageParam }
       if (source === 'blocks') return getSchoolBlocks(schoolId, window)
-      const query = { kind: kind as 'master' | 'student', search: search || undefined, ...window }
+      const query = { kind: kind as 'master' | 'student', ...(search ? { search } : {}), ...window }
       return source === 'roster'
         ? getSchoolRoster(schoolId, query)
         : getSchoolMembers(schoolId, query)

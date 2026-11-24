@@ -47,7 +47,7 @@ export interface SegmentOption {
   value: string
   label: string
   /** Optional count/marker shown as a pill after the label. */
-  badge?: string | number
+  badge?: string | number | undefined
 }
 
 withDefaults(

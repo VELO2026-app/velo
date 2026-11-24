@@ -120,7 +120,7 @@ const props = withDefaults(
     /** While the form submits, the whole scale is inert and emits nothing (tz §8). */
     disabled?: boolean
   }>(),
-  { ariaLabel: undefined, disabled: false },
+  { disabled: false },
 )
 
 const emit = defineEmits<{

@@ -729,8 +729,8 @@ function onLiveSearch(query: string): void {
 
 async function onApplyFilter(payload: {
   categories: DiaryFeedCategory[]
-  date_from?: string
-  date_to?: string
+  date_from?: string | undefined
+  date_to?: string | undefined
 }): Promise<void> {
   // The feed reads from the first page under the new filter set; scroll once
   // it answered.

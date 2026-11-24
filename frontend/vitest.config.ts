@@ -79,7 +79,7 @@ export default defineConfig({
       // with the shard that did load the file. The merge cannot add unloaded
       // files back, so scripts/coverage-budget.mjs fails on any app file
       // missing from the report.
-      include: process.env.VITEST_SHARD ? undefined : ['src/**/*.{ts,vue}'],
+      ...(process.env.VITEST_SHARD ? {} : { include: ['src/**/*.{ts,vue}'] }),
       exclude: [
         'src/**/*.test.ts',
         'src/**/*.d.ts',

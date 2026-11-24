@@ -386,9 +386,9 @@ export type DiaryFeedCategory = 'entries' | 'dreams' | 'feedbacks' | 'checkins' 
 export interface DiaryFeedFilters {
   // Filter chips -> repeated \`category\` params. Empty/undefined = all.
   categories?: DiaryFeedCategory[]
-  date_from?: string
-  date_to?: string
-  search?: string
+  date_from?: string | undefined
+  date_to?: string | undefined
+  search?: string | undefined
 }
 
 // -- Query / filter types (used by stores and API modules) -------------------
@@ -396,16 +396,16 @@ export interface DiaryFeedFilters {
 /** List/filter query params for practices: facets, date window, sort. */
 export interface PracticeFilters {
   // Multi-select: OR within the facet, sent as repeated query params.
-  practice_type?: PracticeType[]
+  practice_type?: PracticeType[] | undefined
   // Calendar facets (all optional). Multi-select facets are arrays.
-  direction?: PracticeDirection[]
-  difficulty?: PracticeDifficulty[]
+  direction?: PracticeDirection[] | undefined
+  difficulty?: PracticeDifficulty[] | undefined
   // F-8 (2026-05-29): style is now multi-select chips, sent as an array
   // (same as direction/difficulty). Backend B-4 accepts list[str] and
   // filters via .in_().
-  style?: string[]
-  duration_bucket?: DurationBucket
-  time_of_day?: TimeOfDay
+  style?: string[] | undefined
+  duration_bucket?: DurationBucket | undefined
+  time_of_day?: TimeOfDay | undefined
   status?: 'scheduled' | 'live'
   master_id?: string
   date_from?: string

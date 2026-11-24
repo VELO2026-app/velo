@@ -30,7 +30,7 @@ type Part =
   | { kind: 'text'; value: string }
   | { kind: 'named'; key: string }
   | { kind: 'list'; index: number }
-  | { kind: 'linked'; key: Part; modifier?: string }
+  | { kind: 'linked'; key: Part; modifier?: string | undefined }
 
 const SPACE = /[ \n]/
 const IDENTIFIER_START = /[A-Za-z_]/

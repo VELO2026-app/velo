@@ -460,13 +460,9 @@ describe('AdminPracticeDetailView', () => {
   // ===========================================================================
   describe('labels (.vue:143-153)', () => {
     it('attendedLabel falls back to "—" when attended is missing from a malformed response', async () => {
-      vi.mocked(adminApi.getAdminPracticeDetail).mockResolvedValue(
-        practice({
-          id: 'p_past',
-          status: 'past',
-          attended: undefined, // Partial<> allows this -- attendedLabel's ?? still guards it
-        }),
-      )
+      const { attended: _attended, ...malformed } = PRACTICE_PAST()
+      // @ts-expect-error -- deliberately omit a required key to exercise the malformed-response fallback.
+      vi.mocked(adminApi.getAdminPracticeDetail).mockResolvedValue(malformed)
       mount('p_past')
       await flush()
 

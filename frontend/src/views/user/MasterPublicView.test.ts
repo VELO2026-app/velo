@@ -232,8 +232,8 @@ beforeEach(() => {
   push.mockReset()
   back.mockReset()
   routeParams.id = 'm1'
-  routeQuery.schoolId = undefined
-  routeQuery.groupId = undefined
+  delete routeQuery.schoolId
+  delete routeQuery.groupId
 })
 
 afterEach(() => {

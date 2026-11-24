@@ -33,7 +33,7 @@
 <script setup lang="ts">
 defineProps<{
   title: string
-  subtitle?: string
+  subtitle?: string | undefined
   clickable?: boolean
 }>()
 

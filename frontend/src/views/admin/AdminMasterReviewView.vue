@@ -997,7 +997,11 @@ function onVerify(): void {
 async function doVerify(promote?: string[], masterOnly?: string[]): Promise<void> {
   verifying.value = true
   try {
-    await verify.mutateAsync({ promote, masterOnly, grantSchools: grantSchools.value })
+    await verify.mutateAsync({
+      ...(promote !== undefined ? { promote } : {}),
+      ...(masterOnly !== undefined ? { masterOnly } : {}),
+      grantSchools: grantSchools.value,
+    })
     toast.success(t('adminScreens.adminMasterReview.toast.verified'))
     // S-1/S-2: push to the list instead of back() -- it remounts over the
     // entry the verdict invalidated.

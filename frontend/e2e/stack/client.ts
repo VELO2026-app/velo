@@ -26,7 +26,7 @@ export function apiAs(tokens: Tokens, person: Person): Api {
         ...call.headers,
         ...(call.body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
-      body: call.body === undefined ? undefined : JSON.stringify(call.body),
+      body: call.body === undefined ? null : JSON.stringify(call.body),
     })
     const text = await response.text()
     if (!response.ok && !call.ok?.includes(response.status)) {

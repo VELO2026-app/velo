@@ -48,7 +48,7 @@ export default class CrashReporter implements Reporter {
       project: test.parent.project()?.name ?? '',
       test: test.title,
       signals,
-      trace: trace ? relative(process.cwd(), trace) : undefined,
+      ...(trace ? { trace: relative(process.cwd(), trace) } : {}),
     })
   }
 

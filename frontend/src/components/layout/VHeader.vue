@@ -64,15 +64,13 @@ withDefaults(
     title?: string
     showBack?: boolean
     backLabel?: string
-    badge?: string | number
+    badge?: string | number | undefined
     /** FE-103: render the VELO logo before the title (support conversation). */
     logo?: boolean
   }>(),
   {
     title: '',
     showBack: false,
-    backLabel: undefined,
-    badge: undefined,
     logo: false,
   },
 )

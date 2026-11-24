@@ -59,7 +59,7 @@ withDefaults(
      * instead of a bare "button". Undefined = attribute omitted (every
      * existing caller is byte-identical).
      */
-    ariaPressed?: boolean
+    ariaPressed?: boolean | undefined
   }>(),
   {
     size: 'sm',

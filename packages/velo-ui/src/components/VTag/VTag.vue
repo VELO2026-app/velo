@@ -19,7 +19,7 @@
 <script setup lang="ts">
 withDefaults(
   defineProps<{
-    variant?: 'blue' | 'pink' | 'sand'
+    variant?: 'blue' | 'pink' | 'sand' | undefined
   }>(),
   {
     variant: 'blue',

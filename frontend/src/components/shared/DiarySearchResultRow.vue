@@ -45,7 +45,7 @@ import type { DiaryFeedItem } from '@/api/types'
 
 const props = defineProps<{
   item: DiaryFeedItem
-  timezone?: string
+  timezone?: string | undefined
   /** The active search query -- drives the match emphasis. */
   query: string
 }>()

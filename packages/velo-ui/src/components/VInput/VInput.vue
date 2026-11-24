@@ -147,7 +147,7 @@ const errorId = `${fieldId}-error`
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string
+    modelValue?: string | undefined
     label?: string
     placeholder?: string
     type?: string

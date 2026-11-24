@@ -70,7 +70,7 @@ withDefaults(
     /** Extra class(es) for the value cell. */
     valueClass?: string
   }>(),
-  { saving: false, error: '', saveLabel: undefined, variant: 'field', valueClass: undefined },
+  { saving: false, error: '', variant: 'field' },
 )
 
 const emit = defineEmits<{

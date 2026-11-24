@@ -170,8 +170,8 @@ import type { DiaryFeedCategory } from '@/api/types'
 const props = defineProps<{
   open: boolean
   categories: DiaryFeedCategory[]
-  dateFrom?: string
-  dateTo?: string
+  dateFrom?: string | undefined
+  dateTo?: string | undefined
   timezone?: string
 }>()
 
@@ -179,8 +179,8 @@ const emit = defineEmits<{
   apply: [
     payload: {
       categories: DiaryFeedCategory[]
-      date_from?: string
-      date_to?: string
+      date_from?: string | undefined
+      date_to?: string | undefined
     },
   ]
   close: []

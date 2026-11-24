@@ -424,7 +424,9 @@ export default defineConfig(({ mode }) => {
       // start the dev server with the hosts allowlisted, e.g.
       //   VITE_ALLOWED_HOSTS=dev.velo-test.xyz npm run dev
       // Without the variable this stays at Vite's default (localhost + IPs).
-      allowedHosts: process.env.VITE_ALLOWED_HOSTS?.split(','),
+      ...(process.env.VITE_ALLOWED_HOSTS !== undefined
+        ? { allowedHosts: process.env.VITE_ALLOWED_HOSTS.split(',') }
+        : {}),
       // Proxy API requests to backend during local development.
       // In production, Nginx handles this routing.
       proxy: {

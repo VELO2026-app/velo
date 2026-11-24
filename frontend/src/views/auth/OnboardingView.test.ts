@@ -202,8 +202,10 @@ beforeEach(() => {
     .mockReset()
     .mockImplementation(async (body) =>
       user({
-        timezone: body.timezone ?? undefined,
-        onboarding_completed: body.onboarding_completed ?? undefined,
+        ...(body.timezone != null ? { timezone: body.timezone } : {}),
+        ...(body.onboarding_completed != null
+          ? { onboarding_completed: body.onboarding_completed }
+          : {}),
       }),
     )
   toastError.mockReset()

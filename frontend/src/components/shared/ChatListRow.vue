@@ -35,7 +35,7 @@ import { VAvatar, VBadge, VeloLogo } from '@/components/ui'
 import type { ChatPeer } from '@/api/chats'
 
 const props = defineProps<{
-  peer?: ChatPeer | null
+  peer?: ChatPeer | null | undefined
   peerFallback: string
   unread?: number
   /** BE-163: the row is the caller's own support conversation -- the VELO

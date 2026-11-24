@@ -218,7 +218,9 @@ async function send<T>(method: HttpMethod, path: string, options: RequestOptions
     response = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      // null, not undefined: exactOptionalPropertyTypes forbids an explicit
+      // undefined, and a null body sends no body (same as an absent one).
+      body: body !== undefined ? JSON.stringify(body) : null,
       signal: controller.signal,
     })
   } catch {
@@ -378,7 +380,7 @@ export const api = {
   },
 
   post<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
-    return request<T>('POST', path, { body, headers })
+    return request<T>('POST', path, { body, ...(headers ? { headers } : {}) })
   },
 
   patch<T>(path: string, body?: unknown): Promise<T> {

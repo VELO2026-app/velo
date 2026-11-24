@@ -81,7 +81,6 @@ const props = withDefaults(
   }>(),
   {
     modelValue: '',
-    placeholder: undefined,
   },
 )
 

@@ -145,24 +145,23 @@ describe('MasterMessagesView', () => {
   // (i18n:masterScreens.masterMessages.peerFallback) a null peer would
   // degrade to.
   it("the master's own support row renders the VELO logo and «Поддержка VELO», not «Ученик»", async () => {
+    const supportThread = commsThread({
+      id: 'support-1',
+      channel: 'support',
+      peer: null,
+      last_message: {
+        id: 'm-1',
+        sender: 'admin-1',
+        created_at: '2026-08-07T09:00:00+00:00',
+        body: 'Ваш вопрос рассматривается',
+        translation: null,
+      },
+    })
+    delete supportThread.client
+    delete supportThread.kind
+    delete supportThread.status
     vi.mocked(chatsApi.listChats).mockResolvedValue({
-      threads: [
-        commsThread({
-          id: 'support-1',
-          channel: 'support',
-          client: undefined,
-          kind: undefined,
-          status: undefined,
-          peer: null,
-          last_message: {
-            id: 'm-1',
-            sender: 'admin-1',
-            created_at: '2026-08-07T09:00:00+00:00',
-            body: 'Ваш вопрос рассматривается',
-            translation: null,
-          },
-        }),
-      ],
+      threads: [supportThread],
       next_cursor: null,
     })
     mount()

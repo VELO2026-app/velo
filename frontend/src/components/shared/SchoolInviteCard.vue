@@ -71,7 +71,7 @@ import SchoolMandalaBadge from '@/components/shared/SchoolMandalaBadge.vue'
 
 const props = defineProps<{
   name: string
-  avatarUrl?: string | null
+  avatarUrl?: string | null | undefined
   /** Branding hash: caller's field when it has one; otherwise derived from
    *  the name (§5.2 variant A, the SchoolRow idiom). */
   hash?: string | null
