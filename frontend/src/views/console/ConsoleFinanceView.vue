@@ -45,6 +45,7 @@ import WithdrawalsPanel from '@/components/console/finance/WithdrawalsPanel.vue'
 import { useUrlChoice } from '@/components/console/finance/useFinanceUrl'
 import { adminPendingWithdrawalsQuery } from '@/composables/queries/admin'
 import { isOptionEnabled } from '@/platform/instance'
+import { formatCount } from '@/utils/format'
 
 type FinanceTab = 'withdrawals' | 'promos'
 
@@ -67,7 +68,7 @@ const tabOptions = computed<SegmentOption[]>(() =>
     const pending = pendingQuery.data.value ?? 0
     return {
       value,
-      label: value === 'withdrawals' && pending > 0 ? `${label} · ${pending}` : label,
+      label: value === 'withdrawals' && pending > 0 ? `${label} · ${formatCount(pending)}` : label,
     }
   }),
 )

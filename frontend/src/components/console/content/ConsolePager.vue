@@ -1,23 +1,23 @@
 <!--
-  VELO Frontend -- FinancePager (FE-267)
+  VELO Frontend -- ConsolePager (FE-262)
 
-  The page row under a finance table: a summary on the left ("Shown 1-20 of
-  64"), page buttons on the right. The buttons are hidden when there is a
+  The page row under a console table: a summary on the left ("Showing 1-20
+  of 64"), page buttons on the right. The buttons are hidden when there is a
   single page; the summary stays. The screen owns the page number.
 -->
 
 <template>
-  <nav class="finance-pager" :aria-label="t('console.finance.pager.nav')">
-    <span class="finance-pager__summary" data-testid="finance-pager-summary">{{ summary }}</span>
-    <div v-if="pageCount > 1" class="finance-pager__pages">
+  <nav class="console-pager" :aria-label="t('console.pager.nav')">
+    <span class="console-pager__summary" data-testid="console-pager-summary">{{ summary }}</span>
+    <div v-if="pageCount > 1" class="console-pager__pages">
       <template v-for="(item, index) in items" :key="index">
-        <span v-if="item === null" class="finance-pager__gap" aria-hidden="true">...</span>
+        <span v-if="item === null" class="console-pager__gap" aria-hidden="true">...</span>
         <button
           v-else
           type="button"
-          class="finance-pager__page"
-          :class="{ 'finance-pager__page--current': item === page }"
-          :aria-label="t('console.finance.pager.page', { n: item })"
+          class="console-pager__page"
+          :class="{ 'console-pager__page--current': item === page }"
+          :aria-label="t('console.pager.page', { n: item })"
           :aria-current="item === page ? 'page' : undefined"
           @click="emit('update:page', item)"
         >
@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { pageItems } from '@/components/console/finance/pageItems'
+import { pagerItems } from '@/utils/console/pagerItems'
 
 const props = defineProps<{
   /** Current page, 1-based. */
@@ -46,11 +46,11 @@ const emit = defineEmits<{
   'update:page': [page: number]
 }>()
 
-const items = computed(() => pageItems(props.page, props.pageCount))
+const items = computed(() => pagerItems(props.page, props.pageCount))
 </script>
 
 <style scoped>
-.finance-pager {
+.console-pager {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -58,18 +58,18 @@ const items = computed(() => pageItems(props.page, props.pageCount))
   padding: var(--space-3) var(--space-4) var(--space-2);
 }
 
-.finance-pager__summary {
+.console-pager__summary {
   font-size: var(--velo-fs-12);
   color: var(--velo-text-secondary);
 }
 
-.finance-pager__pages {
+.console-pager__pages {
   display: flex;
   align-items: center;
   gap: var(--space-1);
 }
 
-.finance-pager__page {
+.console-pager__page {
   min-width: var(--velo-size-36);
   height: var(--velo-size-36);
   padding: 0 var(--space-2);
@@ -82,25 +82,25 @@ const items = computed(() => pageItems(props.page, props.pageCount))
   cursor: pointer;
 }
 
-.finance-pager__page:hover {
+.console-pager__page:hover {
   background: var(--velo-bg-subtle);
 }
 
-.finance-pager__page:focus-visible {
+.console-pager__page:focus-visible {
   outline: 2px solid var(--velo-primary);
   outline-offset: 2px;
 }
 
-.finance-pager__page--current {
+.console-pager__page--current {
   background: var(--velo-primary);
   color: var(--velo-on-accent);
 }
 
-.finance-pager__page--current:hover {
+.console-pager__page--current:hover {
   background: var(--velo-primary);
 }
 
-.finance-pager__gap {
+.console-pager__gap {
   padding: 0 var(--space-1);
   color: var(--velo-text-secondary);
 }

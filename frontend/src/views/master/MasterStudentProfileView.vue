@@ -299,10 +299,13 @@
       :student-name="name"
       :avatar-url="avatarUrl"
       :custom-groups="customGroups"
+      :groups-failed="customGroupsFailed"
+      :groups-loading="customGroupsLoading"
       :existing-group-ids="groupChips.map((g) => g.id)"
       :current-group-id="null"
       @close="addToGroupSheetOpen = false"
       @saved="loadGroups"
+      @retry-groups="loadCustomGroups"
     />
 
     <RemoveFromGroupSheet
@@ -312,8 +315,11 @@
       :avatar-url="avatarUrl"
       :current-group-id="null"
       :custom-groups="customGroups"
+      :groups-failed="customGroupsFailed"
+      :groups-loading="customGroupsLoading"
       @close="removeFromGroupSheetOpen = false"
       @saved="loadGroups"
+      @retry-groups="loadCustomGroups"
     />
   </div>
 </template>
@@ -413,15 +419,22 @@ onMounted(loadGroups)
 // AddToGroupSheet / RemoveFromGroupSheet's chip palette (distinct from
 // groupChips above, which is only the groups THIS student is already in --
 // same distinction MasterGroupDetailView.vue's own allGroups/customGroups
-// made). Non-fatal on failure, same reasoning as loadGroups above.
+// made). A failure does not break the profile, but the two sheets must not read
+// it as "this master has no groups": they show an error with Retry (FE-257).
 const allGroups = ref<GroupListItem[]>([])
 const customGroups = computed(() => allGroups.value.filter((g) => g.kind === 'custom'))
+const customGroupsFailed = ref(false)
+const customGroupsLoading = ref(false)
 async function loadCustomGroups(): Promise<void> {
+  customGroupsLoading.value = true
+  customGroupsFailed.value = false
   try {
     const res = await getGroups()
     allGroups.value = res.items
   } catch {
-    allGroups.value = []
+    customGroupsFailed.value = true
+  } finally {
+    customGroupsLoading.value = false
   }
 }
 onMounted(loadCustomGroups)

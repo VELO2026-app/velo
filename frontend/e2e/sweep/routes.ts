@@ -336,6 +336,12 @@ export const SWEEP: Record<string, SweepRow> = {
   'console-users': { path: '/console/users', roles: A, a11yViewport: CONSOLE_VIEWPORT },
   'console-schools': { path: '/console/schools', roles: A, a11yViewport: CONSOLE_VIEWPORT },
   'console-practices': { path: '/console/practices', roles: A, a11yViewport: CONSOLE_VIEWPORT },
+  'console-practices-detail': {
+    path: '/console/practices/:id',
+    roles: A,
+    params: { id: 'practicePastId' },
+    a11yViewport: CONSOLE_VIEWPORT,
+  },
   'console-catalog': { path: '/console/catalog', roles: A, a11yViewport: CONSOLE_VIEWPORT },
   'console-moderation': { path: '/console/moderation', roles: A, a11yViewport: CONSOLE_VIEWPORT },
   'console-support': { path: '/console/support', roles: A, a11yViewport: CONSOLE_VIEWPORT },

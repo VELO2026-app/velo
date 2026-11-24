@@ -23,8 +23,10 @@ declare module 'vue-router' {
 
 const placeholder = () => import('@/views/console/ConsolePlaceholderView.vue')
 
-/** The modules that have their own web screen; the rest show the placeholder. Lazy: a screen is its own chunk. */
+/** The module screens that have replaced the placeholder (by module key). Lazy: a screen is its own chunk. */
 const SCREENS: Partial<Record<ConsoleModuleKey, () => Promise<Component>>> = {
+  practices: () => import('@/views/console/ConsolePracticesView.vue'),
+  catalog: () => import('@/views/console/ConsoleCatalogView.vue'),
   finance: () => import('@/views/console/ConsoleFinanceView.vue'),
 }
 
@@ -42,6 +44,13 @@ export function consoleRoutes(): RouteRecordRaw[] {
           meta: module.option === undefined ? {} : { option: module.option },
           component: SCREENS[module.key] ?? placeholder,
         })),
+        // A screen inside a module is named console-<module>-<what>, so the
+        // menu keeps the module lit (consoleModuleOf).
+        {
+          path: 'practices/:id',
+          name: 'console-practices-detail',
+          component: () => import('@/views/console/ConsolePracticeDetailView.vue'),
+        },
         {
           path: '',
           redirect: { name: consoleRouteName('dashboard') },

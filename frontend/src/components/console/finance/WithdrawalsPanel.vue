@@ -24,9 +24,7 @@
     />
 
     <ConsoleCard flush>
-      <div v-if="loading" class="withdrawals__loading" data-testid="finance-loading">
-        <VLoader size="lg" />
-      </div>
+      <ConsoleLoading v-if="loading" data-testid="finance-loading" />
       <VEmptyState
         v-else-if="failed"
         icon="warning"
@@ -80,13 +78,13 @@
               </VButton>
             </div>
             <span v-else class="withdrawals__stack">
-              <FinanceStatusBadge :tone="row.status === 'approved' ? 'success' : 'error'">
+              <ConsoleStatusBadge :tone="row.status === 'approved' ? 'success' : 'error'">
                 {{
                   row.status === 'approved'
                     ? t('console.finance.withdrawals.approved')
                     : t('console.finance.withdrawals.rejected')
                 }}
-              </FinanceStatusBadge>
+              </ConsoleStatusBadge>
               <span
                 v-if="row.status === 'rejected' && row.admin_note"
                 class="withdrawals__reason"
@@ -99,7 +97,7 @@
           </template>
           <template #empty>{{ t(`console.finance.withdrawals.empty.${status}`) }}</template>
         </ConsoleTable>
-        <FinancePager
+        <ConsolePager
           v-if="total > 0"
           :page="page"
           :page-count="pageCount"
@@ -141,17 +139,17 @@
 import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
 import { useQuery } from '@pinia/colada'
-import { VButton, VEmptyState, VLoader, VSegment } from '@/components/ui'
+import { VButton, VEmptyState, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import ConfirmPaymentModal from '@/components/shared/ConfirmPaymentModal.vue'
-import FinancePager from '@/components/console/finance/FinancePager.vue'
-import FinanceStatusBadge from '@/components/console/finance/FinanceStatusBadge.vue'
+import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
+import ConsolePager from '@/components/console/content/ConsolePager.vue'
+import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
 import WithdrawalRejectModal from '@/components/console/finance/WithdrawalRejectModal.vue'
 import { formatStamp } from '@/components/console/finance/financeFormat'
 import { payoutHolder, payoutMethodLabel } from '@/components/console/finance/payoutMethod'
-import { useFinanceWidth } from '@/components/console/finance/useFinanceWidth'
 import { useUrlChoice, useUrlPage } from '@/components/console/finance/useFinanceUrl'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
 import type { AdminWithdrawalResponse, WithdrawalStatus } from '@/api/admin'
@@ -165,8 +163,9 @@ import {
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { useConsoleWidth } from '@/composables/useConsoleWidth'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
-import { formatMoney } from '@/utils/format'
+import { formatCount, formatMoney } from '@/utils/format'
 
 const toast = useToast()
 const zone = useViewerTimezone()
@@ -224,7 +223,7 @@ const total = computed(() => listQuery.data.value?.total ?? 0)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / ADMIN_WITHDRAWALS_PAGE_SIZE)))
 const summary = computed(() => {
   const from = (page.value - 1) * ADMIN_WITHDRAWALS_PAGE_SIZE + 1
-  return t('console.finance.pager.shown', {
+  return t('console.pager.shown', {
     from,
     to: Math.min(total.value, from + rows.value.length - 1),
     total: total.value,
@@ -237,13 +236,16 @@ const statusOptions = computed<SegmentOption[]>(() =>
   STATUSES.map((value) => {
     const label = t(`console.finance.withdrawals.status.${value}`)
     const pending = pendingQuery.data.value ?? 0
-    return { value, label: value === 'pending' && pending > 0 ? `${label} · ${pending}` : label }
+    return {
+      value,
+      label: value === 'pending' && pending > 0 ? `${label} · ${formatCount(pending)}` : label,
+    }
   }),
 )
 
 // -- Columns. Below 1400 px the payout details move under the name and the net
 //    amount under the amount; below 1200 px the date moves under the name. --
-const { narrow, medium } = useFinanceWidth()
+const { narrow, medium } = useConsoleWidth()
 const columns = computed<ConsoleTableColumn[]>(() => [
   { key: 'master', label: t('console.finance.withdrawals.columns.master') },
   {
@@ -383,12 +385,6 @@ watch(reason, (value) => {
 
 .withdrawals > :deep(.console-card) {
   align-self: stretch;
-}
-
-.withdrawals__loading {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-8) 0;
 }
 
 .withdrawals__stack {

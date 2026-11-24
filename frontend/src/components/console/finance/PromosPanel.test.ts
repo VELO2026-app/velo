@@ -46,12 +46,12 @@ vi.mock('@/composables/useViewerTimezone', async () => {
   return { useViewerTimezone: () => ref('Pacific/Kiritimati') }
 })
 
-// The window width classes (components/console/finance/useFinanceWidth.ts):
-// happy-dom is 1024 px wide, so the test sets them. Default: the wide layout.
+// The window width classes (composables/useConsoleWidth.ts): happy-dom is
+// 1024 px wide, so the test sets them. Default: the wide layout.
 const width = vi.hoisted(() => ({ narrow: false, medium: false }))
-vi.mock('@/components/console/finance/useFinanceWidth', async () => {
+vi.mock('@/composables/useConsoleWidth', async () => {
   const { ref } = await import('vue')
-  return { useFinanceWidth: () => ({ narrow: ref(width.narrow), medium: ref(width.medium) }) }
+  return { useConsoleWidth: () => ({ narrow: ref(width.narrow), medium: ref(width.medium) }) }
 })
 
 const NOW = new Date('2026-11-25T12:00:00Z')
@@ -186,7 +186,7 @@ function pageButton(n: number): HTMLButtonElement | undefined {
   return host?.querySelector<HTMLButtonElement>(`button[aria-label="Страница ${n}"]`) ?? undefined
 }
 function summary(): string | undefined {
-  return host?.querySelector('[data-testid="finance-pager-summary"]')?.textContent ?? undefined
+  return host?.querySelector('[data-testid="console-pager-summary"]')?.textContent ?? undefined
 }
 function field(label: string): HTMLInputElement | HTMLSelectElement {
   const labelEl = Array.from(dialog().querySelectorAll('label')).find((l) =>
@@ -429,7 +429,7 @@ describe('PromosPanel', () => {
       await mount()
 
       expect(summary()).toBe('Показано 1–2 из 2')
-      expect(host?.querySelector('.finance-pager__pages')).toBeNull()
+      expect(host?.querySelector('.console-pager__pages')).toBeNull()
     })
 
     it.each([

@@ -26,9 +26,7 @@
     </div>
 
     <ConsoleCard flush>
-      <div v-if="loading" class="promos__loading" data-testid="finance-loading">
-        <VLoader size="lg" />
-      </div>
+      <ConsoleLoading v-if="loading" data-testid="finance-loading" />
       <VEmptyState
         v-else-if="failed"
         icon="warning"
@@ -60,9 +58,9 @@
           <template #cell-until="{ row }">{{ until(row) }}</template>
           <template #cell-state="{ row }">
             <span class="promos__stack">
-              <FinanceStatusBadge :tone="row.status === 'active' ? 'success' : 'muted'">
+              <ConsoleStatusBadge :tone="row.status === 'active' ? 'success' : 'muted'">
                 {{ t(`console.finance.promos.status.${row.status}`) }}
-              </FinanceStatusBadge>
+              </ConsoleStatusBadge>
               <VButton
                 v-if="narrow && row.status === 'active'"
                 size="sm"
@@ -89,7 +87,7 @@
           </template>
           <template #empty>{{ t(`console.finance.promos.empty.${filter}`) }}</template>
         </ConsoleTable>
-        <FinancePager
+        <ConsolePager
           v-if="total > 0"
           :page="page"
           :page-count="pageCount"
@@ -116,16 +114,16 @@
 import { t } from '@/locales'
 import { computed, ref, watch } from 'vue'
 import { useQuery } from '@pinia/colada'
-import { VButton, VConfirmDialog, VEmptyState, VLoader, VSegment } from '@/components/ui'
+import { VButton, VConfirmDialog, VEmptyState, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
-import FinancePager from '@/components/console/finance/FinancePager.vue'
-import FinanceStatusBadge from '@/components/console/finance/FinanceStatusBadge.vue'
+import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
+import ConsolePager from '@/components/console/content/ConsolePager.vue'
+import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
 import PromoCreateModal from '@/components/console/finance/PromoCreateModal.vue'
 import { formatDay } from '@/components/console/finance/financeFormat'
 import { promoStatus, type PromoStatus } from '@/components/console/finance/promoStatus'
-import { useFinanceWidth } from '@/components/console/finance/useFinanceWidth'
 import { useUrlChoice, useUrlPage } from '@/components/console/finance/useFinanceUrl'
 import { deactivateAdminPromo } from '@/api/admin'
 import type { AdminPromoResponse } from '@/api/admin'
@@ -139,6 +137,7 @@ import {
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { useConsoleWidth } from '@/composables/useConsoleWidth'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 
 const toast = useToast()
@@ -198,7 +197,7 @@ const total = computed(() => listQuery.data.value?.total ?? 0)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / ADMIN_PROMOS_PAGE_SIZE)))
 const summary = computed(() => {
   const from = (page.value - 1) * ADMIN_PROMOS_PAGE_SIZE + 1
-  return t('console.finance.pager.shown', {
+  return t('console.pager.shown', {
     from,
     to: Math.min(total.value, from + rows.value.length - 1),
     total: total.value,
@@ -207,7 +206,7 @@ const summary = computed(() => {
 
 // -- Columns. Below 1400 px the owner moves under the code; below 1200 px the
 //    end date moves under the use count and the button under the status. --
-const { narrow, medium } = useFinanceWidth()
+const { narrow, medium } = useConsoleWidth()
 const columns = computed<ConsoleTableColumn[]>(() => [
   { key: 'code', label: t('console.finance.promos.columns.code') },
   ...(medium.value ? [] : [{ key: 'owner', label: t('console.finance.promos.columns.owner') }]),
@@ -311,12 +310,6 @@ async function onConfirmDeactivate(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-.promos__loading {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-8) 0;
 }
 
 .promos__stack {
