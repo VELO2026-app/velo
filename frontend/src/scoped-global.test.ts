@@ -137,11 +137,11 @@ describe('scoped styles: :global() is a whole selector (FE-261)', () => {
   })
 
   it('no scoped style of the app or the kit has a :global() call with a neighbour', () => {
-    const paths = Object.keys(files)
-    expect(paths.length).toBeGreaterThan(100) // the glob saw the codebase
-    expect(paths.some((p) => p.includes('/velo-ui/src/'))).toBe(true) // ...and the kit
-    const violations = paths.flatMap((path) =>
-      scopedGlobalViolations(files[path]!).map((v) => `${path}:${v}`),
+    const sources = Object.entries(files)
+    expect(sources.length).toBeGreaterThan(100) // the glob saw the codebase
+    expect(sources.some(([path]) => path.includes('/velo-ui/src/'))).toBe(true) // ...and the kit
+    const violations = sources.flatMap(([path, source]) =>
+      scopedGlobalViolations(source).map((v) => `${path}:${v}`),
     )
     expect(violations).toEqual([])
   })
