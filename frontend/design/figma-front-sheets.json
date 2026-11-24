@@ -1,7 +1,7 @@
 {
   "about": "Mirror sheets of the Figma \"Front\" pages (docs/figma-protocol.md §8). Generated from c2fInventory() in Figma; commits and seals stay in Figma. Read by frontend/scripts/front-sheets.mjs.",
   "file": "IV92js0q2cBHmHmDxB0zxM",
-  "generated": "2026-11-21",
+  "generated": "2026-11-24",
   "sheets": [
     {
       "key": "screen:user.dashboard",
@@ -297,6 +297,20 @@
       "id": "4179:1985",
       "page": "Фронт · Скины",
       "name": "Skin / gold",
+      "sources": []
+    },
+    {
+      "key": "skin:core",
+      "id": "4245:2110",
+      "page": "Фронт · Скины",
+      "name": "Skin / core",
+      "sources": []
+    },
+    {
+      "key": "skin:goodo",
+      "id": "4245:2419",
+      "page": "Фронт · Скины",
+      "name": "Skin / goodo",
       "sources": []
     }
   ]

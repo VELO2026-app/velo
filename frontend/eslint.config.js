@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint'
 import pluginVue from 'eslint-plugin-vue'
 import pluginTsdoc from 'eslint-plugin-tsdoc'
 import globals from 'globals'
-import { e2eRulesConfig, testRulesConfig } from './eslint-rules/index.mjs'
+import { apiBoundaryConfig, e2eRulesConfig, testRulesConfig } from './eslint-rules/index.mjs'
 
 // Timezone-hygiene selectors (see the rule below); shared with the platform
 // block, which must repeat them (flat config replaces same-rule options).
@@ -293,6 +293,10 @@ export default [
   // FE-211: the same for the Playwright suite -- no waitForTimeout anywhere
   // in e2e/, no timer-in-a-Promise pause in its specs and setup projects.
   ...e2eRulesConfig(['e2e/**/*.ts'], ['e2e/**/*.spec.ts', 'e2e/**/*.setup.ts']),
+
+  // FE-232: headers and fetch() only in src/api/ -- the CORS guard of the
+  // backend reads that directory and nothing else.
+  ...apiBoundaryConfig(['src/**/*.{ts,vue}'], ['src/api/**', 'src/**/*.test.ts']),
 
   {
     // The barrels and the components themselves may use deep paths internally

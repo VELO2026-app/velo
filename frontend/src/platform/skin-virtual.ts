@@ -10,7 +10,7 @@
 
 import type { Plugin } from 'vite'
 
-import { materializedSkinTokens, type SkinPackage } from './skin'
+import { CORE_SKIN, materializedSkinTokens, type SkinPackage } from './skin'
 
 /** Import id of the skin's token cascade (a stylesheet; app.ts imports it LAST). */
 export const SKIN_TOKENS_ID = 'virtual:skin-tokens.css'
@@ -22,15 +22,16 @@ export const SKIN_BRAND_ID = 'virtual:skin-brand'
 const RESOLVED_PREFIX = '\0'
 
 /**
- * Source of the brand module: the skin's display name, or null (no package),
- * and whether the build shows a logo set -- the core's neutral one, or the
+ * Source of the brand module: the skin's display name, or the core's neutral
+ * word when no package ships (FE-231: no brand name in the core), and
+ * whether the build shows a logo set -- the core's neutral one, or the
  * package's; false = the package left it out (FE-230).
  *
  * @param skin - The skin package, or null for the core build.
  */
 export function skinBrandSource(skin: SkinPackage | null): string {
   return (
-    `export const SKIN_BRAND = ${JSON.stringify(skin?.displayName ?? null)}\n` +
+    `export const SKIN_BRAND = ${JSON.stringify((skin ?? CORE_SKIN).displayName)}\n` +
     `export const SKIN_HAS_LOGO = ${JSON.stringify(skin?.hasLogo ?? true)}\n`
   )
 }

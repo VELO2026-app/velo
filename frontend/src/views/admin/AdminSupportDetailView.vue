@@ -349,6 +349,7 @@ import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { formatTime as formatClockTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
+import { createAttemptKeys } from '@/api/attemptKeys'
 import { ApiResponseError } from '@/api/client'
 import {
   SUPPORT_CLOSING_STATUSES,
@@ -728,9 +729,13 @@ const changeStatus = useAdminMutation(
 const claim = useAdminMutation('changeTicketTaker', () => claimSupportThread(ticketId), {
   waitForRefetch: false,
 })
+// One key per send attempt (FE-232): a retry of the same text is the same
+// reply. A landed reply and a refusal free the key, any other failure keeps
+// it (onSend, createAttemptKeys).
+const replyKeys = createAttemptKeys()
 const reply = useAdminMutation(
   'replySupport',
-  (body: string) => sendAdminSupportReply(ticketId, body),
+  (body: string) => sendAdminSupportReply(ticketId, body, replyKeys.keyFor(ticketId, body)),
   { waitForRefetch: false },
 )
 const retryTranslation = useAdminMutation(
@@ -986,6 +991,7 @@ async function onSend(): Promise<void> {
   sending.value = true
   try {
     const sent = await reply.mutateAsync(body)
+    replyKeys.settle()
     // Shown at once as written; its translation for the person (BE-166) is
     // known only to the feed -- read it again, and poll if it is on its way.
     updateSupportFeed(queryCache, ticketId, (list) => [
@@ -995,6 +1001,7 @@ async function onSend(): Promise<void> {
     draft.value = ''
     void rereadFeeds().then(restartPolling)
   } catch (e) {
+    replyKeys.settle(e)
     toast.error(extractApiError(e, t('adminScreens.adminSupportDetail.toast.replyFailed')))
   } finally {
     sending.value = false

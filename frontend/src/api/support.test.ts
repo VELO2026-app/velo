@@ -9,8 +9,6 @@
 // Idempotency-Key header of the form's call, the absence of a status filter
 // on the admin list, the one-ticket read and the status change.
 //
-// createAppealKeys -- "one appeal, one key" (owner ruling FE-104) -- is pure
-// and tested directly with an injected key source.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -19,7 +17,6 @@ import {
   SUPPORT_SPAM_RETENTION_MS,
   assignTicket,
   claimSupportThread,
-  createAppealKeys,
   createTicket,
   getAdminSupportMessages,
   getAdminTicket,
@@ -67,62 +64,6 @@ describe('createTicket -- the form appeal', () => {
       { topic: 'complaint_user', body: 'Текст' },
       { 'Idempotency-Key': 'key-abc' },
     )
-  })
-})
-
-describe('createAppealKeys -- one appeal, one key', () => {
-  function keeper() {
-    let n = 0
-    const mint = vi.fn(() => `k${++n}`)
-    return { keyFor: createAppealKeys(mint), mint }
-  }
-
-  it('the same (topic, body) asked again gets the SAME key -- a retry is one appeal', () => {
-    const { keyFor, mint } = keeper()
-
-    expect(keyFor('payment', 'Текст')).toBe('k1')
-    expect(keyFor('payment', 'Текст')).toBe('k1')
-    expect(mint).toHaveBeenCalledTimes(1)
-  })
-
-  it('a changed body gets a NEW key', () => {
-    const { keyFor } = keeper()
-
-    keyFor('payment', 'Текст')
-    expect(keyFor('payment', 'Текст, исправленный')).toBe('k2')
-  })
-
-  it('a changed topic gets a NEW key', () => {
-    const { keyFor } = keeper()
-
-    keyFor('payment', 'Текст')
-    expect(keyFor('technical', 'Текст')).toBe('k2')
-  })
-
-  it('going back to an earlier appeal is a new key too -- only the LAST appeal is kept', () => {
-    const { keyFor } = keeper()
-
-    keyFor('payment', 'А')
-    keyFor('payment', 'Б')
-    expect(keyFor('payment', 'А')).toBe('k3')
-  })
-
-  it('two keepers (two form instances) never share a key', () => {
-    let n = 0
-    const mint = () => `k${++n}`
-    const a = createAppealKeys(mint)
-    const b = createAppealKeys(mint)
-
-    expect(a('payment', 'Текст')).not.toBe(b('payment', 'Текст'))
-  })
-
-  it('the default key source yields a non-empty key', () => {
-    const keyFor = createAppealKeys()
-
-    const key = keyFor('payment', 'Текст')
-    expect(typeof key).toBe('string')
-    expect(key.length).toBeGreaterThan(0)
-    expect(keyFor('payment', 'Текст')).toBe(key)
   })
 })
 
@@ -257,10 +198,14 @@ describe('admin -- the thread routes keyed by the ticket id (unchanged)', () => 
     expect(api.get).toHaveBeenCalledWith(`${S}/threads/t_9/messages?limit=50`)
   })
 
-  it('sendAdminSupportReply POSTs {body}', async () => {
-    await sendAdminSupportReply('t_9', 'Ответ')
+  it('sendAdminSupportReply POSTs {body} under the attempt key', async () => {
+    await sendAdminSupportReply('t_9', 'Ответ', 'key-1')
 
-    expect(api.post).toHaveBeenCalledWith(`${S}/threads/t_9/messages`, { body: 'Ответ' })
+    expect(api.post).toHaveBeenCalledWith(
+      `${S}/threads/t_9/messages`,
+      { body: 'Ответ' },
+      { 'Idempotency-Key': 'key-1' },
+    )
   })
 
   it('claimSupportThread POSTs the claim', async () => {
