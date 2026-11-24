@@ -83,7 +83,7 @@ export interface RequestOptions {
   /** JSON body; omitted means no body and no Content-Type. */
   body?: unknown
   /** Extra headers (e.g. `Idempotency-Key`); Authorization is the client's own. */
-  headers?: Record<string, string> | undefined
+  headers?: Record<string, string>
   /**
    * Abort after this many milliseconds and reject with ApiTimeoutError.
    *
@@ -380,7 +380,7 @@ export const api = {
   },
 
   post<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
-    return request<T>('POST', path, { body, headers })
+    return request<T>('POST', path, { body, ...(headers ? { headers } : {}) })
   },
 
   patch<T>(path: string, body?: unknown): Promise<T> {

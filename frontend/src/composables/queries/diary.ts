@@ -96,7 +96,11 @@ function feedFilterKey(filters: DiaryFeedFilters): DiaryFeedFilters {
 
 /** One page of the feed for the filters a feed key carries. */
 function fetchFeedPage(filters: DiaryFeedFilters, cursor: string | null) {
-  return listDiaryFeed({ ...filters, cursor: cursor ?? undefined, limit: DIARY_FEED_PAGE_SIZE })
+  return listDiaryFeed({
+    ...filters,
+    ...(cursor !== null ? { cursor } : {}),
+    limit: DIARY_FEED_PAGE_SIZE,
+  })
 }
 
 /** Infinite query options for the feed under one filter set (see the header). */

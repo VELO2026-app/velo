@@ -385,7 +385,7 @@ export type DiaryFeedCategory = 'entries' | 'dreams' | 'feedbacks' | 'checkins' 
 /** Query params of the diary feed endpoint: chips, date window, search (cursor pagination). */
 export interface DiaryFeedFilters {
   // Filter chips -> repeated \`category\` params. Empty/undefined = all.
-  categories?: DiaryFeedCategory[] | undefined
+  categories?: DiaryFeedCategory[]
   date_from?: string | undefined
   date_to?: string | undefined
   search?: string | undefined
@@ -406,12 +406,12 @@ export interface PracticeFilters {
   style?: string[] | undefined
   duration_bucket?: DurationBucket | undefined
   time_of_day?: TimeOfDay | undefined
-  status?: 'scheduled' | 'live' | undefined
-  master_id?: string | undefined
-  date_from?: string | undefined
-  date_to?: string | undefined
-  sort_by?: 'scheduled_at' | 'price_cents' | undefined
-  sort_order?: 'asc' | 'desc' | undefined
+  status?: 'scheduled' | 'live'
+  master_id?: string
+  date_from?: string
+  date_to?: string
+  sort_by?: 'scheduled_at' | 'price_cents'
+  sort_order?: 'asc' | 'desc'
 }
 
 // Admin report-list query-param literals -- not response fields, no

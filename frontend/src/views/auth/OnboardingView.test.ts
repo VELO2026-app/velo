@@ -200,7 +200,14 @@ beforeEach(() => {
 
   vi.mocked(usersApi.updateMe)
     .mockReset()
-    .mockImplementation(async (body) => user(body as Partial<UserResponse>))
+    .mockImplementation(async (body) =>
+      user({
+        ...(body.timezone != null ? { timezone: body.timezone } : {}),
+        ...(body.onboarding_completed != null
+          ? { onboarding_completed: body.onboarding_completed }
+          : {}),
+      }),
+    )
   toastError.mockReset()
 })
 

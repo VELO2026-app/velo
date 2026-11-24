@@ -171,7 +171,7 @@ export function deleteSchool(id: string): Promise<void> {
  *  omitting kind lists both masters and students. */
 export interface SchoolMembersQuery {
   kind?: SchoolMemberKind
-  search?: string | undefined
+  search?: string
   limit?: number
   offset?: number
 }
