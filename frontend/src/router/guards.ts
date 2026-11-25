@@ -223,8 +223,8 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
  * Scope is deliberately UNCHANGED (still called for every role, not gated to
  * role==='user'): the obvious-looking fix of only refreshing for a
  * rejection-eligible role would blind the SYMMETRIC case --
- * AdminMasterReviewView.vue's revoke action
- * (i18n:adminScreens.adminMasterReview.revokeMaster) flips a master's
+ * the console's revoke action (MasterRightsCard.vue,
+ * i18n:adminScreens.adminMasterReview.revokeMaster) flips a master's
  * server-side role straight to 'user' (admin/masters/service.py's
  * revoke_master), and a master who is never refreshed would keep the stale
  * client-side role until a cold boot, same bug class as T21-4, pointed the

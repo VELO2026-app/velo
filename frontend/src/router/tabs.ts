@@ -1,17 +1,10 @@
 // =============================================================================
-// VELO Frontend -- Tab Bar Config (Phase F2.2; admin -> 3 tabs, DS rebuild 2026-06-14)
+// VELO Frontend -- Tab Bar Config (Phase F2.2)
 // =============================================================================
 //
-// Tab items per role. Used by shell components (UserShell, MasterShell,
-// AdminShell) to configure their tab bars (VTabBar for user/master,
-// VAdminTabBar for admin).
-//
-// Admin DS rebuild (2026-06-14, operator): admin has 3 tabs --
-// i18n:tabs.dashboard / i18n:tabs.masters /
-// i18n:tabs.moderation. The former 4th tab, profile (i18n:tabs.profile,
-// /admin/profile), is removed: the operator
-// confirmed admin needs no own profile. Badge counts are injected live by
-// AdminShell (masters awaiting verification + reports awaiting moderation).
+// Tab items per role. Used by the shells (UserShell, MasterShell) to
+// configure their tab bar (VTabBar). The admin zone is the web console
+// (FE-272): its menu is ConsoleSidebar, not a tab bar.
 // =============================================================================
 
 import type { Component } from 'vue'
@@ -22,9 +15,7 @@ import {
   IconDiary,
   IconProfile,
   IconAnalytics,
-  IconGroup,
   IconSchool,
-  IconWarning,
 } from '@/components/icons'
 
 // Labels resolve at ACCESS time (getters), not at module import: the tab bar
@@ -38,9 +29,6 @@ export interface TabItem {
   icon: string | Component
   label: string
   to: string
-  /** Count badge -- rendered by VAdminTabBar only (admin counts); the
-   *  user/master VTabBar itself paints no badges. */
-  badge?: number | string
   /** Conditional tab (tz-curator.md §1.2): the SHELL drops the tab unless
    *  the named server-side condition holds; VTabBar stays dumb. Omit for
    *  the unconditional default. 'schools' = the account belongs to `>= 1` school
@@ -147,30 +135,5 @@ export const MASTER_TABS: TabItem[] = [
       return t('tabs.profile')
     },
     to: '/master/profile',
-  },
-]
-
-/** The admin zone's tab bar (AdminShell, live badge counts injected by the shell). */
-export const ADMIN_TABS: TabItem[] = [
-  {
-    icon: IconHome,
-    get label(): string {
-      return t('tabs.dashboard')
-    },
-    to: '/admin/dashboard',
-  },
-  {
-    icon: IconGroup,
-    get label(): string {
-      return t('tabs.masters')
-    },
-    to: '/admin/masters',
-  },
-  {
-    icon: IconWarning,
-    get label(): string {
-      return t('tabs.moderation')
-    },
-    to: '/admin/reports',
   },
 ]

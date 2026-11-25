@@ -58,7 +58,7 @@ async function flush(): Promise<void> {
 
 /** The teleported sheet's overlay -- document, never `host`. Its Transition
  *  keeps the element through the leave animation, so a leaving overlay is
- *  NOT an open sheet (same trick as AdminSupportDetailView.test.ts). */
+ *  NOT an open sheet. */
 function sheet(): HTMLElement | null {
   const el = document.body.querySelector<HTMLElement>('.v-sheet__overlay')
   return el && !el.classList.contains('v-sheet-leave-active') ? el : null

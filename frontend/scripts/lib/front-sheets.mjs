@@ -56,7 +56,7 @@ export const SCREEN_SHELLS = {
   ],
   user: ['frontend/src/views/shells/UserShell.vue'],
   master: ['frontend/src/views/shells/MasterShell.vue'],
-  admin: ['frontend/src/views/shells/AdminShell.vue'],
+  admin: ['frontend/src/views/shells/ConsoleShell.vue'],
 }
 /** .ts files that are visible: the tab table renders the tab bar. */
 const VISUAL_TS = ['frontend/src/router/tabs.ts']

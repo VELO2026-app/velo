@@ -8,13 +8,8 @@
   (PATCH /admin/masters/{id}/methods) and the two-level taxonomy picker.
 
   A save writes the answer into the held detail at once (patchAdminMaster)
-  and the mutation row refetches the lists that name the master. The mobile
-  twin is the field editor of AdminMasterReviewView.
-
-  DEBT (FE-272): the field editor is a copy of the one in AdminMasterReviewView
-  (startField, cancelField, saveField, the methods editor) and its patch rules
-  are masterProfilePatch.ts, a copy of the old buildPatch. Both live until the
-  mobile /admin is removed; then the copy here is the only one.
+  and the mutation row refetches the lists that name the master. The patch
+  rules of one field are masterProfilePatch.ts.
 -->
 
 <template>

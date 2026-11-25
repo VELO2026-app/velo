@@ -50,10 +50,8 @@ import type {
   ReturnMetricResponse,
   PaginatedAdminPracticesResponse,
   AdminPracticeDetailResponse,
-  AdminRevenueResponse,
   InviteMasterResponse,
   PaginatedUsersResponse,
-  PaginatedParticipantsResponse,
   AdminMasterDetail,
   AdminMasterProfileUpdate,
   MasterSchoolRightResponse,
@@ -134,12 +132,6 @@ export function getAdminStatsOverview(
 // Masters
 // ============================================================================
 
-/** List master applications awaiting verification, paginated. */
-export function getPendingMasters(limit = 20, offset = 0): Promise<PaginatedMastersResponse> {
-  const query = buildQuery({ limit, offset })
-  return api.get<PaginatedMastersResponse>(`/api/v1/admin/masters/pending${query}`)
-}
-
 /** List masters filtered by verification status, paginated. */
 export function getMastersList(
   status?: 'pending' | 'verified' | 'rejected',
@@ -170,23 +162,6 @@ export function getUsersList(
 }
 
 /**
- * Global participants list (all platform users) for the participants screen
- * (i18n:adminScreens.adminParticipants.title).
- * `filter` = all | new | active; new/active window on `period` (+ `offset`
- * stepper, parity with the dashboard). Paginated (limit/page_offset).
- */
-export function getParticipants(
-  filter: 'all' | 'new' | 'active' = 'all',
-  period: 'week' | 'month' = 'week',
-  offset = 0,
-  limit = 100,
-  page_offset = 0,
-): Promise<PaginatedParticipantsResponse> {
-  const query = buildQuery({ filter, period, offset, limit, page_offset })
-  return api.get<PaginatedParticipantsResponse>(`/api/v1/admin/participants${query}`)
-}
-
-/**
  * Explicitly promote a user to master (creates a verified MasterProfile if
  * missing). 409 already_master if they are already a master. Distinct from the
  * application-approval verify path.
@@ -196,8 +171,7 @@ export function makeMaster(userId: string): Promise<AdminMasterActionResponse> {
 }
 
 /**
- * Fetch a single master by user_id.
- * Fallback for AdminMasterReviewView when router state is unavailable.
+ * Fetch a single master by user_id (the console's master card).
  */
 export function getMasterById(userId: string): Promise<AdminMasterDetail> {
   return api.get<AdminMasterDetail>(path`/api/v1/admin/masters/${userId}`)
@@ -368,8 +342,7 @@ export function getReports(
 }
 
 /**
- * Fetch a single report by id.
- * Fallback for AdminReportDetailView when router state is unavailable.
+ * Fetch a single report by id (the console's complaint detail).
  */
 export function getReportById(reportId: string): Promise<ReportResponse> {
   return api.get<ReportResponse>(path`/api/v1/admin/reports/${reportId}`)
@@ -490,21 +463,9 @@ export function getAdminZoomAttendance(practiceId: string): Promise<AdminZoomAtt
   )
 }
 
-/** Platform revenue/commission/payout + per-master breakdown for the period.
- * offset (W9, PROMPT №387): steps the window by whole periods, same stepper
- * convention as getCheckinMetric/getFeedbackMetric/getReturnMetric below. */
-export function getAdminRevenue(
-  period: 'week' | 'month' = 'week',
-  offset = 0,
-): Promise<AdminRevenueResponse> {
-  const query = buildQuery({ period, offset })
-  return api.get<AdminRevenueResponse>(`/api/v1/admin/revenue${query}`)
-}
-
 // ============================================================================
 // Promos (T5) -- admin sees + deactivates every master's promos, plus its own
-// company-wide ones. Creating a company promo (POST) is the web console's
-// (FE-267); the mobile admin never calls it.
+// company-wide ones, and creates a company promo (FE-267).
 // ============================================================================
 
 /** Every promo (company-wide and master) for the admin oversight list, paginated. */

@@ -8,7 +8,8 @@
   section renders). Renders one VMenuRow per allowed role EXCEPT the current
   one.
 
-  Used in the three profile screens (user / master / admin). The switch
+  Used in the user and master profile screens (an admin's switch to the
+  user mode is in the console sidebar, FE-272). The switch
   rewrites the role server-side; we reset uiMode and navigate to the target
   role's dashboard so the whole shell (tabs, guards) re-resolves.
 -->

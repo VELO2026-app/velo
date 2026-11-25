@@ -138,7 +138,7 @@ const catalogStyleValueByLabel = shallowRef<Record<string, Record<string, string
 // Style value -> label, per direction (reverse of catalogStyleValueByLabel).
 // Added for bug 5 leak 2 (PROMPT №408): flattenMethods' style branch only ever
 // consulted the hardcoded STYLE_LABEL, so a catalog-only style (created in
-// AdminCatalogView, or auto-promoted) flattened straight to its raw slug --
+// the console's catalog editor, or auto-promoted) flattened straight to its raw slug --
 // the direction-side analogue of catalogDirectionLabelByValue below, which
 // the bug 2 fix already added for directions but never mirrored for styles.
 const catalogStyleLabelByValue = shallowRef<Record<string, Record<string, string>> | null>(null)
@@ -282,7 +282,7 @@ function resolveStyleValue(dirValue: PracticeDirection, label: string): string |
 
 /** `Style value -> label` under a direction, for DISPLAY: the hardcoded key
  *  first (live locale), the server catalog second, the raw value last.
- *  Exported (T21-10, PROMPT №546): AdminMastersView's collapsed master card
+ *  Exported (T21-10, PROMPT №546): an admin master card
  *  had no catalog-aware style helper available and hand-rolled a
  *  hardcoded-only version (STYLE_LABEL[st] ?? st) -- a catalog-only style
  *  (e.g. under a promoted custom direction) fell through to its raw slug,

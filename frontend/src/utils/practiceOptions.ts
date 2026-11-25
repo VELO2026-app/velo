@@ -220,28 +220,6 @@ function buildTimezoneLabel(iana: string, city: string, at: Date = new Date()): 
   return `${city} ${formatUtcOffset(iana, at)}`
 }
 
-/**
- * Derive a display city from a raw IANA id when we have no curated city for
- * it: take the last "/" segment and turn underscores into spaces.
- *   `"Asia/Novosibirsk"   -> "Novosibirsk"`
- *   `"America/Argentina/Buenos_Aires" -> "Buenos Aires"`
- *   `"UTC"                -> "UTC"`
- */
-function cityFromIana(iana: string): string {
-  const last = iana.split('/').pop() ?? iana
-  return last.replace(/_/g, ' ')
-}
-
-/**
- * Build a single `{ label, value }` option for an arbitrary IANA zone, with a
- * dynamically generated label. Used by the onboarding picker to inject an
- * exotic auto-detected / profile zone that is not in the curated list, so the
- * user's real zone is shown and selectable instead of being silently dropped.
- */
-export function makeTimezoneOption(iana: string): { label: string; value: string } {
-  return { label: buildTimezoneLabel(iana, cityFromIana(iana)), value: iana }
-}
-
 // Curated options, computed once at module load, sorted by real offset
 // (UTC-11 -> UTC+14). Same { label, value }[] shape as before.
 /** Curated timezone options of the profile picker, sorted by real UTC offset. */
@@ -462,12 +440,6 @@ export const STYLE_OPTIONS_BY_DIRECTION: Partial<Record<PracticeDirection, Style
 export function stylesForDirection(direction: PracticeDirection | undefined | null): StyleOption[] {
   if (!direction) return []
   return STYLE_OPTIONS_BY_DIRECTION[direction] ?? []
-}
-
-/** True when the direction has at least one style — used by filter / forms
- *  to decide whether to render the style selector (i18n:filters.style). */
-export function directionHasStyles(direction: PracticeDirection | undefined | null): boolean {
-  return stylesForDirection(direction).length > 0
 }
 
 /** `Flat style value -> localized label` (live).

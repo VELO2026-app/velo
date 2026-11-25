@@ -3,8 +3,8 @@
 // =============================================================================
 //
 // B13 (Batch B, PROMPT №579): the promote (add-to-catalog) seam had thorough
-// coverage on BOTH ends -- AdminMasterReviewView.test.ts / AdminMethodRequestsView.
-// test.ts assert the COMPONENT calls verifyMaster/approveMethodChange with the
+// coverage on BOTH ends -- ConsoleMasterDetailView.test.ts / ConsoleModerationView.test.ts
+// assert the COMPONENT calls verifyMaster/approveMethodChange with the
 // right (promote, masterOnly) args (but mock @/api/admin entirely, so the
 // actual body-construction logic below is never exercised); backend's
 // test_admin_masters.py / test_master_method_change.py hit the real HTTP
@@ -22,10 +22,19 @@
 // approveMethodChange, and asserts the exact body shape sent -- the missing
 // middle link between the component tests' asserted args and the backend
 // tests' asserted JSON body.
+//
+// THE REQUEST TABLE (FE-272): the console's screens mock @/api/admin whole,
+// so a wrong path, method or query name in a wrapper would pass every screen
+// test. The table pins the request each wrapper sends -- method, URL with its
+// query, body -- against the backend's routers
+// (backend/app/modules/admin/**/router.py).
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import * as admin from '@/api/admin'
 import { verifyMaster, approveMethodChange, setMasterSchoolRight } from '@/api/admin'
+import type { AnnouncementRequest } from '@/api/admin'
+import type { CreateCompanyPromoRequest } from '@/api/generated'
 import { api } from '@/api/client'
 
 vi.mock('@/api/client', async (importOriginal) => {
@@ -63,7 +72,7 @@ describe.each([
   it('promote only: body carries ONLY promote, master_only key absent (not undefined-valued, ABSENT)', async () => {
     await fn('m_1', ['Новое направление'])
 
-    const [, body] = vi.mocked(api.post).mock.calls[0]!
+    const [, body] = vi.mocked(api.post).mock.calls[0] ?? []
     expect(body).toEqual({ promote: ['Новое направление'] })
     expect(Object.keys(body as object)).not.toContain('master_only')
   })
@@ -71,7 +80,7 @@ describe.each([
   it('master_only only: body carries ONLY master_only, promote key absent', async () => {
     await fn('m_1', undefined, ['Личный вариант'])
 
-    const [, body] = vi.mocked(api.post).mock.calls[0]!
+    const [, body] = vi.mocked(api.post).mock.calls[0] ?? []
     expect(body).toEqual({ master_only: ['Личный вариант'] })
     expect(Object.keys(body as object)).not.toContain('promote')
   })
@@ -136,5 +145,146 @@ describe('setMasterSchoolRight (BE-18) -- PATCH /admin/masters/{id}/can-create-s
     expect(api.patch).toHaveBeenCalledWith('/api/v1/admin/masters/m_1/can-create-schools', {
       can_create_schools: true,
     })
+  })
+})
+
+type Call = () => unknown
+type Sent = [method: 'get' | 'post' | 'patch', url: string, ...body: unknown[]]
+
+const CASES: Array<[name: string, call: Call, sent: Sent]> = [
+  ['stats', () => admin.getAdminStats(), ['get', '/api/v1/admin/stats']],
+  [
+    'overview of a past month',
+    () => admin.getAdminStatsOverview('month', -1),
+    ['get', '/api/v1/admin/stats/overview?period=month&offset=-1'],
+  ],
+  [
+    'masters, all, first page',
+    () => admin.getMastersList(),
+    ['get', '/api/v1/admin/masters/list?limit=100&offset=0'],
+  ],
+  [
+    'masters under review',
+    () => admin.getMastersList('pending', 20, 40),
+    ['get', '/api/v1/admin/masters/list?limit=20&offset=40&status=pending'],
+  ],
+  [
+    'active users of a role',
+    () => admin.getUsersList('user', 20, 0, true),
+    ['get', '/api/v1/admin/users?limit=20&offset=0&role=user&is_active=true'],
+  ],
+  [
+    'make a user master',
+    () => admin.makeMaster('u1'),
+    ['post', '/api/v1/admin/users/u1/make-master', {}],
+  ],
+  ['a master', () => admin.getMasterById('m1'), ['get', '/api/v1/admin/masters/m1']],
+  [
+    'reject an application',
+    () => admin.rejectMaster('m1', 'no documents'),
+    ['post', '/api/v1/admin/masters/m1/reject', { reason: 'no documents' }],
+  ],
+  [
+    'revoke preview',
+    () => admin.getRevokePreview('m1'),
+    ['get', '/api/v1/admin/masters/m1/revoke-preview'],
+  ],
+  ['invite a master', () => admin.inviteMaster(), ['post', '/api/v1/admin/masters/invite', {}]],
+  [
+    'method change requests',
+    () => admin.getMethodChangeRequests(),
+    ['get', '/api/v1/admin/masters/method-change-requests?limit=20&offset=0'],
+  ],
+  [
+    'pending complaints about masters',
+    () => admin.getReports('pending', 'master', 20, 20),
+    ['get', '/api/v1/admin/reports?status=pending&target_type=master&limit=20&offset=20'],
+  ],
+  ['a complaint', () => admin.getReportById('r1'), ['get', '/api/v1/admin/reports/r1']],
+  [
+    'resolve a complaint',
+    () => admin.resolveReport('r1', 'warned'),
+    ['post', '/api/v1/admin/reports/r1/resolve', { resolution_note: 'warned' }],
+  ],
+  [
+    'dismiss a complaint without a note',
+    () => admin.dismissReport('r1'),
+    ['post', '/api/v1/admin/reports/r1/dismiss', { resolution_note: null }],
+  ],
+  [
+    'pending payouts',
+    () => admin.getAdminWithdrawals('pending'),
+    ['get', '/api/v1/admin/withdrawals?limit=20&offset=0&status=pending'],
+  ],
+  [
+    'approve a payout without a note',
+    () => admin.approveWithdrawal('w1'),
+    ['post', '/api/v1/admin/withdrawals/w1/approve', { note: null }],
+  ],
+  [
+    'reject a payout',
+    () => admin.rejectWithdrawal('w1', 'wrong IBAN'),
+    ['post', '/api/v1/admin/withdrawals/w1/reject', { note: 'wrong IBAN' }],
+  ],
+  [
+    'check-in rate of the current week',
+    () => admin.getCheckinMetric(),
+    ['get', '/api/v1/admin/metrics/check-in?period=week&offset=0'],
+  ],
+  [
+    'feedback rate of last month',
+    () => admin.getFeedbackMetric('month', -1),
+    ['get', '/api/v1/admin/metrics/feedback?period=month&offset=-1'],
+  ],
+  [
+    'return rate of the current week',
+    () => admin.getReturnMetric(),
+    ['get', '/api/v1/admin/metrics/return?period=week&offset=0'],
+  ],
+  [
+    'every practice, first page',
+    () => admin.getAdminPractices(),
+    ['get', '/api/v1/admin/practices?scope=all&limit=20&offset=0'],
+  ],
+  ['a practice', () => admin.getAdminPracticeDetail('p1'), ['get', '/api/v1/admin/practices/p1']],
+  [
+    'its Zoom attendance',
+    () => admin.getAdminZoomAttendance('p1'),
+    ['get', '/api/v1/admin/practices/p1/zoom-attendance'],
+  ],
+  [
+    'inactive company promos',
+    () => admin.getAdminPromos('company', false),
+    ['get', '/api/v1/admin/promos?type=company&is_active=false&limit=20&offset=0'],
+  ],
+  [
+    'deactivate a promo',
+    () => admin.deactivateAdminPromo('pr1'),
+    ['patch', '/api/v1/admin/promos/pr1/deactivate'],
+  ],
+]
+
+describe('api/admin.ts requests', () => {
+  beforeEach(() => {
+    vi.mocked(api.get).mockReset().mockResolvedValue({})
+  })
+
+  it.each(CASES)('%s', async (_name, call, [method, url, ...body]) => {
+    await call()
+
+    expect(api[method]).toHaveBeenCalledWith(url, ...body)
+  })
+
+  it('sends a company promo and an announcement as given', async () => {
+    const promo: CreateCompanyPromoRequest = { code: 'WINTER', discount_percent: 25 }
+    const note: AnnouncementRequest = { title: 'T', body: 'B', audience: 'masters' }
+
+    await admin.createCompanyPromo(promo)
+    await admin.sendAnnouncement(note)
+
+    expect(vi.mocked(api.post).mock.calls).toEqual([
+      ['/api/v1/admin/promos', promo],
+      ['/api/v1/admin/announcements', note],
+    ])
   })
 })

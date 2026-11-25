@@ -2,8 +2,8 @@
 // VELO Frontend -- MasterApplyView Screen Tests (probekit-screen-test)
 // =============================================================================
 //
-// 628 lines. THE MASTER APPLICATION -- the other end of AdminMasterReviewView
-// (№482/№483/№486): what this screen submits is exactly what an admin later
+// 628 lines. THE MASTER APPLICATION -- the other end of the console's master card
+// (MasterReviewCard; №482/№483/№486): what this screen submits is exactly what an admin later
 // reviews. PATTERN = a THREE-STEP WIZARD over local reactive state (`step`,
 // `form`, `methods`, `experienceLabel`, `langRu`/`langEn`, `uploadedCerts`) +
 // ONE mutating seam (applyMaster, @/api/masters). Real Pinia and Colada: the
@@ -13,11 +13,11 @@
 // watch, no store-driven list -- confirmed by reading every import and the
 // whole script end to end.
 //
-// CHILD WITH ITS OWN SEAM, SAME EditProfileView/AdminMasterReviewView TRAP:
+// CHILD WITH ITS OWN SEAM, SAME EditProfileView TRAP:
 // MethodTaxonomyPicker fetches its OWN taxonomy catalog via getActiveTaxonomy
 // (@/api/taxonomy) on its own onMounted, independent of this screen (which
 // doesn't prime any catalog cache itself -- no primeMethodTaxonomyCatalog
-// import here at all, unlike AdminMasterReviewView). Mocked to REJECT, same
+// import here at all). Mocked to REJECT, same
 // justification as those precedents: the picker falls back to the identical
 // hardcoded taxonomy on failure, so rejection is the real offline path, not
 // a shortcut. Driven via REAL chip clicks below (direction, then style),
@@ -348,6 +348,13 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+/** The payload of the first applyMaster call; no call fails the test here. */
+function firstApplication(): Parameters<typeof mastersApi.applyMaster>[0] {
+  const call = vi.mocked(mastersApi.applyMaster).mock.calls[0]
+  if (!call) throw new Error('applyMaster was not called')
+  return call[0]
+}
+
 describe('MasterApplyView', () => {
   // ===========================================================================
   describe('step 1 validation (goToStep2, .vue:324-336)', () => {
@@ -637,7 +644,7 @@ describe('MasterApplyView', () => {
       submitBtn().click()
       await flush()
 
-      const call = vi.mocked(mastersApi.applyMaster).mock.calls[0]![0]
+      const call = firstApplication()
       expect(call.profile.email).toBe('anna@example.com')
       expect(call.profile.phone).toBe('+79991234567')
     })
@@ -663,7 +670,7 @@ describe('MasterApplyView', () => {
       submitBtn().click()
       await flush()
 
-      const call = vi.mocked(mastersApi.applyMaster).mock.calls[0]![0]
+      const call = firstApplication()
       expect(call.experience.languages).toEqual(['Русский', 'English'])
     })
 
@@ -688,7 +695,7 @@ describe('MasterApplyView', () => {
       submitBtn().click()
       await flush()
 
-      const call = vi.mocked(mastersApi.applyMaster).mock.calls[0]![0]
+      const call = firstApplication()
       expect(call.experience.languages).toEqual([])
     })
 
@@ -711,7 +718,7 @@ describe('MasterApplyView', () => {
       submitBtn().click()
       await flush()
 
-      const call = vi.mocked(mastersApi.applyMaster).mock.calls[0]![0]
+      const call = firstApplication()
       expect(call.experience.experience_years).toBe(7)
     })
   })

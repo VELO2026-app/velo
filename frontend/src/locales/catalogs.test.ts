@@ -88,11 +88,11 @@ describe('catalog split', () => {
     // ru is the fallback locale: a key the en catalog lacks falls back there.
     expect(te(key, 'ru')).toBe(true)
     // te() is true for message leaves only -- these keys are leaves.
-    expect(te('moderation.category', 'en')).toBe(false)
+    expect(te('console.brand', 'en')).toBe(false)
 
     await mod.setLocale('uk')
     expect(te(key, 'uk')).toBe(true)
-    expect(te('moderation.category', 'uk')).toBe(false)
+    expect(te('console.brand', 'uk')).toBe(false)
   })
 
   it('a zone asked for during a switch is in the new locale when it flips', async () => {
@@ -101,7 +101,7 @@ describe('catalog split', () => {
     await mod.ensureCatalogs(['admin'])
     await switching
     expect(mod.getLocale()).toBe('en')
-    expect(mod.default.global.te('moderation.category', 'en')).toBe(true)
+    expect(mod.default.global.te('console.brand', 'en')).toBe(true)
   })
 })
 

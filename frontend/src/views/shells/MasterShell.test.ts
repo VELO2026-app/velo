@@ -2,9 +2,9 @@
 // VELO Frontend -- MasterShell Tests (guard-adjacent, NOT the screen ladder)
 // =============================================================================
 //
-// WHY THIS FILE EXISTS, AND ITS SHAPE (probekit-screen-test audit, rank 3, see
-// AdminShell.test.ts's banner for the full rationale shared by all three
-// shells): no fetched record, so this tests only what MasterShell computes --
+// WHY THIS FILE EXISTS, AND ITS SHAPE (probekit-screen-test audit, rank 3:
+// a router-outlet shell is tested for what it gates and computes, not for
+// the screens it renders): no fetched record, so this tests only what MasterShell computes --
 // which tab lights up, fill mode, fog-route membership, and hideTabBar's TWO
 // independent inputs (route.meta AND the live keyboard signal).
 //

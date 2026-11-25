@@ -52,8 +52,7 @@ import type { UserResponse } from '@/api/types'
 // satisfy. refreshRoleIfStale's OWN behaviour (debounce timing, what it
 // fetches) is tested separately in useRoleFreshness.test.ts -- here only
 // roleFreshnessGuard's OWN redirect logic is under test, so the call is
-// stubbed to a no-op, same idiom as AdminMastersView.test.ts's
-// primeMethodTaxonomyCatalog mock.
+// stubbed to a no-op.
 const refreshRoleIfStale = vi.fn().mockResolvedValue(undefined)
 vi.mock('@/composables/useRoleFreshness', () => ({
   refreshRoleIfStale: (...args: Parameters<typeof refreshRoleIfStale>) =>

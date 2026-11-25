@@ -4,8 +4,8 @@
 //
 // Client-side label for the admin dashboard's navigated week/month, shifted by
 // an offset (0 = current, -1 = previous …). Cosmetic mirror of the backend's UTC
-// calendar bounds. Shared by AdminDashboardView (the stepper) and the Engagement
-// drill-in detail views so both show the SAME week when the user drills in.
+// calendar bounds. The console's PeriodBar uses it, so the dashboard and the
+// metric drill-ins show the SAME week.
 //
 // SW17 (batch 3, PROMPT №580): pinned to UTC throughout -- both the calendar
 // math (which day is "today", which day a week starts on, which month an

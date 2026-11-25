@@ -141,7 +141,7 @@ Figma не умеет давать права на страницу. Прави�
   ├─ Content      вертикальный Auto Layout, отступ экрана — переменная app/screen-padding
   │  ├─ Header    инстанс VHeader, если у экрана есть шапка
   │  └─ <Блок>    фрейм на каждый смысловой блок, Auto Layout, имя по роли: NearestList, ActionsRow
-  ├─ TabBar       инстанс VTabBar / VAdminTabBar, прижат к низу
+  ├─ TabBar       инстанс VTabBar, прижат к низу
   └─ Overlay      шторки и окна этого состояния
   ```
 - Состояния одного экрана — рядом слева направо: `Default`, `Loading`, `Empty`, `Error`,

@@ -8,7 +8,7 @@
 // consts kept as the offline/error fallback.
 //
 // GET/POST/PATCH /api/v1/admin/taxonomy/* -- admin CRUD (R5 stage 3c),
-// backs the editable AdminCatalogView.vue.
+// backs the console's catalog editor.
 //
 // Types sourced from generated.ts (regenerated at deploy c1dbe08) -- both
 // endpoints share the same admin/taxonomy/schemas.py response shape, so one

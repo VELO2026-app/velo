@@ -4,8 +4,7 @@
   The "Invite a master" dialog of the console masters list: one button mints
   a one-time link (POST /admin/masters/invite) and the dialog shows it with a
   copy button. The link is generic -- it works for whoever opens it first --
-  and each press mints a fresh one, replacing the shown link. The mobile
-  screen of the same flow is AdminMasterInviteView.
+  and each press mints a fresh one, replacing the shown link.
 
   Error contract: `bot_url_not_configured` (503) is a server setup gap, told
   with its own message; any other failure gets the generic one.

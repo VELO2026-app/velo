@@ -12,7 +12,7 @@
 | **Faux-bold 600** | `VButton.vue` (label), `VHeader.vue` (title) | У Marmelad одно начертание; браузер синтезирует weight 600, Figma — нет. Кнопки/заголовки в зеркале выглядят легче, чем в приложении. Это ожидаемо, не расхождение. |
 | Focus order, `:focus-visible`, ARIA | все компоненты; `useKeyboardFieldScroll` | Поведение, не статика. |
 | Поведение клавиатуры TMA | `platform/dom`, `.velo-kbd-scroll`, `--velo-vvh` | Скролл-контейнеры/заморозка высоты — рантайм. |
-| `env(safe-area-inset-bottom)` | `VTabBar.vue`, `VAdminTabBar.vue` | Figma не знает платформенные инсеты. |
+| `env(safe-area-inset-bottom)` | `VTabBar.vue` | Figma не знает платформенные инсеты. |
 | Backdrop-filter | `VBackButton · glass` (blur 18/180%), `VTabBar` (blur 12/150% + блик soft-light) | В Figma — условный background-blur/градиент; настоящая формула стекла — в CSS. |
 | Анимации и тайминги | `motion.css`, `--velo-dur-*`, `--velo-ease-*`, skeleton delay 300ms / hold 450ms, пульс скелета 1.8s, спин VeloLogo 120s/об., `VLoadingSwap` crossfade | Переходы не живут в статике. |
 | Telegram-платформа | haptics, viewport, `@tma.js/sdk` | Вне Figma. |

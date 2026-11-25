@@ -112,8 +112,7 @@ const props = withDefaults(
      *  FE-70: the external-activity form passes max=today (nothing that has
      *  not happened yet can be recorded). */
     max?: string
-    /** Sheet title (default i18n:shared.datePicker.title; reused as the
-     *  report date i18n:moderation.reportDate in admin). */
+    /** Sheet title (default i18n:shared.datePicker.title). */
     title?: string | undefined
   }>(),
   { modelValue: '', min: '', max: '' },

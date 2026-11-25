@@ -8,7 +8,7 @@ const files: Record<string, string> = {
     '<script type="module" src="/assets/index-A.js"></script><link href="/assets/app-C.css">',
   'assets/index-A.js': 'import"./instance-B.js";import("./app-D.js")',
   'assets/app-D.js':
-    'import{x}from"./instance-B.js";import("./AdminShell-E.js");import{y}from"./shared-F.js"',
+    'import{x}from"./instance-B.js";import("./ConsoleShell-E.js");import{y}from"./shared-F.js"',
   'assets/shared-F.js': 'export const y=1',
 }
 const read = (url: string): string => files[url] ?? ''
@@ -22,7 +22,7 @@ describe('shellOnlyTransform', () => {
     'assets/app-C.css',
     'assets/app-D.js',
     'assets/shared-F.js',
-    'assets/AdminShell-E.js',
+    'assets/ConsoleShell-E.js',
     'assets/zzz-lazy.js',
   ]
 

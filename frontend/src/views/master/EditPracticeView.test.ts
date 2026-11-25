@@ -1549,8 +1549,8 @@ describe('EditPracticeView', () => {
     it('back POPS to the detail screen when there is history (the back-loop fix)', async () => {
       // :327-331. Pushing a fresh detail entry instead of popping grew the stack
       // and ping-ponged edit<->detail (operator 2026-06-24). NB: onBack reads
-      // window.history.state at CLICK time, not during setup -- unlike
-      // AdminWithdrawalDetailView, seeding it after mount is fine here.
+      // window.history.state at CLICK time, not during setup, so
+      // seeding it after mount is fine here.
       mountCached(practice({ id: 'p7' }))
       await flush()
       window.history.replaceState({ back: '/master/practices/p7' }, '')

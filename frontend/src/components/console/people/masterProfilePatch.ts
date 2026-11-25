@@ -5,9 +5,6 @@
 // The web master card edits one field at a time and sends only that field
 // (PATCH /admin/masters/{id}/profile applies only the keys it gets). This is
 // the pure half of the editor: the drafts in, the body or the reason out.
-//
-// DEBT (FE-272): a copy of buildPatch and ProfileField in AdminMasterReviewView,
-// kept until the mobile /admin is removed; then this is the only one.
 // =============================================================================
 
 import type { AdminMasterProfileUpdate } from '@/api/admin'

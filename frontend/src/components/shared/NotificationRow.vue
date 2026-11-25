@@ -15,8 +15,8 @@
   (i18n:masterScreens.masterProfile.menu.withdraw)). Absent = dot only, no icon
   block.
 
-  formatRelative is @/utils/adminHelpers -- the name is legacy (ModerationFilterModal.vue
-  already reuses it outside admin), not an admin-only utility.
+  formatRelative is @/utils/adminHelpers -- the name is legacy, not an
+  admin-only utility.
 -->
 
 <template>

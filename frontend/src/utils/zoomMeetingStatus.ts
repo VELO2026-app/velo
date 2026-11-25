@@ -3,8 +3,8 @@
 // =============================================================================
 //
 // `zoom_meeting_status` of GET /admin/practices/{id}/zoom-attendance, as the
-// admin screens (the mobile /admin and the web console) show it: a tone per
-// status. The words differ by screen and live in their own catalogs.
+// web console shows it: a tone per status. The words live in the console's
+// catalogs.
 //
 // `null` -- no ZoomMeeting row was ever made for the practice. A status not
 // listed here is shown as it came, in the quiet tone.

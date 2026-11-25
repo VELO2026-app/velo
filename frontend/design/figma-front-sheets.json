@@ -144,7 +144,6 @@
       "page": "Фронт · Kit и токены",
       "name": "Component / Admin & analytics",
       "sources": [
-        "frontend/src/components/layout/VAdminTabBar.vue",
         "frontend/src/components/shared/DistributionCard.vue",
         "frontend/src/components/shared/VRatingDistribution.vue",
         "frontend/src/components/ui/VBarChart.vue",
@@ -198,8 +197,7 @@
       "page": "Фронт · Kit и токены",
       "name": "Component / Diary, sheets & modals",
       "sources": [
-        "frontend/src/components/admin/SupportMessageBubble.vue",
-        "frontend/src/components/admin/SupportTicketsFilterModal.vue",
+        "frontend/src/components/console/requests/SupportMessageBubble.vue",
         "frontend/src/components/onboarding/OnboardingDateStep.vue",
         "frontend/src/components/onboarding/OnboardingGoalStep.vue",
         "frontend/src/components/shared/BookingPopup.vue",
@@ -215,7 +213,6 @@
         "frontend/src/components/shared/DiarySearchResultRow.vue",
         "frontend/src/components/shared/DiaryThreadCard.vue",
         "frontend/src/components/shared/DiaryTimeline.vue",
-        "frontend/src/components/shared/ModerationFilterModal.vue",
         "frontend/src/components/shared/PracticeAudiencePicker.vue",
         "frontend/src/components/shared/SendMessageModal.vue",
         "frontend/src/components/shared/TimezoneCityPicker.vue",

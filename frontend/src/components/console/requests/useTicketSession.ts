@@ -5,9 +5,7 @@
 // Everything one open support ticket does on the web console, in one place so
 // the card layout stays markup: the ticket row, its message feed and the
 // person's earlier conversation, the claim, the handover, the statuses, the
-// reply and the translation of messages. It is the logic of the mobile
-// AdminSupportDetailView, moved here without changes of behaviour; the mobile
-// screen stays as it is until /admin moves to the console.
+// reply and the translation of messages.
 //
 // THE TICKET comes from the list's row (`handed`, written into an empty cache
 // entry so the card paints at once) or, for a deep link, from one read of the

@@ -2,12 +2,10 @@
 // VELO Frontend -- Admin Helper Utilities (F8-fix W-5)
 // =============================================================================
 //
-// Shared pure functions used across admin views:
-//   AdminMastersView, AdminMasterReviewView,
-//   AdminReportsView, AdminReportDetailView.
-//
-// Extracted to eliminate copy-paste of statusVariant / statusLabel /
-// targetLabel / displayName between views.
+// Shared pure functions of the web console (components/console,
+// views/console): a master's display name, the labels of master and
+// complaint statuses and of complaint targets, the date formats -- one
+// wording for every screen.
 // =============================================================================
 
 import type { AdminMasterListItem } from '@/api/admin'
@@ -30,17 +28,6 @@ export function masterDisplayName(
 ): string {
   const parts = [item.first_name, item.last_name].filter(Boolean)
   return parts.length > 0 ? parts.join(' ') : t('admin.fallbackUserName')
-}
-
-/**
- * Map master_status to VBadge variant.
- */
-export function masterStatusVariant(status: string): 'warning' | 'success' | 'error' | 'info' {
-  if (status === 'pending') return 'warning'
-  if (status === 'verified') return 'success'
-  if (status === 'rejected') return 'error'
-  if (status === 'suspended') return 'error'
-  return 'info'
 }
 
 /**

@@ -16,10 +16,6 @@
   and never blocks; a failed preview says the check did not run. Revoking
   suspends the profile and turns the account back to a user, data kept
   (POST .../revoke).
-
-  DEBT (FE-272): the school-right toggle, the revoke preview wording and
-  onRevoke are a copy of AdminMasterReviewView's. The copy lives until the
-  mobile /admin is removed; then it is the only one.
 -->
 
 <template>

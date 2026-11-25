@@ -7,8 +7,6 @@
     feedback  the counts and the rating distribution (the shared 1..10 scale
               in five zones);
     return    the counts and the most frequent participants.
-  Logic carried over from the mobile drill-ins (AdminCheckinRateView,
-  AdminFeedbackRateView, AdminReturnRateView); the markup is new.
 -->
 
 <template>

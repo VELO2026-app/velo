@@ -19,6 +19,8 @@ import {
   styleDisplayLabel,
   DIRECTION_OPTIONS,
   stylesForDirection,
+  audienceOptions,
+  formatUtcOffset,
 } from '@/utils/practiceOptions'
 import { setLocale } from '@/locales'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
@@ -148,5 +150,37 @@ describe('catalog label display mapping (directionDisplayLabel/styleDisplayLabel
       value: 'yoga',
       label: 'Йога',
     })
+  })
+})
+
+describe('audienceOptions', () => {
+  it('offers the three kinds without schools and adds «Школы» with them', () => {
+    expect(audienceOptions(false).map((o) => o.value)).toEqual(['public', 'students', 'groups'])
+    const withSchools = audienceOptions(true)
+    expect(withSchools.map((o) => o.value)).toEqual(['public', 'students', 'groups', 'schools'])
+    expect(withSchools.at(-1)?.label).toBe('Школы')
+  })
+})
+
+describe('formatUtcOffset', () => {
+  const winter = new Date('2026-01-15T12:00:00Z')
+
+  it.each([
+    ['UTC', 'UTC\u00B10'],
+    ['Europe/Moscow', 'UTC+3'],
+    ['America/New_York', 'UTC-5'],
+    ['Asia/Kolkata', 'UTC+5:30'],
+    ['Asia/Kathmandu', 'UTC+5:45'],
+    ['Not/AZone', 'UTC'],
+  ])('%s -> %s', (iana, label) => {
+    expect(formatUtcOffset(iana, winter)).toBe(label)
+  })
+})
+
+describe('stylesForDirection', () => {
+  it('has no styles for no direction and for a direction without any', () => {
+    expect(stylesForDirection(null)).toEqual([])
+    expect(stylesForDirection(undefined)).toEqual([])
+    expect(stylesForDirection('no-such' as never)).toEqual([])
   })
 })

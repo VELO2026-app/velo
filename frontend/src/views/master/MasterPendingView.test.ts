@@ -19,7 +19,7 @@
 //   - Re-applying afterwards genuinely works: apply_for_master only special-
 //     cases "pending"/"verified", so "cancelled_by_user" falls through to the
 //     generic reapply path (pinned: test_reapply_after_withdrawal_succeeds).
-//   So the CLAIM IS TRUE and this is NOT an AdminWithdrawalDetailView-grade
+//   So the CLAIM IS TRUE and this is NOT a payout-approval-grade
 //   one-way door: no money moves, nothing is deleted.
 //
 // It is still a one-way door in the small: there is no un-withdraw endpoint

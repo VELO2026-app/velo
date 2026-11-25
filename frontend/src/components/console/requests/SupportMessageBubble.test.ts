@@ -6,7 +6,7 @@
 // support) x its translation state (comms' closed set of five, or no block) x
 // `retryable`. What is shown, which mark, which buttons; the original only on
 // demand. The card's part (which thread a retry hits, the poll) is in
-// AdminSupportDetailView.test.ts.
+// ConsoleSupportView.test.ts.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
