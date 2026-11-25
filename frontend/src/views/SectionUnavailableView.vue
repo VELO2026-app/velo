@@ -51,7 +51,9 @@ const router = useRouter()
 .not-found__text {
   font-family: var(--font-body);
   font-size: var(--velo-fs-20);
-  color: var(--velo-text-muted);
+  /* Text on the page itself, as NotFoundView's: on a gradient page the muted
+     ink is under 4.5:1 (goodo, 4.29:1). */
+  color: var(--velo-text-on-bg-muted);
   margin-bottom: var(--space-5);
 }
 .not-found__btn {
