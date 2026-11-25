@@ -642,6 +642,19 @@ describe('ConsoleDashboardView: today', () => {
     )
   })
 
+  it('a day of exactly the cap is counted whole, without "+"', async () => {
+    upcoming = [
+      practice({ id: 'p_tomorrow', scheduled_at: '2026-11-25T07:00:00Z' }),
+      ...busyDay(100),
+    ]
+    await mount()
+
+    expect(todayTitles()).toHaveLength(100)
+    const text = norm(host?.querySelector('[data-testid="today-card"]')?.textContent)
+    expect(text).toContain('ещё100практик')
+    expect(text).not.toContain('100+')
+  })
+
   it('says so when no practice is left today', async () => {
     upcoming = [practice({ id: 'p_tomorrow', scheduled_at: '2026-11-25T07:00:00Z' })]
     await mount()

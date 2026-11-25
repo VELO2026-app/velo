@@ -45,6 +45,7 @@ import type { UserResponse } from '@/api/admin'
 import {
   adminAdminsQuery,
   adminSupportMessagesQuery,
+  translationInFlight,
   adminSupportTicketQuery,
   hasSupportTicket,
   onFailedRequest,
@@ -77,11 +78,9 @@ function isStatus(error: unknown, status: number): boolean {
   return error instanceof ApiResponseError && error.status === status
 }
 
-/** A message still on its way through translation (comms `preparing`, or `not_requested` before the job is taken). */
+/** Some message of the feed is still on its way through translation. */
 function inFlight(list: readonly SupportMessage[]): boolean {
-  return list.some(
-    (m) => m.translation?.state === 'preparing' || m.translation?.state === 'not_requested',
-  )
+  return list.some(translationInFlight)
 }
 
 function adminName(user: UserResponse): string {

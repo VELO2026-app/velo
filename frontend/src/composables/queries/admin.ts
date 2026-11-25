@@ -653,8 +653,8 @@ export const adminPracticesPageQuery = defineQueryOptions(
   }),
 )
 
-/** Pages of the nearest practices read for the dashboard's "Today" at most (100 practices). */
-export const ADMIN_TODAY_MAX_PAGES = 5
+/** The practices of today the dashboard's "Today" lists at most; past it the count reads "N+". */
+export const ADMIN_TODAY_CAP = 100
 
 /** The practices still ahead today; `more` -- the read stopped at its cap, and today has more. */
 export interface TodayPractices {
@@ -669,24 +669,26 @@ export interface TodayPractices {
  * @remarks
  * A busy day has more practices than one page (FE-260): the pages are read
  * nearest first until one holds a practice of another day or the scope
- * ends. The read stops at ADMIN_TODAY_MAX_PAGES; past it the card says
- * "N+" (`more`). A practice is today in its own time zone, as the
- * practices table dates it.
+ * ends. The list stops at ADMIN_TODAY_CAP; a day with more says "N+"
+ * (`more`). A practice is today in its own time zone, as the practices
+ * table dates it.
  */
 export const adminTodayPracticesQuery = defineQueryOptions(() => ({
   key: adminKeys.practicesToday(),
   query: async (): Promise<TodayPractices> => {
     const items: AdminPracticeListItem[] = []
-    for (let page = 1; page <= ADMIN_TODAY_MAX_PAGES; page++) {
+    // One page past the cap is read when needed, so a day of exactly
+    // ADMIN_TODAY_CAP practices is not called "N+".
+    for (let page = 1; items.length <= ADMIN_TODAY_CAP; page++) {
       const slice = await loadPracticesPage('upcoming', page)
       const today = slice.items.filter(
         (p) => relativeDayCode(p.scheduled_at, p.timezone) === 'today',
       )
       items.push(...today)
       const ended = page * ADMIN_PRACTICES_PAGE_SIZE >= slice.total
-      if (today.length < slice.items.length || ended) return { items, more: false }
+      if (today.length < slice.items.length || ended) break
     }
-    return { items, more: true }
+    return { items: items.slice(0, ADMIN_TODAY_CAP), more: items.length > ADMIN_TODAY_CAP }
   },
   staleTime: 0,
 }))
@@ -1151,12 +1153,19 @@ async function readWholeFeed(threadId: string, signal: AbortSignal): Promise<Sup
   return messages
 }
 
+/** A message still on its way through translation (comms `preparing`, or `not_requested` before the job is taken). */
+export function translationInFlight(m: SupportMessage): boolean {
+  return m.translation?.state === 'preparing' || m.translation?.state === 'not_requested'
+}
+
 /**
  * A held feed (oldest first) brought up to date by its newest page: the
  * page's messages replace their older copies (a translation that came) and
- * the new ones join at the end. When the page reaches no message already
- * held and there are older pages, messages may lie between the two -- the
- * whole feed is read instead.
+ * the new ones join at the end. The whole feed is read instead when the
+ * page cannot tell all that changed and there are older pages: it reaches
+ * no message already held (messages may lie between the two), or a held
+ * message older than the page waits for its translation (a retry on an old
+ * message, the backend's catch-up) -- the poll would never see it land.
  */
 async function refreshFeed(
   threadId: string,
@@ -1166,10 +1175,13 @@ async function refreshFeed(
   const head = await getAdminSupportMessages(threadId, SUPPORT_FEED_PAGE_SIZE, undefined, signal)
   const fresh = [...head.messages].reverse()
   const heldIds = new Set(held.map((m) => m.id))
-  const joins = fresh.some((m) => heldIds.has(m.id))
-  if (!joins && head.next_cursor !== null) return (await readWholeFeed(threadId, signal)).reverse()
   const freshIds = new Set(fresh.map((m) => m.id))
-  return [...held.filter((m) => !freshIds.has(m.id)), ...fresh]
+  const older = held.filter((m) => !freshIds.has(m.id))
+  const joins = fresh.some((m) => heldIds.has(m.id))
+  const waitingOutside = older.some(translationInFlight)
+  if (head.next_cursor !== null && (!joins || waitingOutside))
+    return (await readWholeFeed(threadId, signal)).reverse()
+  return [...older, ...fresh]
 }
 
 /** The entry's own data is a feed; Colada types it `unknown` inside the query. */

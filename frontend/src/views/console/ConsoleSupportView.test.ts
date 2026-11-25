@@ -635,6 +635,49 @@ describe('ConsoleSupportView: translation', () => {
   })
 })
 
+describe('ConsoleSupportView: translation of an old message in a long feed', () => {
+  /** 230 messages, oldest first; №5 failed its translation and may be asked again. */
+  function feed(fifth: Partial<SupportMessage>): SupportMessage[] {
+    return Array.from({ length: 230 }, (_, i) =>
+      message('t_free_0001', {
+        id: `m_old_${i}`,
+        body: `Message number ${i}`,
+        created_at: DateTime.fromISO('2026-11-20T10:00:00Z').plus({ minutes: i }).toISO() ?? '',
+        ...(i === 5 ? fifth : {}),
+      }),
+    )
+  }
+
+  it('a retried translation far past the newest page still reaches the screen (FE-260)', async () => {
+    vi.useFakeTimers()
+    server.feeds.t_free_0001 = feed({
+      body: 'Old message in English',
+      translation: { locale: 'ru', state: 'impossible', source_locale: 'en', retryable: true },
+    })
+    vi.mocked(supportApi.retrySupportTranslation).mockResolvedValue({
+      message_id: 'm_old_5',
+      locale: 'ru',
+      attempt: 2,
+      state: 'preparing',
+    })
+    await mount()
+
+    await click(button('Повторить'))
+    expect(feedText()).toContain('Переводится…')
+
+    server.feeds.t_free_0001 = feed({
+      body: 'Старое сообщение по-русски',
+      original: 'Old message in English',
+      translation: { locale: 'ru', state: 'ready', source_locale: 'en', retryable: false },
+    })
+    await vi.advanceTimersByTimeAsync(TICKET_POLL_MS)
+    await flush()
+
+    expect(feedText()).toContain('Старое сообщение по-русски')
+    expect(feedText()).not.toContain('Переводится…')
+  })
+})
+
 describe('ConsoleSupportView: statistics', () => {
   function stats(total: number): SupportStats {
     return {
