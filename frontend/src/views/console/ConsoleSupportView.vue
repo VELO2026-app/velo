@@ -39,7 +39,7 @@ import ConsolePage from '@/components/console/ConsolePage.vue'
 import SupportStatsPanel from '@/components/console/requests/SupportStatsPanel.vue'
 import TicketsPanel from '@/components/console/requests/TicketsPanel.vue'
 import { TICKET_FILTER_PARAMS } from '@/components/console/requests/ticketFilters'
-import { useUrlTab } from '@/components/console/requests/useUrlTab'
+import { useUrlTab } from '@/composables/console/useUrlTab'
 
 // The filters stay when the tab changes: they apply to all three ticket tabs.
 const { tab, tabModel } = useUrlTab(['open', 'mine', 'closed', 'stats'], TICKET_FILTER_PARAMS)

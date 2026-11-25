@@ -260,7 +260,7 @@ import { t } from '@/locales'
 import { computed, nextTick, ref, watch } from 'vue'
 import { VButton, VEmptyState, VLoader, VMenuRow, VModal, VTextarea } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
-import SupportMessageBubble from '@/components/admin/SupportMessageBubble.vue'
+import SupportMessageBubble from '@/components/console/requests/SupportMessageBubble.vue'
 import TicketAside from '@/components/console/requests/TicketAside.vue'
 import { useTicketSession } from '@/components/console/requests/useTicketSession'
 import {

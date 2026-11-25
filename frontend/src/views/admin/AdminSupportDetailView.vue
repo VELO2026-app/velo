@@ -349,7 +349,7 @@ import {
   VLoader,
 } from '@/components/ui'
 import { IconDots, IconStar } from '@/components/icons'
-import SupportMessageBubble from '@/components/admin/SupportMessageBubble.vue'
+import SupportMessageBubble from '@/components/console/requests/SupportMessageBubble.vue'
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 import { formatTime as formatClockTime } from '@/utils/format'

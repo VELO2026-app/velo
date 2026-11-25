@@ -71,9 +71,9 @@
                 @click="select(item)"
               >
                 <span class="ticket-row__top">
-                  <RequestStatusBadge :tone="supportStatusBadge(item.status)">
+                  <ConsoleBadge :tone="supportStatusBadge(item.status)">
                     {{ supportStatusLabel(item.status) }}
-                  </RequestStatusBadge>
+                  </ConsoleBadge>
                   <span class="ticket-row__time">{{ formatRelative(item.created_at) }}</span>
                 </span>
                 <span class="ticket-row__title">{{ supportTopicLabel(item.topic) }}</span>
@@ -134,7 +134,7 @@ import { useInfiniteQuery } from '@pinia/colada'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import RatingStars from '@/components/console/requests/RatingStars.vue'
 import RequestChip from '@/components/console/requests/RequestChip.vue'
-import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleSplit from '@/components/console/ConsoleSplit.vue'
 import TicketDetail from '@/components/console/requests/TicketDetail.vue'
@@ -148,7 +148,7 @@ import {
 } from '@/components/console/requests/ticketFilters'
 import { takerLabel } from '@/components/console/requests/ticketTaker'
 import { useSplitLayout } from '@/components/console/requests/useSplitLayout'
-import { useUrlSelection } from '@/components/console/requests/useUrlSelection'
+import { useUrlSelection } from '@/composables/console/useUrlSelection'
 import type { AdminSupportTicket, SupportTicketStatus } from '@/api/support'
 import { adminSupportTicketsQuery, usePagedListFailures } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'

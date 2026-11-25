@@ -78,13 +78,13 @@
               </VButton>
             </div>
             <span v-else class="withdrawals__stack">
-              <ConsoleStatusBadge :tone="row.status === 'approved' ? 'success' : 'error'">
+              <ConsoleBadge :tone="row.status === 'approved' ? 'success' : 'error'">
                 {{
                   row.status === 'approved'
                     ? t('console.finance.withdrawals.approved')
                     : t('console.finance.withdrawals.rejected')
                 }}
-              </ConsoleStatusBadge>
+              </ConsoleBadge>
               <span
                 v-if="row.status === 'rejected' && row.admin_note"
                 class="withdrawals__reason"
@@ -145,14 +145,14 @@ import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import ConfirmPaymentModal from '@/components/shared/ConfirmPaymentModal.vue'
-import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
-import ConsolePager from '@/components/console/content/ConsolePager.vue'
-import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
+import ConsoleLoading from '@/components/console/ConsoleLoading.vue'
+import ConsolePager from '@/components/console/ConsolePager.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import WithdrawalRejectModal from '@/components/console/finance/WithdrawalRejectModal.vue'
 import { countedLabel, formatStamp } from '@/components/console/finance/financeFormat'
 import { payoutHolder, payoutMethodLabel } from '@/components/console/finance/payoutMethod'
-import { useUrlChoice } from '@/components/console/finance/useUrlChoice'
-import { useUrlPage } from '@/components/console/finance/useUrlPage'
+import { useUrlChoice } from '@/composables/console/useUrlChoice'
+import { useUrlPage } from '@/composables/console/useUrlPage'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import type { AdminWithdrawalResponse, WithdrawalStatus } from '@/api/admin'

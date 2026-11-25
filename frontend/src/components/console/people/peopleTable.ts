@@ -6,7 +6,7 @@
 // Kept apart from the components so they are tested without a DOM.
 // =============================================================================
 
-import type { PillTone } from '@/components/console/people/PeoplePill.vue'
+import type { ConsoleTone } from '@/utils/console/tone'
 import type { AdminMasterListItem } from '@/api/admin'
 import { getLocale, t } from '@/locales'
 import { formatMoney } from '@/utils/format'
@@ -57,31 +57,6 @@ export function masterStatusLabel(status: string): string {
   return MASTER_STATUSES.includes(status) ? t(`console.masters.status.${status}`) : status
 }
 
-/** One slot of the pager: a page number or a gap (an ellipsis). */
-export type PagerItem = number | 'gap'
-
-/**
- * The slots of a numbered pager: the first page, the last page and the
- * neighbours of the current one, with a gap where pages are left out.
- *
- * @param page - The current 1-based page
- * @param pages - How many pages there are
- * @returns Nothing for fewer than two pages (no pager is needed)
- */
-export function pagerItems(page: number, pages: number): PagerItem[] {
-  if (pages < 2) return []
-  const wanted = new Set([1, pages, page - 1, page, page + 1])
-  const numbers = [...wanted].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b)
-  const items: PagerItem[] = []
-  numbers.forEach((n, i) => {
-    const before = numbers[i - 1]
-    if (before !== undefined && n - before === 2) items.push(n - 1)
-    else if (before !== undefined && n - before > 2) items.push('gap')
-    items.push(n)
-  })
-  return items
-}
-
 /** A calendar day (UTC, like every admin date) as `24 Nov 2026`. */
 export function formatDay(iso: string): string {
   return new Date(iso).toLocaleDateString(getLocale(), {
@@ -122,16 +97,16 @@ export function methodChips(master: Pick<AdminMasterListItem, 'methods'>): Metho
 }
 
 /** The pill tone of a master's verification status. */
-export function masterStatusTone(status: string): PillTone {
+export function masterStatusTone(status: string): ConsoleTone {
   if (status === 'verified') return 'success'
   if (status === 'pending') return 'warning'
-  if (status === 'rejected' || status === 'suspended') return 'danger'
-  return 'neutral'
+  if (status === 'rejected' || status === 'suspended') return 'error'
+  return 'muted'
 }
 
 /** The pill tone of a user's role. */
-export function roleTone(role: string): PillTone {
+export function roleTone(role: string): ConsoleTone {
   if (role === 'admin') return 'warning'
   if (role === 'master') return 'success'
-  return 'neutral'
+  return 'muted'
 }

@@ -1,16 +1,16 @@
 <!--
-  VELO Frontend -- ConsoleStatusBadge (FE-262)
+  VELO Frontend -- ConsoleBadge (FE-262, FE-272)
 
-  A status pill of the web console: a coloured dot and the status word in
-  the primary text colour on a light tint of the status colour. The dot says
-  the tone, the word says the status: the text keeps its contrast on every
-  skin (the kit's VBadge paints the word in the status colour, which is
-  under 4.5:1 on a tint).
+  The one status badge of the web console: a tinted pill with a dot whose
+  color says the state (success, error, warning, info, muted) and the label
+  in the primary text colour (the tint alone never carries the meaning, and
+  the label keeps its contrast on every skin). Replaces the three badges the
+  slices had (status badge, request badge, people pill).
 -->
 
 <template>
-  <span class="console-status" :class="`console-status--${tone}`">
-    <span class="console-status__dot" aria-hidden="true" />
+  <span class="console-badge" :class="`console-badge--${tone}`">
+    <span class="console-badge__dot" aria-hidden="true" />
     <slot />
   </span>
 </template>
@@ -28,7 +28,7 @@ withDefaults(
 </script>
 
 <style scoped>
-.console-status {
+.console-badge {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -40,7 +40,7 @@ withDefaults(
   white-space: nowrap;
 }
 
-.console-status__dot {
+.console-badge__dot {
   flex: 0 0 auto;
   width: var(--space-2);
   height: var(--space-2);
@@ -48,35 +48,35 @@ withDefaults(
   background: var(--velo-text-muted);
 }
 
-.console-status--success {
+.console-badge--success {
   background: var(--velo-glass-teal-30);
 }
 
-.console-status--success .console-status__dot {
+.console-badge--success .console-badge__dot {
   background: var(--velo-teal-600);
 }
 
-.console-status--error {
+.console-badge--error {
   background: var(--velo-error-bg);
 }
 
-.console-status--error .console-status__dot {
+.console-badge--error .console-badge__dot {
   background: var(--velo-pink-500);
 }
 
-.console-status--warning {
+.console-badge--warning {
   background: var(--velo-warning-bg);
 }
 
-.console-status--warning .console-status__dot {
+.console-badge--warning .console-badge__dot {
   background: var(--velo-warning-text);
 }
 
-.console-status--info {
+.console-badge--info {
   background: var(--velo-glass-blue-15);
 }
 
-.console-status--info .console-status__dot {
+.console-badge--info .console-badge__dot {
   background: var(--velo-primary);
 }
 </style>
