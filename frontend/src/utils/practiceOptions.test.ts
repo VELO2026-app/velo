@@ -19,6 +19,11 @@ import {
   styleDisplayLabel,
   DIRECTION_OPTIONS,
   stylesForDirection,
+  audienceOptions,
+  AUDIENCE_OPTIONS,
+  directionHasStyles,
+  formatUtcOffset,
+  makeTimezoneOption,
 } from '@/utils/practiceOptions'
 import { setLocale } from '@/locales'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
@@ -148,5 +153,47 @@ describe('catalog label display mapping (directionDisplayLabel/styleDisplayLabel
       value: 'yoga',
       label: 'Йога',
     })
+  })
+})
+
+describe('audienceOptions', () => {
+  it('keeps the three kinds without schools and adds the fourth with them', () => {
+    expect(audienceOptions(false)).toBe(AUDIENCE_OPTIONS)
+    const withSchools = audienceOptions(true)
+    expect(withSchools.map((o) => o.value)).toEqual([
+      ...AUDIENCE_OPTIONS.map((o) => o.value),
+      'schools',
+    ])
+    expect(withSchools.at(-1)?.label).toBeTruthy()
+  })
+})
+
+describe('formatUtcOffset', () => {
+  const winter = new Date('2026-01-15T12:00:00Z')
+
+  it.each([
+    ['UTC', 'UTC\u00B10'],
+    ['Europe/Moscow', 'UTC+3'],
+    ['America/New_York', 'UTC-5'],
+    ['Asia/Kolkata', 'UTC+5:30'],
+    ['Asia/Kathmandu', 'UTC+5:45'],
+    ['Not/AZone', 'UTC'],
+  ])('%s -> %s', (iana, label) => {
+    expect(formatUtcOffset(iana, winter)).toBe(label)
+  })
+
+  it('labels an uncurated zone by its last segment', () => {
+    expect(makeTimezoneOption('America/Argentina/Buenos_Aires')).toMatchObject({
+      value: 'America/Argentina/Buenos_Aires',
+      label: expect.stringMatching(/^Buenos Aires UTC-3$/),
+    })
+  })
+})
+
+describe('directionHasStyles', () => {
+  it('is false for no direction and for a direction without styles', () => {
+    expect(directionHasStyles(null)).toBe(false)
+    expect(directionHasStyles(undefined)).toBe(false)
+    expect(stylesForDirection('no-such' as never)).toEqual([])
   })
 })

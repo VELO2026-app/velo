@@ -52,10 +52,7 @@
     "schools": "Школи",
     "profile": "Я",
     "practices": "Практики",
-    "analytics": "Аналітика",
-    "masters": "Майстри",
-    "moderation": "Модерація",
-    "withBadge": "{label}, {count}"
+    "analytics": "Аналітика"
   },
   "supportTopics": {
     "payment": "Проблема з оплатою / транзакцією",

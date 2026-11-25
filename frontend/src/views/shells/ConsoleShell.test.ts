@@ -1,5 +1,5 @@
 // =============================================================================
-// VELO Frontend -- ConsoleShell tests (guard-adjacent, like AdminShell.test.ts)
+// VELO Frontend -- ConsoleShell tests (guard-adjacent, like the other shells' tests)
 // =============================================================================
 //
 // What the console's shell decides: where the console opens (the stub

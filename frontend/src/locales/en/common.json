@@ -52,10 +52,7 @@
     "schools": "Schools",
     "profile": "Me",
     "practices": "Practices",
-    "analytics": "Analytics",
-    "masters": "Masters",
-    "moderation": "Moderation",
-    "withBadge": "{label}, {count}"
+    "analytics": "Analytics"
   },
   "supportTopics": {
     "payment": "A problem with a payment / transaction",

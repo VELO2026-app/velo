@@ -25,8 +25,7 @@
                --velo-error-text / --velo-error-text
     alert   -> --velo-glass-pink-40 / --velo-pink-300 /
                --velo-danger-text (icon + title + body) -- stronger red than
-               `error`; the admin moderation-queue banner
-               (i18n:adminScreens.adminDashboard.moderationBanner).
+               `error`; for a queue that needs action.
 
   Slots:
     #icon (optional) — left-aligned icon. If empty, no icon column.

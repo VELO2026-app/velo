@@ -444,7 +444,7 @@ describe('ExternalActivityCreateView', () => {
       await nextTick()
       expect(host?.querySelector('.ea__chip--custom')).not.toBeNull()
 
-      host?.querySelector<HTMLButtonElement>('.ea__chip-remove')!.click()
+      host?.querySelector<HTMLButtonElement>('.ea__chip-remove')?.click()
       await nextTick()
 
       expect(host?.querySelector('.ea__chip--custom')).toBeNull()
@@ -684,7 +684,7 @@ describe('ExternalActivityCreateView', () => {
       await nextTick()
       expect(host?.querySelector('.ea__chip--custom')).not.toBeNull()
 
-      host?.querySelector<HTMLButtonElement>('.ea__chip-remove')!.click()
+      host?.querySelector<HTMLButtonElement>('.ea__chip-remove')?.click()
       await nextTick()
 
       saveBtn().click()
@@ -877,7 +877,7 @@ describe('ExternalActivityCreateView', () => {
     })
 
     it('UserShell hides the tab bar and renders fill mode for the route', async () => {
-      // AdminShell.test.ts's pattern: a real memory router per mount; the
+      // The shells' tests' pattern: a real memory router per mount; the
       // route names are the shell's own hardcoded lists' contract.
       const StubChild = { template: '<div class="stub-child" />' }
       const router: Router = createRouter({

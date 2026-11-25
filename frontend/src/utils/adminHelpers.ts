@@ -33,17 +33,6 @@ export function masterDisplayName(
 }
 
 /**
- * Map master_status to VBadge variant.
- */
-export function masterStatusVariant(status: string): 'warning' | 'success' | 'error' | 'info' {
-  if (status === 'pending') return 'warning'
-  if (status === 'verified') return 'success'
-  if (status === 'rejected') return 'error'
-  if (status === 'suspended') return 'error'
-  return 'info'
-}
-
-/**
  * Map master_status to Russian label.
  *
  * F3 (2026-07-07): `suspended` shows the blocked label

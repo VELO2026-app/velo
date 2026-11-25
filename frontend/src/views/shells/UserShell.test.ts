@@ -2,9 +2,9 @@
 // VELO Frontend -- UserShell Tests (guard-adjacent, NOT the screen ladder)
 // =============================================================================
 //
-// WHY THIS FILE EXISTS, AND ITS SHAPE (probekit-screen-test audit, rank 3 --
-// see AdminShell.test.ts's banner for the rationale shared by all three
-// shells). UserShell is the richest of the three: 7 computed()s, and unlike
+// WHY THIS FILE EXISTS, AND ITS SHAPE (probekit-screen-test audit, rank 3:
+// a router-outlet shell is tested for what it gates and computes, not for
+// the screens it renders). UserShell is the richest of the three: 7 computed()s, and unlike
 // MasterShell's activeTab (pure path-prefix match), this one has a real
 // TWO-INPUT branch worth proving on its own -- `meta.activeTab` OVERRIDES the
 // path match (.vue:40-46), for the one screen with no tab of its own

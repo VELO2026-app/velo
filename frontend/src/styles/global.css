@@ -362,7 +362,7 @@ ol {
 
    3. HEIGHT UNITS: NEVER `dvh`/`svh` (nor plain-`vh`-only) on a screen root or
       wrapper — they collapse when the keyboard shrinks the viewport. A screen
-      that fills the shell (AppFrame / MobileLayout __main / AdminLayout) uses
+      that fills the shell (AppFrame / MobileLayout __main / ConsoleShell) uses
       `min-height:100%`. A root that genuinely needs standalone viewport height
       uses `100lvh` (stable on platforms that honour interactive-widget). The
       ONLY `vh` allowed is the `100vh -> 100lvh -> var(--velo-frozen-vh)`
@@ -500,7 +500,7 @@ html.is-keyboard-open .velo-kbd-scroll {
      fired (№663 root cause); it fires now. Safe here because every
      `.velo-kbd-scroll` consumer this rule reaches is a normal descendant of
      AppFrame (auth screens, onboarding, MasterApplyView, GroupJoinView,
-     MasterPendingView, NotFoundView, AdminLayout -- confirmed via App.vue,
+     MasterPendingView, NotFoundView, ConsoleShell -- confirmed via App.vue,
      `<AppFrame><RouterView/></AppFrame>` wraps every route), so
      `--velo-content-safe-top` reaches them by ordinary CSS inheritance.
      NOT applied to the `.v-modal__overlay`/`.v-sheet__overlay`/

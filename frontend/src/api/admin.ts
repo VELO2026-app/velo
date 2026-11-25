@@ -50,10 +50,8 @@ import type {
   ReturnMetricResponse,
   PaginatedAdminPracticesResponse,
   AdminPracticeDetailResponse,
-  AdminRevenueResponse,
   InviteMasterResponse,
   PaginatedUsersResponse,
-  PaginatedParticipantsResponse,
   AdminMasterDetail,
   AdminMasterProfileUpdate,
   MasterSchoolRightResponse,
@@ -134,12 +132,6 @@ export function getAdminStatsOverview(
 // Masters
 // ============================================================================
 
-/** List master applications awaiting verification, paginated. */
-export function getPendingMasters(limit = 20, offset = 0): Promise<PaginatedMastersResponse> {
-  const query = buildQuery({ limit, offset })
-  return api.get<PaginatedMastersResponse>(`/api/v1/admin/masters/pending${query}`)
-}
-
 /** List masters filtered by verification status, paginated. */
 export function getMastersList(
   status?: 'pending' | 'verified' | 'rejected',
@@ -167,23 +159,6 @@ export function getUsersList(
 ): Promise<PaginatedUsersResponse> {
   const query = buildQuery({ limit, offset, role, is_active: isActive })
   return api.get<PaginatedUsersResponse>(`/api/v1/admin/users${query}`)
-}
-
-/**
- * Global participants list (all platform users) for the participants screen
- * (i18n:adminScreens.adminParticipants.title).
- * `filter` = all | new | active; new/active window on `period` (+ `offset`
- * stepper, parity with the dashboard). Paginated (limit/page_offset).
- */
-export function getParticipants(
-  filter: 'all' | 'new' | 'active' = 'all',
-  period: 'week' | 'month' = 'week',
-  offset = 0,
-  limit = 100,
-  page_offset = 0,
-): Promise<PaginatedParticipantsResponse> {
-  const query = buildQuery({ filter, period, offset, limit, page_offset })
-  return api.get<PaginatedParticipantsResponse>(`/api/v1/admin/participants${query}`)
 }
 
 /**
@@ -488,17 +463,6 @@ export function getAdminZoomAttendance(practiceId: string): Promise<AdminZoomAtt
   return api.get<AdminZoomAttendanceResponse>(
     path`/api/v1/admin/practices/${practiceId}/zoom-attendance`,
   )
-}
-
-/** Platform revenue/commission/payout + per-master breakdown for the period.
- * offset (W9, PROMPT №387): steps the window by whole periods, same stepper
- * convention as getCheckinMetric/getFeedbackMetric/getReturnMetric below. */
-export function getAdminRevenue(
-  period: 'week' | 'month' = 'week',
-  offset = 0,
-): Promise<AdminRevenueResponse> {
-  const query = buildQuery({ period, offset })
-  return api.get<AdminRevenueResponse>(`/api/v1/admin/revenue${query}`)
 }
 
 // ============================================================================

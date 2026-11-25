@@ -72,7 +72,7 @@ describe('routeCatalogs', () => {
 
 describe('navigation waits for the zone catalog', () => {
   const MASTER_KEY = 'masterScreens.masterOnboarding.welcome.text'
-  const ADMIN_KEY = 'moderation.category'
+  const ADMIN_KEY = 'console.brand'
 
   /** A memory router over FRESH i18n modules: test-setup.ts preloads every
    * zone catalog into the shared singleton. */

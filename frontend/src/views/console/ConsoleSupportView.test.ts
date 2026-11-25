@@ -687,6 +687,23 @@ describe('ConsoleSupportView: statistics', () => {
     expect(byId('stats-tile-share')?.textContent).toContain('—')
     expect(host?.textContent).toContain('Оценок за этот период пока нет')
   })
+
+  it('names an admin who is gone by the fallback, with dashes for what is unknown', async () => {
+    vi.mocked(supportApi.getSupportStats).mockResolvedValue({
+      ...stats(0),
+      categories: [],
+      resolvers: [
+        { admin: null, rated: 2, average: null, share_4_5: null },
+        { admin: null, rated: 1, average: 4, share_4_5: 1 },
+      ],
+    } as unknown as SupportStats)
+    await mount('/admin/support?tab=stats')
+
+    const text = host?.textContent ?? ''
+    expect(text).toContain('—')
+    expect(text).toContain('4.00')
+    expect(text).toContain('100%')
+  })
 })
 
 describe('ConsoleSupportView: narrow window', () => {
@@ -815,6 +832,87 @@ describe('ConsoleSupportView: handover conflicts', () => {
 
     expect(toastError).toHaveBeenCalledWith('Повторять нечего — перевод уже идёт или готов')
     expect(vi.mocked(supportApi.getAdminSupportMessages).mock.calls.length).toBeGreaterThan(reads)
+  })
+})
+
+describe('ConsoleSupportView: failed actions', () => {
+  const boom = () => new ApiResponseError(500, 'down')
+
+  it('tells a failed handover and keeps the ticket', async () => {
+    vi.mocked(supportApi.assignTicket).mockRejectedValueOnce(boom())
+    await mount('/admin/support?tab=mine&ticket=t_mine_0002')
+
+    await click(button('Назначить'))
+    await click(document.body.querySelector('.v-menu-row') as HTMLElement)
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось передать обращение')
+  })
+
+  it('tells a failed release', async () => {
+    vi.mocked(supportApi.releaseTicket).mockRejectedValueOnce(boom())
+    await mount('/admin/support?tab=mine&ticket=t_mine_0002')
+
+    await click(button('Освободить'))
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось освободить обращение')
+  })
+
+  it('tells a reopen that met a change and reads the ticket again', async () => {
+    vi.mocked(supportApi.reopenTicket).mockRejectedValueOnce(new ApiResponseError(409, 'moved'))
+    await mount('/admin/support?tab=closed&ticket=t_done_0004')
+    const reads = vi.mocked(supportApi.getAdminTicket).mock.calls.length
+
+    await click(button('Вернуть в работу'))
+
+    expect(toastError).toHaveBeenCalledWith(
+      'Вернуть не удалось — обращение изменилось или спам старше 30 дней',
+    )
+    expect(vi.mocked(supportApi.getAdminTicket).mock.calls.length).toBeGreaterThan(reads)
+  })
+
+  it('tells a failed reopen', async () => {
+    vi.mocked(supportApi.reopenTicket).mockRejectedValueOnce(boom())
+    await mount('/admin/support?tab=closed&ticket=t_done_0004')
+
+    await click(button('Вернуть в работу'))
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось вернуть обращение в работу')
+  })
+
+  it('tells a failed status change and keeps the ticket open', async () => {
+    vi.mocked(supportApi.setTicketStatus).mockRejectedValueOnce(boom())
+    await mount()
+    await rowClick(TOPIC_TECH)
+
+    await click(button('Закрыть'))
+    await click(document.body.querySelector('[data-testid="close-resolved"]') as HTMLElement)
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось сменить статус')
+    expect(hasButton('Закрыть')).toBe(true)
+  })
+
+  it('tells a failed take and still offers no reply field', async () => {
+    vi.mocked(supportApi.claimSupportThread).mockRejectedValueOnce(boom())
+    await mount()
+
+    await click(button('Взять себе'))
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось закрепить обращение')
+    expect(composer()).toBeNull()
+  })
+
+  it('tells a failed retry of a translation', async () => {
+    server.feeds.t_free_0001 = [
+      message('t_free_0001', {
+        translation: { locale: 'ru', state: 'impossible', source_locale: 'en', retryable: true },
+      }),
+    ]
+    vi.mocked(supportApi.retrySupportTranslation).mockRejectedValueOnce(boom())
+    await mount()
+
+    await click(button('Повторить'))
+
+    expect(toastError).toHaveBeenCalledWith('Не удалось повторить перевод')
   })
 })
 

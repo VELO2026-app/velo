@@ -60,7 +60,6 @@ import {
   getAdminPracticeDetail,
   getAdminPractices,
   getAdminPromos,
-  getAdminRevenue,
   getAdminStats,
   getAdminStatsOverview,
   getAdminZoomAttendance,
@@ -69,7 +68,6 @@ import {
   getMasterById,
   getMastersList,
   getMethodChangeRequests,
-  getParticipants,
   getReports,
   getReturnMetric,
   getRevokePreview,
@@ -77,10 +75,8 @@ import {
   getAdminWithdrawals,
   getReportById,
   type AdminMasterDetail,
-  type AdminWithdrawalResponse,
   type WithdrawalStatus,
   type ReportStatusFilter,
-  type AdminPaginatedPromosResponse,
   type AdminPracticeScope,
   type AdminPromoTypeFilter,
 } from '@/api/admin'
@@ -97,18 +93,13 @@ import {
 } from '@/api/support'
 import { getFullTaxonomy } from '@/api/taxonomy'
 import type {
-  AdminRevenueResponse,
   AdminStatsOverviewResponse,
   AdminStatsResponse,
   CheckinMetricResponse,
   FeedbackMetricResponse,
   PaginatedAdminPracticesResponse,
-  PaginatedAdminSchoolsResponse,
   PaginatedMethodChangeRequestsResponse,
-  PaginatedAdminWithdrawalsResponse,
-  PaginatedParticipantsResponse,
   PaginatedReportsResponse,
-  PaginatedUsersResponse,
   ReturnMetricResponse,
 } from '@/api/types'
 import { adminKeys } from '@/composables/queries/adminKeys'
@@ -534,14 +525,6 @@ export const returnMetricQuery = defineQueryOptions(({ period, offset }: AdminPe
   placeholderData: (previous: ReturnMetricResponse | undefined) => previous,
 }))
 
-/** Query options for the platform revenue of one window (`GET /admin/revenue`). */
-export const revenueQuery = defineQueryOptions(({ period, offset }: AdminPeriodWindow) => ({
-  key: adminKeys.metric('revenue', period, offset),
-  query: () => getAdminRevenue(period, offset),
-  staleTime: 0,
-  placeholderData: (previous: AdminRevenueResponse | undefined) => previous,
-}))
-
 /** A screen's view of one period window's figures (the drill-in screens). */
 export interface AdminFiguresState<T> {
   /** The selected window's answer, or null while there is none. */
@@ -630,16 +613,6 @@ export const adminPendingWithdrawalsQuery = defineQueryOptions((enabled: boolean
   enabled,
 }))
 
-/** Practices the platform list asks for (one page, no "show more"). */
-export const ADMIN_PRACTICES_LIMIT = 100
-
-/** Query options for the platform's practices in one scope (`GET /admin/practices`). */
-export const adminPracticesQuery = defineQueryOptions((scope: AdminPracticeScope) => ({
-  key: adminKeys.practices(scope),
-  query: () => getAdminPractices(scope, ADMIN_PRACTICES_LIMIT, 0),
-  staleTime: 0,
-}))
-
 /** Practices per page of the web console's practices table. */
 export const ADMIN_PRACTICES_PAGE_SIZE = 20
 
@@ -678,34 +651,6 @@ export const adminPracticesPageQuery = defineQueryOptions(
   ({ scope, page }: { scope: AdminPracticeScope; page: number }) => ({
     key: adminKeys.practicesPage(scope, page),
     query: () => loadPracticesPage(scope, page),
-    staleTime: 0,
-  }),
-)
-
-/** A filter of the participants list: everyone, or new / active this week. */
-export type AdminParticipantFilter = 'all' | 'new' | 'active'
-
-/** Participants per page of `GET /admin/participants`. */
-export const ADMIN_PARTICIPANTS_PAGE_SIZE = 100
-
-/**
- * Infinite query options for the platform's participants under one filter
- * (`GET /admin/participants`, the current week's window), every page loaded
- * so far.
- */
-export const adminParticipantsQuery = defineInfiniteQueryOptions(
-  (filter: AdminParticipantFilter) => ({
-    key: adminKeys.participants(filter),
-    query: ({ pageParam }: { pageParam: number }) =>
-      getParticipants(filter, 'week', 0, ADMIN_PARTICIPANTS_PAGE_SIZE, pageParam),
-    initialPageParam: 0,
-    getNextPageParam: (
-      last: PaginatedParticipantsResponse,
-      pages: PaginatedParticipantsResponse[],
-    ) => {
-      const loaded = pages.reduce((n, page) => n + page.items.length, 0)
-      return loaded < last.total ? loaded : null
-    },
     staleTime: 0,
   }),
 )
@@ -754,25 +699,6 @@ export const adminTaxonomyQuery = defineQueryOptions(() => ({
   staleTime: 0,
 }))
 
-/** Schools per page of `GET /admin/schools`. */
-export const ADMIN_SCHOOLS_PAGE_SIZE = 100
-
-/** Infinite query options for every school of the platform (`GET /admin/schools`). */
-export const adminSchoolsQuery = defineInfiniteQueryOptions(() => ({
-  key: adminKeys.schools(),
-  query: ({ pageParam }: { pageParam: number }) =>
-    getAdminSchools(ADMIN_SCHOOLS_PAGE_SIZE, pageParam),
-  initialPageParam: 0,
-  getNextPageParam: (
-    last: PaginatedAdminSchoolsResponse,
-    pages: PaginatedAdminSchoolsResponse[],
-  ) => {
-    const loaded = pages.reduce((n, page) => n + page.items.length, 0)
-    return loaded < last.total ? loaded : null
-  },
-  staleTime: 0,
-}))
-
 /** A tab of the promo oversight list. */
 export type AdminPromoFilter = 'all' | 'master' | 'company' | 'inactive'
 
@@ -792,21 +718,6 @@ function promoParams(filter: AdminPromoFilter): {
   if (filter === 'inactive') return { isActive: false }
   return {}
 }
-
-/** Infinite query options for one tab of the promo oversight list (`GET /admin/promos`). */
-export const adminPromosQuery = defineInfiniteQueryOptions((filter: AdminPromoFilter) => ({
-  key: adminKeys.promos(filter),
-  query: ({ pageParam }: { pageParam: number }) => {
-    const { type, isActive } = promoParams(filter)
-    return getAdminPromos(type, isActive, ADMIN_PROMOS_PAGE_SIZE, pageParam)
-  },
-  initialPageParam: 0,
-  getNextPageParam: (last: AdminPaginatedPromosResponse, pages: AdminPaginatedPromosResponse[]) => {
-    const loaded = pages.reduce((n, page) => n + page.items.length, 0)
-    return loaded < last.total ? loaded : null
-  },
-  staleTime: 0,
-}))
 
 /** A tab of the web console's promo table: no "inactive" tab -- a deactivated promo shows under "all" with its status. */
 export type ConsolePromoFilter = Exclude<AdminPromoFilter, 'inactive'>
@@ -850,23 +761,6 @@ export const adminPracticeAttendanceQuery = defineQueryOptions((practiceId: stri
   staleTime: 0,
 }))
 
-/**
- * Show a promo as inactive in every promo list held, at once -- before the
- * invalidation's refetch answers (the card's badge flips under the toast).
- */
-export function markPromoInactive(queryCache: QueryCache, promoId: string): void {
-  for (const entry of queryCache.getEntries({ key: adminKeys.promosAll() })) {
-    if (entry.state.value.data === undefined) continue
-    setInfiniteQueryData<AdminPaginatedPromosResponse, number>(queryCache, entry.key, (data) => ({
-      pageParams: data?.pageParams ?? [],
-      pages: (data?.pages ?? []).map((page) => ({
-        ...page,
-        items: page.items.map((p) => (p.id === promoId ? { ...p, is_active: false } : p)),
-      })),
-    }))
-  }
-}
-
 // =============================================================================
 // Users and masters
 // =============================================================================
@@ -880,61 +774,11 @@ export function markPromoInactive(queryCache: QueryCache, promoId: string): void
 // alongside its own answer -- a promoted custom method must already resolve
 // to a plain chip on first render (Bug 2, PROMPT №405).
 
-/** Users per page of `GET /admin/users` (the backend's cap). */
-export const ADMIN_USERS_PAGE_SIZE = 100
-
 /** Next offset of an offset-paged list, or null once every row is loaded. */
 function nextOffset(last: { total: number }, pages: { items: unknown[] }[]): number | null {
   const loaded = pages.reduce((n, page) => n + page.items.length, 0)
   return loaded < last.total ? loaded : null
 }
-
-/** Infinite query options for every user of the platform (`GET /admin/users`, any role). */
-export const adminUsersQuery = defineInfiniteQueryOptions(() => ({
-  key: adminKeys.users(),
-  query: ({ pageParam }: { pageParam: number }) =>
-    getUsersList(undefined, ADMIN_USERS_PAGE_SIZE, pageParam),
-  initialPageParam: 0,
-  getNextPageParam: (last: PaginatedUsersResponse, pages: PaginatedUsersResponse[]) =>
-    nextOffset(last, pages),
-  staleTime: 0,
-}))
-
-/**
- * Show a user as a master in the users list held, at once -- before the
- * invalidation's refetch answers: the make-master button leaves the row
- * (a second tap would only meet 409 already_master).
- */
-export function markUserMaster(queryCache: QueryCache, userId: string): void {
-  if (queryCache.getQueryData(adminKeys.users()) === undefined) return
-  setInfiniteQueryData<PaginatedUsersResponse, number>(queryCache, adminKeys.users(), (data) => ({
-    pageParams: data?.pageParams ?? [],
-    pages: (data?.pages ?? []).map((page) => ({
-      ...page,
-      items: page.items.map((u) => (u.id === userId ? { ...u, role: 'master' as const } : u)),
-    })),
-  }))
-}
-
-/**
- * Masters the list asks for: the backend's page cap (le=100; 200 was
- * 422-rejected). The screen filters and counts client-side; pagination
- * comes when the master count approaches it (operator ruling, PROMPT №289).
- */
-export const ADMIN_MASTERS_LIMIT = 100
-
-/** Query options for every master with its status (`GET /admin/masters/list`). */
-export const adminMastersQuery = defineQueryOptions(() => ({
-  key: adminKeys.masters(),
-  query: async () => {
-    const [res] = await Promise.all([
-      getMastersList(undefined, ADMIN_MASTERS_LIMIT, 0),
-      primeTaxonomy(),
-    ])
-    return res
-  },
-  staleTime: 0,
-}))
 
 /** Query options for one master's full review page (`GET /admin/masters/{id}`). */
 export const adminMasterQuery = defineQueryOptions((userId: string) => ({
@@ -1188,39 +1032,6 @@ export function dropReport(queryCache: QueryCache, reportId: string): void {
 
 /** Payout requests per page of `GET /admin/withdrawals`. */
 export const ADMIN_WITHDRAWALS_PAGE_SIZE = 20
-
-/** Infinite query options for every payout request, all statuses (`GET /admin/withdrawals`). */
-export const adminWithdrawalsQuery = defineInfiniteQueryOptions(() => ({
-  key: adminKeys.withdrawals(),
-  query: ({ pageParam }: { pageParam: number }) =>
-    getAdminWithdrawals(undefined, ADMIN_WITHDRAWALS_PAGE_SIZE, pageParam),
-  initialPageParam: 0,
-  getNextPageParam: (
-    last: PaginatedAdminWithdrawalsResponse,
-    pages: PaginatedAdminWithdrawalsResponse[],
-  ) => nextOffset(last, pages),
-  staleTime: 0,
-}))
-
-/**
- * Write a decided payout request into the payouts list held, at once --
- * the row leaves "pending" before the refetch answers (a second decision
- * would only meet 409).
- */
-export function setWithdrawal(queryCache: QueryCache, decided: AdminWithdrawalResponse): void {
-  if (queryCache.getQueryData(adminKeys.withdrawals()) === undefined) return
-  setInfiniteQueryData<PaginatedAdminWithdrawalsResponse, number>(
-    queryCache,
-    adminKeys.withdrawals(),
-    (data) => ({
-      pageParams: data?.pageParams ?? [],
-      pages: (data?.pages ?? []).map((page) => ({
-        ...page,
-        items: page.items.map((w) => (w.id === decided.id ? decided : w)),
-      })),
-    }),
-  )
-}
 
 /**
  * Query options for one page (1-based) of one status of the payout queue

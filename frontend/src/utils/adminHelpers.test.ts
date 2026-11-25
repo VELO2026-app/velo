@@ -13,7 +13,15 @@
 // =============================================================================
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { formatDateTime, formatRelative } from '@/utils/adminHelpers'
+import {
+  formatDateTime,
+  formatRelative,
+  masterDisplayName,
+  masterStatusLabel,
+  reportStatusLabel,
+  reportStatusVariant,
+  reportTargetLabel,
+} from '@/utils/adminHelpers'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -107,5 +115,45 @@ describe('formatRelative', () => {
     const resultB = formatRelative(iso)
 
     expect(resultA).toBe(resultB)
+  })
+})
+
+describe('masterDisplayName', () => {
+  it('joins the names it has, and falls back when there is none', () => {
+    expect(masterDisplayName({ first_name: 'Анна', last_name: 'Лебедева' })).toBe('Анна Лебедева')
+    expect(masterDisplayName({ first_name: 'Анна', last_name: null })).toBe('Анна')
+    expect(masterDisplayName({ first_name: null, last_name: null })).toBe('Пользователь')
+  })
+})
+
+describe('status and target labels', () => {
+  it.each([
+    ['pending', 'Ожидает'],
+    ['verified', 'Верифицирован'],
+    ['rejected', 'Отклонён'],
+    ['suspended', 'Заблокирован'],
+    ['cancelled_by_user', 'Аккаунт удалён'],
+    ['something_new', 'something_new'],
+  ])('master status %s reads %s', (status, label) => {
+    expect(masterStatusLabel(status)).toBe(label)
+  })
+
+  it.each([
+    ['pending', 'Ожидает', 'warning'],
+    ['resolved', 'Решена', 'success'],
+    ['dismissed', 'Отклонена', 'info'],
+    ['something_new', 'something_new', 'info'],
+  ])('report status %s reads %s as %s', (status, label, variant) => {
+    expect(reportStatusLabel(status)).toBe(label)
+    expect(reportStatusVariant(status)).toBe(variant)
+  })
+
+  it.each([
+    ['user', 'Юзер'],
+    ['master', 'Мастер'],
+    ['practice', 'Практика'],
+    ['school', 'school'],
+  ])('report target %s reads %s', (type, label) => {
+    expect(reportTargetLabel(type)).toBe(label)
   })
 })

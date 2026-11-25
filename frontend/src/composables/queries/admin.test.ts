@@ -14,7 +14,7 @@ import { createPinia } from 'pinia'
 import { PiniaColada, useQueryCache, type QueryCache } from '@pinia/colada'
 import { coladaOptions, useQueryScopeStore } from '@/composables/queries/setup'
 import { adminKeys } from '@/composables/queries/adminKeys'
-import { useAdminMutation } from '@/composables/queries/admin'
+import { dropReport, useAdminMutation } from '@/composables/queries/admin'
 
 let app: App | null = null
 
@@ -79,7 +79,7 @@ describe('useAdminMutation', () => {
     const done = run()
     await nextTick()
     // Logout / 401: resetAccountScope calls every member's $reset.
-    useQueryScopeStore(app!.config.globalProperties.$pinia).$reset()
+    useQueryScopeStore(app?.config.globalProperties.$pinia).$reset()
     // The next session's catalog, loaded before the old answer lands.
     holdCatalog(queryCache)
     answer()
@@ -87,5 +87,58 @@ describe('useAdminMutation', () => {
 
     expect(written).toEqual([])
     expect(queryCache.get(adminKeys.taxonomy())?.stale).toBe(false)
+  })
+})
+
+describe('dropReport', () => {
+  /** A cache with two complaint lists held and one never read. */
+  function cacheWithLists(): QueryCache {
+    let queryCache!: QueryCache
+    const Host = defineComponent({
+      setup() {
+        queryCache = useQueryCache()
+        return () => h('div')
+      },
+    })
+    app = createApp(Host).use(createPinia()).use(PiniaColada, coladaOptions)
+    app.mount(document.createElement('div'))
+    const report = (id: string) => ({ id }) as never
+    queryCache.setQueryData([...adminKeys.reportsAll(), 'pending'], {
+      pageParams: [0, 20],
+      pages: [
+        { items: [report('r1'), report('r2')], total: 3, limit: 20, offset: 0 },
+        { items: [report('r1')], total: 3, limit: 20, offset: 20 },
+      ],
+    })
+    queryCache.setQueryData([...adminKeys.reportsAll(), 'resolved'], {
+      pageParams: [0],
+      pages: [{ items: [report('r9')], total: 1, limit: 20, offset: 0 }],
+    })
+    queryCache.ensure({ key: [...adminKeys.reportsAll(), 'never'], query: async () => null })
+    return queryCache
+  }
+
+  it('takes the complaint off every list that holds it, its total down by one', () => {
+    const queryCache = cacheWithLists()
+
+    dropReport(queryCache, 'r1')
+
+    const pending = queryCache.getQueryData([...adminKeys.reportsAll(), 'pending']) as {
+      pages: Array<{ items: Array<{ id: string }>; total: number }>
+    }
+    expect(pending.pages.map((p) => p.items.map((r) => r.id))).toEqual([['r2'], []])
+    expect(pending.pages.map((p) => p.total)).toEqual([2, 2])
+  })
+
+  it('leaves a list without the complaint, and a list never read, as they were', () => {
+    const queryCache = cacheWithLists()
+
+    dropReport(queryCache, 'r1')
+
+    const resolved = queryCache.getQueryData([...adminKeys.reportsAll(), 'resolved']) as {
+      pages: Array<{ total: number }>
+    }
+    expect(resolved.pages[0]?.total).toBe(1)
+    expect(queryCache.getQueryData([...adminKeys.reportsAll(), 'never'])).toBeUndefined()
   })
 })

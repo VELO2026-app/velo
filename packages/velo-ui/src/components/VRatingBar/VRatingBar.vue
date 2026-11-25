@@ -3,8 +3,7 @@
   distribution"; migrated FE-140 batch B)
 
   A rating-distribution row: leading icon + label, a coloured progress track below,
-  and the percentage. Used inside the admin feedback-detail distribution card
-  (heading i18n:adminScreens.adminFeedbackRate.distributionratings), on rows
+  and the percentage. Used inside a rating distribution card, on rows
   such as fire (i18n:mood.fire), good (i18n:mood.good) and "have questions".
 
   Stub-friendly (build-full-design): omit `value` (null) to show an empty track +

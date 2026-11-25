@@ -1,19 +1,4 @@
 {
-  "moderation": {
-    "reportDate": "Report date",
-    "category": "Category",
-    "priority": "Priority",
-    "status": "Report status",
-    "cats": {
-      "tickets": "Tickets",
-      "complaints": "Complaints",
-      "payments": "Payments"
-    },
-    "statuses": {
-      "open": "Open",
-      "closed": "Closed"
-    }
-  },
   "payout": {
     "title": "Confirm the payout",
     "sub": "The funds go to the master via the provider",
@@ -25,69 +10,13 @@
     "approve": "Approve the payout"
   },
   "adminScreens": {
-    "adminCatalog": {
-      "newDirectionPlaceholder": "New direction…",
-      "catalogLoadFailed": "Failed to load the catalog",
-      "newStylePlaceholder": "New style…",
-      "catalogLink": "Practice catalog",
-      "noStyles": "No styles",
-      "directionAdded": "Direction added",
-      "styleAdded": "Style added",
-      "intro": "Manage the catalog. Changes are visible to masters immediately when they choose methods.",
-      "activate": "Activate",
-      "inactiveNote": "Inactive — hidden from masters, existing methods are kept",
-      "addDirectionFailed": "Failed to add the direction",
-      "addStyleFailed": "Failed to add the style",
-      "saveFailed": "Failed to save",
-      "statusChangeFailed": "Failed to change the status"
-    },
-    "adminCheckinRate": {
-      "lowCheckinTitle": "Low check-in (practices)",
-      "subtitle": "{pct}% · {total} records",
-      "avgRate": "Average check-in rate",
-      "totalRecords": "Total records",
-      "checkedIn": "Checked in"
-    },
     "adminSchools": {
       "active": "Active",
       "frozen": "Frozen",
-      "countsLine": "Masters: {masters} • Students: {students} • since {since}",
-      "emptyNote": "No schools yet. A school is created by a verified master themselves — there is no separate permission grant (the admin's lever is master verification).",
-      "title": "Schools"
-    },
-    "adminDashboard": {
-      "prevPeriod": "Previous period",
-      "nextPeriod": "Next period",
-      "withdrawalRequestsLink": "Masters' withdrawal requests",
-      "promocodesLink": "All promo codes: platform and masters",
-      "usersLink": "All users · master appointments",
-      "methodRequestsLink": "Method change requests",
-      "methodRequestsHint": "Masters change their directions",
-      "catalogLink": "Practice catalog",
-      "catalogHint": "Practice directions and styles",
-      "revenue": "Revenue",
-      "system": "System",
-      "mastersBalance": "Balance by masters",
-      "verificationBanner": "{n} master awaiting verification | {n} masters awaiting verification",
-      "moderationBanner": "{n} ticket in moderation | {n} tickets in moderation",
-      "practicesStat": "Practices",
-      "mastersStat": "Masters",
-      "participantsStat": "Participants",
-      "payoutsSection": "Payouts",
-      "usersSection": "Users",
-      "statistics": "Statistics",
-      "profileAria": "Profile",
-      "promocodesSection": "Promo codes"
-    },
-    "adminFeedbackRate": {
-      "distributionratings": "Rating distribution",
-      "leaveRate": "Leave feedback",
-      "visited": "Visited",
-      "leftReview": "Left feedback"
+      "emptyNote": "No schools yet. A school is created by a verified master themselves — there is no separate permission grant (the admin's lever is master verification)."
     },
     "adminMasterInvite": {
       "title": "Invite a master",
-      "oneTimeLinkLabel": "ONE-TIME LINK",
       "linkReady": "LINK READY",
       "copy": "Copy",
       "oneTimeLinkExpiryHint": "Single-use · 7 days from creation",
@@ -121,7 +50,6 @@
         "certificates": "Edit certificates"
       },
       "certificateEnter": "Add a certificate + Enter",
-      "viewDocument": "View the document",
       "allowSchoolCreation": "Allow creating schools",
       "notFound": "Application not found",
       "notFoundHint": "It may have been deleted or already processed",
@@ -129,17 +57,11 @@
       "revoke": "Revoke",
       "addToCatalog": "Add to the catalog",
       "thisMasterOnly": "This master only",
-      "applicationTitle": "Master application",
-      "information": "Information",
       "displayNameTitle": "Display name",
       "accountNameTitle": "Account name",
       "phone": "Phone",
       "experience": "Experience",
       "certificates": "Certificates",
-      "documents": "Documents",
-      "noDocuments": "No documents attached",
-      "firstApplication": "This is the first application.",
-      "schoolCreationRight": "Right to create schools",
       "nonZeroBalance": "non-zero balance",
       "revokedToUser": "The master is revoked — the account became a user",
       "toast": {
@@ -158,24 +80,16 @@
         "enterDisplayName": "Enter the display name",
         "experienceRange": "Experience: an integer from 0 to 50"
       },
-      "documentViewUnavailable": "Document viewing is not available yet",
       "verificationError": "Verification error",
       "rejectionReasonHint": "State the reason for rejection",
       "experienceYears": "{n} years",
       "revokeMessage": "The master {name} becomes a regular user again. All data (profile, practices, history) is kept — access can be restored with the \"Make a master\" button.",
       "revokeWarning": "{base} Note: {warns} — the revocation is not blocked, the data will be kept.",
       "revokePreviewFailed": "{base} The check for active practices, balance and pending payouts failed — the revocation is not blocked.",
-      "grantNote": "Revoking verification freezes all of this curator's schools — participants will stop seeing them; the data is kept and revives on re-verification.",
       "warnSchedule": "{n} practice(s) in the schedule",
       "warnWithdrawals": "{n} payout(s) pending",
-      "save": "Save",
-      "historyTitle": "Application history",
       "approve": "Approve",
       "alreadyProcessed": "The application has already been processed — status: ",
-      "granted": "Granted",
-      "notGranted": "Not granted",
-      "revokeGrant": "Revoke the right",
-      "grantAction": "Grant the right",
       "revokeMaster": "Revoke the master",
       "rejectionReasonPlaceholder": "State the reason for rejecting the application",
       "rejectionReason": "Rejection reason",
@@ -184,40 +98,18 @@
       "rejectAction": "Reject"
     },
     "adminMasters": {
-      "masters": "Masters",
-      "review": "Review",
-      "blockedShort": "Blocked",
-      "inviteCta": "Invite a master",
-      "schoolsTab": "Schools",
       "curatorRole": "Curator",
-      "status": {
-        "verified": "Verified",
-        "pending": "Awaiting verification",
-        "rejected": "Rejected",
-        "suspended": "Blocked",
-        "cancelled_by_user": "Account deleted"
-      },
       "loadFailed": "Failed to load the masters",
       "directionsMissing": "No directions specified",
       "practicesStat": "Practices",
       "studentsStat": "Students",
       "toWithdrawStat": "To withdraw",
-      "filterDeleted": "Deleted",
-      "emptyPending": "No masters awaiting review",
-      "emptyVerified": "No verified masters",
-      "emptyRejected": "No rejected masters",
-      "emptySuspended": "No blocked masters",
-      "emptyCancelled": "No deleted accounts",
-      "emptyFallback": "No masters yet",
-      "loadFailedToast": "Error loading the masters",
-      "verifiedShort": "Verified",
-      "filterRejected": "Rejected"
+      "loadFailedToast": "Error loading the masters"
     },
     "adminMethodRequests": {
       "rejectCta": "Reject the request",
       "addToCatalog": "Add to the catalog",
       "thisMasterOnly": "This master only",
-      "methodRequestsLink": "Method change requests",
       "now": "Now",
       "offered": "Offered",
       "methodsUpdated": "Methods updated",
@@ -227,7 +119,6 @@
         "requestRejected": "The request has been rejected",
         "rejectFailed": "Error while rejecting"
       },
-      "reject": "Reject",
       "approve": "Approve",
       "emptyTitle": "No requests",
       "rejectionReasonPlaceholder": "State the reason for rejecting the request",
@@ -235,101 +126,16 @@
       "noChangeRequests": "No masters have requested method changes",
       "rejectionReason": "Rejection reason"
     },
-    "adminParticipants": {
-      "toast": {
-        "loadMembersFailed": "Failed to load the participants"
-      },
-      "new": "New",
-      "active": "Active",
-      "joinedLine": "Practices: {n} • since {since}",
-      "lastSeen": "Last: {label}",
-      "messageAria": "Write",
-      "title": "Participants",
-      "messagesUnavailable": "Messages are not available yet"
-    },
-    "adminPracticeDetail": {
-      "practiceDetails": "Practice details",
-      "meetingStatus": "Meeting status",
-      "noData": "No data",
-      "m": "M",
-      "active": "Active",
-      "awaitingCreation": "Awaiting creation",
-      "creationError": "Creation error",
-      "bookedStat": "Booked",
-      "attendedStat": "Attended",
-      "freeStat": "Free",
-      "bookedSection": "Booked ({booked}/{capacity})",
-      "presentSection": "Present ({n})",
-      "absentSection": "No-show ({n})",
-      "unmatchedTitle": "Unrecognized participants",
-      "unavailable": "The practice is unavailable",
-      "deletedLabel": "Deleted",
-      "notCreatedLabel": "Not created",
-      "errorReasonLabel": "Error reason"
-    },
-    "adminPractices": {
-      "upcoming": "Upcoming",
-      "past": "Past",
-      "durationMinutes": "{n} min",
-      "loadFailed": "Failed to load the practices",
-      "title": "Practices"
-    },
-    "adminProfile": {
-      "administrator": "Administrator",
-      "logout": "Log out",
-      "title": "Profile",
-      "switchNote": "Switch to the user interface to browse the catalog and book practices.",
-      "switchCta": "Open as a user",
-      "readOnlyBadge": "READ-ONLY MODE"
-    },
-    "adminPromos": {
-      "companies": "Companies",
-      "deactivatedShort": "Deactivated",
-      "empty": {
-        "title": "No promo codes yet",
-        "master": "No masters' promo codes",
-        "company": "No company promo codes",
-        "inactive": "No deactivated promo codes"
-      },
-      "noExpiry": "no expiry",
-      "promocodesLoadError": "Error loading the promo codes",
-      "promocodeDeactivated": "The promo code has been deactivated",
-      "deactivateConfirm": "Deactivate the promo code {code}? The master and participants will no longer be able to use it.",
-      "usedOf": "{used} of {max}",
-      "typeCompany": "Company",
-      "typeMaster": "Master",
-      "active": "Active",
-      "inactive": "Deactivated",
-      "discountLine": "Discount: {n}% · Used: {used}",
-      "loadFailed": "Failed to load the promo codes",
-      "deactivateFailedToast": "Failed to deactivate the promo code",
-      "filterMasters": "Masters",
-      "ownerFallback": "User",
-      "title": "Promo codes"
-    },
     "adminReportDetail": {
-      "resolutionNote": "Resolution note *",
-      "noteOptional": "Note (optional)",
-      "rejectionReason": "Rejection reason",
-      "details": "Details",
-      "targetType": "Target type",
-      "targetId": "Target ID",
       "processed": "Processed",
       "note": "Note",
       "resolutionNotePlaceholder": "Enter the resolution note",
       "processError": "Error while processing",
-      "title": "Complaint",
-      "resolve": "Resolve",
       "reject": "Dismiss",
-      "alreadyProcessed": "The complaint has already been processed — status: ",
       "notFoundTitle": "Complaint not found",
-      "createdLabel": "Created",
       "resolutionPlaceholder": "Describe the measures taken",
       "backToList": "Return to the complaints list",
-      "loadFailedToast": "Error loading the complaint",
       "reportTextLabel": "Complaint text",
-      "resolveCta": "Resolve the complaint",
-      "rejectCta": "Dismiss the complaint",
       "resolvedToast": "The complaint has been resolved",
       "rejectedToast": "The complaint has been dismissed"
     },
@@ -338,31 +144,8 @@
         "title": "No tickets"
       },
       "filterNoHits": "Nothing found for the selected filters",
-      "tickets": "Tickets",
-      "payments": "Payments",
-      "filter": "Filter",
       "ticketsLoadError": "Error loading the tickets",
-      "moderationTab": "Moderation",
-      "tabComplaints": "Complaints",
-      "tabTickets": "Requests"
-    },
-    "adminReturnRate": {
-      "topLoyalUsers": "Top loyal users",
-      "practicesCount": "{n} practices",
-      "returnRate": "Returning repeatedly",
-      "totalUsers": "Total users",
-      "returning": "Repeat"
-    },
-    "adminRevenue": {
-      "revenuePeriod": "Revenue period",
-      "revenueLoadFailed": "Failed to load the revenue",
-      "revenue": "Revenue",
-      "byMasters": "By masters",
-      "paidAmount": "Paid out: {amount}",
-      "commissionStat": "Commission",
-      "payoutStat": "Paid out",
-      "titleWeek": "Weekly revenue",
-      "titleMonth": "Monthly revenue"
+      "tabComplaints": "Complaints"
     },
     "adminSupportDetail": {
       "reply": "Reply…",
@@ -391,21 +174,16 @@
         "reopenConflict": "Cannot reopen — the ticket changed or the spam is over 30 days old",
         "reopenFailed": "Failed to reopen the ticket"
       },
-      "take": "Take it",
       "noMessages": "No messages yet.",
       "refresh": "Refresh",
       "messagesLoadFailed": "Failed to load the messages",
       "notFoundTitle": "Ticket not found",
       "backToList": "Return to the tickets list",
-      "threadFallback": "Ticket",
-      "currentStatus": "Ticket status:",
       "history": {
         "show": "Earlier conversation",
         "title": "The conversation before form tickets — read-only"
       },
       "menu": {
-        "aria": "Ticket actions",
-        "title": "Ticket actions",
         "assign": "Assign",
         "release": "Release",
         "reopen": "Reopen",
@@ -421,8 +199,7 @@
         "undelivered": "Not delivered",
         "showOriginal": "Show original",
         "showTranslation": "Show translation"
-      },
-      "resolvedBy": "Resolved by: {name}"
+      }
     },
     "adminSupport": {
       "empty": {
@@ -451,9 +228,7 @@
         "complaints": "Complaints",
         "other": "Other"
       },
-      "appealDate": "Request date",
       "rating": {
-        "filterLabel": "Rating",
         "none": "No rating",
         "commentIn": "Comment {language}",
         "aboutResolver": "rating the work of: {name}",
@@ -485,53 +260,12 @@
         "promoteFailed": "Failed to appoint as a master"
       },
       "promoteConfirm": "Appoint the user \"{name}\" as a master?",
-      "searchPlaceholder": "Search by name or Telegram ID",
       "makeMaster": "Make a master",
       "roleAdmin": "Admin",
       "roleMaster": "Master",
-      "title": "Users",
       "roleUser": "User"
     },
-    "adminWithdrawalDetail": {
-      "rejectionReason": "Rejection reason",
-      "rejectCta": "Reject the payout",
-      "requestTitle": "Withdrawal request",
-      "bank": "Bank",
-      "providerFee": "Provider fee",
-      "netAmount": "To receive",
-      "unavailable": "The request is unavailable",
-      "pending": "Pending",
-      "approved": "Approved",
-      "toast": {
-        "approved": "The payout has been approved",
-        "approveFailed": "Error approving the payout",
-        "rejected": "The payout has been rejected",
-        "rejectFailed": "Error rejecting the payout"
-      },
-      "alreadyProcessed": "The request has already been processed — status: ",
-      "rejectionReasonPlaceholder": "State the reason for rejecting the payout",
-      "rejectionReasonRequired": "State the rejection reason",
-      "title": "Payout",
-      "statusRejected": "Rejected",
-      "openReject": "Reject"
-    },
-    "adminWithdrawals": {
-      "empty": {
-        "title": "No withdrawal requests",
-        "text": "New requests from masters will appear here"
-      },
-      "status": {
-        "pending": "Under review"
-      },
-      "approved": "Approved",
-      "bank": "Bank",
-      "withdrawalsLoadError": "Error loading the payouts",
-      "toReceive": "To receive {amount}",
-      "title": "Payouts",
-      "statusRejected": "Rejected"
-    },
     "adminCommon": {
-      "loadMetricFailed": "Failed to load the metric",
       "methodSingle": "The method \"{label}\" is not in the catalog — add it for all masters?",
       "methodPlural": "The methods {labels} are not in the catalog — add them for all masters?"
     },
@@ -539,7 +273,6 @@
       "title": "Support statistics",
       "prevMonth": "Previous month",
       "nextMonth": "Next month",
-      "total": "Requests",
       "spam": "Spam",
       "categories": "By category",
       "resolvers": "By admin",

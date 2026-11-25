@@ -180,8 +180,11 @@
   --size-field-disc-clearance: 46px; /* nested 36px disc + breathing room */
 
   /* Layout clearances (bare, value = prior literal). */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --size-admin-fog-top: 60px; /* admin dashboard fog: flat top clearance */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --size-admin-tabbar-clearance: 112px; /* legacy admin screens: clears VAdminTabBar */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --size-tabbar-clearance: 160px; /* floating tab bar clearance (mirrors MobileLayout) */
   --size-cta-clearance: 140px; /* content above a fixed bottom CTA (master public page) */
   --size-school-logo-tile: 80px; /* school hero logo badge tile */
@@ -586,13 +589,20 @@
      Admin count-badges, avatars, id circles, week-nav button, review photo. */
   --velo-size-10: 10px; /* bell presence-dot diameter (user dashboard header bell) */
   --velo-size-12: 12px; /* select chevron (VSelect) */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --velo-size-16: 16px; /* practice-detail id circle */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --velo-size-35: 35px; /* dashboard week-nav button height */
   --velo-size-36: 36px; /* list count-badge height */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --velo-size-38: 38px; /* reports / method-requests count-badge min-width */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --velo-size-41: 41px; /* participant / roster avatar square */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --velo-size-48: 48px; /* list count-badge min-width */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --velo-size-60: 60px; /* dashboard week-nav button width */
+  /* @deprecated FE-272: its only consumers were the mobile admin screens, removed with them. */
   --velo-size-104: 104px; /* master-review photo square (= --velo-card-height-list value, distinct role) */
 
   /* =========================================================================

@@ -264,4 +264,46 @@ describe('MasterProfileForm', () => {
 
     expect(row('Направления практик').textContent).toContain('—')
   })
+
+  it.each([
+    ['Имя-визитка', 'input'],
+    ['О себе', 'textarea'],
+    ['Почта', 'input'],
+    ['Телефон', 'input'],
+  ])('opens «%s» empty for a master who has not filled it', async (label, tag) => {
+    mount(
+      master({
+        display_name: null,
+        bio: null,
+        email: null,
+        phone: null,
+        experience_years: null as unknown as number,
+        first_name: null,
+        last_name: null,
+      }),
+    )
+
+    pen(label)
+    await vi.waitFor(() => expect(row(label).querySelector(tag)).not.toBeNull())
+
+    expect((row(label).querySelector(tag) as HTMLInputElement).value).toBe('')
+  })
+
+  it('opens the experience at 0 and the account name empty for a master who has none', async () => {
+    mount(
+      master({ experience_years: null as unknown as number, first_name: null, last_name: null }),
+    )
+
+    pen('Опыт')
+    await vi.waitFor(() => expect(row('Опыт').querySelector('input')).not.toBeNull())
+    expect(row('Опыт').querySelector('input')?.value).toBe('0')
+
+    press('Опыт', 'Отмена')
+    pen('Имя аккаунта')
+    await vi.waitFor(() => expect(row('Имя аккаунта').querySelectorAll('input')).toHaveLength(2))
+    expect(Array.from(row('Имя аккаунта').querySelectorAll('input')).map((i) => i.value)).toEqual([
+      '',
+      '',
+    ])
+  })
 })
