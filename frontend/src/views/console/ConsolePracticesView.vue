@@ -74,8 +74,9 @@
         <ConsolePager
           v-if="total > 0"
           :page="page"
-          :page-count="pageCount"
-          :summary="summary"
+          :page-size="ADMIN_PRACTICES_PAGE_SIZE"
+          :total="total"
+          :shown="rows.length"
           @update:page="setPage"
         />
       </template>
@@ -170,15 +171,6 @@ function retry(): void {
 // Spread: ConsoleTable rows are plain records, the API items are interfaces.
 const rows = computed(() => (listQuery.data.value?.items ?? []).map((item) => ({ ...item })))
 const total = computed(() => listQuery.data.value?.total ?? 0)
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / ADMIN_PRACTICES_PAGE_SIZE)))
-const summary = computed(() => {
-  const from = (page.value - 1) * ADMIN_PRACTICES_PAGE_SIZE + 1
-  return t('console.pager.shown', {
-    from,
-    to: Math.min(total.value, from + rows.value.length - 1),
-    total: total.value,
-  })
-})
 
 // Below 1200 px the master column goes: its name moves under the title.
 const { narrow } = useConsoleWidth()

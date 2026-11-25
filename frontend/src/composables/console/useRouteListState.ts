@@ -12,6 +12,7 @@
 
 import { computed, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { pageCountOf } from '@/utils/console/pagerItems'
 
 /** The tab and the page of a console table, and how to change them. */
 export interface RouteListState<Tab extends string> {
@@ -40,7 +41,7 @@ export interface RouteListState<Tab extends string> {
 
 /** The last page of a list of `total` rows (the first while it is empty), or undefined while the total is unknown. */
 export function lastPageOf(total: number | undefined, pageSize: number): number | undefined {
-  return total === undefined ? undefined : Math.max(1, Math.ceil(total / pageSize))
+  return total === undefined ? undefined : pageCountOf(total, pageSize)
 }
 
 /**

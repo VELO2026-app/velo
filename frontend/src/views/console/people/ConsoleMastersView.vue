@@ -76,7 +76,6 @@
       </ConsoleTable>
       <ConsolePager
         :page="page"
-        :page-count="Math.max(1, Math.ceil(total / CONSOLE_PAGE_SIZE))"
         :page-size="CONSOLE_PAGE_SIZE"
         :total="total"
         :shown="rows.length"

@@ -92,8 +92,9 @@
         <ConsolePager
           v-if="total > 0"
           :page="page"
-          :page-count="pageCount"
-          :summary="summary"
+          :page-size="ADMIN_PROMOS_PAGE_SIZE"
+          :total="total"
+          :shown="rows.length"
           @update:page="setPage"
         />
       </template>
@@ -197,15 +198,6 @@ const rows = computed<PromoRow[]>(() => {
   }))
 })
 const total = computed(() => listQuery.data.value?.total ?? 0)
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / ADMIN_PROMOS_PAGE_SIZE)))
-const summary = computed(() => {
-  const from = (page.value - 1) * ADMIN_PROMOS_PAGE_SIZE + 1
-  return t('console.pager.shown', {
-    from,
-    to: Math.min(total.value, from + rows.value.length - 1),
-    total: total.value,
-  })
-})
 
 // -- Columns. Below 1400 px the owner moves under the code; below 1200 px the
 //    end date moves under the use count and the button under the status. --
