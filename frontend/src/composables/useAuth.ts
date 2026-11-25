@@ -126,10 +126,12 @@ export function beginLogout(): void {
 // module on demand, is what keeps auth -> useAuth -> auth out of the graph.
 onSessionEnd((reason) => {
   if (reason === 'logout' && platform.name === 'telegram') beginLogout()
-  // Outside Telegram the login screen comes up over the page the session
-  // ended on (an expired session, a logout): the next sign-in lands there.
-  // An address not worth it (the root, the wiped return) keeps what is set.
-  if (platform.name === 'standalone') {
+  // Outside Telegram the login screen comes up over the page a DROPPED
+  // session ended on (expired, revoked): the next sign-in lands there. Not
+  // after a logout -- the next sign-in may be another account, and the page
+  // of the one who left is no place to put it. An address not worth it (the
+  // root, the wiped return) keeps what is set.
+  if (reason === 'dropped' && platform.name === 'standalone') {
     loginDestination.value = currentLoginDestination() ?? loginDestination.value
   }
 })
@@ -139,7 +141,8 @@ onSessionEnd((reason) => {
  *
  * @remarks Set when the login screen comes up: at start, the address the
  * person opened (the router has not moved yet -- its first navigation waits
- * for isReady); later, the page a session ended on (onSessionEnd below).
+ * for isReady); later, the page a dropped session ended on (onSessionEnd
+ * below; a logout leaves none).
  * TelegramLoginView hands it to startBrowserLogin, which keeps it with the
  * mark; the return sets it back from the mark, and roleRedirect takes it
  * once signed in (takeLoginDestination). A failed return keeps it for the
