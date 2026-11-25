@@ -134,6 +134,34 @@ test('$deprecated: one shape only -- a non-empty string on a token', () => {
   assert.match(v, /--velo-flag has no consumer/, 'a malformed flag does not excuse a dead token')
 })
 
+test('pending: an approved token may wait for its consumer; a used or malformed note is red', () => {
+  const pend = (cssName, value, order, pending) => ({
+    $value: ` ${value}`,
+    $extensions: { pridem: { cssName, order, pending } },
+  })
+  const doc = {
+    root: {
+      velo: {
+        waiting: pend('--velo-waiting', '7px', 1, 'FE-274: approved, first consumer comes later'),
+        used: pend('--velo-used', '25px', 2, 'FE-274: approved, first consumer comes later'),
+        blank: pend('--velo-blank', '3px', 3, ' '),
+        plain: leaf('--velo-plain', '1px', 4),
+      },
+    },
+  }
+  const files = [{ file: 'src/a.css', src: '.a { gap: var(--velo-used); }' }]
+  const rows = byName(auditTokens(doc, files))
+  assert.equal(rows['--velo-waiting'].pending, 'FE-274: approved, first consumer comes later')
+  assert.equal(rows['--velo-blank'].pending, false, 'a blank note is no note')
+  const v = auditViolations(auditTokens(doc, files), doc)
+  const text = v.join('\n')
+  assert.ok(!v.some((line) => line.startsWith('--velo-waiting')), 'pending and dead is allowed')
+  assert.match(text, /--velo-used is marked pending but has a consumer/)
+  assert.match(text, /--velo-blank: pending must be a non-empty string/)
+  assert.match(text, /--velo-blank has no consumer/, 'a blank note does not excuse a dead token')
+  assert.match(text, /--velo-plain has no consumer/, 'no note, no consumer: still red')
+})
+
 test('a "<style>" quoted in a template comment does not open a block', () => {
   const vue = [
     '<template>',

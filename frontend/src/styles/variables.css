@@ -549,10 +549,13 @@
   /* Micro inter-element spacing (gap / margin) below --space-2=8 granularity */
   --velo-gap-2: 2px;
   --velo-gap-3: 3px;
+  --velo-gap-5: 5px; /* day-pill row gap (week strip), legend row label-to-bar gap */
   --velo-gap-6: 6px;
+  --velo-gap-7: 7px; /* day cell and metric card content gap */
   --velo-gap-11: 11px; /* master-review photo/text row gap */
   --velo-gap-15: 15px; /* cross-component flex gap (dashboard / master-review / withdrawal) */
   --velo-gap-21: 21px; /* master-review history accordion header gap */
+  --velo-gap-25: 25px; /* gap between large calendar / analytics blocks */
   --velo-inset-12: 12px; /* admin filter / list row horizontal inset */
 
   /* =========================================================================

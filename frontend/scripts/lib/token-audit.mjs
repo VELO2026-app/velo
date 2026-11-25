@@ -35,6 +35,13 @@
 // and validate-skin all read that string. Any other shape -- `true`, an
 // empty string, a flag on a GROUP -- is a violation, so the three never
 // disagree about what is deprecated.
+//
+// `pending` (FE-274) is the mirror case: a token the owner approved ahead of
+// its first consumer (a designer's token request, docs/figma-protocol.md §10
+// step 7). It is a non-empty string in `$extensions.pridem.pending`
+// ("<task>: <why>, first consumer <where>"). A pending token may be dead; the
+// day it gains a consumer the marker must go, so the list stays the honest
+// set of tokens waiting for a first user.
 // =============================================================================
 
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -143,6 +150,11 @@ export function deprecationOf(node) {
   const d = node?.$deprecated
   return typeof d === 'string' && d.trim() !== '' ? d : null
 }
+/** The `pending` note of a token node (see the header), or null. */
+export function pendingOf(node) {
+  const p = node?.$extensions?.pridem?.pending
+  return typeof p === 'string' && p.trim() !== '' ? p : null
+}
 /** `--velo-fog-pd-${x}` -> '--velo-fog-pd-' (template-literal name builders). */
 const DYNAMIC = /(--[a-zA-Z0-9_-]+-)\$\{/g
 
@@ -154,8 +166,8 @@ const DYNAMIC = /(--[a-zA-Z0-9_-]+-)\$\{/g
  *   (NOT variables.css -- it is the generated registry itself)
  * @returns {Array<any> & {broadDynamic: Array<{prefix: string, files: string[], covers: number}>}}
  *   one row per token, registry order:
- *   { cssName, path, value, deprecated, badDeprecated, prod, test, files,
- *     dynamic, refs, referrers, alive }; the array also carries
+ *   { cssName, path, value, deprecated, badDeprecated, pending, badPending,
+ *     prod, test, files, dynamic, refs, referrers, alive }; the array also carries
  *   `broadDynamic`: [{ prefix, files, covers }] for the refused blankets.
  */
 export function auditTokens(doc, files) {
@@ -169,6 +181,8 @@ export function auditTokens(doc, files) {
         value: l.value.trim(),
         deprecated: deprecationOf(l.node) ?? false,
         badDeprecated: '$deprecated' in l.node && deprecationOf(l.node) === null,
+        pending: pendingOf(l.node) ?? false,
+        badPending: 'pending' in (l.node.$extensions?.pridem ?? {}) && pendingOf(l.node) === null,
         prod: 0,
         test: 0,
         files: new Set(),
@@ -234,7 +248,8 @@ export function auditTokens(doc, files) {
 /**
  * The standing rules the guard test pins (FE-150):
  *   - a $deprecated token has NO consumer (the next generation can delete it);
- *   - every other token is alive (no new dead weight in the contract);
+ *   - every other token is alive, or pending with a note (no new dead weight
+ *     in the contract); a pending token that gained a consumer drops the note;
  *   - $deprecated has the one accepted shape, on tokens only (pass `doc`);
  *   - no dynamic name builder blankets a whole branch.
  */
@@ -273,9 +288,17 @@ export function auditViolations(rows, doc) {
         `${r.cssName} is $deprecated but consumed by ${how} -- migrate the consumer, the next generation deletes the token`,
       )
     }
-    if (!r.deprecated && !r.alive) {
+    if (r.badPending)
       out.push(
-        `${r.cssName} has no consumer -- use it, or mark it $deprecated in tokens.json (the next generation removes it, tz-whitelabel §3.1)`,
+        `${r.cssName}: pending must be a non-empty string ("<task>: <why>, first consumer <where>")`,
+      )
+    if (r.pending && r.alive)
+      out.push(
+        `${r.cssName} is marked pending but has a consumer -- drop \`pending\` from tokens.json`,
+      )
+    if (!r.deprecated && !r.alive && !r.pending) {
+      out.push(
+        `${r.cssName} has no consumer -- use it, mark it pending (an approved token awaiting its first consumer), or mark it $deprecated in tokens.json (the next generation removes it, tz-whitelabel §3.1)`,
       )
     }
   }
