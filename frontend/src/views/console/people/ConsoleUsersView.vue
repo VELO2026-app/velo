@@ -30,6 +30,8 @@
       />
       <div class="users-filter">
         <VSelect
+          flush
+          outlined
           :model-value="activity"
           :options="activityOptions"
           :aria-label="t('console.users.filter.label')"

@@ -1,5 +1,8 @@
 {
   "recordedAt": "2026-11-19T04:46:39.613Z",
+  "roles": {
+    "admin": "2026-11-25T06:09:04.789Z"
+  },
   "paths": {
     "user-dashboard": "/user/dashboard",
     "user-calendar": "/user/calendar",
@@ -19,6 +22,21 @@
     "master-profile": "/master/profile",
     "admin-dashboard": "/admin/dashboard",
     "admin-masters": "/admin/masters",
-    "admin-reports": "/admin/reports"
+    "admin-reports": "/admin/reports",
+    "console-dashboard": "/console/dashboard",
+    "console-masters": "/console/masters",
+    "console-masters-detail": "/console/masters/d7f84656-89ac-410e-84a7-de9d6d586dfc",
+    "console-users": "/console/users",
+    "console-schools": "/console/schools",
+    "console-practices": "/console/practices",
+    "console-practices-detail": "/console/practices/7a2c6b70-458a-479c-b4d5-f7ad83e9db62",
+    "console-catalog": "/console/catalog",
+    "console-moderation": "/console/moderation",
+    "console-support": "/console/support",
+    "console-finance": "/console/finance",
+    "console-analytics": "/console/analytics",
+    "console-mail": "/console/mail",
+    "console-settings": "/console/settings",
+    "section-unavailable": "/unavailable"
   }
 }

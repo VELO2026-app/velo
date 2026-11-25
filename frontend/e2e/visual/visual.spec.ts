@@ -11,10 +11,11 @@
 import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { SESSION_TOKEN_KEY } from '../support/fixtures'
+import { GOODO_INSTANCE_CONFIG, serveInstanceConfig } from '../support/instance'
 import { settle, trackApi } from '../support/settle'
 import { test, expect } from '../support/test'
 import { harOf, META_FILE, type HarMeta } from './har'
-import { SCREENS, rowOf, VIEWPORT } from './screens'
+import { SCREENS, rowOf, shotOf, viewportOf, VIEWPORT } from './screens'
 import { readFileSync } from 'node:fs'
 
 const OUT = resolve(process.env.VISUAL_OUT ?? 'visual-out/head')
@@ -24,12 +25,15 @@ test.use({ viewport: VIEWPORT })
 mkdirSync(OUT, { recursive: true })
 
 for (const screen of SCREENS) {
-  test(`[${screen.role}] ${screen.name}`, async ({ page, crashes }) => {
+  test(`[${screen.role}] ${shotOf(screen)}`, async ({ page, crashes }) => {
     for (const allowance of rowOf(screen).allow?.(screen.role) ?? []) crashes.allow(allowance)
     const path = meta.paths[screen.name]
     expect(path, `${screen.name} is not in har/meta.json -- re-record`).toBeTruthy()
+    // Before the load: the app reads the window size at start.
+    await page.setViewportSize(viewportOf(screen))
     await page.routeFromHAR(harOf(screen.role), { url: /\/api\//, notFound: 'abort' })
-    await page.clock.setFixedTime(meta.recordedAt)
+    if (screen.instance === 'goodo') await serveInstanceConfig(page, GOODO_INSTANCE_CONFIG)
+    await page.clock.setFixedTime(meta.roles?.[screen.role] ?? meta.recordedAt)
     // Any token: the HAR answers /users/me. (The real one is not needed, and
     // not stored.)
     await page.addInitScript(([key]) => localStorage.setItem(key!, 'visual'), [SESSION_TOKEN_KEY])
@@ -38,7 +42,7 @@ for (const screen of SCREENS) {
     await settle(page, tracker)
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({
-      path: resolve(OUT, `${screen.name}.png`),
+      path: resolve(OUT, `${shotOf(screen)}.png`),
       animations: 'disabled',
       caret: 'hide',
     })

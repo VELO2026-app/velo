@@ -77,7 +77,9 @@ withDefaults(
 .console-page__crumbs {
   margin: 0;
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  /* Text on the page itself, not on a card: the skin's page-text pair
+     (a gradient page needs a stronger ink than the muted one). */
+  color: var(--velo-text-on-bg-muted);
 }
 
 .console-page__title-row {

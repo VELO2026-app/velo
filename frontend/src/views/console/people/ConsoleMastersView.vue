@@ -122,6 +122,7 @@ import { lastPageOf, useRouteListState } from '@/composables/console/useRouteLis
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { masterDisplayName } from '@/utils/adminHelpers'
+import { consoleHasPayments } from '@/utils/console/options'
 
 const router = useRouter()
 const toast = useToast()
@@ -171,34 +172,39 @@ const tabOptions = computed(() =>
   ),
 )
 
+// The payout balance is the payments option's: without it the column is not there.
+const paymentsEnabled = consoleHasPayments()
+
 // FE-264: practices, students and payout stand in for the design's sessions,
 // rating and per-session rate columns until the backend has them (BE-246, BE-249).
-const columns = computed<ConsoleTableColumn[]>(() => [
-  { key: 'master', label: t('console.masters.columns.master') },
-  { key: 'methods', label: t('console.masters.columns.methods') },
-  { key: 'status', label: t('console.masters.columns.status'), width: 200 },
-  {
-    key: 'practices',
-    label: t('adminScreens.adminMasters.practicesStat'),
-    width: 80,
-    align: 'end',
-    secondary: true,
-  },
-  {
-    key: 'students',
-    label: t('adminScreens.adminMasters.studentsStat'),
-    width: 90,
-    align: 'end',
-    secondary: true,
-  },
-  {
-    key: 'payout',
-    label: t('adminScreens.adminMasters.toWithdrawStat'),
-    width: 110,
-    align: 'end',
-    secondary: true,
-  },
-])
+const columns = computed<ConsoleTableColumn[]>(() =>
+  [
+    { key: 'master', label: t('console.masters.columns.master') },
+    { key: 'methods', label: t('console.masters.columns.methods') },
+    { key: 'status', label: t('console.masters.columns.status'), width: 200 },
+    {
+      key: 'practices',
+      label: t('adminScreens.adminMasters.practicesStat'),
+      width: 80,
+      align: 'end' as const,
+      secondary: true,
+    },
+    {
+      key: 'students',
+      label: t('adminScreens.adminMasters.studentsStat'),
+      width: 90,
+      align: 'end' as const,
+      secondary: true,
+    },
+    {
+      key: 'payout',
+      label: t('adminScreens.adminMasters.toWithdrawStat'),
+      width: 110,
+      align: 'end' as const,
+      secondary: true,
+    },
+  ].filter((column) => column.key !== 'payout' || paymentsEnabled),
+)
 
 const emptyText = computed(() => t(`console.masters.empty.${tab.value}`))
 

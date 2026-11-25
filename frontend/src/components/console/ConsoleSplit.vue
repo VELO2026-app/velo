@@ -18,11 +18,21 @@
       v-if="pane !== 'detail'"
       class="console-split__list"
       :class="{ 'console-split__list--alone': pane === 'list' }"
-      :style="pane === 'both' ? { flexBasis: `${listWidth}px` } : undefined"
+      :style="
+        pane === 'both'
+          ? {
+              flexBasis: `calc(${listWidth}px + var(--split-room-side) + var(--split-room-gap))`,
+            }
+          : undefined
+      "
     >
       <slot name="list" />
     </div>
-    <div v-if="pane !== 'list'" class="console-split__detail">
+    <div
+      v-if="pane !== 'list'"
+      class="console-split__detail"
+      :class="{ 'console-split__detail--alone': pane === 'detail' }"
+    >
       <slot name="detail" />
     </div>
   </div>
@@ -42,6 +52,13 @@ withDefaults(
 
 <style scoped>
 .console-split {
+  /* The room a pane keeps for the card shadow: the outer side, the inner
+     side (half the gap), the top and the bottom. */
+  --split-room-side: var(--space-5);
+  --split-room-gap: var(--space-2);
+  --split-room-top: var(--space-3);
+  --split-room-bottom: var(--space-8);
+
   display: flex;
   flex: 1 1 auto;
   align-items: stretch;
@@ -49,24 +66,44 @@ withDefaults(
   min-height: 0;
 }
 
-.console-split__list {
+.console-split__list,
+.console-split__detail {
   display: flex;
-  flex: 0 0 auto;
   flex-direction: column;
   min-height: 0;
+  box-sizing: border-box;
   overflow-y: auto;
+  padding-top: var(--split-room-top);
+  padding-bottom: var(--split-room-bottom);
+  margin-top: calc(-1 * var(--split-room-top));
+  margin-bottom: calc(-1 * var(--split-room-bottom));
+}
+
+.console-split__list {
+  flex: 0 0 auto;
+  padding-right: var(--split-room-gap);
+  padding-left: var(--split-room-side);
+  margin-right: calc(-1 * var(--split-room-gap));
+  margin-left: calc(-1 * var(--split-room-side));
 }
 
 .console-split__list--alone {
   flex: 1 1 auto;
+  padding-right: var(--split-room-side);
+  margin-right: calc(-1 * var(--split-room-side));
 }
 
 .console-split__detail {
-  display: flex;
   flex: 1 1 auto;
-  flex-direction: column;
   min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
+  padding-right: var(--split-room-side);
+  padding-left: var(--split-room-gap);
+  margin-right: calc(-1 * var(--split-room-side));
+  margin-left: calc(-1 * var(--split-room-gap));
+}
+
+.console-split__detail--alone {
+  padding-left: var(--split-room-side);
+  margin-left: calc(-1 * var(--split-room-side));
 }
 </style>

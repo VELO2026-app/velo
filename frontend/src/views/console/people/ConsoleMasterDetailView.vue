@@ -136,6 +136,10 @@ import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { routeParam } from '@/router/routeParam'
 import { masterDisplayName } from '@/utils/adminHelpers'
+import { consoleHasPayments } from '@/utils/console/options'
+
+// The payout balance is the payments option's: without it the stat is not there.
+const paymentsEnabled = consoleHasPayments()
 
 const route = useRoute()
 const router = useRouter()
@@ -195,7 +199,7 @@ const stats = computed(() => {
       label: t('adminScreens.adminMasters.toWithdrawStat'),
       value: payoutText(m.available_cents),
     },
-  ]
+  ].filter((stat) => stat.key !== 'payout' || paymentsEnabled)
 })
 
 /** Back to the screen the card was opened from, or the masters list for a direct link. */

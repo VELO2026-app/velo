@@ -10,6 +10,12 @@ export const harOf = (role: SweepRole): string => resolve(HAR_DIR, `${role}.har`
 export interface HarMeta {
   /** ISO time of the recording: the browser clock stands here when replaying. */
   recordedAt: string
+  /**
+   * A role recorded on its own, later than the rest (VISUAL_ROLES=admin): its
+   * own time. The other roles keep `recordedAt`, so their HARs stay as they
+   * were; a full recording leaves this out.
+   */
+  roles?: Partial<Record<SweepRole, string>>
   /** The URL each screen was recorded at (ids come from the seeded stack, which CI has not). */
   paths: Record<string, string>
 }

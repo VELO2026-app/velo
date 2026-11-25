@@ -12,9 +12,21 @@
 import { SWEEP, type SweepRole, type SweepVisit } from '../sweep/routes'
 
 export interface VisualScreen {
-  /** Key of SWEEP; also the screenshot's file name. */
+  /** Key of SWEEP. */
   name: string
   role: SweepRole
+  /**
+   * The instance the screen is shot as, when not the one with every option on
+   * (FE-275): `goodo` answers the app's /config.json with the Goodo options
+   * (no payments). The path and the HAR are the screen's own: it asks the API
+   * for a part of what the full instance asks for.
+   */
+  instance?: 'goodo'
+}
+
+/** The screenshot's file name (and the test's name): the screen, and its instance. */
+export function shotOf(screen: VisualScreen): string {
+  return screen.instance ? `${screen.name}@${screen.instance}` : screen.name
 }
 
 const S = 'student'
@@ -31,6 +43,8 @@ export const SCREENS: VisualScreen[] = [
   { name: 'user-school', role: S },
   { name: 'user-topup', role: S },
   { name: 'not-found', role: S },
+  // FE-275: where a switched-off option's address lands.
+  { name: 'section-unavailable', role: S },
   { name: 'master-dashboard', role: M },
   { name: 'master-practices', role: M },
   { name: 'master-practice-new', role: M },
@@ -41,6 +55,26 @@ export const SCREENS: VisualScreen[] = [
   { name: 'admin-dashboard', role: A },
   { name: 'admin-masters', role: A },
   { name: 'admin-reports', role: A },
+  // FE-275: the web console, every screen, in the laptop window of its sweep
+  // row (webViewport) -- on both skins, as the rest.
+  { name: 'console-dashboard', role: A },
+  { name: 'console-masters', role: A },
+  { name: 'console-masters-detail', role: A },
+  { name: 'console-users', role: A },
+  { name: 'console-schools', role: A },
+  { name: 'console-practices', role: A },
+  { name: 'console-practices-detail', role: A },
+  { name: 'console-catalog', role: A },
+  { name: 'console-moderation', role: A },
+  { name: 'console-support', role: A },
+  { name: 'console-finance', role: A },
+  { name: 'console-analytics', role: A },
+  { name: 'console-mail', role: A },
+  { name: 'console-settings', role: A },
+  // FE-275: the console of the Goodo instance (no payments): no revenue tile,
+  // no payout column.
+  { name: 'console-dashboard', role: A, instance: 'goodo' },
+  { name: 'console-masters', role: A, instance: 'goodo' },
 ]
 
 /** The sweep row of a screen; throws on a name the table does not have. */
@@ -55,5 +89,10 @@ export function rowOf(screen: VisualScreen): SweepVisit {
 /** The roles that have at least one screen: one HAR each. */
 export const ROLES: SweepRole[] = [...new Set(SCREENS.map((s) => s.role))]
 
-/** Viewport of every shot. */
+/** Viewport of a shot, unless the screen's sweep row names a window of its own. */
 export const VIEWPORT = { width: 390, height: 844 }
+
+/** The window a screen is shot (and recorded) in. */
+export function viewportOf(screen: VisualScreen): { width: number; height: number } {
+  return rowOf(screen).webViewport ?? VIEWPORT
+}

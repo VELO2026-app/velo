@@ -375,6 +375,17 @@ describe('ConsoleDashboardView: figures', () => {
     expect(adminApi.getAdminStatsOverview).toHaveBeenCalledWith('week', 0)
   })
 
+  it('without the payments option the revenue tile is not there, the other three stay', async () => {
+    options.payments = false
+    await mount()
+
+    expect(tiles()).toEqual([
+      'Практики312+8%кпрошломупериоду',
+      'Новыепользователи128—нетданныхдлясравнения',
+      'Новыемастера3-2%кпрошломупериоду',
+    ])
+  })
+
   it('the month tab asks the month; the stepper asks the periods before it, and stops at the current one', async () => {
     await mount()
     const weekRange = range()
