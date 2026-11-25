@@ -40,7 +40,7 @@
 import { t } from '@/locales'
 import { VButton } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
-import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
+import ConsoleLoading from '@/components/console/ConsoleLoading.vue'
 import DeltaLine from '@/components/console/overview/DeltaLine.vue'
 import OverviewEmpty from '@/components/console/overview/OverviewEmpty.vue'
 import { formatRate } from '@/components/console/overview/engagement'

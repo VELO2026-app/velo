@@ -29,9 +29,9 @@
     testid="console-master-detail"
   >
     <template v-if="master" #title-extra>
-      <PeoplePill :tone="masterStatusTone(master.master_status)">{{
+      <ConsoleBadge :tone="masterStatusTone(master.master_status)">{{
         masterStatusLabel(master.master_status)
-      }}</PeoplePill>
+      }}</ConsoleBadge>
     </template>
     <template #actions>
       <VButton variant="ghost" @click="back">{{ t('console.masters.detail.back') }}</VButton>
@@ -72,13 +72,13 @@
           </div>
           <div class="master-summary__chips">
             <template v-if="chips.length">
-              <PeoplePill
+              <ConsoleBadge
                 v-for="(chip, i) in chips"
                 :key="`${chip.label}-${i}`"
-                :tone="chip.muted ? 'neutral' : 'accent'"
+                :tone="chip.muted ? 'muted' : 'info'"
               >
                 {{ chip.label }}
-              </PeoplePill>
+              </ConsoleBadge>
             </template>
             <span v-else class="master-summary__muted">{{
               t('adminScreens.adminMasters.directionsMissing')
@@ -120,7 +120,7 @@ import ConsolePage from '@/components/console/ConsolePage.vue'
 import MasterProfileForm from '@/components/console/people/MasterProfileForm.vue'
 import MasterReviewCard from '@/components/console/people/MasterReviewCard.vue'
 import MasterRightsCard from '@/components/console/people/MasterRightsCard.vue'
-import PeoplePill from '@/components/console/people/PeoplePill.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import {
   DASH,
   countText,

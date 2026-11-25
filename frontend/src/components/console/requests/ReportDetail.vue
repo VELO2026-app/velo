@@ -30,9 +30,9 @@
           }}
         </p>
       </div>
-      <RequestStatusBadge :tone="reportStatusVariant(report.status)">
+      <ConsoleBadge :tone="reportStatusVariant(report.status)">
         {{ reportStatusLabel(report.status) }}
-      </RequestStatusBadge>
+      </ConsoleBadge>
     </header>
 
     <div class="report-detail__parties">
@@ -106,7 +106,7 @@ import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { useRouter, type RouteLocationRaw } from 'vue-router'
 import { VButton, VTextarea } from '@/components/ui'
-import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import { reportTitle } from '@/components/console/requests/reportTitle'
 import { dismissReport, resolveReport, type ReportResponse } from '@/api/admin'

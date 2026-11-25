@@ -31,3 +31,8 @@ export function pagerItems(page: number, count: number): Array<number | null> {
   }
   return items
 }
+
+/** The number of pages of a list: at least one, so an empty list has page 1. */
+export function pageCountOf(total: number, pageSize: number): number {
+  return Math.max(1, Math.ceil(total / pageSize))
+}

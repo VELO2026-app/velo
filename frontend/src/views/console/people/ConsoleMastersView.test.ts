@@ -191,7 +191,7 @@ describe('ConsoleMastersView', () => {
   it('words each status the same way every console screen does', async () => {
     await mount()
 
-    expect(rows().map((r) => r.querySelector('.people-pill')?.textContent?.trim())).toEqual([
+    expect(rows().map((r) => r.querySelector('.console-badge')?.textContent?.trim())).toEqual([
       'Верифицирован',
       'Ожидает верификации',
       'Отклонён',

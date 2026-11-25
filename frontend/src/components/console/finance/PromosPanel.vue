@@ -60,9 +60,9 @@
           <template #cell-until="{ row }">{{ until(row) }}</template>
           <template #cell-state="{ row }">
             <span class="promos__stack">
-              <ConsoleStatusBadge :tone="row.status === 'active' ? 'success' : 'muted'">
+              <ConsoleBadge :tone="row.status === 'active' ? 'success' : 'muted'">
                 {{ t(`console.finance.promos.status.${row.status}`) }}
-              </ConsoleStatusBadge>
+              </ConsoleBadge>
               <VButton
                 v-if="narrow && row.status === 'active'"
                 size="sm"
@@ -92,8 +92,9 @@
         <ConsolePager
           v-if="total > 0"
           :page="page"
-          :page-count="pageCount"
-          :summary="summary"
+          :page-size="ADMIN_PROMOS_PAGE_SIZE"
+          :total="total"
+          :shown="rows.length"
           @update:page="setPage"
         />
       </template>
@@ -120,14 +121,14 @@ import { VButton, VConfirmDialog, VEmptyState, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
-import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
-import ConsolePager from '@/components/console/content/ConsolePager.vue'
-import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
+import ConsoleLoading from '@/components/console/ConsoleLoading.vue'
+import ConsolePager from '@/components/console/ConsolePager.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import PromoCreateModal from '@/components/console/finance/PromoCreateModal.vue'
 import { formatDay } from '@/components/console/finance/financeFormat'
 import { promoStatus, type PromoStatus } from '@/components/console/finance/promoStatus'
-import { useUrlChoice } from '@/components/console/finance/useUrlChoice'
-import { useUrlPage } from '@/components/console/finance/useUrlPage'
+import { useUrlChoice } from '@/composables/console/useUrlChoice'
+import { useUrlPage } from '@/composables/console/useUrlPage'
 import { deactivateAdminPromo } from '@/api/admin'
 import type { AdminPromoResponse } from '@/api/admin'
 import {
@@ -197,15 +198,6 @@ const rows = computed<PromoRow[]>(() => {
   }))
 })
 const total = computed(() => listQuery.data.value?.total ?? 0)
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / ADMIN_PROMOS_PAGE_SIZE)))
-const summary = computed(() => {
-  const from = (page.value - 1) * ADMIN_PROMOS_PAGE_SIZE + 1
-  return t('console.pager.shown', {
-    from,
-    to: Math.min(total.value, from + rows.value.length - 1),
-    total: total.value,
-  })
-})
 
 // -- Columns. Below 1400 px the owner moves under the code; below 1200 px the
 //    end date moves under the use count and the button under the status. --

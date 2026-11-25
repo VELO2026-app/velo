@@ -63,12 +63,9 @@
             <h3 class="methods__caption">{{ t('adminScreens.adminMethodRequests.offered') }}</h3>
             <div class="methods__chips">
               <template v-for="m in item.proposed_methods ?? []" :key="m">
-                <RequestStatusBadge
-                  v-if="isAdded(item, m)"
-                  tone="success"
-                  data-testid="method-added"
-                  >{{ m }}</RequestStatusBadge
-                >
+                <ConsoleBadge v-if="isAdded(item, m)" tone="success" data-testid="method-added">{{
+                  m
+                }}</ConsoleBadge>
                 <RequestChip v-else>{{ m }}</RequestChip>
               </template>
             </div>
@@ -149,7 +146,7 @@ import {
 } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import RequestChip from '@/components/console/requests/RequestChip.vue'
-import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import { approveMethodChange, rejectMethodChange, type AdminMethodChangeItem } from '@/api/admin'
 import {
   adminMethodRequestsQuery,

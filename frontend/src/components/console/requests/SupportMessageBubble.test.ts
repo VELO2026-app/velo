@@ -12,7 +12,7 @@
 import { createTestI18n } from '@/locales/testing'
 import { describe, it, expect, afterEach, onTestFinished } from 'vitest'
 import { createApp, h, nextTick, ref, type App } from 'vue'
-import SupportMessageBubble from '@/components/admin/SupportMessageBubble.vue'
+import SupportMessageBubble from '@/components/console/requests/SupportMessageBubble.vue'
 import type { SupportMessage, SupportTranslationState } from '@/api/support'
 import { applyInstanceConfig } from '@/platform/instance'
 
