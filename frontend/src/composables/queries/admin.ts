@@ -1082,16 +1082,37 @@ export const adminSupportTicketQuery = defineQueryOptions((ticketId: string) => 
   query: () => getAdminTicket(ticketId),
 }))
 
+/** The API's largest page of a thread feed (`limit` le=100, support/router.py). */
+export const SUPPORT_FEED_PAGE_SIZE = 100
+
+/**
+ * Every message of one support thread, newest first: the pages are read by
+ * their cursor until the API says there is no more (FE-260 -- the first page
+ * alone hid the start of a long conversation). A cursor the API repeats ends
+ * the read, so a bad answer cannot loop.
+ */
+async function readWholeFeed(threadId: string): Promise<SupportMessage[]> {
+  const messages: SupportMessage[] = []
+  const seen = new Set<string>()
+  let cursor: string | undefined
+  for (;;) {
+    const page = await getAdminSupportMessages(threadId, SUPPORT_FEED_PAGE_SIZE, cursor)
+    messages.push(...page.messages)
+    if (page.next_cursor === null || seen.has(page.next_cursor)) return messages
+    seen.add(page.next_cursor)
+    cursor = page.next_cursor
+  }
+}
+
 /**
  * Query options for one support thread's feed, oldest first (the API
- * answers newest first). Asked again on every visit; the detail screen
- * polls it while translations are on their way.
+ * answers newest first), all of it. Asked again on every visit; the detail
+ * screen polls it while translations are on their way.
  */
 export const adminSupportMessagesQuery = defineQueryOptions(
   ({ threadId, enabled }: { threadId: string; enabled: boolean }) => ({
     key: adminKeys.supportMessages(threadId),
-    query: async (): Promise<SupportMessage[]> =>
-      [...(await getAdminSupportMessages(threadId)).messages].reverse(),
+    query: async (): Promise<SupportMessage[]> => (await readWholeFeed(threadId)).reverse(),
     staleTime: 0,
     enabled,
   }),

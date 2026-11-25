@@ -172,10 +172,19 @@ function fakeServer(): void {
     if (!found) throw new ApiResponseError(404, 'not found')
     return { ...found }
   })
-  vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(async (threadId) => ({
-    messages: [...(server.feeds[threadId] ?? [])].reverse(),
-    next_cursor: null,
-  }))
+  // Newest first, one page of `limit` from the cursor (the offset as text),
+  // like GET /support/threads/{id}/messages.
+  vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(
+    async (threadId, limit = 50, cursor) => {
+      const all = [...(server.feeds[threadId] ?? [])].reverse()
+      const from = Number(cursor ?? 0)
+      const next = from + limit
+      return {
+        messages: all.slice(from, next),
+        next_cursor: next < all.length ? String(next) : null,
+      }
+    },
+  )
   vi.mocked(supportApi.claimSupportThread).mockImplementation(async (id) => {
     server.tickets[id] = { ...must(server.tickets[id]), claimed_by: ME }
     return { claimed: true }
@@ -536,7 +545,7 @@ describe('ConsoleSupportView: the person', () => {
 
     await click(button('История обращений'))
 
-    expect(supportApi.getAdminSupportMessages).toHaveBeenCalledWith('h_0003')
+    expect(supportApi.getAdminSupportMessages).toHaveBeenCalledWith('h_0003', 100, undefined)
     expect(feedText()).toContain('An older talk before tickets')
   })
 })
@@ -707,6 +716,44 @@ describe('ConsoleSupportView: statistics', () => {
       ['Администратор', '2', '—', '—'],
       ['Администратор', '1', '4.00', '100%'],
     ])
+  })
+})
+
+describe('ConsoleSupportView: a long conversation', () => {
+  it('shows every message, the oldest too, however many pages the feed takes', async () => {
+    server.feeds.t_free_0001 = Array.from({ length: 230 }, (_, i) =>
+      message('t_free_0001', {
+        id: `m_long_${i}`,
+        body: `Message number ${i}`,
+        created_at: DateTime.fromISO('2026-11-20T10:00:00Z').plus({ minutes: i }).toISO() ?? '',
+      }),
+    )
+    await mount()
+
+    const text = byId('ticket-detail')?.textContent ?? ''
+    expect(text).toContain('Message number 0')
+    expect(text).toContain('Message number 229')
+    expect(vi.mocked(supportApi.getAdminSupportMessages).mock.calls).toContainEqual([
+      't_free_0001',
+      100,
+      '200',
+    ])
+  })
+})
+
+describe('ConsoleSupportView: a feed whose cursor repeats', () => {
+  it('stops reading at the repeated cursor and still shows what came', async () => {
+    vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(async (threadId) => ({
+      messages: [message(threadId, { body: 'Stuck page' })],
+      next_cursor: 'same',
+    }))
+    await mount()
+
+    expect(byId('ticket-detail')?.textContent).toContain('Stuck page')
+    const reads = vi
+      .mocked(supportApi.getAdminSupportMessages)
+      .mock.calls.filter(([threadId]) => threadId === 't_free_0001')
+    expect(reads.map(([, , cursor]) => cursor)).toEqual([undefined, 'same'])
   })
 })
 
