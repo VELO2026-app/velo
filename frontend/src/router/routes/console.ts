@@ -1,10 +1,9 @@
 // =============================================================================
-// VELO Frontend -- web console routes (/console, ConsoleShell; FE-262)
+// VELO Frontend -- web console routes (/admin, ConsoleShell; FE-262, FE-272)
 // =============================================================================
 //
-// The desktop web version of the instance admin. It lives next to the mobile
-// /admin zone until it is tested; then /admin moves here and the mobile
-// screens go. One route per module (utils/console/modules.ts) plus the
+// The instance admin: the web console at /admin (FE-272; it lived at
+// /console next to the mobile admin until then). One route per module (utils/console/modules.ts) plus the
 // screens inside a module. The records of an instance option carry
 // meta.option, as in routes/user.ts.
 //
@@ -29,11 +28,61 @@ function screen(name: ConsoleRouteName): () => Promise<{ default: Component }> {
   return () => import('@/views/console/consoleScreens').then((m) => m.loadConsoleScreen(name))
 }
 
-/** The /console zone: ConsoleShell and one screen per module. */
+/**
+ * The addresses of the mobile admin that the console now answers (FE-272):
+ * bot deep links, bookmarks and old notifications open the console screen
+ * that does the same job. The same paths as a console screen
+ * (dashboard, masters, masters/:id, users, schools, catalog, practices,
+ * practices/:id) need no record here.
+ */
+const LEGACY_ADMIN: RouteRecordRaw[] = [
+  { path: 'masters/invite', redirect: { name: 'console-masters' } },
+  { path: 'method-requests', redirect: { name: 'console-moderation', query: { tab: 'methods' } } },
+  {
+    // The old moderation screen had the support tickets as its first tab.
+    path: 'reports',
+    redirect: (to) =>
+      to.query.tab === 'complaints'
+        ? { name: 'console-moderation', query: { tab: 'complaints' } }
+        : { name: 'console-support' },
+  },
+  {
+    path: 'reports/:id',
+    redirect: (to) => ({
+      name: 'console-moderation',
+      query: { tab: 'complaints', id: String(to.params.id) },
+    }),
+  },
+  { path: 'profile', redirect: { name: 'console-dashboard' } },
+  {
+    path: 'metrics/check-in',
+    redirect: { name: 'console-analytics', query: { metric: 'checkin' } },
+  },
+  {
+    path: 'metrics/feedback',
+    redirect: { name: 'console-analytics', query: { metric: 'feedback' } },
+  },
+  { path: 'metrics/return', redirect: { name: 'console-analytics', query: { metric: 'return' } } },
+  { path: 'revenue', redirect: { name: 'console-finance' } },
+  { path: 'participants', redirect: { name: 'console-users', query: { tab: 'user' } } },
+  { path: 'withdrawals', redirect: { name: 'console-finance', query: { tab: 'withdrawals' } } },
+  {
+    path: 'withdrawals/:id',
+    redirect: { name: 'console-finance', query: { tab: 'withdrawals' } },
+  },
+  { path: 'promos', redirect: { name: 'console-finance', query: { tab: 'promos' } } },
+  { path: 'support/stats', redirect: { name: 'console-support', query: { tab: 'stats' } } },
+  {
+    path: 'support/:id',
+    redirect: (to) => ({ name: 'console-support', query: { ticket: String(to.params.id) } }),
+  },
+]
+
+/** The /admin zone (the web console): ConsoleShell and one screen per module. */
 export function consoleRoutes(): RouteRecordRaw[] {
   return [
     {
-      path: '/console',
+      path: '/admin',
       component: () => import('@/views/shells/ConsoleShell.vue'),
       meta: { catalogs: ['admin'], requires: 'admin-role', web: true },
       children: [
@@ -55,11 +104,23 @@ export function consoleRoutes(): RouteRecordRaw[] {
           name: 'console-practices-detail',
           component: screen('console-practices-detail'),
         },
+        ...LEGACY_ADMIN,
         {
           path: '',
           redirect: { name: consoleRouteName('dashboard') },
         },
       ],
+    },
+    // The console's first address (FE-262, until FE-272): the same screen
+    // under /admin, query and hash kept.
+    {
+      path: '/console/:rest(.*)*',
+      redirect: (to) => {
+        const rest = Array.isArray(to.params.rest)
+          ? to.params.rest.join('/')
+          : String(to.params.rest ?? '')
+        return { path: `/admin/${rest}`, query: to.query, hash: to.hash }
+      },
     },
   ]
 }

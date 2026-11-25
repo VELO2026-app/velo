@@ -1,7 +1,7 @@
 {
   "_comment": "Size budget for scripts/bundle-report.mjs --budget (rules: scripts/lib/bundle-budget.mjs; policy and the agent rule: docs/agents/bundle.md). entryGzip = gzip bytes of assets/app-*.js, precacheBytes = PWA precache bytes. Both float: a build may sit within +-2% of them; raising one needs the `bundle-growth` label, a build more than 2% below fails with the value to lower it to. ceiling = the FE-157 targets, a hard limit with no tolerance: 150000 B = 150.00 kB gzip app chunk, 1000000 B = 1000.00 kB precache (1 kB = 1000 B as kb() prints); raising it needs the `bundle-ceiling` label, the owner's. History of raises: git log. skinned = the same two budgets for a build WITH a skin package (FE-230: the core is neutral, production always ships a package -- its photo and font join the precache); bundle-report picks it when dist/skin/report.json exists (a build with a package writes it); `package` and `tag` name what it was measured with, `repo` is where CI fetches it from.",
-  "entryGzip": 138800,
-  "precacheBytes": 532307,
+  "entryGzip": 138198,
+  "precacheBytes": 526731,
   "ceiling": {
     "entryGzip": 150000,
     "precacheBytes": 1000000
@@ -10,7 +10,7 @@
     "package": "velo-brand",
     "tag": "v0.1.1",
     "repo": "https://github.com/VELO2026-app/velo-brand.git",
-    "entryGzip": 140288,
-    "precacheBytes": 644488
+    "entryGzip": 138191,
+    "precacheBytes": 638472
   }
 }

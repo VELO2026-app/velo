@@ -52,7 +52,7 @@ defineProps<{
 
 const router = useRouter()
 const uiStore = useUiStore()
-const consoleUrl = new URL('/console', host.location.origin).toString()
+const consoleUrl = new URL('/admin', host.location.origin).toString()
 
 /** How long the copy button says what happened before it reads «Copy» again. */
 const COPY_FEEDBACK_MS = 2500

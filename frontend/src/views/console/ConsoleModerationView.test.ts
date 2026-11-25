@@ -161,8 +161,8 @@ async function mount(path = '/console/moderation'): Promise<HTMLElement> {
     history: createMemoryHistory(),
     routes: [
       { path: '/console/moderation', name: 'console-moderation', component: ConsoleModerationView },
-      { path: '/admin/masters/:id', name: 'admin-master-review', component: Stub },
-      { path: '/admin/practices/:id', name: 'admin-practice-detail', component: Stub },
+      { path: '/admin/masters/:id', name: 'console-masters-detail', component: Stub },
+      { path: '/admin/practices/:id', name: 'console-practices-detail', component: Stub },
     ],
   })
   await router.push(path)
@@ -309,7 +309,7 @@ describe('ConsoleModerationView: complaints', () => {
     await mount()
 
     await click(byId('report-target') as HTMLElement)
-    expect(router.currentRoute.value.name).toBe('admin-master-review')
+    expect(router.currentRoute.value.name).toBe('console-masters-detail')
     expect(router.currentRoute.value.params.id).toBe('target_master_0001')
 
     await router.push('/console/moderation?id=r_user_0002')

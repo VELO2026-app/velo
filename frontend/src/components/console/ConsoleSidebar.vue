@@ -3,8 +3,7 @@
 
   The web console's left menu: the instance mark, the module groups
   (utils/console/nav.ts -- only the modules this instance has), and at the
-  bottom the way back to the user mode, the mobile admin (until the console
-  replaces it) and who is signed in. Masters and Moderation carry the live
+  bottom the way back to the user mode and who is signed in. Masters and Moderation carry the live
   counters of the admin stats, the query the mobile AdminShell reads; a
   failed load says so once per run of failures.
 
@@ -66,14 +65,6 @@
         <IconUserMode class="console-sidebar__icon" aria-hidden="true" />
         <span class="console-sidebar__label">{{ t('console.userMode') }}</span>
       </button>
-      <RouterLink
-        :to="{ name: 'admin-dashboard' }"
-        class="console-sidebar__item console-sidebar__item--quiet"
-        :title="t('console.mobileAdmin')"
-      >
-        <IconHome class="console-sidebar__icon" aria-hidden="true" />
-        <span class="console-sidebar__label">{{ t('console.mobileAdmin') }}</span>
-      </RouterLink>
       <div class="console-sidebar__me" :title="meName">
         <VAvatar :name="meName" :url="meAvatar" size="sm" />
         <div class="console-sidebar__me-text console-sidebar__wide-only">
@@ -90,7 +81,7 @@ import { t } from '@/locales'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { VAvatar, VeloLogo } from '@/components/ui'
-import { IconHome, IconUserMode } from '@/components/icons'
+import { IconUserMode } from '@/components/icons'
 import { onFailedRequest, useAdminStats } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'

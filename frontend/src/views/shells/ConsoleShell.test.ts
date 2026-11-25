@@ -55,7 +55,6 @@ function buildRouter(): Router {
         component: StubChild,
       })),
       { path: '/', name: 'user-dashboard', component: StubChild },
-      { path: '/admin', name: 'admin-dashboard', component: StubChild },
     ],
   })
 }
@@ -232,7 +231,7 @@ describe('ConsoleShell: copying the console link on the stub', () => {
     await vi.waitFor(() =>
       expect(byTestId('console-stub-copy')?.textContent?.trim()).toBe('Ссылка скопирована'),
     )
-    expect(writeText).toHaveBeenCalledWith(`${location.origin}/console`)
+    expect(writeText).toHaveBeenCalledWith(`${location.origin}/admin`)
 
     await vi.advanceTimersByTimeAsync(3000)
     expect(byTestId('console-stub-copy')?.textContent?.trim()).toBe('Скопировать ссылку')

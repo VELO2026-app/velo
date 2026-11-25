@@ -54,7 +54,7 @@ describe('parseStartParam', () => {
       [`open_thread__${id}`, 'master', { name: 'master-chat', params: { id } }],
       // FE-103/BE-172: the admin signal carries the OPENER's user_id; only
       // an admin gets the destination.
-      [`open_admin_support__${id}`, 'admin', { name: 'admin-support-detail', params: { id } }],
+      [`open_admin_support__${id}`, 'admin', { name: 'console-support', query: { ticket: id } }],
       // FE-107 / BE-162 delivery 3: the rating notification's title
       // (i18n:chat.rating.title) -- the same chat route open_thread uses,
       // plus ?rate=1 asking the rating sheet to open on the ticket the link

@@ -137,10 +137,10 @@ describe('router/guards', () => {
       expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
     })
 
-    it('admin in a browser -> the web console', async () => {
+    it('admin in a browser -> /admin/dashboard as well', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'admin' })
-      expect(await call(roleRedirect)).toEqual({ path: '/console' })
+      expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
     })
 
     it('master -> /master/dashboard', async () => {
@@ -158,19 +158,19 @@ describe('router/guards', () => {
     it('after a browser sign-in: lands on the address opened before the login screen, once', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'admin' })
-      loginDestination.value = '/console/masters'
+      loginDestination.value = '/admin/masters'
 
-      expect(await call(roleRedirect)).toBe('/console/masters')
+      expect(await call(roleRedirect)).toBe('/admin/masters')
       expect(loginDestination.value).toBeNull()
-      expect(await call(roleRedirect)).toEqual({ path: '/console' })
+      expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
     })
 
     it('not signed in: the destination waits for the sign-in', async () => {
       __setReadyForTest(true)
-      loginDestination.value = '/console'
+      loginDestination.value = '/admin'
 
       expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
-      expect(loginDestination.value).toBe('/console')
+      expect(loginDestination.value).toBe('/admin')
     })
 
     // Links (3 October): this used to set an already-PARSED route. Right while

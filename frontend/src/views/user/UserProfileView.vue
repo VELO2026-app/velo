@@ -308,7 +308,7 @@ async function onLogout(): Promise<void> {
 function returnToNativeMode(): void {
   uiStore.setUiMode('default')
   if (authStore.role === 'admin') {
-    void router.push({ name: 'admin-dashboard' })
+    void router.push({ name: 'console-dashboard' })
   } else {
     void router.push({ name: 'master-dashboard' })
   }
