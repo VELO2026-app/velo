@@ -107,8 +107,10 @@ export const SWEEP: Record<string, SweepRow> = {
   root: {
     path: '/',
     roles: ['student', 'master', 'admin'],
-    // Each role to ITS zone's dashboard.
-    lands: (role) => new RegExp(`/${ZONE[role]}/dashboard$`),
+    // Each role to ITS zone's dashboard; an admin in a browser to the web
+    // console (owner ruling, FE-272). Inside Telegram: telegram.spec.ts.
+    lands: (role) =>
+      role === 'admin' ? /\/console\/dashboard$/ : new RegExp(`/${ZONE[role]}/dashboard$`),
   },
   'auth-error': {
     path: '/auth-error',
