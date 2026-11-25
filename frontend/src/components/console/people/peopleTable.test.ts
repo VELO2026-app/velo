@@ -3,27 +3,11 @@ import {
   DASH,
   countText,
   masterStatusLabel,
-  pagerItems,
+  masterStatusTone,
   payoutText,
+  roleTone,
   tabOptions,
 } from '@/components/console/people/peopleTable'
-
-describe('pagerItems', () => {
-  it.each([
-    [1, 8, [1, 2, 'gap', 8]],
-    [4, 8, [1, 2, 3, 4, 5, 'gap', 8]],
-    [8, 8, [1, 'gap', 7, 8]],
-    [3, 5, [1, 2, 3, 4, 5]],
-    [2, 2, [1, 2]],
-  ])('page %i of %i -> %j', (page, pages, expected) => {
-    expect(pagerItems(page, pages)).toEqual(expected)
-  })
-
-  it('has no pager for fewer than two pages', () => {
-    expect(pagerItems(1, 1)).toEqual([])
-    expect(pagerItems(1, 0)).toEqual([])
-  })
-})
 
 describe('countText and payoutText', () => {
   it('show the number, and a dash when the server has none', () => {
@@ -64,5 +48,25 @@ describe('masterStatusLabel', () => {
 
   it('shows a status the console does not know as the server sent it', () => {
     expect(masterStatusLabel('on_hold')).toBe('on_hold')
+  })
+})
+
+describe('masterStatusTone and roleTone', () => {
+  it.each([
+    ['verified', 'success'],
+    ['pending', 'warning'],
+    ['rejected', 'error'],
+    ['suspended', 'error'],
+    ['something-new', 'muted'],
+  ])('master status %s reads as %s', (status, tone) => {
+    expect(masterStatusTone(status)).toBe(tone)
+  })
+
+  it.each([
+    ['admin', 'warning'],
+    ['master', 'success'],
+    ['user', 'muted'],
+  ])('role %s reads as %s', (role, tone) => {
+    expect(roleTone(role)).toBe(tone)
   })
 })

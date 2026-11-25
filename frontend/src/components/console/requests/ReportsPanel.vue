@@ -69,9 +69,9 @@
                 @click="select(item)"
               >
                 <span class="report-row__top">
-                  <RequestStatusBadge :tone="reportStatusVariant(item.status)">
+                  <ConsoleBadge :tone="reportStatusVariant(item.status)">
                     {{ reportStatusLabel(item.status) }}
-                  </RequestStatusBadge>
+                  </ConsoleBadge>
                   <span class="report-row__time">{{ formatRelative(item.created_at) }}</span>
                 </span>
                 <span class="report-row__title">{{ reportTitle(item) }}</span>
@@ -124,13 +124,13 @@ import { computed, ref } from 'vue'
 import { useInfiniteQuery, useQuery, useQueryCache } from '@pinia/colada'
 import { VButton, VEmptyState, VLoader } from '@/components/ui'
 import RequestChip from '@/components/console/requests/RequestChip.vue'
-import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleSplit from '@/components/console/ConsoleSplit.vue'
 import ReportDetail from '@/components/console/requests/ReportDetail.vue'
 import { reportTitle } from '@/components/console/requests/reportTitle'
 import { useSplitLayout } from '@/components/console/requests/useSplitLayout'
-import { useUrlSelection } from '@/components/console/requests/useUrlSelection'
+import { useUrlSelection } from '@/composables/console/useUrlSelection'
 import type { ReportResponse, ReportStatusFilter } from '@/api/admin'
 import {
   adminReportQuery,

@@ -62,7 +62,7 @@
           v-for="cell in cells"
           :key="cell.key"
           type="button"
-          class="week-strip__day"
+          class="week-strip__day velo-tap-target"
           :class="{ 'week-strip__day--active': cell.key === selectedDate }"
           @click="onDayClick(cell.key)"
         >

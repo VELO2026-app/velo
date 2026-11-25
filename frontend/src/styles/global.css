@@ -630,6 +630,27 @@ html.is-keyboard-open .mobile-layout__main--fog {
   border: 0;
 }
 
+/* === Tap target (FE-249) ===
+   An invisible layer grows the tappable area of a small control to 44x44 px
+   without changing how it looks (the e2e layout detector counts it, see
+   docs/agents/e2e.md, rule `small-target`). The layer is exactly 44 px on an
+   axis where the control is smaller, and the control's own size where it is
+   larger. Put the class on a <button> or <a>, never on an <input> (it takes no
+   pseudo-element). An element that sets its own `position` keeps it (a scoped
+   rule outranks this one); the layer is then placed against that box.
+   Keep neighbours at least the overhang apart: a control 29 px tall overhangs
+   7.5 px above and below, and a positioned layer wins a tap over an earlier
+   plain sibling. The kit (@velo/ui) keeps its own copies of this rule. */
+.velo-tap-target {
+  position: relative;
+}
+
+.velo-tap-target::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((100% - var(--velo-size-44)) / 2));
+}
+
 /* === Listbox keyboard highlight ===
    The option an arrow key has moved to in a search field with a suggestion
    list (useListboxNav adds the class). A ring, so it never reads as the

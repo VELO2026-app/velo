@@ -44,7 +44,7 @@
     <!-- FE-107: the period statistics of the appeals -- the gate decides
          where it lives (dashboard or its own screen); until then it is its
          own, one hop from the list it sums. -->
-    <button type="button" class="tickets__stats" @click="openStats">
+    <button type="button" class="tickets__stats velo-tap-target" @click="openStats">
       {{ t('adminScreens.adminSupportStats.title') }}
     </button>
 
@@ -318,7 +318,11 @@ function openStats(): void {
    filter pill -- an offer, not a competing action. */
 .tickets__stats {
   align-self: flex-end;
-  margin: calc(-1 * var(--space-3)) 0;
+  /* The link's tap layer (velo-tap-target, 44px) overhangs its 29px box by 7.5px
+     on each side: the top margin keeps that clear of the filter pill above
+     (the 16px column gap less 8px leaves 8px), the bottom margin keeps the rows
+     below where they were (-14px, -14px before). */
+  margin: calc(-1 * var(--space-2)) 0 calc(-1 * (var(--space-4) + var(--space-1)));
   background: none;
   border: none;
   font-family: var(--font-body);

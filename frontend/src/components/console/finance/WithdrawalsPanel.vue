@@ -78,13 +78,13 @@
               </VButton>
             </div>
             <span v-else class="withdrawals__stack">
-              <ConsoleStatusBadge :tone="row.status === 'approved' ? 'success' : 'error'">
+              <ConsoleBadge :tone="row.status === 'approved' ? 'success' : 'error'">
                 {{
                   row.status === 'approved'
                     ? t('console.finance.withdrawals.approved')
                     : t('console.finance.withdrawals.rejected')
                 }}
-              </ConsoleStatusBadge>
+              </ConsoleBadge>
               <span
                 v-if="row.status === 'rejected' && row.admin_note"
                 class="withdrawals__reason"
@@ -100,8 +100,9 @@
         <ConsolePager
           v-if="total > 0"
           :page="page"
-          :page-count="pageCount"
-          :summary="summary"
+          :page-size="ADMIN_WITHDRAWALS_PAGE_SIZE"
+          :total="total"
+          :shown="rows.length"
           @update:page="setPage"
         />
       </template>
@@ -145,14 +146,14 @@ import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import ConfirmPaymentModal from '@/components/shared/ConfirmPaymentModal.vue'
-import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
-import ConsolePager from '@/components/console/content/ConsolePager.vue'
-import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
+import ConsoleLoading from '@/components/console/ConsoleLoading.vue'
+import ConsolePager from '@/components/console/ConsolePager.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import WithdrawalRejectModal from '@/components/console/finance/WithdrawalRejectModal.vue'
 import { countedLabel, formatStamp } from '@/components/console/finance/financeFormat'
 import { payoutHolder, payoutMethodLabel } from '@/components/console/finance/payoutMethod'
-import { useUrlChoice } from '@/components/console/finance/useUrlChoice'
-import { useUrlPage } from '@/components/console/finance/useUrlPage'
+import { useUrlChoice } from '@/composables/console/useUrlChoice'
+import { useUrlPage } from '@/composables/console/useUrlPage'
 import { approveWithdrawal, rejectWithdrawal } from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import type { AdminWithdrawalResponse, WithdrawalStatus } from '@/api/admin'
@@ -225,15 +226,6 @@ const rows = computed<WithdrawalRow[]>(() =>
   (listQuery.data.value?.items ?? []).map((item) => ({ ...item })),
 )
 const total = computed(() => listQuery.data.value?.total ?? 0)
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / ADMIN_WITHDRAWALS_PAGE_SIZE)))
-const summary = computed(() => {
-  const from = (page.value - 1) * ADMIN_WITHDRAWALS_PAGE_SIZE + 1
-  return t('console.pager.shown', {
-    from,
-    to: Math.min(total.value, from + rows.value.length - 1),
-    total: total.value,
-  })
-})
 
 // The pending counter is its own request, so it stays right on any tab and page.
 const pendingQuery = useQuery(() => adminPendingWithdrawalsQuery(true))

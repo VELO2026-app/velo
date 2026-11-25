@@ -21,11 +21,11 @@
     testid="console-practice-detail"
   >
     <template v-if="practice" #title-extra>
-      <ConsoleStatusBadge :tone="isPast ? 'muted' : 'info'" data-testid="practice-state">{{
+      <ConsoleBadge :tone="isPast ? 'muted' : 'info'" data-testid="practice-state">{{
         isPast
           ? t('console.practices.detail.state.past')
           : t('console.practices.detail.state.upcoming')
-      }}</ConsoleStatusBadge>
+      }}</ConsoleBadge>
     </template>
     <template #actions>
       <VButton variant="outline" size="sm" data-testid="practice-back" @click="backToList">{{
@@ -126,30 +126,28 @@
                 <div class="practice-detail__fact">
                   <dt>{{ t('console.practices.detail.zoom.meetingStatus') }}</dt>
                   <dd>
-                    <ConsoleStatusBadge
-                      :tone="meetingStatus.tone"
-                      data-testid="zoom-meeting-status"
-                      >{{ meetingStatus.label }}</ConsoleStatusBadge
-                    >
+                    <ConsoleBadge :tone="meetingStatus.tone" data-testid="zoom-meeting-status">{{
+                      meetingStatus.label
+                    }}</ConsoleBadge>
                   </dd>
                 </div>
                 <div class="practice-detail__fact">
                   <dt>{{ t('console.practices.detail.zoom.report') }}</dt>
                   <dd>
-                    <ConsoleStatusBadge :tone="zoom.report_ingested ? 'success' : 'muted'">{{
+                    <ConsoleBadge :tone="zoom.report_ingested ? 'success' : 'muted'">{{
                       zoom.report_ingested
                         ? t('console.practices.detail.zoom.reportReady')
                         : t('console.practices.detail.zoom.reportWaiting')
-                    }}</ConsoleStatusBadge>
+                    }}</ConsoleBadge>
                   </dd>
                 </div>
                 <div class="practice-detail__fact">
                   <dt>{{ t('console.practices.detail.zoom.unmatched') }}</dt>
                   <dd>
-                    <ConsoleStatusBadge
+                    <ConsoleBadge
                       :tone="zoom.unmatched_count > 0 ? 'warning' : 'muted'"
                       data-testid="zoom-unmatched-count"
-                      >{{ zoom.unmatched_count }}</ConsoleStatusBadge
+                      >{{ zoom.unmatched_count }}</ConsoleBadge
                     >
                   </dd>
                 </div>
@@ -257,8 +255,8 @@ import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import BookingStatusBadge from '@/components/console/content/BookingStatusBadge.vue'
-import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
-import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
+import ConsoleLoading from '@/components/console/ConsoleLoading.vue'
 import ConsoleStat from '@/components/console/content/ConsoleStat.vue'
 import { ApiResponseError } from '@/api/client'
 import { useConsoleWidth } from '@/composables/useConsoleWidth'

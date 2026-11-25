@@ -22,9 +22,9 @@
         <div class="ticket-aside__fact">
           <dt>{{ t('console.support.user.status') }}</dt>
           <dd>
-            <RequestStatusBadge :tone="supportStatusBadge(ticket.status)">
+            <ConsoleBadge :tone="supportStatusBadge(ticket.status)">
               {{ supportStatusLabel(ticket.status) }}
-            </RequestStatusBadge>
+            </ConsoleBadge>
           </dd>
         </div>
         <div class="ticket-aside__fact">
@@ -75,7 +75,7 @@ import { t } from '@/locales'
 import { computed } from 'vue'
 import { VAvatar } from '@/components/ui'
 import RatingStars from '@/components/console/requests/RatingStars.vue'
-import RequestStatusBadge from '@/components/console/requests/RequestStatusBadge.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import { takerLabel } from '@/components/console/requests/ticketTaker'
 import type { AdminSupportTicket } from '@/api/support'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'

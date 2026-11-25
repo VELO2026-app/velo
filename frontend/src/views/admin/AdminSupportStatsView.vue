@@ -221,8 +221,8 @@ function figuresLine(row: SupportStatsFigures & { tickets?: number }): string {
 }
 
 .stats__nav-btn {
-  width: var(--velo-size-40);
-  height: var(--velo-size-40);
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
   border: var(--velo-border-width) solid var(--velo-glass-border);
   border-radius: var(--radius-full);
   background: none;

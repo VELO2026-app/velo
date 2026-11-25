@@ -49,8 +49,9 @@ withDefaults(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--velo-size-40);
-  height: var(--velo-size-40);
+  /* 44px tap target (FE-249), as the trigger above it. */
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-full);

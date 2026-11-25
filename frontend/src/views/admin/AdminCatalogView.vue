@@ -82,7 +82,7 @@
           <VInput v-model="draftLabel" class="admin-catalog__edit-input" />
           <button
             type="button"
-            class="admin-catalog__icon-btn"
+            class="admin-catalog__icon-btn velo-tap-target"
             :aria-label="t('ui.save')"
             @click="saveDirectionLabel(dir)"
           >
@@ -90,7 +90,7 @@
           </button>
           <button
             type="button"
-            class="admin-catalog__icon-btn"
+            class="admin-catalog__icon-btn velo-tap-target"
             :aria-label="t('ui.cancel')"
             @click="cancelEdit"
           >
@@ -102,7 +102,7 @@
           <VBadge :variant="dir.source === 'seed' ? 'muted' : 'blue'">{{ dir.source }}</VBadge>
           <button
             type="button"
-            class="admin-catalog__icon-btn"
+            class="admin-catalog__icon-btn velo-tap-target"
             :aria-label="t('ui.edit')"
             @click="startEditDirection(dir)"
           >

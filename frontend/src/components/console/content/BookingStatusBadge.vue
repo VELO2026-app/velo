@@ -6,19 +6,19 @@
 -->
 
 <template>
-  <ConsoleStatusBadge
+  <ConsoleBadge
     :tone="isBookingStatus(status) ? TONES[status] : 'muted'"
     data-testid="booking-status"
   >
     {{
       labelOrRaw(status, isBookingStatus, (known) => t(`console.practices.detail.booking.${known}`))
     }}
-  </ConsoleStatusBadge>
+  </ConsoleBadge>
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
-import ConsoleStatusBadge from '@/components/console/content/ConsoleStatusBadge.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import { labelOrRaw } from '@/utils/console/labelOrRaw'
 import type { ConsoleTone } from '@/utils/console/tone'
 

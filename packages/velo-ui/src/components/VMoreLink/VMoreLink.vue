@@ -46,6 +46,8 @@ defineEmits<{ click: [] }>()
 .v-more {
   display: flex;
   align-items: center;
+  /* 44px tap target around the 40px pill (FE-249). */
+  min-height: var(--velo-size-44);
   /* The content (text + pill) is flushed right; width:100% -- so the flush
    * works in any parent (not only a stretch column). */
   justify-content: flex-end;

@@ -60,13 +60,13 @@
         </template>
         <template #cell-status="{ row }">
           <div class="masters-status">
-            <PeoplePill :tone="masterStatusTone(row.master.master_status)">
+            <ConsoleBadge :tone="masterStatusTone(row.master.master_status)">
               {{ masterStatusLabel(row.master.master_status) }}
-            </PeoplePill>
+            </ConsoleBadge>
             <!-- A school counts active and frozen alike (the admin needs to see what stays attached). -->
-            <PeoplePill v-if="(row.master.schools_count ?? 0) > 0" tone="accent">
+            <ConsoleBadge v-if="(row.master.schools_count ?? 0) > 0" tone="info">
               {{ t('adminScreens.adminMasters.curatorRole') }} · {{ row.master.schools_count }}
-            </PeoplePill>
+            </ConsoleBadge>
           </div>
         </template>
         <template #cell-practices="{ row }">{{ countText(row.master.practices_count) }}</template>
@@ -74,7 +74,7 @@
         <template #cell-payout="{ row }">{{ payoutText(row.master.available_cents) }}</template>
         <template #empty>{{ emptyText }}</template>
       </ConsoleTable>
-      <PeoplePager
+      <ConsolePager
         :page="page"
         :page-size="CONSOLE_PAGE_SIZE"
         :total="total"
@@ -97,8 +97,8 @@ import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import MasterInviteModal from '@/components/console/people/MasterInviteModal.vue'
 import PeopleListCard from '@/components/console/people/PeopleListCard.vue'
-import PeoplePager from '@/components/console/people/PeoplePager.vue'
-import PeoplePill from '@/components/console/people/PeoplePill.vue'
+import ConsolePager from '@/components/console/ConsolePager.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import PersonCell from '@/components/console/people/PersonCell.vue'
 import {
   DASH,
