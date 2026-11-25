@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   LOGIN_MARK_KEY,
   RETURN_PATH,
-  loginTarget,
+  safeLoginDestination,
   newMark,
   rememberLoginMark,
   takeLoginMark,
@@ -64,12 +64,12 @@ describe('the mark', () => {
   })
 
   it('carries the destination of the sign-in; a destination that is not an app path is dropped', () => {
-    rememberLoginMark({ state: 'S1', mark: 'M1', next: '/console/masters' })
-    expect(takeLoginMark()).toEqual({ state: 'S1', mark: 'M1', next: '/console/masters' })
+    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/console/masters' })
+    expect(takeLoginMark()).toEqual({ state: 'S1', mark: 'M1', destination: '/console/masters' })
 
     localStorage.setItem(
       LOGIN_MARK_KEY,
-      JSON.stringify({ state: 'S1', mark: 'M1', next: 'https://evil.example/' }),
+      JSON.stringify({ state: 'S1', mark: 'M1', destination: 'https://evil.example/' }),
     )
     expect(takeLoginMark()).toEqual({ state: 'S1', mark: 'M1' })
   })
@@ -126,12 +126,9 @@ describe('takeLoginReturn', () => {
   })
 })
 
-describe('loginTarget', () => {
-  it.each([
-    ['/console', '/console'],
-    ['/console/masters?tab=new', '/console/masters?tab=new'],
-  ])('an app path is kept: %s', (path, kept) => {
-    expect(loginTarget(path)).toBe(kept)
+describe('safeLoginDestination', () => {
+  it.each(['/console', '/console/masters?status=pending'])('an app path is kept: %s', (path) => {
+    expect(safeLoginDestination(path)).toBe(path)
   })
 
   it.each([
@@ -142,8 +139,10 @@ describe('loginTarget', () => {
     ['the root with a query', '/?x=1'],
     ['the return path', `${RETURN_PATH}?code=C&state=S`],
     ['too long', `/${'a'.repeat(1024)}`],
+    ['a control character', '/console\n/masters'],
+    ['a NUL', '/console\u0000'],
     ['not a string', 42],
   ])('not a destination: %s', (_label, path) => {
-    expect(loginTarget(path)).toBeNull()
+    expect(safeLoginDestination(path)).toBeNull()
   })
 })

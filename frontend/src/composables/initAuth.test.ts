@@ -118,8 +118,8 @@ describe('initAuth outside Telegram', () => {
     expect(loginDestination.value).toBe('/console/masters?tab=new')
   })
 
-  it('the return lands where the sign-in started: the mark gives back its destination', async () => {
-    rememberLoginMark({ state: 'S1', mark: 'M1', next: '/console' })
+  it('a successful return restores the destination the mark carried', async () => {
+    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/console' })
     openReturn('code=C1&state=S1')
     vi.mocked(api.post).mockResolvedValue({
       session_token: 'new_tok',
@@ -134,7 +134,7 @@ describe('initAuth outside Telegram', () => {
   })
 
   it('a refused return keeps the destination for the next try', async () => {
-    rememberLoginMark({ state: 'S1', mark: 'M1', next: '/console' })
+    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/console' })
     openReturn('code=C1&state=S1')
     vi.mocked(api.post).mockRejectedValue(new ApiResponseError(400, 'x', 'telegram_failed'))
 
@@ -142,6 +142,32 @@ describe('initAuth outside Telegram', () => {
 
     expect(auth.loginNotice.value).toBe('telegram_failed')
     expect(loginDestination.value).toBe('/console')
+  })
+
+  it('a refused return over an expired saved session: the destination is not lost', async () => {
+    localStorage.setItem(SESSION_TOKEN_KEY, 'old_tok')
+    vi.mocked(usersApi.getMe).mockRejectedValue(new ApiResponseError(401, 'x', 'unauthorized'))
+    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/console' })
+    openReturn('code=C1&state=S1')
+    vi.mocked(api.post).mockRejectedValue(new ApiResponseError(400, 'x', 'telegram_failed'))
+
+    const auth = await run()
+
+    expect(auth.isAuthenticated.value).toBe(false)
+    expect(loginDestination.value).toBe('/console')
+  })
+
+  it('a session that ends on a page (expired, logged out): the next sign-in lands there', async () => {
+    localStorage.setItem(SESSION_TOKEN_KEY, 'kept_tok')
+    vi.mocked(usersApi.getMe).mockResolvedValue(user({ role: 'admin' }))
+    vi.mocked(api.post).mockResolvedValue(undefined)
+    await run()
+    window.history.replaceState(null, '', '/console/masters?status=pending')
+
+    await useAuthStore().logout()
+
+    expect(useAuth().isAuthenticated.value).toBe(false)
+    expect(loginDestination.value).toBe('/console/masters?status=pending')
   })
 
   it('a saved session survives a relaunch of the installed app', async () => {
@@ -437,6 +463,21 @@ describe('initAuth inside Telegram -- whose session is restored', () => {
     expect(auth.isAuthenticated.value).toBe(true)
   })
 
+  it("A's session dropped on A's page: B does not inherit it as a sign-in destination", async () => {
+    window.history.replaceState(null, '', '/console/masters')
+    sessionStorage.setItem(SESSION_TOKEN_KEY, 'tok_A')
+    vi.mocked(usersApi.getMe).mockResolvedValue(user({ id: 'user_A', telegram_id: 2002 }))
+    vi.mocked(api.post).mockImplementation(async (path: string) => {
+      if (path === TG_LOGIN)
+        return { session_token: 'tok_B', user: user({ id: 'user_B', telegram_id: 1001 }) }
+      return undefined
+    })
+
+    await run()
+
+    expect(loginDestination.value).toBeNull()
+  })
+
   it('revoking A fails (no answer): B is still signed in', async () => {
     sessionStorage.setItem(SESSION_TOKEN_KEY, 'tok_A')
     vi.mocked(usersApi.getMe).mockResolvedValue(user({ telegram_id: 2002 }))
@@ -545,7 +586,7 @@ describe('startBrowserLogin', () => {
     await useAuthStore().startBrowserLogin('/console')
 
     const kept = JSON.parse(localStorage.getItem(LOGIN_MARK_KEY) ?? 'null')
-    expect(kept).toMatchObject({ state: 'S9', next: '/console' })
+    expect(kept).toMatchObject({ state: 'S9', destination: '/console' })
     assign.mockRestore()
   })
 

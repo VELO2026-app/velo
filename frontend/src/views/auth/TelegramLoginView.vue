@@ -10,7 +10,7 @@
   What the screen says comes from loginNotice: why the last attempt did not
   get in (useAuth.ts, LoginNotice), worded here as a phrase -- never an error
   code. Pressing the button again clears it. The sign-in carries the address
-  the person opened (loginDestination), so it ends there, not on the role's zone.
+  the person was on (loginDestination), so it ends there, not on the role's zone.
 
   Same look as TelegramStubView (01_Welcome.png): logo, title, pill button.
 -->

@@ -204,20 +204,20 @@ export const useAuthStore = defineStore(AUTH_STORE_ID, () => {
 
   /**
    * Browser sign-in, step 1: ask the backend for Telegram's URL, remember
-   * `{ state, mark, next }` in this browser (platform/browser-login.ts) and
-   * leave for Telegram.
+   * `{ state, mark, destination }` in this browser (platform/browser-login.ts)
+   * and leave for Telegram.
    *
-   * @param next - Where to land once signed in (useAuth.ts,
+   * @param destination - Where to land once signed in (useAuth.ts,
    *   loginDestination); null lands on the role's zone.
    * @throws The API error for the login screen to word.
    */
-  async function startBrowserLogin(next: string | null = null): Promise<void> {
+  async function startBrowserLogin(destination: string | null = null): Promise<void> {
     const mark = newMark()
     const started = await api.post<BrowserLoginStartResponse>(
       '/api/v1/auth/telegram/browser/start',
       { mark },
     )
-    rememberLoginMark({ state: started.state, mark, ...(next ? { next } : {}) })
+    rememberLoginMark({ state: started.state, mark, destination: destination ?? undefined })
     host.location.assign(started.url)
   }
 

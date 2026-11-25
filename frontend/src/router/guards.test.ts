@@ -43,6 +43,7 @@ import {
   pendingStartParam,
   loginDestination,
 } from '@/composables/useAuth'
+import { ROOT_ROUTE } from '@/router/routes/public'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import type { UserResponse } from '@/api/types'
 
@@ -138,7 +139,7 @@ describe('router/guards', () => {
       setAuthUser({ role: 'admin' })
       loginDestination.value = '/console'
 
-      expect(await call(roleRedirect)).toEqual({ path: '/console' })
+      expect(await call(roleRedirect)).toBe('/console')
       expect(loginDestination.value).toBeNull()
       expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
     })
@@ -689,6 +690,21 @@ describe('router/guards', () => {
 
     beforeEach(() => {
       __setReadyForTest(true)
+    })
+
+    it('a sign-in destination keeps its query through the real router', async () => {
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          ROOT_ROUTE,
+          { path: '/console/masters', component: Stub, meta: { requires: 'admin-role' } },
+        ],
+      })
+      installAccessGuard(router)
+      setAuthUser({ role: 'admin' })
+      loginDestination.value = '/console/masters?status=pending'
+
+      expect(await go(router, '/')).toBe('/console/masters?status=pending')
     })
 
     it('the parent role requirement runs first: a user never reaches the status check', async () => {

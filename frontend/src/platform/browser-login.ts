@@ -23,11 +23,12 @@
 // (sessionStorage is per tab). It is one-time: taken (read and removed) at
 // the first return, whatever the outcome.
 //
-// WHERE THE PERSON LANDS: the address they opened before the login screen
-// (say /console) travels with the mark as `next`. The return itself comes to
-// RETURN_PATH and the router's first navigation goes to `/`, so without it a
-// sign-in always ended on the role's own zone (an admin on /admin, not on
-// /console). Only an in-app path is kept (loginTarget).
+// WHERE THE PERSON LANDS: the address they were on before the login screen
+// (say /console) travels with the mark as `destination`. The return itself
+// comes to RETURN_PATH and the router's first navigation goes to `/`, so
+// without it a sign-in always ended on the role's own zone (an admin on
+// /admin, not on /console). Only an in-app path is kept
+// (safeLoginDestination).
 //
 // WHY THE ADDRESS IS WIPED: the code and state stay in the address bar and in
 // history otherwise -- every reload would re-read an already used state, and
@@ -55,22 +56,28 @@ export interface LoginReturn {
 export interface LoginMark {
   state: string
   mark: string
-  /** Where to land once signed in (an in-app path, loginTarget). */
-  next?: string
+  /** Where to land once signed in (safeLoginDestination). */
+  destination?: string | undefined
 }
 
 /** Longest address kept as a destination; a longer one is dropped. */
 const MAX_TARGET_LENGTH = 1024
 
+// C0 control characters (U+0000..U+001F) and DEL: no address of this app has them.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/
+
 /**
  * An address worth landing on after the sign-in, or null.
  *
  * @remarks Only a path of this app: it starts with one `/` (not `//` or
- *  `/\`, which a browser reads as another host), and it is neither the root
- *  (roleRedirect already decides that) nor the return path itself.
+ *  `/\`, which a browser reads as another host), carries no control
+ *  character, and is neither the root (roleRedirect already decides that) nor
+ *  the return path itself.
  */
-export function loginTarget(path: unknown): string | null {
+export function safeLoginDestination(path: unknown): string | null {
   if (typeof path !== 'string' || path.length > MAX_TARGET_LENGTH) return null
+  if (CONTROL_CHARACTERS.test(path)) return null
   if (!path.startsWith('/') || path.startsWith('//') || path.startsWith('/\\')) return null
   const pathname = path.split(/[?#]/, 1)[0]
   if (pathname === '/' || pathname === RETURN_PATH) return null
@@ -120,11 +127,10 @@ export function takeLoginMark(storage: () => Storage = () => host.localStorage):
       (value as LoginMark).state &&
       (value as LoginMark).mark
     ) {
-      const next = loginTarget((value as LoginMark).next)
       return {
         state: (value as LoginMark).state,
         mark: (value as LoginMark).mark,
-        ...(next ? { next } : {}),
+        destination: safeLoginDestination((value as LoginMark).destination) ?? undefined,
       }
     }
   } catch {
