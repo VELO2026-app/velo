@@ -134,31 +134,50 @@ test('$deprecated: one shape only -- a non-empty string on a token', () => {
   assert.match(v, /--velo-flag has no consumer/, 'a malformed flag does not excuse a dead token')
 })
 
-test('pending: an approved token may wait for its consumer; a used or malformed note is red', () => {
-  const pend = (cssName, value, order, pending) => ({
+test('awaitingConsumer: an approved token may wait for its first consumer; a used, unnamed or doubled note is red', () => {
+  const NOTE = 'approved in FE-274 for a screen; consumer DSGN-33 (screens from its copies)'
+  const awaiting = (cssName, value, order, note, extra = {}) => ({
     $value: ` ${value}`,
-    $extensions: { pridem: { cssName, order, pending } },
+    ...extra,
+    $extensions: { pridem: { cssName, order, awaitingConsumer: note } },
   })
   const doc = {
     root: {
       velo: {
-        waiting: pend('--velo-waiting', '7px', 1, 'FE-274: approved, first consumer comes later'),
-        used: pend('--velo-used', '25px', 2, 'FE-274: approved, first consumer comes later'),
-        blank: pend('--velo-blank', '3px', 3, ' '),
-        plain: leaf('--velo-plain', '1px', 4),
+        waiting: awaiting('--velo-waiting', '7px', 1, NOTE),
+        used: awaiting('--velo-used', '25px', 2, NOTE),
+        blank: awaiting('--velo-blank', '3px', 3, ' '),
+        // A task key that is not the consumer's: only the requester is named.
+        requester: awaiting('--velo-requester', '5px', 4, 'approved in FE-274 for a screen'),
+        nokey: awaiting('--velo-nokey', '4px', 5, 'approved in FE-274; consumer comes later'),
+        both: awaiting('--velo-both', '6px', 6, NOTE, {
+          $deprecated: '2026-11-25: test, delete in Gen-3',
+        }),
+        plain: leaf('--velo-plain', '1px', 7),
       },
     },
   }
   const files = [{ file: 'src/a.css', src: '.a { gap: var(--velo-used); }' }]
   const rows = byName(auditTokens(doc, files))
-  assert.equal(rows['--velo-waiting'].pending, 'FE-274: approved, first consumer comes later')
-  assert.equal(rows['--velo-blank'].pending, false, 'a blank note is no note')
+  assert.equal(rows['--velo-waiting'].awaitingConsumer, NOTE)
+  for (const name of ['--velo-blank', '--velo-requester', '--velo-nokey'])
+    assert.equal(rows[name].awaitingConsumer, false, `${name}: no consumer task named, no note`)
   const v = auditViolations(auditTokens(doc, files), doc)
   const text = v.join('\n')
-  assert.ok(!v.some((line) => line.startsWith('--velo-waiting')), 'pending and dead is allowed')
-  assert.match(text, /--velo-used is marked pending but has a consumer/)
-  assert.match(text, /--velo-blank: pending must be a non-empty string/)
-  assert.match(text, /--velo-blank has no consumer/, 'a blank note does not excuse a dead token')
+  assert.ok(!v.some((line) => line.startsWith('--velo-waiting')), 'waiting and dead is allowed')
+  assert.match(text, /--velo-used is marked awaitingConsumer but has a consumer/)
+  for (const name of ['--velo-blank', '--velo-requester', '--velo-nokey']) {
+    assert.match(
+      text,
+      new RegExp(`${name}: awaitingConsumer must be a string that names the consumer task`),
+    )
+    assert.match(
+      text,
+      new RegExp(`${name} has no consumer`),
+      'a bad note does not excuse a dead token',
+    )
+  }
+  assert.match(text, /--velo-both is both \$deprecated and awaitingConsumer/)
   assert.match(text, /--velo-plain has no consumer/, 'no note, no consumer: still red')
 })
 

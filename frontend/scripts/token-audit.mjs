@@ -19,7 +19,7 @@ const { doc, files } = readTree(frontendDir)
 const rows = auditTokens(doc, files)
 const violations = auditViolations(rows, doc)
 const deprecated = rows.filter((r) => r.deprecated)
-const pending = rows.filter((r) => r.pending)
+const awaiting = rows.filter((r) => r.awaitingConsumer)
 const rare = rows.filter((r) => !r.deprecated && r.prod > 0 && r.prod <= 2 && !r.dynamic)
 
 if (process.argv.includes('--json')) {
@@ -31,7 +31,7 @@ if (process.argv.includes('--json')) {
         files: files.length,
         violations,
         deprecated: deprecated.map(plain),
-        pending: pending.map(plain),
+        awaitingConsumer: awaiting.map(plain),
         rare: rare.map(plain),
       },
       null,
@@ -51,9 +51,9 @@ if (process.argv.includes('--json')) {
     out.push(`- \`${r.cssName}\`: ${oneLine(r.value)} (${r.deprecated})`)
   }
   out.push('')
-  out.push(`### Pending, approved and waiting for a first consumer (${pending.length})`)
-  for (const r of pending) {
-    out.push(`- \`${r.cssName}\`: ${oneLine(r.value)} (${r.pending})`)
+  out.push(`### Awaiting a first consumer, approved (${awaiting.length})`)
+  for (const r of awaiting) {
+    out.push(`- \`${r.cssName}\`: ${oneLine(r.value)} (${r.awaitingConsumer})`)
   }
   out.push('')
   out.push(`### Rare: 1-2 product references (${rare.length})`)
