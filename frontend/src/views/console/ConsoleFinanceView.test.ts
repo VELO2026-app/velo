@@ -3,16 +3,16 @@
 // =============================================================================
 //
 // The Finance module of the web console is two tabs over what the API has
-// today: the payout queue (only where the instance has the payments option)
-// and the promo codes. The tables themselves are tested with their panels
-// (components/console/finance/*.test.ts); this file proves what the screen
-// owns: which tabs exist, which one opens, that the tab rides the URL and
-// that the number on the payout tab is the count of requests awaiting a
-// verdict.
+// today: the payout queue and the promo codes. An instance without the
+// payments option never reaches the screen: the menu and the router drop the
+// module (utils/console/modules.test.ts, router/routes.test.ts). The tables
+// themselves are tested with their panels (components/console/finance/*.test.ts);
+// this file proves what the screen owns: which tabs exist, which one opens,
+// that the tab rides the URL and that the number on the payout tab is the
+// count of requests awaiting a verdict.
 //
 // The screen mounts with a real router (memory history), a real Pinia and
-// Pinia Colada, as in production; the seam mocked is @/api/admin. The option
-// is set the way the app gets it (applyInstanceConfig, as /config.json does).
+// Pinia Colada, as in production; the seam mocked is @/api/admin.
 // =============================================================================
 
 import { createTestI18n } from '@/locales/testing'
@@ -24,7 +24,6 @@ import { PiniaColada } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import ConsoleFinanceView from '@/views/console/ConsoleFinanceView.vue'
 import * as adminApi from '@/api/admin'
-import { applyInstanceConfig } from '@/platform/instance'
 import type { AdminWithdrawalResponse } from '@/api/admin'
 
 vi.mock('@/api/admin')
@@ -128,11 +127,10 @@ afterEach(() => {
   host?.remove()
   app = null
   host = null
-  applyInstanceConfig({})
 })
 
 describe('ConsoleFinanceView', () => {
-  describe('an instance with the payments option', () => {
+  describe('the tabs', () => {
     it('has the payout tab, with the count awaiting a verdict, and the promo tab; the payouts open first', async () => {
       await mount()
 
@@ -192,28 +190,6 @@ describe('ConsoleFinanceView', () => {
       await mount('/console/finance?tab=revenue')
 
       expect(panel()).toBe('withdrawals')
-    })
-  })
-
-  describe('an instance without the payments option', () => {
-    beforeEach(() => {
-      applyInstanceConfig({ options: { payments: 'false' } })
-    })
-
-    it('has only the promo codes: no tab strip, no payout request is made', async () => {
-      await mount()
-
-      expect(moduleTabs()).toEqual([])
-      expect(panel()).toBe('promos')
-      expect(adminApi.getAdminPromos).toHaveBeenCalled()
-      expect(adminApi.getAdminWithdrawals).not.toHaveBeenCalled()
-    })
-
-    it('a kept link to the payouts opens the promo codes', async () => {
-      await mount('/console/finance?tab=withdrawals')
-
-      expect(panel()).toBe('promos')
-      expect(adminApi.getAdminWithdrawals).not.toHaveBeenCalled()
     })
   })
 })

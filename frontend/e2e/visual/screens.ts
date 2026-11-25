@@ -12,9 +12,21 @@
 import { SWEEP, type SweepRole, type SweepVisit } from '../sweep/routes'
 
 export interface VisualScreen {
-  /** Key of SWEEP; also the screenshot's file name. */
+  /** Key of SWEEP. */
   name: string
   role: SweepRole
+  /**
+   * The instance the screen is shot as, when not the one with every option on
+   * (FE-275): `goodo` answers the app's /config.json with the Goodo options
+   * (no payments). The path and the HAR are the screen's own: it asks the API
+   * for a part of what the full instance asks for.
+   */
+  instance?: 'goodo'
+}
+
+/** The screenshot's file name (and the test's name): the screen, and its instance. */
+export function shotOf(screen: VisualScreen): string {
+  return screen.instance ? `${screen.name}@${screen.instance}` : screen.name
 }
 
 const S = 'student'
@@ -31,6 +43,8 @@ export const SCREENS: VisualScreen[] = [
   { name: 'user-school', role: S },
   { name: 'user-topup', role: S },
   { name: 'not-found', role: S },
+  // FE-275: where a switched-off option's address lands.
+  { name: 'section-unavailable', role: S },
   { name: 'master-dashboard', role: M },
   { name: 'master-practices', role: M },
   { name: 'master-practice-new', role: M },
@@ -57,6 +71,10 @@ export const SCREENS: VisualScreen[] = [
   { name: 'console-analytics', role: A },
   { name: 'console-mail', role: A },
   { name: 'console-settings', role: A },
+  // FE-275: the console of the Goodo instance (no payments): no revenue tile,
+  // no payout column.
+  { name: 'console-dashboard', role: A, instance: 'goodo' },
+  { name: 'console-masters', role: A, instance: 'goodo' },
 ]
 
 /** The sweep row of a screen; throws on a name the table does not have. */

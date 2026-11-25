@@ -11,9 +11,9 @@
  * start). The skin is the one of the build under test, so the CI cells
  * (`sweep-console@velo-brand`, `sweep-console@goodo-brand`) judge both.
  */
-import { readParams, tokenOf } from '../stack/state'
-import { SESSION_TOKEN_KEY } from '../support/fixtures'
+import { readParams } from '../stack/state'
 import { WEB_WINDOW, checkLayout } from '../support/layout'
+import { signIn } from '../support/session'
 import { settle, trackApi } from '../support/settle'
 import { expect, test } from '../support/test'
 import { CONSOLE_SIZES, sizeLabel } from '../support/console-sizes'
@@ -33,10 +33,7 @@ for (const size of CONSOLE_SIZES) {
             const path = fillPath(entry, readParams(testInfo.project.name))
             expect(path, `no value for a parameter of ${entry.path} in params.json`).not.toBeNull()
             for (const allowance of entry.allow?.(role) ?? []) crashes.allow(allowance)
-            await page.addInitScript(
-              ([key, token]) => localStorage.setItem(key!, token!),
-              [SESSION_TOKEN_KEY, tokenOf(role)],
-            )
+            await signIn(page, role)
             const tracker = trackApi(page)
 
             await page.goto(path!)

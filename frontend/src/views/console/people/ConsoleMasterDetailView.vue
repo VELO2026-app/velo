@@ -111,7 +111,6 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { host } from '@/platform/host'
-import { isOptionEnabled } from '@/platform/instance'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
@@ -137,6 +136,10 @@ import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { routeParam } from '@/router/routeParam'
 import { masterDisplayName } from '@/utils/adminHelpers'
+import { consoleHasPayments } from '@/utils/console/options'
+
+// The payout balance is the payments option's: without it the stat is not there.
+const paymentsEnabled = consoleHasPayments()
 
 const route = useRoute()
 const router = useRouter()
@@ -191,17 +194,12 @@ const stats = computed(() => {
       label: t('adminScreens.adminMasters.studentsStat'),
       value: countText(m.students_count),
     },
-    // The payout balance is the payments option's.
-    ...(isOptionEnabled('payments')
-      ? [
-          {
-            key: 'payout',
-            label: t('adminScreens.adminMasters.toWithdrawStat'),
-            value: payoutText(m.available_cents),
-          },
-        ]
-      : []),
-  ]
+    {
+      key: 'payout',
+      label: t('adminScreens.adminMasters.toWithdrawStat'),
+      value: payoutText(m.available_cents),
+    },
+  ].filter((stat) => stat.key !== 'payout' || paymentsEnabled)
 })
 
 /** Back to the screen the card was opened from, or the masters list for a direct link. */

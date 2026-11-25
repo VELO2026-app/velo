@@ -97,7 +97,7 @@ import { t, getLocale } from '@/locales'
 import { computed, useId } from 'vue'
 import { useQuery } from '@pinia/colada'
 import { VButton } from '@/components/ui'
-import { isOptionEnabled } from '@/platform/instance'
+import { consoleHasPayments } from '@/utils/console/options'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
@@ -139,7 +139,7 @@ function countText(count: number | undefined): string {
   return count === undefined ? '—' : formatCount(count)
 }
 // The revenue figure is the payments option's: without it the tile is not there.
-const paymentsEnabled = isOptionEnabled('payments')
+const paymentsEnabled = consoleHasPayments()
 // Four tiles with the revenue one, three without: the row fills its width.
 const tileCount = paymentsEnabled ? 4 : 3
 

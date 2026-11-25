@@ -93,7 +93,6 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
 import { VButton, VSegment } from '@/components/ui'
-import { isOptionEnabled } from '@/platform/instance'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import MasterInviteModal from '@/components/console/people/MasterInviteModal.vue'
@@ -123,6 +122,7 @@ import { lastPageOf, useRouteListState } from '@/composables/console/useRouteLis
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { masterDisplayName } from '@/utils/adminHelpers'
+import { consoleHasPayments } from '@/utils/console/options'
 
 const router = useRouter()
 const toast = useToast()
@@ -172,6 +172,9 @@ const tabOptions = computed(() =>
   ),
 )
 
+// The payout balance is the payments option's: without it the column is not there.
+const paymentsEnabled = consoleHasPayments()
+
 // FE-264: practices, students and payout stand in for the design's sessions,
 // rating and per-session rate columns until the backend has them (BE-246, BE-249).
 const columns = computed<ConsoleTableColumn[]>(() =>
@@ -200,8 +203,7 @@ const columns = computed<ConsoleTableColumn[]>(() =>
       align: 'end' as const,
       secondary: true,
     },
-    // The payout balance is the payments option's: without it the column is not there.
-  ].filter((column) => column.key !== 'payout' || isOptionEnabled('payments')),
+  ].filter((column) => column.key !== 'payout' || paymentsEnabled),
 )
 
 const emptyText = computed(() => t(`console.masters.empty.${tab.value}`))

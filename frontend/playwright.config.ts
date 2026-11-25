@@ -44,8 +44,8 @@ const DIST = process.env.VISUAL_DIST ?? 'dist'
 const PREVIEW_URL = `http://127.0.0.1:${PORT}`
 const BASE_URL = process.env.E2E_BASE_URL ?? PREVIEW_URL
 const CI = !!process.env.CI
-// The console's layout sweep: its own project, not the phone projects' business.
-const CONSOLE_SPEC = 'sweep/console.spec.ts'
+// The console's sweeps: their own project, not the phone projects' business.
+const CONSOLE_SPEC = 'sweep/console*.spec.ts'
 
 export default defineConfig({
   testDir: 'e2e',

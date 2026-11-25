@@ -7,6 +7,12 @@
   White plate canon (Phase-3) — unified with VInput as the single field surface
   (was glass-blue). `required` -> pink IconRequired seal in the right gutter.
 
+  Style hooks (custom properties a caller sets on the component's root class
+  for a select that sits on the page, not in a form): `--v-select-gap` (the
+  margin under the field, default the form gap) and `--v-select-border` (the
+  field's border colour, default transparent -- a plate on a white card needs
+  no outline, one on a gradient page does).
+
   Usage:
     <VSelect v-model="lang" label="Language" :options="langOptions" />
     <VSelect v-model="dir" label="Direction" :options="opts" required />
@@ -102,7 +108,7 @@ defineEmits<{
 
 <style scoped>
 .v-select {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--v-select-gap, var(--space-4));
 }
 
 .v-select__label {
@@ -130,7 +136,7 @@ defineEmits<{
   color: var(--velo-text-primary);
   /* White plate canon — the single field surface, unified with VInput. */
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  border: 2px solid var(--v-select-border, transparent);
   border-radius: var(--velo-radius-badge);
   transition: border-color var(--transition-base);
   appearance: none;

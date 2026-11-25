@@ -14,13 +14,13 @@
  * Telegram on an iPhone in fullscreen opens it, at the project's size, and
  * the layout detector judges its geometry (./layout-host.ts).
  */
-import { readParams, tokenOf } from '../stack/state'
+import { readParams } from '../stack/state'
 import { settle, trackApi } from '../support/settle'
 import { expect, test } from '../support/test'
-import { SESSION_TOKEN_KEY } from '../support/fixtures'
+import { signIn } from '../support/session'
 import { checkLayout } from '../support/layout'
 import { isLayoutProject, launchInTelegram } from './layout-host'
-import { SWEEP, fillPath, type SweepRole } from './routes'
+import { SWEEP, fillPath } from './routes'
 
 /** Screens App.vue draws INSTEAD of the route (src/views/auth/). */
 const GATES = /^(splash|welcome|login)$/
@@ -70,11 +70,4 @@ for (const [name, entry] of Object.entries(SWEEP)) {
       if (layout) await checkLayout(page, crashes, name)
     })
   }
-}
-
-async function signIn(page: import('@playwright/test').Page, role: SweepRole): Promise<void> {
-  await page.addInitScript(
-    ([key, token]) => localStorage.setItem(key!, token!),
-    [SESSION_TOKEN_KEY, tokenOf(role)],
-  )
 }

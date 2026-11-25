@@ -20,11 +20,11 @@ import { AxeBuilder } from '@axe-core/playwright'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Page } from '@playwright/test'
-import { readParams, tokenOf } from '../stack/state'
-import { SESSION_TOKEN_KEY } from '../support/fixtures'
+import { readParams } from '../stack/state'
+import { signIn } from '../support/session'
 import { settle, trackApi } from '../support/settle'
 import { expect, test } from '../support/test'
-import { SWEEP, fillPath, type SweepRole } from '../sweep/routes'
+import { SWEEP, fillPath } from '../sweep/routes'
 import { A11Y_ALLOWLIST } from './allowlist'
 import {
   EXTRA_RULES,
@@ -102,13 +102,6 @@ async function resolveDeclaredPair(page: Page, brand: Brand): Promise<ResolvedPa
 
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-async function signIn(page: Page, role: SweepRole): Promise<void> {
-  await page.addInitScript(
-    ([key, token]) => localStorage.setItem(key!, token!),
-    [SESSION_TOKEN_KEY, tokenOf(role)],
-  )
 }
 
 function registerRoutes(skin: SkinName, brand: Brand): void {

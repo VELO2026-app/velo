@@ -152,7 +152,7 @@ function toUserMode(): void {
   padding: var(--space-5) var(--space-4) var(--space-4);
   overflow: hidden;
   background: var(--velo-glass-white-70);
-  border-right: 1px solid var(--velo-border-light);
+  border-right: var(--velo-border-width) solid var(--velo-border-light);
 }
 
 .console-sidebar__brand {
@@ -285,7 +285,7 @@ function toUserMode(): void {
   flex-direction: column;
   gap: var(--space-hairline);
   padding-top: var(--space-2);
-  border-top: 1px solid var(--velo-border-light);
+  border-top: var(--velo-border-width) solid var(--velo-border-light);
 }
 
 .console-sidebar__me {
@@ -330,7 +330,7 @@ function toUserMode(): void {
 
   .console-sidebar__group + .console-sidebar__group {
     padding-top: var(--space-2);
-    border-top: 1px solid var(--velo-border-light);
+    border-top: var(--velo-border-width) solid var(--velo-border-light);
   }
 
   .console-sidebar__item {
@@ -416,7 +416,7 @@ function toUserMode(): void {
 
   .console-sidebar__group + .console-sidebar__group {
     padding-top: var(--space-1);
-    border-top: 1px solid var(--velo-border-light);
+    border-top: var(--velo-border-width) solid var(--velo-border-light);
   }
 
   .console-sidebar__item {
