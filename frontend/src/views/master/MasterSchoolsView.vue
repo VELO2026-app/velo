@@ -184,8 +184,8 @@ function load(): void {
 /* Same top-right add control MasterGroupsView uses (G3, PROMPT №609): a 40px
    primary circle flush with the header row's right edge. */
 .mcg__add-btn {
-  width: var(--velo-size-40);
-  height: var(--velo-size-40);
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-full);

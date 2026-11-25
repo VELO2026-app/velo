@@ -1,7 +1,8 @@
 <!--
   VELO Frontend -- VInput Component (Phase F2.1)
 
-  Text input with label. VELΘ minimal style: no border at rest, focus ring.
+  Text input with label. VELΘ minimal style: a 1px rim at rest (--velo-border-input-rest,
+  3:1 against the plate, FE-249), a 2px focus ring.
   `required` (Phase-3 master DS) -> renders the pink IconRequired seal in the
   right gutter, paired with the legend banner on the form. Replaces the inline
   "*"-asterisk pattern; old `label="… *"` usages keep working until migrated.
@@ -274,22 +275,29 @@ function onInput(e: Event): void {
 .v-input__field {
   flex: 1;
   min-width: 0;
-  height: var(--velo-size-40);
-  padding: 0 var(--space-4);
+  /* 44px tap target (FE-249). */
+  height: var(--velo-size-44);
+  /* The rim is 1px, the text sits where it did under the old 2px border. */
+  padding: 0 calc(var(--space-4) + var(--velo-border-width));
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   /* Figma: form fields are SOLID WHITE plates (was glass-blue, which read as
      "transparent" on the photo background). This is the single field standard. */
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  border: var(--velo-border-width) solid var(--velo-border-input-rest);
   border-radius: var(--velo-radius-badge);
-  transition: border-color var(--transition-base);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
+/* Focus and error draw a 2px ring: the 1px border plus a 1px inset line, so
+   the box does not change size. */
 .v-input__field:focus {
   outline: none;
-  border-color: var(--velo-border-input-focus);
+  border-color: var(--velo-border-input-ring);
+  box-shadow: var(--velo-shadow-field-focus);
 }
 
 .v-input__field::placeholder {
@@ -304,6 +312,7 @@ function onInput(e: Event): void {
 
 .v-input--error .v-input__field {
   border-color: var(--velo-error);
+  box-shadow: var(--velo-shadow-field-error);
 }
 
 /* -- Affix box (prefix/suffix slots) -- */
@@ -313,20 +322,24 @@ function onInput(e: Event): void {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: var(--velo-size-40);
-  padding: 0 var(--space-4);
+  height: var(--velo-size-44);
+  padding: 0 calc(var(--space-4) + var(--velo-border-width));
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  border: var(--velo-border-width) solid var(--velo-border-input-rest);
   border-radius: var(--velo-radius-badge);
-  transition: border-color var(--transition-base);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
 }
 
 .v-input__box:focus-within {
-  border-color: var(--velo-border-input-focus);
+  border-color: var(--velo-border-input-ring);
+  box-shadow: var(--velo-shadow-field-focus);
 }
 
 .v-input--error .v-input__box {
   border-color: var(--velo-error);
+  box-shadow: var(--velo-shadow-field-error);
 }
 
 .v-input__affix {
@@ -336,13 +349,23 @@ function onInput(e: Event): void {
 }
 
 .v-input__field--bare {
+  /* Fills the box and its rim: the bare field is the tap target, 44px tall
+     (FE-249); the transparent field lets the box's rim and ring show. */
   height: auto;
+  align-self: stretch;
+  margin-block: calc(-1 * var(--velo-border-width));
   flex: 1;
   min-width: 0;
   padding: 0;
   background: transparent;
   border: none;
   border-radius: 0;
+  box-shadow: none;
+}
+
+.v-input__field--bare:focus,
+.v-input--error .v-input__field--bare {
+  box-shadow: none;
 }
 
 .v-input__field--bare:disabled {
@@ -361,7 +384,7 @@ function onInput(e: Event): void {
 .v-input__field--float {
   width: 100%;
   height: var(--velo-size-56);
-  padding: var(--velo-gap-21) var(--space-4) 0;
+  padding: var(--velo-gap-21) calc(var(--space-4) + var(--velo-border-width)) 0;
 }
 
 .v-input__float-label {

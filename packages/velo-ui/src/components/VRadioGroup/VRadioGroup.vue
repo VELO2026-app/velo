@@ -65,12 +65,14 @@ function onPick(value: string): void {
 .v-radio-group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
 }
 
 .v-radio {
   display: flex;
   align-items: center;
+  /* Each row is a 44px tap target (FE-249); the rows touch, so there is no
+     gap between them. */
+  min-height: var(--velo-size-44);
   gap: var(--space-3);
   padding: 0;
   border: none;

@@ -148,12 +148,12 @@ const MUTATIONS: Mutation[] = [
       text-overflow: clip !important; width: 40px !important; }`,
   },
   {
-    // The bell is 36 px with a 44 px hit area around it (::after); without
-    // that area it is too small.
-    name: 'a button without its hit area',
+    // The bell is a 44 px disc (FE-249); drawn at 36 px with no hit area
+    // around it, it is too small.
+    name: 'a button under 44 px without a hit area',
     rule: 'small-target',
     element: 'dashboard__bell',
-    css: '.dashboard__bell::after { display: none !important; }',
+    css: '.dashboard__bell { width: 36px !important; height: 36px !important; }',
   },
   {
     name: 'a transparent layer over the card',

@@ -145,16 +145,20 @@ defineEmits<{
 .v-select__field {
   flex: 1;
   min-width: 0;
-  height: var(--velo-size-40);
-  padding: 0 var(--size-select-chevron-clearance) 0 var(--space-4);
+  /* 44px tap target (FE-249). */
+  height: var(--velo-size-44);
+  padding: 0 var(--size-select-chevron-clearance) 0 calc(var(--space-4) + var(--velo-border-width));
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   /* White plate canon — the single field surface, unified with VInput. */
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  /* 1px rim at rest, 2px ring on focus and error (the VInput recipe, FE-249). */
+  border: var(--velo-border-width) solid var(--velo-border-input-rest);
   border-radius: var(--velo-radius-badge);
-  transition: border-color var(--transition-base);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
   appearance: none;
 }
 
@@ -194,7 +198,8 @@ defineEmits<{
 
 .v-select__field:focus {
   outline: none;
-  border-color: var(--velo-border-input-focus);
+  border-color: var(--velo-border-input-ring);
+  box-shadow: var(--velo-shadow-field-focus);
 }
 
 .v-select__field:disabled {
@@ -205,6 +210,7 @@ defineEmits<{
 
 .v-select--error .v-select__field {
   border-color: var(--velo-error);
+  box-shadow: var(--velo-shadow-field-error);
 }
 
 /* Required seal — sits beside the field, never shrinks, gutter always reserved

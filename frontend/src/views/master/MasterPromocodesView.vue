@@ -172,8 +172,8 @@ onMounted(load)
 }
 
 .promo__add {
-  width: var(--velo-size-40);
-  height: var(--velo-size-40);
+  width: var(--velo-size-44);
+  height: var(--velo-size-44);
   border-radius: var(--radius-full);
   border: none;
   background: var(--velo-primary);

@@ -28,7 +28,7 @@
   <div class="use-template">
     <button
       type="button"
-      class="use-template__head"
+      class="use-template__head velo-tap-target"
       :class="{ 'use-template__head--open': open }"
       :aria-expanded="open"
       @click="open = !open"

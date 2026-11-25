@@ -419,12 +419,13 @@ function onScheduleDays(days: string[]): void {
 /* Tappable time field — white plate that opens the wheel sheet (mirrors a select). */
 .mn-sched__field {
   flex: 1;
-  height: var(--velo-size-40);
-  padding: 0 var(--space-4);
+  /* A field: the VInput height and rim (FE-249). */
+  height: var(--velo-size-44);
+  padding: 0 calc(var(--space-4) + var(--velo-border-width));
   display: flex;
   align-items: center;
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  border: var(--velo-border-width) solid var(--velo-border-input-rest);
   border-radius: var(--velo-radius-badge);
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);

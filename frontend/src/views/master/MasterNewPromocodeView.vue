@@ -272,14 +272,15 @@ async function onCreate(): Promise<void> {
 .new-promo__picker {
   flex: 1;
   min-width: 0;
-  height: var(--velo-size-40);
+  /* A field: the VInput height and rim (FE-249). */
+  height: var(--velo-size-44);
   text-align: left;
-  padding: 0 var(--space-4);
+  padding: 0 calc(var(--space-4) + var(--velo-border-width));
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  border: var(--velo-border-width) solid var(--velo-border-input-rest);
   border-radius: var(--velo-radius-badge);
   cursor: pointer;
 }
