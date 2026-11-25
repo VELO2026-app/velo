@@ -102,7 +102,7 @@ describe('dropReport', () => {
     })
     app = createApp(Host).use(createPinia()).use(PiniaColada, coladaOptions)
     app.mount(document.createElement('div'))
-    const report = (id: string) => ({ id }) as never
+    const report = (id: string) => ({ id })
     queryCache.setQueryData([...adminKeys.reportsAll(), 'pending'], {
       pageParams: [0, 20],
       pages: [

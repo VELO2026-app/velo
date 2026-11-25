@@ -8,7 +8,7 @@
 // admin key is built here, shape [domain, kind, params?], invalidation by
 // prefix.
 //
-// The admin views (`/admin/*`) answer with their own payloads, shaped for
+// The console's screens (`/admin/*`) answer with their own payloads, shaped for
 // oversight, never the user zone's entities -- so they live under one domain
 // of their own, and a user-zone mutation never reaches them.
 // =============================================================================
@@ -19,7 +19,8 @@ export const adminKeys = {
   root: () => ['admin'] as const,
   /**
    * `GET /admin/stats` plus the count of reports awaiting moderation: the
-   * shell's tab badges, the dashboard's banners, the lists' "all" badges.
+   * console sidebar's counters, the dashboard's attention queues, the
+   * moderation screen's tab counts.
    */
   stats: () => ['admin', 'stats'] as const,
   /** `GET /admin/stats/overview` -- the dashboard's stat cards for one period window. */
@@ -33,16 +34,10 @@ export const adminKeys = {
     ['admin', 'metric', { kind, period, offset }] as const,
   /** Prefix of every revenue window (Colada matches the params object partially). */
   revenueAll: () => ['admin', 'metric', { kind: 'revenue' }] as const,
-  /** `GET /admin/practices?scope=` -- the platform's practices, first page. */
-  practices: (scope: string) => ['admin', 'practices', { scope }] as const,
   /** `GET /admin/practices?scope=&limit=&offset=` -- one page of the platform's practices (the web console). */
   practicesPage: (scope: string, page: number) => ['admin', 'practices', { scope, page }] as const,
   /** Prefix of every platform practices list. */
   practicesAll: () => ['admin', 'practices'] as const,
-  /** `GET /admin/participants?filter=` -- the platform's users, every page loaded so far. */
-  participants: (filter: string) => ['admin', 'participants', { filter }] as const,
-  /** Prefix of every platform participants list. */
-  participantsAll: () => ['admin', 'participants'] as const,
   /** `GET /admin/practices/{id}` -- one practice with its roster. */
   practice: (practiceId: string) => ['admin', 'practice', practiceId] as const,
   /** Prefix of every practice detail (and its attendance). */
@@ -59,17 +54,11 @@ export const adminKeys = {
   schools: () => ['admin', 'schools'] as const,
   /** `GET /admin/schools` -- one page of the web console's schools table. Under the schools prefix. */
   schoolsPage: (page: number) => ['admin', 'schools', { page }] as const,
-  /** Prefix of every promo list. */
-  promosAll: () => ['admin', 'promos'] as const,
-  /** `GET /admin/promos?type=&is_active=` -- one tab of the promo oversight list, every page loaded so far. */
-  promos: (filter: string) => ['admin', 'promos', { filter }] as const,
-  /** Prefix of every page of the promo list (the web console's table). */
+  /** Prefix of every page of the promo table. */
   promoPagesAll: () => ['admin', 'promoPages'] as const,
   /**
    * `GET /admin/promos?type=&limit=&offset=` -- one page (1-based) of one
-   * tab of the promo list, the web console's table. A prefix of its own,
-   * not under `promos`: those entries hold infinite-query data, and the
-   * writers of that shape (markPromoInactive) must not meet a page.
+   * tab of the promo list, the web console's table.
    */
   promosPage: (filter: string, page: number) => ['admin', 'promoPages', { filter, page }] as const,
   /** `GET /admin/users` -- every user of the platform (any role), every page loaded so far. */

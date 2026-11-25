@@ -2,12 +2,10 @@
 // VELO Frontend -- Admin Helper Utilities (F8-fix W-5)
 // =============================================================================
 //
-// Shared pure functions used across admin views:
-//   AdminMastersView, AdminMasterReviewView,
-//   AdminReportsView, AdminReportDetailView.
-//
-// Extracted to eliminate copy-paste of statusVariant / statusLabel /
-// targetLabel / displayName between views.
+// Shared pure functions of the web console (components/console,
+// views/console): a master's display name, the labels of master and
+// complaint statuses and of complaint targets, the date formats -- one
+// wording for every screen.
 // =============================================================================
 
 import type { AdminMasterListItem } from '@/api/admin'

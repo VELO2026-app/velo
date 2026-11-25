@@ -138,8 +138,7 @@ function onMore(): void {
    (methodTaxonomy.ts SEP), so a single composite tag can be long -- flex-wrap
    above only wraps BETWEEN tags, it cannot help one tag whose own content
    overflows. VTag's shared default is white-space:nowrap (correct everywhere
-   else it's used, short bounded labels). Same escape hatch already proven at
-   AdminCatalogView.vue's chips (PROMPT №503) -- scoped via :deep() so the
+   else it's used, short bounded labels). Scoped via :deep() so the
    shared component's nowrap default is untouched everywhere else it's used. */
 .master-card__tags :deep(.v-tag) {
   white-space: normal;

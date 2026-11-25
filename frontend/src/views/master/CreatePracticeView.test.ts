@@ -1816,8 +1816,8 @@ describe('CreatePracticeView', () => {
       // screen's "+";
       // pushing a fixed route would send half the masters somewhere they did not
       // come from (operator 2026-06-23). NB: onBack reads window.history.state at
-      // CLICK time, not during setup -- unlike AdminWithdrawalDetailView, seeding
-      // it after mount is correct here.
+      // CLICK time, not during setup, so seeding it after mount
+      // is correct here.
       mount()
       await flush()
       window.history.replaceState({ back: '/master/dashboard' }, '')

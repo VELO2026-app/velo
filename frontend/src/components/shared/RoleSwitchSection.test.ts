@@ -9,7 +9,13 @@ import RoleSwitchSection from '@/components/shared/RoleSwitchSection.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { masterApprovedSeenKey } from '@/utils/constants'
+import { switchRole } from '@/api/users'
 import type { UserResponse, UserRole } from '@/api/types'
+
+vi.mock('@/api/users', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/users')>()),
+  switchRole: vi.fn(),
+}))
 
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
@@ -22,14 +28,35 @@ let router: Router
 
 const Stub = { render: () => null }
 
+function person(role: UserRole, allowed: UserRole[]): UserResponse {
+  return {
+    id: 'u1',
+    telegram_id: null,
+    role,
+    first_name: 'Anna',
+    last_name: null,
+    avatar_url: null,
+    timezone: 'Europe/Moscow',
+    language: 'ru',
+    is_active: true,
+    balance_cents: 0,
+    created_at: '2026-11-01T00:00:00Z',
+    last_login_at: null,
+    onboarding_completed: true,
+    master_onboarding_completed: true,
+    phone: null,
+    bio: null,
+    email: null,
+    birth_date: null,
+    goals: [],
+    goals_custom: null,
+    role_switch: { allowed_roles: allowed },
+  }
+}
+
 async function mount(role: UserRole, allowed: UserRole[]): Promise<HTMLElement> {
   setActivePinia(createPinia())
-  const auth = useAuthStore()
-  auth.user = {
-    id: 'u1',
-    role,
-    role_switch: { allowed_roles: allowed },
-  } as unknown as UserResponse
+  useAuthStore().user = person(role, allowed)
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -61,6 +88,7 @@ async function settle(): Promise<void> {
 
 beforeEach(() => {
   toastError.mockReset()
+  vi.mocked(switchRole).mockReset()
   localStorage.clear()
 })
 
@@ -75,7 +103,10 @@ describe('RoleSwitchSection', () => {
   it('offers every allowed role but the current one', async () => {
     await mount('user', ['user', 'master', 'admin'])
 
-    expect(rows()).toHaveLength(2)
+    expect(rows().map((row) => row.textContent?.trim())).toEqual([
+      'Режим мастера',
+      'Режим администратора',
+    ])
   })
 
   it('shows nothing when there is no other role', async () => {
@@ -86,21 +117,20 @@ describe('RoleSwitchSection', () => {
 
   it('switches to admin, drops the user-mode preview and opens the console dashboard', async () => {
     await mount('user', ['user', 'admin'])
-    const auth = useAuthStore()
-    const switchRole = vi.spyOn(auth, 'switchRole').mockResolvedValue({} as UserResponse)
+    vi.mocked(switchRole).mockResolvedValue(person('admin', ['user', 'admin']))
     useUiStore().setUiMode('user')
 
     rows()[0]?.click()
     await settle()
 
     expect(switchRole).toHaveBeenCalledWith('admin')
+    expect(useAuthStore().user?.role).toBe('admin')
     expect(useUiStore().uiMode).toBe('default')
     expect(router.currentRoute.value.name).toBe('console-dashboard')
   })
 
   it('takes a freshly verified user through the approval screen once, without a switch', async () => {
     await mount('user', ['user', 'master'])
-    const switchRole = vi.spyOn(useAuthStore(), 'switchRole')
 
     rows()[0]?.click()
     await settle()
@@ -112,7 +142,7 @@ describe('RoleSwitchSection', () => {
   it('switches a user who has seen the approval straight to the master dashboard', async () => {
     localStorage.setItem(masterApprovedSeenKey('u1'), '1')
     await mount('user', ['user', 'master'])
-    vi.spyOn(useAuthStore(), 'switchRole').mockResolvedValue({} as UserResponse)
+    vi.mocked(switchRole).mockResolvedValue(person('master', ['user', 'master']))
 
     rows()[0]?.click()
     await settle()
@@ -122,7 +152,7 @@ describe('RoleSwitchSection', () => {
 
   it('tells a failed switch and stays', async () => {
     await mount('master', ['master', 'user'])
-    vi.spyOn(useAuthStore(), 'switchRole').mockRejectedValue(new Error('down'))
+    vi.mocked(switchRole).mockRejectedValue(new Error('down'))
 
     rows()[0]?.click()
     await settle()

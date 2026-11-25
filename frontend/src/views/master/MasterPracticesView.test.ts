@@ -337,6 +337,12 @@ function cardTitles(): string[] {
 function cardById(title: string): HTMLElement | undefined {
   return cards().find((c) => tidy(c.querySelector('.mp-card__title')?.textContent) === title)
 }
+/** The card titled so; a missing card fails the test here, by its title. */
+function cardTitled(title: string): HTMLElement {
+  const found = cardById(title)
+  if (!found) throw new Error(`no card titled «${title}»`)
+  return found
+}
 function subOf(card: HTMLElement): string {
   return tidy(card.querySelector('.mp-card__sub')?.textContent)
 }
@@ -731,8 +737,8 @@ describe('MasterPracticesView', () => {
       expect(cardTitles()).toEqual(['Окленд', 'Лондон'])
       // Proof the premise holds -- the rendered times really are the ones the
       // local-wall-clock ordering (now retired) would have disagreed on.
-      expect(subOf(cardById('Окленд')!)).toContain('08:00')
-      expect(subOf(cardById('Лондон')!)).toContain('22:00')
+      expect(subOf(cardTitled('Окленд'))).toContain('08:00')
+      expect(subOf(cardTitled('Лондон'))).toContain('22:00')
     })
   })
 
@@ -742,14 +748,14 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(subOf(cardById('Завтрашняя')!)).toBe('Завтра, 09:00 • 60 мин')
+      expect(subOf(cardTitled('Завтрашняя'))).toBe('Завтра, 09:00 • 60 мин')
     })
 
     it('reads «Сегодня» for a practice later today', async () => {
       mount()
       await flush()
 
-      expect(subOf(cardById('Сегодняшняя')!)).toBe('Сегодня, 15:00 • 60 мин')
+      expect(subOf(cardTitled('Сегодняшняя'))).toBe('Сегодня, 15:00 • 60 мин')
     })
 
     it('falls back to the compact date beyond tomorrow', async () => {
@@ -759,7 +765,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(subOf(cardById('Черновик')!)).toBe('25 июля, 10:00 • 60 мин')
+      expect(subOf(cardTitled('Черновик'))).toBe('25 июля, 10:00 • 60 мин')
     })
 
     it("renders each card in its OWN timezone, not the viewer's", async () => {
@@ -774,14 +780,14 @@ describe('MasterPracticesView', () => {
 
       // 00:00Z on the 21st is 09:00 on the 21st in Tokyo (+9) -- and the 21st
       // is tomorrow in Tokyo too, since NOW is 21:00 there on the 20th.
-      expect(subOf(cardById('Токио')!)).toBe('Завтра, 09:00 • 60 мин')
+      expect(subOf(cardTitled('Токио'))).toBe('Завтра, 09:00 • 60 мин')
     })
 
     it('shows participants as «N/M» against the cap', async () => {
       mount()
       await flush()
 
-      expect(statsOf(cardById('Завтрашняя')!)[0]).toBe('5/20')
+      expect(statsOf(cardTitled('Завтрашняя'))[0]).toBe('5/20')
     })
 
     it('drops the denominator entirely when there is no cap', async () => {
@@ -796,7 +802,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(statsOf(cardById('Без лимита')!)[0]).toBe('7')
+      expect(statsOf(cardTitled('Без лимита'))[0]).toBe('7')
     })
 
     it('shows the check-in count as «N/M» when the owner is entitled to it', async () => {
@@ -810,7 +816,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(statsOf(cardById('С чекинами')!)).toEqual(['8/10', '3/10'])
+      expect(statsOf(cardTitled('С чекинами'))).toEqual(['8/10', '3/10'])
     })
 
     it('renders a REAL zero check-in count as «0/10», not as nothing', async () => {
@@ -826,7 +832,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(statsOf(cardById('Ноль чекинов')!)).toEqual(['4/10', '0/10'])
+      expect(statsOf(cardTitled('Ноль чекинов'))).toEqual(['4/10', '0/10'])
     })
 
     it('omits the check-in chip when the count is null', async () => {
@@ -835,7 +841,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(statsOf(cardById('Завтрашняя')!)).toEqual(['5/20'])
+      expect(statsOf(cardTitled('Завтрашняя'))).toEqual(['5/20'])
     })
 
     it('falls back to the participant count as the check-in denominator when uncapped', async () => {
@@ -850,7 +856,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(statsOf(cardById('Чекины без лимита')!)).toEqual(['6', '2/6'])
+      expect(statsOf(cardTitled('Чекины без лимита'))).toEqual(['6', '2/6'])
     })
 
     it('names the recurrence days for a series that has them', async () => {
@@ -866,7 +872,7 @@ describe('MasterPracticesView', () => {
       // De-duplicated and re-ordered Mon->Sun by recurrenceDaysLabel, so the
       // shuffled [5,1,3] must come back as the Mon/Wed/Fri abbreviation list
       // (resolved via `recurrenceDaysLabel`).
-      expect(statsOf(cardById('Серия')!)).toEqual(['5/20', 'Пн, Ср, Пт'])
+      expect(statsOf(cardTitled('Серия'))).toEqual(['5/20', 'Пн, Ср, Пт'])
     })
 
     it('falls back to «Регулярная» for a series with no day list', async () => {
@@ -879,7 +885,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(statsOf(cardById('Серия без дней')!)).toEqual(['5/20', 'Регулярная'])
+      expect(statsOf(cardTitled('Серия без дней'))).toEqual(['5/20', 'Регулярная'])
     })
 
     it('shows no recurrence chip on a one-off practice', async () => {
@@ -894,7 +900,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(statsOf(cardById('Разовая')!)).toEqual(['5/20'])
+      expect(statsOf(cardTitled('Разовая'))).toEqual(['5/20'])
     })
 
     it('counts the remaining sessions of a series on its own second row', async () => {
@@ -908,7 +914,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      const row2 = cardById('Курс')!.querySelector('.mp-card__meta--row2')
+      const row2 = cardTitled('Курс').querySelector('.mp-card__meta--row2')
       expect(tidy(row2?.textContent)).toBe('Осталось 5 из 8 занятий')
     })
 
@@ -926,7 +932,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(tidy(cardById('Перебор')!.querySelector('.mp-card__meta--row2')?.textContent)).toBe(
+      expect(tidy(cardTitled('Перебор').querySelector('.mp-card__meta--row2')?.textContent)).toBe(
         'Осталось 0 из 8 занятий',
       )
     })
@@ -935,7 +941,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(cardById('Завтрашняя')!.querySelector('.mp-card__meta--row2')).toBeNull()
+      expect(cardTitled('Завтрашняя').querySelector('.mp-card__meta--row2')).toBeNull()
     })
   })
 
@@ -944,7 +950,7 @@ describe('MasterPracticesView', () => {
     it("reads «date • N участников», not the upcoming card's N/M", async () => {
       await mountOnPast()
 
-      expect(subOf(cardById('Недавняя')!)).toBe('18 июля • 5 участников')
+      expect(subOf(cardTitled('Недавняя'))).toBe('18 июля • 5 участников')
     })
 
     it('agrees the Russian plural across the cases that actually break', async () => {
@@ -964,7 +970,7 @@ describe('MasterPracticesView', () => {
       )
       await mountOnPast()
 
-      const said = (n: number) => subOf(cardById(`Счёт ${n}`)!).split('• ')[1]
+      const said = (n: number) => subOf(cardTitled(`Счёт ${n}`)).split('• ')[1]
       expect(said(0)).toBe('0 участников')
       expect(said(1)).toBe('1 участник')
       expect(said(2)).toBe('2 участника')
@@ -981,8 +987,8 @@ describe('MasterPracticesView', () => {
       // wrong practice's insights fails.
       await mountOnPast()
 
-      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
-      expect(badgesOf(cardById('Давняя')!)).toEqual(['25%', '25%', '25%', '25%', '0%'])
+      expect(badgesOf(cardTitled('Недавняя'))).toEqual(['60%', '20%', '0%', '0%', '20%'])
+      expect(badgesOf(cardTitled('Давняя'))).toEqual(['25%', '25%', '25%', '25%', '0%'])
     })
 
     it('shows no badges on a practice whose insights never arrived', async () => {
@@ -995,8 +1001,8 @@ describe('MasterPracticesView', () => {
       })
       await mountOnPast()
 
-      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
-      expect(badgesOf(cardById('Давняя')!)).toEqual([])
+      expect(badgesOf(cardTitled('Недавняя'))).toEqual(['60%', '20%', '0%', '0%', '20%'])
+      expect(badgesOf(cardTitled('Давняя'))).toEqual([])
     })
 
     it('shows no badges when insights arrived but nobody left feedback', async () => {
@@ -1008,7 +1014,7 @@ describe('MasterPracticesView', () => {
       await mountOnPast()
 
       expect(cards()).toHaveLength(2)
-      expect(badgesOf(cardById('Недавняя')!)).toEqual([])
+      expect(badgesOf(cardTitled('Недавняя'))).toEqual([])
     })
 
     it('survives a total insights outage -- the cards still render', async () => {
@@ -1052,7 +1058,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      expect(badgesOf(cardById('Недавняя')!)).toEqual(['60%', '20%', '0%', '0%', '20%'])
+      expect(badgesOf(cardTitled('Недавняя'))).toEqual(['60%', '20%', '0%', '0%', '20%'])
     })
   })
 
@@ -1103,7 +1109,13 @@ describe('MasterPracticesView', () => {
       await flush()
 
       expect(cardTitles()).toEqual(['Недавняя', 'Догруженная прошедшая'])
-      expect(badgesOf(cardById('Догруженная прошедшая')!)).toEqual(['50%', '50%', '0%', '0%', '0%'])
+      expect(badgesOf(cardTitled('Догруженная прошедшая'))).toEqual([
+        '50%',
+        '50%',
+        '0%',
+        '0%',
+        '0%',
+      ])
       delete INSIGHTS['p-next']
     })
 
@@ -1134,8 +1146,8 @@ describe('MasterPracticesView', () => {
       //
       // The guard alone would have traded that loud-wrong behaviour for a SILENT
       // one (list stays, failure never surfaces -- which is what MyBookingsView
-      // actually does). So this follows the admin lists instead
-      // (AdminPromosView.vue:219-221): keep the list AND toast. Both halves are
+      // actually does). So this follows the admin lists instead:
+      // keep the list AND toast. Both halves are
       // asserted below; drop either and this test fails.
       vi.mocked(mastersApi.getMyPractices).mockResolvedValue(page([U_SCHED], 2, 0))
       mount()
@@ -1219,7 +1231,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      const card = cardById('Тёмная')!
+      const card = cardTitled('Тёмная')
       const mark = card.querySelector<HTMLElement>('.mp-stat--warn')
       // THE PAIR: the mark is rendered with its statement ...
       expect(mark).toBeTruthy()
@@ -1306,7 +1318,7 @@ describe('MasterPracticesView', () => {
       mount()
       await flush()
 
-      const card = cardById('Завтрашняя')!
+      const card = cardTitled('Завтрашняя')
       expect(card.getAttribute('role')).toBe('button')
       expect(card.getAttribute('tabindex')).toBe('0')
     })

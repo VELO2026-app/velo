@@ -27,7 +27,7 @@
 // every fixture below: role_switch stays null, so `authStore.allowedRoles`
 // is empty and RoleSwitchSection's own `v-if="targets.length > 0"` never
 // opens -- confirmed by reading RoleSwitchSection.vue rather than assumed,
-// same check AdminProfileView.test.ts / UserProfileView.test.ts already made
+// same check UserProfileView.test.ts already made
 // for their own copies of this shared component). @/api/masters and
 // @/api/chats are the two API seams (module-mocked); @/composables/useToast
 // mocked wholesale per this repo's convention even though nothing here

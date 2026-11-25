@@ -171,8 +171,7 @@ export function makeMaster(userId: string): Promise<AdminMasterActionResponse> {
 }
 
 /**
- * Fetch a single master by user_id.
- * Fallback for AdminMasterReviewView when router state is unavailable.
+ * Fetch a single master by user_id (the console's master card).
  */
 export function getMasterById(userId: string): Promise<AdminMasterDetail> {
   return api.get<AdminMasterDetail>(path`/api/v1/admin/masters/${userId}`)
@@ -343,8 +342,7 @@ export function getReports(
 }
 
 /**
- * Fetch a single report by id.
- * Fallback for AdminReportDetailView when router state is unavailable.
+ * Fetch a single report by id (the console's complaint detail).
  */
 export function getReportById(reportId: string): Promise<ReportResponse> {
   return api.get<ReportResponse>(path`/api/v1/admin/reports/${reportId}`)
@@ -467,8 +465,7 @@ export function getAdminZoomAttendance(practiceId: string): Promise<AdminZoomAtt
 
 // ============================================================================
 // Promos (T5) -- admin sees + deactivates every master's promos, plus its own
-// company-wide ones. Creating a company promo (POST) is the web console's
-// (FE-267); the mobile admin never calls it.
+// company-wide ones, and creates a company promo (FE-267).
 // ============================================================================
 
 /** Every promo (company-wide and master) for the admin oversight list, paginated. */

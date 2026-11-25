@@ -40,7 +40,6 @@ const SAMPLE = {
   // The admin zone (FE-181): no user-zone mutation may reach it.
   adminStats: adminKeys.stats() as EntryKey,
   adminTaxonomy: adminKeys.taxonomy() as EntryKey,
-  adminPromos: adminKeys.promos('master') as EntryKey,
   // The web console's promo table: one entry per (tab, page), FE-267.
   adminPromosPage: adminKeys.promosPage('company', 2) as EntryKey,
   adminSchools: adminKeys.schools() as EntryKey,
@@ -52,12 +51,11 @@ const SAMPLE = {
   adminOverview: adminKeys.overview('week', 0) as EntryKey,
   adminMetric: adminKeys.metric('checkin', 'week', 0) as EntryKey,
   adminRevenue: adminKeys.metric('revenue', 'month', -1) as EntryKey,
-  adminPractices: adminKeys.practices('all') as EntryKey,
+  adminPractices: adminKeys.practicesPage('all', 1) as EntryKey,
   adminPractice: adminKeys.practice('p1') as EntryKey,
   masterPublic: keys.masters.public('m1') as EntryKey,
   // The admin's own master profile: no admin edit of another master reaches it.
   masterProfile: keys.masters.profile() as EntryKey,
-  adminParticipants: adminKeys.participants('all') as EntryKey,
   adminReports: adminKeys.reports('pending') as EntryKey,
   adminReport: adminKeys.report('r1') as EntryKey,
   adminWithdrawals: adminKeys.withdrawals() as EntryKey,
@@ -132,8 +130,8 @@ describe('INVALIDATES', () => {
 /** Expected stale domains per admin row (ADMIN_INVALIDATES, ./admin.ts), written out by hand. */
 const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
   changeTaxonomy: ['adminTaxonomy'],
-  createPromo: ['adminPromos', 'adminPromosPage'],
-  deactivatePromo: ['adminPromos', 'adminPromosPage'],
+  createPromo: ['adminPromosPage'],
+  deactivatePromo: ['adminPromosPage'],
   inviteMaster: [],
   makeMaster: [
     'adminUsers',
@@ -169,7 +167,6 @@ const ADMIN_EXPECTED: Record<AdminMutationName, Domain[]> = {
     'adminMasters',
     'adminMaster',
     'adminUsers',
-    'adminParticipants',
     'adminMethodRequests',
     'adminSchools',
     'adminPractices',

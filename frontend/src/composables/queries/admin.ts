@@ -6,16 +6,16 @@
 //
 //   - shared: onFailedRequest (how a screen tells a failed request) and the
 //     admin mutation map with useAdminMutation;
-//   - the shell and the dashboard: the counters (`GET /admin/stats` + the
-//     count of reports awaiting moderation: the tab badges, the banners,
-//     the lists' "all" badges -- one entry, so the shell and the screens
-//     read the same answer), the counts of the dashboard's other queues
+//   - the sidebar and the dashboard: the counters (`GET /admin/stats` + the
+//     count of reports awaiting moderation: the sidebar's counters, the
+//     attention queues, the moderation tabs -- one entry, so the sidebar
+//     and the screens read the same answer), the counts of the dashboard's other queues
 //     (open tickets, pending payouts) and the period window (the overview
 //     cards and the four engagement / revenue figures, one entry per
 //     (period, offset));
-//   - the platform's practices and participants lists;
+//   - the platform's practices table;
 //   - the catalogs: the method catalog editor, the schools, the promo
-//     oversight list, one practice's oversight detail.
+//     table, one practice's oversight detail.
 //   - users and masters: the users and masters lists, one master's review
 //     page, the method-change queue.
 //   - the metric drill-ins and the revenue: the dashboard's window queries,
@@ -214,14 +214,10 @@ export const ADMIN_INVALIDATES = {
    * an item added, renamed, switched off or on -- the catalog editor's tree.
    */
   changeTaxonomy: [adminKeys.taxonomy()],
-  /**
-   * `POST /admin/promos`: a company promo is born -- every tab of the promo
-   * list, in the mobile admin (every page loaded so far) and in the web
-   * console (one page per entry).
-   */
-  createPromo: [adminKeys.promosAll(), adminKeys.promoPagesAll()],
-  /** `PATCH /admin/promos/{id}/deactivate`: the promo turns inactive -- every tab of the promo list, in both admins. */
-  deactivatePromo: [adminKeys.promosAll(), adminKeys.promoPagesAll()],
+  /** `POST /admin/promos`: a company promo is born -- every page of every tab of the promo table. */
+  createPromo: [adminKeys.promoPagesAll()],
+  /** `PATCH /admin/promos/{id}/deactivate`: the promo turns inactive -- every page of every tab of the promo table. */
+  deactivatePromo: [adminKeys.promoPagesAll()],
   /**
    * `POST /admin/masters/invite`: a one-time invite link, answered to the
    * caller only -- no list shows invites, nothing goes stale.
@@ -280,7 +276,7 @@ export const ADMIN_INVALIDATES = {
    * `PATCH /admin/masters/{id}/methods`, `PATCH /admin/masters/{id}/profile`:
    * a master-authored field -- the detail and the public page, and every
    * admin list that names or describes the master: the masters list (chips,
-   * names), the users and participants lists, the method queue, the schools
+   * names), the users list, the method queue, the schools
    * (their curator), the platform practices (their master). The user zone's
    * practice cards also carry the name; they are left to their staleness
    * window -- an admin rarely holds them, and a name edit is not urgent.
@@ -289,7 +285,6 @@ export const ADMIN_INVALIDATES = {
     adminKeys.masters(),
     adminKeys.masterAll(),
     adminKeys.users(),
-    adminKeys.participantsAll(),
     adminKeys.methodRequests(),
     adminKeys.schools(),
     adminKeys.practicesAll(),
@@ -456,7 +451,7 @@ export const adminStatsQuery = defineQueryOptions(() => ({
 }))
 
 /**
- * The admin counters for a screen or the shell.
+ * The admin counters for a screen or the sidebar.
  *
  * @remarks
  * Every number reads 0 / null while nothing has answered: a badge or a

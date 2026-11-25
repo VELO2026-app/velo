@@ -123,8 +123,7 @@ const meName = computed(() => {
 const meAvatar = computed(() => auth.user?.avatar_url ?? undefined)
 
 // The router sends an admin on a user screen back to the admin zone unless
-// the UI mode is «user» (zoneHomeGuard) -- the same switch AdminProfileView
-// makes.
+// the UI mode is «user» (zoneHomeGuard).
 function toUserMode(): void {
   uiStore.setUiMode('user')
   void router.push({ name: 'user-dashboard' })

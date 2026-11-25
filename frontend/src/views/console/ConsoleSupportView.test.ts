@@ -699,10 +699,14 @@ describe('ConsoleSupportView: statistics', () => {
     } as unknown as SupportStats)
     await mount('/admin/support?tab=stats')
 
-    const text = host?.textContent ?? ''
-    expect(text).toContain('—')
-    expect(text).toContain('4.00')
-    expect(text).toContain('100%')
+    const rowsOf = host?.querySelectorAll('.console-table__row:not(.console-table__row--head)')
+    const resolvers = Array.from(rowsOf ?? []).map((row) =>
+      Array.from(row.querySelectorAll('[role="cell"]')).map((cell) => cell.textContent?.trim()),
+    )
+    expect(resolvers).toEqual([
+      ['Администратор', '2', '—', '—'],
+      ['Администратор', '1', '4.00', '100%'],
+    ])
   })
 })
 
@@ -838,7 +842,7 @@ describe('ConsoleSupportView: handover conflicts', () => {
 describe('ConsoleSupportView: failed actions', () => {
   const boom = () => new ApiResponseError(500, 'down')
 
-  it('tells a failed handover and keeps the ticket', async () => {
+  it('tells a failed handover and keeps the ticket open', async () => {
     vi.mocked(supportApi.assignTicket).mockRejectedValueOnce(boom())
     await mount('/admin/support?tab=mine&ticket=t_mine_0002')
 
@@ -846,6 +850,8 @@ describe('ConsoleSupportView: failed actions', () => {
     await click(document.body.querySelector('.v-menu-row') as HTMLElement)
 
     expect(toastError).toHaveBeenCalledWith('Не удалось передать обращение')
+    expect(byId('ticket-detail')).not.toBeNull()
+    expect(hasButton('Назначить')).toBe(true)
   })
 
   it('tells a failed release', async () => {

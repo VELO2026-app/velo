@@ -8,8 +8,8 @@
 // warmed the cache later; it stayed at whatever it resolved to on its FIRST
 // read for the rest of the component's lifetime. This is the mechanism behind
 // a value that genuinely exists in the catalog still rendering as
-// "custom"/unmatched after the catalog resolves (e.g. AdminMasterReviewView's
-// hasParsedMethods / EditProfileView's normalizedCurrent -- both computed()).
+// "custom"/unmatched after the catalog resolves (e.g. EditProfileView's
+// normalizedCurrent, a computed()).
 //
 // Separate file from methodTaxonomy.test.ts (not appended to it) because that
 // file's later describe blocks are deliberately order-dependent on a COLD

@@ -20,10 +20,7 @@ import {
   DIRECTION_OPTIONS,
   stylesForDirection,
   audienceOptions,
-  AUDIENCE_OPTIONS,
-  directionHasStyles,
   formatUtcOffset,
-  makeTimezoneOption,
 } from '@/utils/practiceOptions'
 import { setLocale } from '@/locales'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
@@ -157,14 +154,11 @@ describe('catalog label display mapping (directionDisplayLabel/styleDisplayLabel
 })
 
 describe('audienceOptions', () => {
-  it('keeps the three kinds without schools and adds the fourth with them', () => {
-    expect(audienceOptions(false)).toBe(AUDIENCE_OPTIONS)
+  it('offers the three kinds without schools and adds «Школы» with them', () => {
+    expect(audienceOptions(false).map((o) => o.value)).toEqual(['public', 'students', 'groups'])
     const withSchools = audienceOptions(true)
-    expect(withSchools.map((o) => o.value)).toEqual([
-      ...AUDIENCE_OPTIONS.map((o) => o.value),
-      'schools',
-    ])
-    expect(withSchools.at(-1)?.label).toBeTruthy()
+    expect(withSchools.map((o) => o.value)).toEqual(['public', 'students', 'groups', 'schools'])
+    expect(withSchools.at(-1)?.label).toBe('Школы')
   })
 })
 
@@ -181,19 +175,12 @@ describe('formatUtcOffset', () => {
   ])('%s -> %s', (iana, label) => {
     expect(formatUtcOffset(iana, winter)).toBe(label)
   })
-
-  it('labels an uncurated zone by its last segment', () => {
-    expect(makeTimezoneOption('America/Argentina/Buenos_Aires')).toMatchObject({
-      value: 'America/Argentina/Buenos_Aires',
-      label: expect.stringMatching(/^Buenos Aires UTC-3$/),
-    })
-  })
 })
 
-describe('directionHasStyles', () => {
-  it('is false for no direction and for a direction without styles', () => {
-    expect(directionHasStyles(null)).toBe(false)
-    expect(directionHasStyles(undefined)).toBe(false)
+describe('stylesForDirection', () => {
+  it('has no styles for no direction and for a direction without any', () => {
+    expect(stylesForDirection(null)).toEqual([])
+    expect(stylesForDirection(undefined)).toEqual([])
     expect(stylesForDirection('no-such' as never)).toEqual([])
   })
 })

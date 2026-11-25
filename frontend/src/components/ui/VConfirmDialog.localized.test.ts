@@ -83,7 +83,7 @@ describe('VConfirmDialog (barrel): the localized action labels', () => {
   it('template-style kebab-case :cancel-label/:confirm-label bindings win too (both spellings read)', () => {
     // Every real caller binds kebab-case from a template; a functional
     // wrapper receives those attrs verbatim, so the seam reads both
-    // spellings (the regression the AdminPromosView suite caught).
+    // spellings.
     mountDialog({ 'cancel-label': 'Не сейчас', 'confirm-label': 'Сообщить в поддержку' })
     expect(buttonWith('Не сейчас')).toBeDefined()
     expect(buttonWith('Сообщить в поддержку')).toBeDefined()
@@ -96,7 +96,7 @@ describe('VConfirmDialog (barrel): the localized action labels', () => {
     expect(liveModal()?.textContent).toContain('Заблокировать пользователя?')
     expect(liveModal()?.textContent).toContain('Слот между заголовком и текстом')
 
-    buttonWith('Отмена')!.click()
+    buttonWith('Отмена')?.click()
     expect(cancelled).toBe(1)
   })
 })

@@ -255,7 +255,7 @@ defineEmits<{
 .v-confirm__actions > * {
   /* flex-basis: auto (was `flex: 1` = 0%) so a button's real content size
      counts toward the wrap decision above -- basis:0% hides it entirely from
-     the wrap algorithm (same trap fixed in AdminCatalogView, bug 6b below). */
+     the wrap algorithm (bug 6b below). */
   flex: 1 1 auto;
 }
 </style>

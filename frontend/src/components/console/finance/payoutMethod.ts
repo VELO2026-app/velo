@@ -4,8 +4,8 @@
 //
 // The admin decides on a payout without seeing the whole account: a bank
 // account is masked down to its last four characters (and, for an IBAN, the
-// country and check digits). The same wording as the mobile admin's payout
-// screens; only the IBAN line is new (the console design shows it).
+// country and check digits). The IBAN line shows the country and check
+// digits, as the console design asks.
 // =============================================================================
 
 import { t } from '@/locales'

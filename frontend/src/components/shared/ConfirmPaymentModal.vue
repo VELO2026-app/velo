@@ -5,7 +5,7 @@
   that used to follow it was removed (owner 2026-10-02) because the approve endpoint
   never took a code, so it gated nothing. Recap box (amount / fee / net / bank /
   master) + the approve button (i18n:payout.approve). Pure presentational: the parent
-  (AdminWithdrawalDetailView) passes pre-formatted strings and owns the approve call;
+  (console WithdrawalsPanel) passes pre-formatted strings and owns the approve call;
   `loading` keeps a second tap from firing a second approve while the first is in
   flight.
 -->

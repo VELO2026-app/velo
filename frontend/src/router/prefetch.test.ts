@@ -1,6 +1,6 @@
 // Idle prefetch of the tab screens' chunks: once per zone, once per path,
-// and a failed chunk may be retried. The admin zone (the web console) has
-// no tab bar, so nothing is warmed there (FE-272).
+// and a failed chunk may be retried. A screen outside the tab zones warms
+// nothing.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { MASTER_TABS, USER_TABS } from '@/router/tabs'
@@ -24,11 +24,7 @@ function build(loader: () => Promise<unknown>): Router {
   }))
   return createRouter({
     history: createMemoryHistory(),
-    routes: [
-      { path: '/', component: Stub },
-      { path: '/admin/dashboard', component: Stub },
-      ...tabs,
-    ],
+    routes: [{ path: '/', component: Stub }, { path: '/login', component: Stub }, ...tabs],
   })
 }
 
@@ -79,13 +75,22 @@ describe('installTabPrefetch', () => {
     expect(warmTabData.mock.calls.map(([path]) => path)).toEqual(USER_TABS.map((tab) => tab.to))
   })
 
-  it('warms nothing in the console or on a failed navigation', async () => {
+  it('warms nothing on a screen outside the tab zones', async () => {
+    const { installTabPrefetch } = await load()
+    const router = build(() => Promise.resolve(Stub))
+    installTabPrefetch(router)
+
+    await router.push('/login')
+
+    expect(idle).toHaveLength(0)
+  })
+
+  it('warms nothing after a navigation that was refused', async () => {
     const { installTabPrefetch } = await load()
     const router = build(() => Promise.resolve(Stub))
     router.beforeEach((to) => to.path !== '/master/dashboard')
     installTabPrefetch(router)
 
-    await router.push('/admin/dashboard')
     await router.push('/master/dashboard')
 
     expect(idle).toHaveLength(0)

@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // Where a master asks for their money. POST /masters/me/withdraw opens the
-// payout an admin later approves in AdminWithdrawalDetailView -- these two
+// payout an admin later approves in the console (WithdrawalsPanel) -- these two
 // screens are the two ends of the same money pipe, and this is the end that
 // decides the AMOUNT. So the assertions that matter are the amount arithmetic
 // (min, fee, net, "withdraw all"), the not-more-than-you-have guard, and the
@@ -212,7 +212,7 @@ describe('MasterFinanceView', () => {
       expect(amountField()).toBeNull()
       expect(text()).not.toContain('Сначала добавьте способ выплаты')
       expect(button('Добавить метод оплаты')).toBeUndefined()
-      button('Повторить')!.click()
+      button('Повторить')?.click()
       expect(reloadProfile).toHaveBeenCalled()
     })
 
@@ -606,8 +606,9 @@ describe('MasterFinanceView', () => {
       await flush()
 
       const iban = host?.querySelector<HTMLInputElement>('.finance-view__payout-form input')
-      iban!.value = '  DE89370400440532013000  '
-      iban!.dispatchEvent(new Event('input'))
+      if (!iban) throw new Error('no IBAN field')
+      iban.value = '  DE89370400440532013000  '
+      iban.dispatchEvent(new Event('input'))
       await flush()
 
       button('Сохранить')?.click()
@@ -635,8 +636,9 @@ describe('MasterFinanceView', () => {
       await flush()
 
       const iban = host?.querySelector<HTMLInputElement>('.finance-view__payout-form input')
-      iban!.value = 'DE00'
-      iban!.dispatchEvent(new Event('input'))
+      if (!iban) throw new Error('no IBAN field')
+      iban.value = 'DE00'
+      iban.dispatchEvent(new Event('input'))
       await flush()
       button('Сохранить')?.click()
       await flush()
@@ -736,7 +738,7 @@ describe('MasterFinanceView', () => {
         .mockResolvedValueOnce(page([withdrawal('w1')]))
       mount()
       await flush()
-      button('Повторить')!.click()
+      button('Повторить')?.click()
       await flush()
 
       expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
