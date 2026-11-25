@@ -27,6 +27,13 @@ import { ApiResponseError } from '@/api/client'
 import type { AdminMasterDetail, RevokeMasterAdvisory } from '@/api/admin'
 
 vi.mock('@/api/admin')
+
+// The instance options: the payout balance is the payments option's.
+const options = vi.hoisted(() => ({ payments: true }))
+vi.mock('@/platform/instance', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/platform/instance')>()),
+  isOptionEnabled: (name: string) => (name === 'payments' ? options.payments : true),
+}))
 vi.mock('@/api/taxonomy')
 
 vi.mock('@/utils/methodTaxonomy', async (importOriginal) => {
@@ -151,6 +158,7 @@ function setValue(
 }
 
 beforeEach(() => {
+  options.payments = true
   toastError.mockReset()
   toastSuccess.mockReset()
   vi.mocked(adminApi.getMasterById).mockReset()
@@ -172,6 +180,19 @@ afterEach(() => {
   document.body.querySelectorAll('.v-modal__overlay, .v-modal__scrim').forEach((el) => el.remove())
   app = null
   root = null
+})
+
+describe('ConsoleMasterDetailView: the counters of the card', () => {
+  it('shows the payout balance, and drops it on an instance without payments', async () => {
+    await mount()
+    expect(root?.textContent).toContain('К выводу')
+
+    app?.unmount()
+    root?.remove()
+    options.payments = false
+    await mount()
+    expect(root?.textContent).not.toContain('К выводу')
+  })
 })
 
 describe('ConsoleMasterDetailView: the verdict on a pending application', () => {

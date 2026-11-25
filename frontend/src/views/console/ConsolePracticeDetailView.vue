@@ -250,6 +250,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
 import { routeParam } from '@/router/routeParam'
+import { isOptionEnabled } from '@/platform/instance'
 import { VAvatar, VButton, VEmptyState, VSegment } from '@/components/ui'
 import type { SegmentOption } from '@/components/ui'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
@@ -346,7 +347,10 @@ const tabOptions = computed<SegmentOption[]>(() => [
     value: 'participants',
     label: `${t('console.practices.detail.tabs.participants')} · ${formatCount(roster.value.length)}`,
   },
-  { value: 'zoom', label: t('console.practices.detail.tabs.zoom') },
+  // The Zoom attendance is the zoom option's: without it there is no tab.
+  ...(isOptionEnabled('zoom')
+    ? [{ value: 'zoom', label: t('console.practices.detail.tabs.zoom') }]
+    : []),
 ])
 
 const rosterColumns = computed<ConsoleTableColumn[]>(() => [

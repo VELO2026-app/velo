@@ -66,13 +66,14 @@ export interface SweepVisit {
   lands?: RegExp | ((role: SweepRole) => RegExp)
   /** Signals this screen produces by design; each with its reason. */
   allow?: (role: SweepRole) => CrashAllowance[]
-  /** The window the accessibility gate opens the screen in, when the
-   *  phone-sized default would show something else (FE-262: the web console
-   *  shows its device stub on a phone). */
-  a11yViewport?: { width: number; height: number }
+  /** The window the screen is opened in by the gates that look at its web
+   *  layout -- accessibility (axe), Visual, the console layout sweep -- when
+   *  the phone-sized default would show something else (FE-262: the web
+   *  console shows its device stub on a phone). */
+  webViewport?: { width: number; height: number }
 }
 
-/** A small laptop: the window the web console's screens are audited in. */
+/** A small laptop: the window the web console's screens are audited and shot in. */
 export const CONSOLE_VIEWPORT = { width: 1280, height: 800 } as const
 
 /**
@@ -329,32 +330,33 @@ export const SWEEP: Record<string, SweepRow> = {
     params: { id: 'supportTicketId' },
   },
   // FE-262: the web console. The sweep's phone viewport shows its device
-  // stub (utils/console/access.ts); the accessibility gate opens the screens
-  // themselves in a laptop window (a11yViewport).
-  'console-dashboard': { path: '/console/dashboard', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-masters': { path: '/console/masters', roles: A, a11yViewport: CONSOLE_VIEWPORT },
+  // stub (utils/console/access.ts); the accessibility gate, Visual and the
+  // console layout sweep open the screens themselves in a laptop window
+  // (webViewport; the layout sweep adds two more sizes, e2e/sweep/console.spec.ts).
+  'console-dashboard': { path: '/console/dashboard', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-masters': { path: '/console/masters', roles: A, webViewport: CONSOLE_VIEWPORT },
   'console-masters-detail': {
     path: '/console/masters/:id',
     roles: A,
     params: { id: 'masterUserId' },
-    a11yViewport: CONSOLE_VIEWPORT,
+    webViewport: CONSOLE_VIEWPORT,
   },
-  'console-users': { path: '/console/users', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-schools': { path: '/console/schools', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-practices': { path: '/console/practices', roles: A, a11yViewport: CONSOLE_VIEWPORT },
+  'console-users': { path: '/console/users', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-schools': { path: '/console/schools', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-practices': { path: '/console/practices', roles: A, webViewport: CONSOLE_VIEWPORT },
   'console-practices-detail': {
     path: '/console/practices/:id',
     roles: A,
     params: { id: 'practicePastId' },
-    a11yViewport: CONSOLE_VIEWPORT,
+    webViewport: CONSOLE_VIEWPORT,
   },
-  'console-catalog': { path: '/console/catalog', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-moderation': { path: '/console/moderation', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-support': { path: '/console/support', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-finance': { path: '/console/finance', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-analytics': { path: '/console/analytics', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-mail': { path: '/console/mail', roles: A, a11yViewport: CONSOLE_VIEWPORT },
-  'console-settings': { path: '/console/settings', roles: A, a11yViewport: CONSOLE_VIEWPORT },
+  'console-catalog': { path: '/console/catalog', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-moderation': { path: '/console/moderation', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-support': { path: '/console/support', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-finance': { path: '/console/finance', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-analytics': { path: '/console/analytics', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-mail': { path: '/console/mail', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-settings': { path: '/console/settings', roles: A, webViewport: CONSOLE_VIEWPORT },
   'admin-withdrawals': { path: '/admin/withdrawals', roles: A },
   // No get-by-id endpoint: the screen reads history.state from the list and a
   // deep link is sent back to the list -- which is what the sweep checks.

@@ -35,7 +35,7 @@ import {
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
-import { isOptionEnabled } from '@/platform/instance'
+import { consoleHasPayments } from '@/utils/console/options'
 import { consoleRouteName } from '@/utils/console/modules'
 
 /** What the dashboard reads of its queues. */
@@ -56,7 +56,7 @@ export function useAttentionQueues(): AttentionQueuesState {
   const ticketsState = screenQueryState(tickets)
   // The payout queue is the payments option's admin surface: with the option
   // off there is no queue and no request.
-  const paymentsEnabled = isOptionEnabled('payments')
+  const paymentsEnabled = consoleHasPayments()
   const payouts = useQuery(() => adminPendingWithdrawalsQuery(paymentsEnabled))
   const payoutsState = screenQueryState(payouts)
 

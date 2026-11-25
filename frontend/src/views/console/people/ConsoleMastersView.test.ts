@@ -24,6 +24,13 @@ import { errorMessage } from '@/composables/useApiError'
 
 vi.mock('@/api/admin')
 
+// The instance options: the payout balance is the payments option's.
+const options = vi.hoisted(() => ({ payments: true }))
+vi.mock('@/platform/instance', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/platform/instance')>()),
+  isOptionEnabled: (name: string) => (name === 'payments' ? options.payments : true),
+}))
+
 vi.mock('@/utils/methodTaxonomy', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/utils/methodTaxonomy')>()
   return { ...actual, primeMethodTaxonomyCatalog: vi.fn().mockResolvedValue(undefined) }
@@ -141,6 +148,7 @@ function button(text: string): HTMLButtonElement | undefined {
 }
 
 beforeEach(() => {
+  options.payments = true
   toastError.mockReset()
   toastSuccess.mockReset()
   vi.mocked(adminApi.getMastersList).mockReset().mockImplementation(serve)
@@ -167,6 +175,17 @@ describe('ConsoleMastersView', () => {
     await vi.waitFor(() =>
       expect(tabLabels()).toEqual(['Все · 3', 'На проверке · 1', 'Отклонённые · 1']),
     )
+  })
+
+  it('shows the payout balance column, and drops it on an instance without payments', async () => {
+    await mount()
+    expect(root?.textContent).toContain('К выводу')
+
+    app?.unmount()
+    root?.remove()
+    options.payments = false
+    await mount()
+    expect(root?.textContent).not.toContain('К выводу')
   })
 
   it('words each status the same way every console screen does', async () => {

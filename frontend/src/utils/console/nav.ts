@@ -9,13 +9,13 @@
 import type { Component } from 'vue'
 import {
   IconAnalytics,
-  IconBroadcast,
   IconCalendar,
   IconFinance,
   IconGroup,
   IconHome,
   IconList,
   IconLock,
+  IconMessages,
   IconSchool,
   IconSupport,
   IconUsers,
@@ -41,7 +41,7 @@ export const CONSOLE_ICONS: Record<ConsoleModuleKey, Component> = {
   support: IconSupport,
   finance: IconFinance,
   analytics: IconAnalytics,
-  mail: IconBroadcast,
+  mail: IconMessages,
   settings: IconLock,
 }
 
