@@ -59,7 +59,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 const ROLE_DASHBOARD: Record<UserRole, string> = {
   user: 'user-dashboard',
   master: 'master-dashboard',
-  admin: 'admin-dashboard',
+  admin: 'console-dashboard',
 }
 
 // Allowed roles minus the current one — the set of switch targets.

@@ -55,11 +55,11 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let router: Router
 
-async function mount(url = '/console/finance'): Promise<HTMLElement> {
+async function mount(url = '/admin/finance'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/console/finance', name: 'console-finance', component: { render: () => null } },
+      { path: '/admin/finance', name: 'console-finance', component: { render: () => null } },
     ],
   })
   await router.push(url)
@@ -173,12 +173,12 @@ describe('ConsoleFinanceView', () => {
 
       app?.unmount()
       host?.remove()
-      await mount('/console/finance?tab=promos')
+      await mount('/admin/finance?tab=promos')
       expect(panel()).toBe('promos')
     })
 
     it('a new tab drops the status, the filter and the page of the old one', async () => {
-      await mount('/console/finance?tab=withdrawals&status=approved&page=2')
+      await mount('/admin/finance?tab=withdrawals&status=approved&page=2')
 
       moduleTab('Промокоды').click()
       await flush()
@@ -187,7 +187,7 @@ describe('ConsoleFinanceView', () => {
     })
 
     it('a tab the URL cannot mean opens the payouts', async () => {
-      await mount('/console/finance?tab=revenue')
+      await mount('/admin/finance?tab=revenue')
 
       expect(panel()).toBe('withdrawals')
     })

@@ -24,10 +24,10 @@
 // the first return, whatever the outcome.
 //
 // WHERE THE PERSON LANDS: the address they were on before the login screen
-// (say /console) travels with the mark as `destination`. The return itself
-// comes to RETURN_PATH and the router's first navigation goes to `/`, so
-// without it a sign-in always ended on the role's own zone (an admin on
-// /admin, not on /console). Only an in-app path is kept
+// (say /admin/support?ticket=...) travels with the mark as `destination`.
+// The return itself comes to RETURN_PATH and the router's first navigation
+// goes to `/`, so without it a sign-in always ended on the role's own zone
+// home instead of the screen asked for. Only an in-app path is kept
 // (safeLoginDestination).
 //
 // WHY THE ADDRESS IS WIPED: the code and state stay in the address bar and in

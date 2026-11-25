@@ -104,13 +104,13 @@ async function askAgain(): Promise<void> {
     .catch(() => {})
 }
 
-async function mount(url = '/console/masters', expectRows = true): Promise<HTMLElement> {
+async function mount(url = '/admin/masters', expectRows = true): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/console/masters', name: 'console-masters', component: ConsoleMastersView },
+      { path: '/admin/masters', name: 'console-masters', component: ConsoleMastersView },
       {
-        path: '/console/masters/:id',
+        path: '/admin/masters/:id',
         name: 'console-masters-detail',
         component: { render: () => null },
       },
@@ -210,7 +210,7 @@ describe('ConsoleMastersView', () => {
   })
 
   it('opens the tab and the page named by the URL', async () => {
-    await mount('/console/masters?tab=rejected&page=2')
+    await mount('/admin/masters?tab=rejected&page=2')
 
     expect(adminApi.getMastersList).toHaveBeenCalledWith('rejected', 20, 20)
   })
@@ -226,7 +226,7 @@ describe('ConsoleMastersView', () => {
 
   it('tells a failed load with an error state, and Retry asks again', async () => {
     vi.mocked(adminApi.getMastersList).mockRejectedValue(new Error('down'))
-    await mount('/console/masters', false)
+    await mount('/admin/masters', false)
     await vi.waitFor(() =>
       expect(root?.querySelector('[data-testid="screen-error"]')).not.toBeNull(),
     )

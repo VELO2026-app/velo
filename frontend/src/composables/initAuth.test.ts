@@ -111,15 +111,15 @@ describe('initAuth outside Telegram', () => {
   })
 
   it('the login screen keeps the address the person opened, for after the sign-in', async () => {
-    window.history.replaceState(null, '', '/console/masters?tab=new')
+    window.history.replaceState(null, '', '/admin/masters?tab=new')
 
     await run()
 
-    expect(loginDestination.value).toBe('/console/masters?tab=new')
+    expect(loginDestination.value).toBe('/admin/masters?tab=new')
   })
 
   it('a successful return restores the destination the mark carried', async () => {
-    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/console' })
+    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/admin' })
     openReturn('code=C1&state=S1')
     vi.mocked(api.post).mockResolvedValue({
       session_token: 'new_tok',
@@ -130,31 +130,31 @@ describe('initAuth outside Telegram', () => {
     const auth = await run()
 
     expect(auth.isAuthenticated.value).toBe(true)
-    expect(loginDestination.value).toBe('/console')
+    expect(loginDestination.value).toBe('/admin')
   })
 
   it('a refused return keeps the destination for the next try', async () => {
-    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/console' })
+    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/admin' })
     openReturn('code=C1&state=S1')
     vi.mocked(api.post).mockRejectedValue(new ApiResponseError(400, 'x', 'telegram_failed'))
 
     const auth = await run()
 
     expect(auth.loginNotice.value).toBe('telegram_failed')
-    expect(loginDestination.value).toBe('/console')
+    expect(loginDestination.value).toBe('/admin')
   })
 
   it('a refused return over an expired saved session: the destination is not lost', async () => {
     localStorage.setItem(SESSION_TOKEN_KEY, 'old_tok')
     vi.mocked(usersApi.getMe).mockRejectedValue(new ApiResponseError(401, 'x', 'unauthorized'))
-    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/console' })
+    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/admin' })
     openReturn('code=C1&state=S1')
     vi.mocked(api.post).mockRejectedValue(new ApiResponseError(400, 'x', 'telegram_failed'))
 
     const auth = await run()
 
     expect(auth.isAuthenticated.value).toBe(false)
-    expect(loginDestination.value).toBe('/console')
+    expect(loginDestination.value).toBe('/admin')
   })
 
   it('a session dropped on a page (expired, revoked): the next sign-in lands there', async () => {
@@ -162,12 +162,12 @@ describe('initAuth outside Telegram', () => {
     vi.mocked(usersApi.getMe).mockResolvedValue(user({ role: 'admin' }))
     vi.mocked(api.post).mockResolvedValue(undefined)
     await run()
-    window.history.replaceState(null, '', '/console/masters?status=pending')
+    window.history.replaceState(null, '', '/admin/masters?status=pending')
 
     await useAuthStore().discardSession()
 
     expect(useAuth().isAuthenticated.value).toBe(false)
-    expect(loginDestination.value).toBe('/console/masters?status=pending')
+    expect(loginDestination.value).toBe('/admin/masters?status=pending')
   })
 
   it('a logout leaves no destination: the next sign-in may be another account', async () => {
@@ -175,7 +175,7 @@ describe('initAuth outside Telegram', () => {
     vi.mocked(usersApi.getMe).mockResolvedValue(user({ role: 'admin' }))
     vi.mocked(api.post).mockResolvedValue(undefined)
     await run()
-    window.history.replaceState(null, '', '/console/settings?tab=texts')
+    window.history.replaceState(null, '', '/admin/settings?tab=texts')
 
     await useAuthStore().logout()
 
@@ -477,7 +477,7 @@ describe('initAuth inside Telegram -- whose session is restored', () => {
   })
 
   it("A's session dropped on A's page: B does not inherit it as a sign-in destination", async () => {
-    window.history.replaceState(null, '', '/console/masters')
+    window.history.replaceState(null, '', '/admin/masters')
     sessionStorage.setItem(SESSION_TOKEN_KEY, 'tok_A')
     vi.mocked(usersApi.getMe).mockResolvedValue(user({ id: 'user_A', telegram_id: 2002 }))
     vi.mocked(api.post).mockImplementation(async (path: string) => {
@@ -596,10 +596,10 @@ describe('startBrowserLogin', () => {
     vi.mocked(api.post).mockResolvedValue({ url: 'https://oauth.telegram.org/auth', state: 'S9' })
     const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
 
-    await useAuthStore().startBrowserLogin('/console')
+    await useAuthStore().startBrowserLogin('/admin')
 
     const kept = JSON.parse(localStorage.getItem(LOGIN_MARK_KEY) ?? 'null')
-    expect(kept).toMatchObject({ state: 'S9', destination: '/console' })
+    expect(kept).toMatchObject({ state: 'S9', destination: '/admin' })
     assign.mockRestore()
   })
 

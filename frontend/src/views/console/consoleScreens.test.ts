@@ -28,7 +28,7 @@ describe('console route records', () => {
   it('finish the navigation with the screen itself loaded', async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: consoleRoutes() })
 
-    await router.push('/console/practices')
+    await router.push('/admin/practices')
 
     expect(router.currentRoute.value.matched.at(-1)?.components?.default).toBe(Practices)
   })

@@ -4,7 +4,7 @@
  * the same; the run answers the app's `/config.json` with that instance's
  * options, as the deploy machine's nginx would. What it proves:
  *
- * - the menu has no Finance, and a typed `/console/finance` lands on the
+ * - the menu has no Finance, and a typed `/admin/finance` lands on the
  *   "section unavailable" screen;
  * - the dashboard has no revenue tile and no payout queue, the masters list
  *   has no payout column -- the money the instance does not have is not shown;
@@ -34,13 +34,13 @@ test.describe('console of an instance without payments', () => {
     page,
   }) => {
     const tracker = trackApi(page)
-    await page.goto('/console/dashboard')
+    await page.goto('/admin/dashboard')
     await settle(page, tracker)
     await expect(page.getByTestId('console-nav-dashboard')).toBeVisible()
     await expect(page.getByTestId('console-nav-schools')).toBeVisible()
     await expect(page.getByTestId('console-nav-finance')).toHaveCount(0)
 
-    await page.goto('/console/finance')
+    await page.goto('/admin/finance')
     await settle(page, tracker)
     await expect(page).toHaveURL(/\/unavailable$/)
     await expect(page.getByRole('heading', { name: 'Section unavailable' })).toBeVisible()
@@ -48,7 +48,7 @@ test.describe('console of an instance without payments', () => {
 
   test('the dashboard has no revenue tile and no payout queue', async ({ page }) => {
     const tracker = trackApi(page)
-    await page.goto('/console/dashboard')
+    await page.goto('/admin/dashboard')
     await settle(page, tracker)
 
     await expect(page.getByTestId('console-dashboard')).toBeVisible()
@@ -60,7 +60,7 @@ test.describe('console of an instance without payments', () => {
 
   test('the masters list has no payout column', async ({ page }) => {
     const tracker = trackApi(page)
-    await page.goto('/console/masters')
+    await page.goto('/admin/masters')
     await settle(page, tracker)
 
     await expect(page.getByTestId('console-table-row').first()).toBeVisible()
@@ -71,8 +71,7 @@ test.describe('console of an instance without payments', () => {
 
   for (const [name, entry] of Object.entries(SWEEP)) {
     // Finance is not there on this instance (above).
-    if ('skip' in entry || !entry.path.startsWith('/console/') || name === 'console-finance')
-      continue
+    if ('skip' in entry || !name.startsWith('console-') || name === 'console-finance') continue
     test(
       `[admin] ${entry.path} opens and has no layout finding`,
       { tag: `@${name}` },

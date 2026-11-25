@@ -5,17 +5,18 @@
 // Every screen is a lazy route. The first tap on a tab therefore waited for
 // its chunk before the View Transition could even start -- a visible "dead"
 // beat on a cold Telegram webview. Once the app is idle after the first
-// screen, warm the chunks of the CURRENT zone's tabs (user / master / admin),
+// screen, warm the chunks of the CURRENT zone's tabs (user / master),
 // so a tab switch only has to render. Once per zone; a failed import is
 // harmless (the router retries on the real navigation).
 // =============================================================================
 
 import type { Router, RouteRecordNormalized } from 'vue-router'
-import { ADMIN_TABS, MASTER_TABS, USER_TABS, type TabItem } from '@/router/tabs'
+import { MASTER_TABS, USER_TABS, type TabItem } from '@/router/tabs'
 import { whenIdle } from '@/platform/dom'
 import { warmTabData } from '@/router/dataPrefetch'
 
-const ZONES: readonly (readonly TabItem[])[] = [USER_TABS, MASTER_TABS, ADMIN_TABS]
+// The admin zone is the web console (FE-272): its menu is not a tab bar.
+const ZONES: readonly (readonly TabItem[])[] = [USER_TABS, MASTER_TABS]
 
 function zoneOf(path: string): readonly TabItem[] | undefined {
   const head = path.split('/')[1]

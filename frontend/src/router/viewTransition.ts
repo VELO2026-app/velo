@@ -45,7 +45,7 @@
 
 import { nextTick } from 'vue'
 import type { RouteLocationNormalized, Router } from 'vue-router'
-import { ADMIN_TABS, MASTER_TABS, USER_TABS } from '@/router/tabs'
+import { MASTER_TABS, USER_TABS } from '@/router/tabs'
 import {
   addRootClass,
   flushRootStyle,
@@ -85,7 +85,7 @@ const TAB_OUT_FALLBACK_MS = 100
 /** html.vt-leave never outlives this, whatever happens to the navigation. */
 const LEAVE_SAFETY_MS = 1200
 
-const TAB_PATHS = new Set([...USER_TABS, ...MASTER_TABS, ...ADMIN_TABS].map((tab) => tab.to))
+const TAB_PATHS = new Set([...USER_TABS, ...MASTER_TABS].map((tab) => tab.to))
 
 /** Classify a navigation: tab-to-tab, history pop, or forward drill-in. */
 export function transitionKind(

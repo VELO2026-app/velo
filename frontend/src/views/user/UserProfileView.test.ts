@@ -191,9 +191,9 @@ describe('UserProfileView', () => {
         hours_attended: 12,
         has_unread_messages: false,
       })
-      Array.from(host!.querySelectorAll('button'))
-        .find((b) => b.textContent?.includes('Повторить'))!
-        .click()
+      Array.from(host?.querySelectorAll('button') ?? [])
+        .find((b) => b.textContent?.includes('Повторить'))
+        ?.click()
       await flush()
 
       expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
@@ -330,7 +330,7 @@ describe('UserProfileView', () => {
       expect(push).toHaveBeenCalledWith({ name: 'master-dashboard' })
     })
 
-    it('role "admin": labelled for admin, resets uiMode and pushes admin-dashboard', async () => {
+    it('role "admin": labelled for admin, resets uiMode and pushes the console dashboard', async () => {
       useAuthStore().user = user({ role: 'admin' })
       useUiStore().setUiMode('user')
       mount()
@@ -345,7 +345,7 @@ describe('UserProfileView', () => {
       await flush()
 
       expect(useUiStore().uiMode).toBe('default')
-      expect(push).toHaveBeenCalledWith({ name: 'admin-dashboard' })
+      expect(push).toHaveBeenCalledWith({ name: 'console-dashboard' })
     })
   })
 

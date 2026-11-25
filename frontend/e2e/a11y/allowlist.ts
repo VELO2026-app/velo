@@ -22,17 +22,7 @@ const REASON = {
 export const A11Y_ALLOWLIST: A11yAllowance[] = [
   {
     rule: 'color-contrast',
-    routes: ['admin-support-detail'],
-    detail: '#798ca7 on #ffffff',
-    skins: ['gold'],
-    reason: REASON.MUTED_TEXT,
-    task: 'FE-244',
-  },
-  {
-    rule: 'color-contrast',
     routes: [
-      'admin-catalog',
-      'admin-practice-detail',
       'master-edit-profile',
       'master-notifications',
       'master-timezone',
@@ -47,7 +37,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-support-detail', 'user-diary-detail', 'user-diary-entry'],
+    routes: ['user-diary-detail', 'user-diary-entry'],
     detail: '#94a3b8 on #ffffff',
     skins: ['gold'],
     reason: REASON.MUTED_TEXT,
@@ -56,13 +46,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   {
     rule: 'color-contrast',
     routes: [
-      'admin-checkin-rate',
-      'admin-master-invite',
-      'admin-profile',
-      'admin-report-detail',
-      'admin-reports',
-      'admin-return-rate',
-      'admin-revenue',
       'master-analytics',
       'master-attendance',
       'master-dashboard',
@@ -81,23 +64,8 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: [
-      'admin-masters',
-      'admin-profile',
-      'admin-schools',
-      'admin-users',
-      'practice-detail',
-      'user-bookings',
-    ],
+    routes: ['practice-detail', 'user-bookings'],
     detail: '#2f9ea8 on #d6f5f8',
-    skins: ['gold'],
-    reason: REASON.STATUS_COLORS,
-    task: 'FE-245',
-  },
-  {
-    rule: 'color-contrast',
-    routes: ['admin-dashboard', 'root'],
-    detail: '#2f9ea8 on #ffffff',
     skins: ['gold'],
     reason: REASON.STATUS_COLORS,
     task: 'FE-245',
@@ -120,7 +88,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['admin-reports', 'admin-users', 'user-bookings'],
+    routes: ['user-bookings'],
     detail: '#a16124 on #fde6cf',
     skins: ['gold'],
     reason: REASON.STATUS_COLORS,
@@ -131,13 +99,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
     routes: ['practice-detail', 'user-master-public'],
     detail: '#a16124 on #fdf3e2',
     skins: ['gold'],
-    reason: REASON.STATUS_COLORS,
-    task: 'FE-245',
-  },
-  {
-    rule: 'color-contrast',
-    routes: ['admin-dashboard', 'admin-practices', 'root'],
-    detail: '#d66674 on #ffffff',
     reason: REASON.STATUS_COLORS,
     task: 'FE-245',
   },
@@ -176,13 +137,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: [
-      'admin-master-review',
-      'master-dashboard',
-      'master-student-profile',
-      'practice-detail',
-      'root',
-    ],
+    routes: ['master-dashboard', 'master-student-profile', 'practice-detail', 'root'],
     detail: '#ffffff on #f795a2',
     skins: ['gold'],
     reason: REASON.STATUS_COLORS,
@@ -199,8 +154,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   {
     rule: 'color-contrast',
     routes: [
-      'admin-profile',
-      'admin-users',
       'console-catalog',
       'console-finance',
       'console-masters',
@@ -209,8 +162,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
       'console-settings',
       'console-support',
       'console-users',
-      // An admin in a browser lands on /console; at the phone size the console
-      // shows its device stub, whose secondary button carries this pair.
       'root',
     ],
     detail: '#4c6589 on #cdd9e9',
@@ -229,7 +180,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   {
     rule: 'color-contrast',
     routes: [
-      'admin-masters',
       'group-join',
       'master-student-profile',
       'practice-detail',
@@ -247,8 +197,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   {
     rule: 'color-contrast',
     routes: [
-      'admin-masters',
-      'admin-users',
       'console-analytics',
       'console-catalog',
       'console-dashboard',
@@ -273,9 +221,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   {
     rule: 'color-contrast',
     routes: [
-      'admin-checkin-rate',
-      'admin-profile',
-      'admin-report-detail',
       'master-analytics',
       'master-edit-profile',
       'master-practice-reviews',
@@ -312,16 +257,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
       'console-settings',
       'console-support',
       'console-users',
-      'admin-dashboard',
-      'admin-master-invite',
-      'admin-masters',
-      'admin-participants',
-      'admin-practices',
-      'admin-promos',
-      'admin-report-detail',
-      'admin-reports',
-      'admin-revenue',
-      'admin-support-detail',
       'auth-error',
       'group-join',
       'master-analytics',

@@ -52,10 +52,7 @@ export const SCREENS: VisualScreen[] = [
   { name: 'master-analytics', role: M },
   { name: 'master-students', role: M },
   { name: 'master-profile', role: M },
-  { name: 'admin-dashboard', role: A },
-  { name: 'admin-masters', role: A },
-  { name: 'admin-reports', role: A },
-  // FE-275: the web console, every screen, in the laptop window of its sweep
+  // FE-275 / FE-272: the web console (the admin zone at /admin), every screen, in the laptop window of its sweep
   // row (webViewport) -- on both skins, as the rest.
   { name: 'console-dashboard', role: A },
   { name: 'console-masters', role: A },

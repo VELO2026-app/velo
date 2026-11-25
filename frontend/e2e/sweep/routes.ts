@@ -112,12 +112,9 @@ export const SWEEP: Record<string, SweepRow> = {
   root: {
     path: '/',
     roles: ['student', 'master', 'admin'],
-    // Each role to ITS zone's dashboard; an admin in a browser to the web
-    // console (owner ruling, FE-272), inside Telegram to the mobile /admin.
-    lands: (role, host) =>
-      role === 'admin' && host === 'browser'
-        ? /\/console\/dashboard$/
-        : new RegExp(`/${ZONE[role]}/dashboard$`),
+    // Each role to ITS zone's dashboard (an admin: the web console at
+    // /admin, FE-272).
+    lands: (role) => new RegExp(`/${ZONE[role]}/dashboard$`),
   },
   'auth-error': {
     path: '/auth-error',
@@ -309,72 +306,34 @@ export const SWEEP: Record<string, SweepRow> = {
   },
 
   // --- admin zone (root) ----------------------------------------------------------
-  'admin-dashboard': { path: '/admin/dashboard', roles: A },
-  'admin-masters': { path: '/admin/masters', roles: A },
-  'admin-users': { path: '/admin/users', roles: A },
-  'admin-master-invite': { path: '/admin/masters/invite', roles: A },
-  'admin-master-review': { path: '/admin/masters/:id', roles: A, params: { id: 'masterUserId' } },
-  'admin-schools': { path: '/admin/schools', roles: A },
-  'admin-method-requests': { path: '/admin/method-requests', roles: A },
-  'admin-catalog': { path: '/admin/catalog', roles: A },
-  'admin-reports': { path: '/admin/reports', roles: A },
-  'admin-report-detail': { path: '/admin/reports/:id', roles: A, params: { id: 'reportId' } },
-  'admin-profile': { path: '/admin/profile', roles: A },
-  'admin-checkin-rate': { path: '/admin/metrics/check-in', roles: A },
-  'admin-feedback-rate': { path: '/admin/metrics/feedback', roles: A },
-  'admin-return-rate': { path: '/admin/metrics/return', roles: A },
-  'admin-revenue': { path: '/admin/revenue', roles: A },
-  'admin-participants': { path: '/admin/participants', roles: A },
-  'admin-practices': { path: '/admin/practices', roles: A },
-  'admin-practice-detail': {
-    path: '/admin/practices/:id',
-    roles: A,
-    params: { id: 'practicePastId' },
-  },
-  'admin-promos': { path: '/admin/promos', roles: A },
-  'admin-support-stats': { path: '/admin/support/stats', roles: A },
-  'admin-support-detail': {
-    path: '/admin/support/:id',
-    roles: A,
-    params: { id: 'supportTicketId' },
-  },
-  // FE-262: the web console. The sweep's phone viewport shows its device
+  // FE-262 / FE-272: the web console at /admin. The sweep's phone viewport shows its device
   // stub (utils/console/access.ts); the accessibility gate, Visual and the
   // console layout sweep open the screens themselves in a laptop window
   // (webViewport; the layout sweep adds two more sizes, e2e/sweep/console.spec.ts).
-  'console-dashboard': { path: '/console/dashboard', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-masters': { path: '/console/masters', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-dashboard': { path: '/admin/dashboard', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-masters': { path: '/admin/masters', roles: A, webViewport: CONSOLE_VIEWPORT },
   'console-masters-detail': {
-    path: '/console/masters/:id',
+    path: '/admin/masters/:id',
     roles: A,
     params: { id: 'masterUserId' },
     webViewport: CONSOLE_VIEWPORT,
   },
-  'console-users': { path: '/console/users', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-schools': { path: '/console/schools', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-practices': { path: '/console/practices', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-users': { path: '/admin/users', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-schools': { path: '/admin/schools', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-practices': { path: '/admin/practices', roles: A, webViewport: CONSOLE_VIEWPORT },
   'console-practices-detail': {
-    path: '/console/practices/:id',
+    path: '/admin/practices/:id',
     roles: A,
     params: { id: 'practicePastId' },
     webViewport: CONSOLE_VIEWPORT,
   },
-  'console-catalog': { path: '/console/catalog', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-moderation': { path: '/console/moderation', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-support': { path: '/console/support', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-finance': { path: '/console/finance', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-analytics': { path: '/console/analytics', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-mail': { path: '/console/mail', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'console-settings': { path: '/console/settings', roles: A, webViewport: CONSOLE_VIEWPORT },
-  'admin-withdrawals': { path: '/admin/withdrawals', roles: A },
-  // No get-by-id endpoint: the screen reads history.state from the list and a
-  // deep link is sent back to the list -- which is what the sweep checks.
-  'admin-withdrawal-detail': {
-    path: '/admin/withdrawals/:id',
-    roles: A,
-    params: { id: '=00000000-0000-4000-8000-000000000000' },
-    lands: /\/admin\/withdrawals$/,
-  },
+  'console-catalog': { path: '/admin/catalog', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-moderation': { path: '/admin/moderation', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-support': { path: '/admin/support', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-finance': { path: '/admin/finance', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-analytics': { path: '/admin/analytics', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-mail': { path: '/admin/mail', roles: A, webViewport: CONSOLE_VIEWPORT },
+  'console-settings': { path: '/admin/settings', roles: A, webViewport: CONSOLE_VIEWPORT },
 }
 
 /**

@@ -156,13 +156,13 @@ let router: Router
 
 const Stub = { template: '<div class="stub" />' }
 
-async function mount(path = '/console/moderation'): Promise<HTMLElement> {
+async function mount(path = '/admin/moderation'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/console/moderation', name: 'console-moderation', component: ConsoleModerationView },
-      { path: '/admin/masters/:id', name: 'admin-master-review', component: Stub },
-      { path: '/admin/practices/:id', name: 'admin-practice-detail', component: Stub },
+      { path: '/admin/moderation', name: 'console-moderation', component: ConsoleModerationView },
+      { path: '/admin/masters/:id', name: 'console-masters-detail', component: Stub },
+      { path: '/admin/practices/:id', name: 'console-practices-detail', component: Stub },
     ],
   })
   await router.push(path)
@@ -253,7 +253,7 @@ describe('ConsoleModerationView: complaints', () => {
 
   it('reads a complaint named in the URL that the list does not hold', async () => {
     server.reports.resolved = [R_DONE]
-    await mount('/console/moderation?id=r_done_0003')
+    await mount('/admin/moderation?id=r_done_0003')
 
     expect(adminApi.getReportById).toHaveBeenCalledWith('r_done_0003')
     expect(reasonShown()).toBe('An old complaint that was handled')
@@ -309,10 +309,10 @@ describe('ConsoleModerationView: complaints', () => {
     await mount()
 
     await click(byId('report-target') as HTMLElement)
-    expect(router.currentRoute.value.name).toBe('admin-master-review')
+    expect(router.currentRoute.value.name).toBe('console-masters-detail')
     expect(router.currentRoute.value.params.id).toBe('target_master_0001')
 
-    await router.push('/console/moderation?id=r_user_0002')
+    await router.push('/admin/moderation?id=r_user_0002')
     await flush()
     expect(byId('report-target')?.tagName).toBe('SPAN')
   })
@@ -323,7 +323,7 @@ describe('ConsoleModerationView: decided tab', () => {
     server.reports.dismissed = [
       report({ id: 'r_dismissed_4', reason: 'Dismissed text', status: 'dismissed' }),
     ]
-    await mount('/console/moderation?tab=decided')
+    await mount('/admin/moderation?tab=decided')
 
     expect(adminApi.getReports).toHaveBeenCalledWith('resolved', undefined, 20, 0)
     expect(reasonShown()).toBe('An old complaint that was handled')
@@ -357,7 +357,7 @@ describe('ConsoleModerationView: narrow window', () => {
 describe('ConsoleModerationView: method changes', () => {
   it('shows who asks, the methods now and after, with the added ones apart', async () => {
     server.requests = [request({ proposed_methods: ['Медитация', 'Мой уникальный метод'] })]
-    await mount('/console/moderation?tab=methods')
+    await mount('/admin/moderation?tab=methods')
 
     expect(host?.textContent).toContain('Anna Lebedeva просит изменить методы')
     expect(
@@ -368,7 +368,7 @@ describe('ConsoleModerationView: method changes', () => {
   })
 
   it('approves a request whose methods are all in the catalog at once, and drops it', async () => {
-    await mount('/console/moderation?tab=methods')
+    await mount('/admin/moderation?tab=methods')
 
     await click(button('Одобрить'))
 
@@ -384,7 +384,7 @@ describe('ConsoleModerationView: method changes', () => {
     'asks about a custom method, and "%s" approves with the matching scope',
     async (choice, promote, masterOnly) => {
       server.requests = [request({ proposed_methods: ['Медитация', 'Мой уникальный метод'] })]
-      await mount('/console/moderation?tab=methods')
+      await mount('/admin/moderation?tab=methods')
 
       await click(button('Одобрить'))
       expect(adminApi.approveMethodChange).not.toHaveBeenCalled()
@@ -395,7 +395,7 @@ describe('ConsoleModerationView: method changes', () => {
   )
 
   it('rejects only with a reason, sent trimmed', async () => {
-    await mount('/console/moderation?tab=methods')
+    await mount('/admin/moderation?tab=methods')
 
     await click(button('Отклонить с причиной'))
     await click(button('Отклонить заявку'))
@@ -413,7 +413,7 @@ describe('ConsoleModerationView: method changes', () => {
 
   it('tells a failed approval and keeps the request in the list', async () => {
     vi.mocked(adminApi.approveMethodChange).mockRejectedValueOnce(new ApiResponseError(500, 'boom'))
-    await mount('/console/moderation?tab=methods')
+    await mount('/admin/moderation?tab=methods')
 
     await click(button('Одобрить'))
 
@@ -443,14 +443,14 @@ describe('ConsoleModerationView: empty and failed lists', () => {
   })
 
   it('says the complaint named in the URL is not found when nothing answers to it', async () => {
-    await mount('/console/moderation?id=r_missing')
+    await mount('/admin/moderation?id=r_missing')
 
     expect(host?.textContent).toContain('Жалоба не найдена')
   })
 
   it('says there are no method change requests', async () => {
     server.requests = []
-    await mount('/console/moderation?tab=methods')
+    await mount('/admin/moderation?tab=methods')
 
     expect(host?.textContent).toContain('Заявок нет')
   })
@@ -459,7 +459,7 @@ describe('ConsoleModerationView: empty and failed lists', () => {
     vi.mocked(adminApi.getMethodChangeRequests).mockRejectedValueOnce(
       new ApiResponseError(500, 'boom'),
     )
-    await mount('/console/moderation?tab=methods')
+    await mount('/admin/moderation?tab=methods')
     expect(host?.querySelector('[data-testid="method-request"]')).toBeNull()
 
     await click(button('Повторить'))
@@ -546,7 +546,7 @@ describe('ConsoleModerationView: a verdict and the background refetch', () => {
   })
 
   it('tells a failed refetch of the method requests once and keeps them', async () => {
-    await mount('/console/moderation?tab=methods')
+    await mount('/admin/moderation?tab=methods')
     vi.mocked(adminApi.getMethodChangeRequests).mockImplementation(() =>
       Promise.reject(new Error('down')),
     )

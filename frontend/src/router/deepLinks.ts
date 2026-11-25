@@ -110,7 +110,7 @@ const SCHOOL_INVITE_PARAM = /^school__([A-Za-z0-9_-]{16,128})$/
  *                                  sheet on THAT resolved ticket (FE-107 /
  *                                  BE-162 delivery 3; the chat resolves the
  *                                  ticket id to the person's one support row)
- *   `open_admin_support__{uuid}  -> { name: 'admin-support-detail', params: { id } }, admin only`
+ *   `open_admin_support__{uuid}  -> { name: 'console-support', query: { ticket: id } }, admin only`
  *                                  (FE-103/BE-172: the comms THREAD id -- owner
  *                                  ruling in the BE-172 fix)
  *   `<action>[__{uuid}]          -> the bell's screen for that notification verb (Links)`;
@@ -248,9 +248,10 @@ export function parseStartParam(
       // FE-103 / BE-172: the per-admin Telegram signal about a support
       // message deep-links the admin detail screen by the comms THREAD id
       // (owner ruling in the BE-172 fix -- the opener's user_id would leave
-      // the front to find the thread through the list). Bare (no id) has no
-      // destination of its own.
-      return id && asAdmin ? { name: 'admin-support-detail', params: { id } } : null
+      // the front to find the thread through the list). The console opens
+      // it in the support module (FE-272). Bare (no id) has no destination
+      // of its own.
+      return id && asAdmin ? { name: 'console-support', query: { ticket: id } } : null
     default:
       // open_notifications / open_admin_masters: there is no admin bell --
       // the app opens as usual. Anything else (or no verb) is not a route.

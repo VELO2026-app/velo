@@ -156,9 +156,9 @@ const dismiss = useAdminMutation(
 /** A master or practice has an admin detail screen; a user has none yet (no admin endpoint reads one user). */
 const targetRoute = computed<RouteLocationRaw | null>(() => {
   if (props.report.target_type === 'master')
-    return { name: 'admin-master-review', params: { id: props.report.target_id } }
+    return { name: 'console-masters-detail', params: { id: props.report.target_id } }
   if (props.report.target_type === 'practice')
-    return { name: 'admin-practice-detail', params: { id: props.report.target_id } }
+    return { name: 'console-practices-detail', params: { id: props.report.target_id } }
   return null
 })
 

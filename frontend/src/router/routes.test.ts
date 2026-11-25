@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import router from '@/router'
 
 // =============================================================================
@@ -46,14 +47,11 @@ describe('route table: module gates resolve in the golden build (tz-whitelabel Â
     expect(router.resolve({ name: 'user-topup' }).href).toBe('/user/topup')
     expect(router.resolve({ name: 'user-topup-success' }).href).toBe('/user/topup/success')
     expect(router.resolve({ name: 'user-topup-cancel' }).href).toBe('/user/topup/cancel')
-    // FE-112, FE-151: the finance screen and the payout queue are the
-    // payments option's master/admin surfaces -- always registered (variant
+    // FE-112, FE-151: the master's finance screen and the console's finance
+    // module (FE-272: at /admin) are the payments option's surfaces -- always registered (variant
     // A); the option's off side is meta.option (the table below).
     expect(router.resolve({ name: 'master-finance' }).href).toBe('/master/finance')
-    expect(router.resolve({ name: 'admin-withdrawals' }).href).toBe('/admin/withdrawals')
-    expect(router.resolve({ name: 'admin-withdrawal-detail', params: { id: 'w1' } }).href).toBe(
-      '/admin/withdrawals/w1',
-    )
+    expect(router.resolve({ name: 'console-finance' }).href).toBe('/admin/finance')
   })
 })
 
@@ -75,8 +73,6 @@ describe('route table: instance options (FE-151, meta.option)', () => {
       'master-finance': 'payments',
       'master-promocodes': 'payments',
       'master-promocode-new': 'payments',
-      'admin-withdrawals': 'payments',
-      'admin-withdrawal-detail': 'payments',
       'console-finance': 'payments',
       'user-calendar-school': 'schools',
       'user-my-schools': 'schools',
@@ -88,7 +84,6 @@ describe('route table: instance options (FE-151, meta.option)', () => {
       'master-school-members': 'schools',
       'master-school-analytics': 'schools',
       'master-school-student': 'schools',
-      'admin-schools': 'schools',
       'console-schools': 'schools',
       'school-join': 'schools',
       'school-master-offer': 'schools',
@@ -121,7 +116,6 @@ describe('route table: access requirements (meta.requires, router/guards.ts)', (
   it('the zone shells require their role', () => {
     expect(record('/master')?.meta?.requires).toBe('master-role')
     expect(record('/admin')?.meta?.requires).toBe('admin-role')
-    expect(record('/console')?.meta?.requires).toBe('admin-role')
   })
 
   // Every MasterShell child is classified here on purpose: a new master
@@ -192,3 +186,48 @@ describe('route table: access requirements (meta.requires, router/guards.ts)', (
     }
   })
 })
+
+describe('route table: the console at /admin answers the old addresses (FE-272)', () => {
+  // Bot deep links, bookmarks and old notifications name the mobile admin's
+  // addresses and the console's first one (/console); each lands on the
+  // console screen that does the same job.
+  it.each([
+    ['/admin/support/t1', 'console-support', { ticket: 't1' }],
+    ['/admin/support/stats', 'console-support', { tab: 'stats' }],
+    ['/admin/reports', 'console-support', {}],
+    ['/admin/reports?tab=complaints', 'console-moderation', { tab: 'complaints' }],
+    ['/admin/reports/r1', 'console-moderation', { tab: 'complaints', id: 'r1' }],
+    ['/admin/method-requests', 'console-moderation', { tab: 'methods' }],
+    ['/admin/withdrawals', 'console-finance', { tab: 'withdrawals' }],
+    ['/admin/withdrawals/w1', 'console-finance', { tab: 'withdrawals' }],
+    ['/admin/promos', 'console-finance', { tab: 'promos' }],
+    ['/admin/revenue', 'console-finance', {}],
+    ['/admin/metrics/check-in', 'console-analytics', { metric: 'checkin' }],
+    ['/admin/participants', 'console-users', { tab: 'user' }],
+    ['/admin/masters/invite', 'console-masters', {}],
+    ['/admin/profile', 'console-dashboard', {}],
+    ['/admin', 'console-dashboard', {}],
+    ['/console', 'console-dashboard', {}],
+    ['/console/', 'console-dashboard', {}],
+  ])('%s -> %s', async (from, name, query) => {
+    const landed = await resolveRedirects(from)
+
+    expect(landed.name).toBe(name)
+    expect(landed.query).toEqual(query)
+  })
+
+  it('/console/* goes to the same screen under /admin, with its query', async () => {
+    const landed = await resolveRedirects('/console/masters/m1?x=1')
+
+    expect(landed.fullPath).toBe('/admin/masters/m1?x=1')
+    expect(landed.name).toBe('console-masters-detail')
+  })
+})
+
+/** Where the router itself lands for an address (a fresh router on the app's
+ *  route table, no guards: the record redirects alone). */
+async function resolveRedirects(path: string) {
+  const fresh = createRouter({ history: createMemoryHistory(), routes: router.options.routes })
+  await fresh.push(path)
+  return fresh.currentRoute.value
+}

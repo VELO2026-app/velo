@@ -43,7 +43,7 @@ describe('the route table declares the zone catalogs its screens need', () => {
 
   it.each([
     ['master', /\/views\/master\/|\/views\/shells\/MasterShell\.vue/],
-    ['admin', /\/views\/admin\/|\/views\/shells\/AdminShell\.vue/],
+    ['admin', /\/views\/console\/|\/views\/shells\/ConsoleShell\.vue/],
   ] as const)('%s screens and shell', (zone, screens) => {
     const zoneRecords = lazy.filter(([record]) => screens.test(loaderSource(record)))
     expect(zoneRecords.length).toBeGreaterThan(5)

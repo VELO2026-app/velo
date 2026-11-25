@@ -123,11 +123,11 @@ let host: HTMLElement | null = null
 let router: Router
 let pinia: Pinia
 
-async function mount(url = '/console/finance?tab=withdrawals'): Promise<HTMLElement> {
+async function mount(url = '/admin/finance?tab=withdrawals'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/console/finance', name: 'console-finance', component: { render: () => null } },
+      { path: '/admin/finance', name: 'console-finance', component: { render: () => null } },
     ],
   })
   await router.push(url)
@@ -357,7 +357,7 @@ describe('WithdrawalsPanel', () => {
     })
 
     it('a status the URL cannot mean falls back to pending, and a bad page to the first', async () => {
-      await mount('/console/finance?tab=withdrawals&status=archive&page=-3')
+      await mount('/admin/finance?tab=withdrawals&status=archive&page=-3')
 
       expect(adminApi.getAdminWithdrawals).toHaveBeenCalledWith('pending', 20, 0)
       expect(
@@ -420,13 +420,13 @@ describe('WithdrawalsPanel', () => {
     it.each([
       // 45 rows are 3 pages: page 9 goes to the last, an empty queue to the first.
       {
-        url: '/console/finance?tab=withdrawals&page=9',
+        url: '/admin/finance?tab=withdrawals&page=9',
         total: 45,
         query: { tab: 'withdrawals', page: '3' },
         shown: 'Показано 41–45 из 45',
       },
       {
-        url: '/console/finance?tab=withdrawals&page=2',
+        url: '/admin/finance?tab=withdrawals&page=2',
         total: 0,
         query: { tab: 'withdrawals' },
         shown: undefined,
@@ -445,7 +445,7 @@ describe('WithdrawalsPanel', () => {
     it('a status tab starts at its first page', async () => {
       server.pending = pendingQueue(45)
       server.approved = [request('w_ok', { status: 'approved' })]
-      await mount('/console/finance?tab=withdrawals&page=2')
+      await mount('/admin/finance?tab=withdrawals&page=2')
 
       tab('Одобрены').click()
       await flush()

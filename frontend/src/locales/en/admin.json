@@ -557,7 +557,6 @@
     "navLabel": "Admin sections",
     "role": "Administrator",
     "userMode": "User mode",
-    "mobileAdmin": "Mobile admin",
     "groups": {
       "people": "People",
       "content": "Content",
@@ -582,14 +581,12 @@
     },
     "placeholder": {
       "title": "This section is moving to the web version",
-      "legacy": "For now it works in the mobile admin.",
-      "soon": "This section will come in a later version.",
-      "open": "Open in the mobile admin"
+      "soon": "This section will come in a later version."
     },
     "stub": {
-      "title": "The admin opens on a computer or a tablet",
-      "telegram": "The admin does not open in Telegram. Open the link in a browser on a computer or a tablet.",
-      "narrow": "The screen is too small for the admin. Open it on a computer or a tablet.",
+      "title": "Open the admin on a tablet or a computer",
+      "telegram": "The admin does not open in Telegram. Open the link in a browser on a tablet or a computer.",
+      "narrow": "The screen is too small for the admin. Open it on a tablet or a computer.",
       "openBrowser": "Open in browser",
       "copy": "Copy link",
       "copied": "Link copied",

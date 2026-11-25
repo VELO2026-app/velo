@@ -38,12 +38,13 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed, onScopeDispose, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { VButton, VeloLogo } from '@/components/ui'
 import { platform } from '@/platform'
 import { host } from '@/platform/host'
 import { useUiStore } from '@/stores/ui'
 import type { ConsoleBlock } from '@/utils/console/access'
+import { CONSOLE_BASE } from '@/utils/console/modules'
 
 defineProps<{
   /** Why the console does not open here. */
@@ -52,7 +53,16 @@ defineProps<{
 
 const router = useRouter()
 const uiStore = useUiStore()
-const consoleUrl = new URL('/console', host.location.origin).toString()
+const route = useRoute()
+// The address asked for (a bot's ticket link, say), so the browser opens
+// the same screen; the console's home when it is not a console address.
+// Path and query only: a hash may carry Telegram's signed launch data.
+const consoleUrl = computed(() => {
+  const asked = route.path.startsWith(`${CONSOLE_BASE}/`)
+    ? router.resolve({ path: route.path, query: route.query }).fullPath
+    : CONSOLE_BASE
+  return new URL(asked, host.location.origin).toString()
+})
 
 /** How long the copy button says what happened before it reads «Copy» again. */
 const COPY_FEEDBACK_MS = 2500
@@ -67,7 +77,7 @@ onScopeDispose(() => clearTimeout(resetTimer))
 
 async function copy(): Promise<void> {
   try {
-    await host.navigator.clipboard.writeText(consoleUrl)
+    await host.navigator.clipboard.writeText(consoleUrl.value)
     copyState.value = 'copied'
   } catch {
     // No clipboard (an old WebView, a denied permission): say so; the link

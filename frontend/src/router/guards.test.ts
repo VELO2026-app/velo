@@ -60,19 +60,6 @@ vi.mock('@/composables/useRoleFreshness', () => ({
     refreshRoleIfStale(...args),
 }))
 
-// Where the app runs: roleRedirect sends a browser admin to /console and a
-// Telegram admin to /admin. Read through a getter, so each test can switch it.
-let platformName: 'telegram' | 'standalone' = 'standalone'
-vi.mock('@/platform', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/platform')>()
-  return {
-    ...actual,
-    get platform() {
-      return { ...actual.platform, name: platformName }
-    },
-  }
-})
-
 // Guards ignore (to, from, next) entirely at runtime -- call bare, matching
 // how vue-router actually invokes them. NavigationGuardWithThis's declared
 // 3-required-param signature is a vue-router typing convenience, not a real
@@ -113,7 +100,6 @@ function setAuthUser(overrides: Partial<UserResponse> & Record<string, unknown> 
 
 describe('router/guards', () => {
   beforeEach(() => {
-    platformName = 'standalone'
     setActivePinia(createPinia())
     resetAuthState()
     sessionStorage.clear()
@@ -130,17 +116,10 @@ describe('router/guards', () => {
   })
 
   describe('roleRedirect', () => {
-    it('admin inside Telegram -> /admin/dashboard', async () => {
-      platformName = 'telegram'
+    it('admin -> /admin/dashboard (the console, in a browser and in Telegram alike)', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'admin' })
       expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
-    })
-
-    it('admin in a browser -> the web console', async () => {
-      __setReadyForTest(true)
-      setAuthUser({ role: 'admin' })
-      expect(await call(roleRedirect)).toEqual({ path: '/console' })
     })
 
     it('master -> /master/dashboard', async () => {
@@ -158,19 +137,19 @@ describe('router/guards', () => {
     it('after a browser sign-in: lands on the address opened before the login screen, once', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'admin' })
-      loginDestination.value = '/console/masters'
+      loginDestination.value = '/admin/masters'
 
-      expect(await call(roleRedirect)).toBe('/console/masters')
+      expect(await call(roleRedirect)).toBe('/admin/masters')
       expect(loginDestination.value).toBeNull()
-      expect(await call(roleRedirect)).toEqual({ path: '/console' })
+      expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
     })
 
     it('not signed in: the destination waits for the sign-in', async () => {
       __setReadyForTest(true)
-      loginDestination.value = '/console'
+      loginDestination.value = '/admin'
 
       expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
-      expect(loginDestination.value).toBe('/console')
+      expect(loginDestination.value).toBe('/admin')
     })
 
     // Links (3 October): this used to set an already-PARSED route. Right while
@@ -718,14 +697,14 @@ describe('router/guards', () => {
         history: createMemoryHistory(),
         routes: [
           ROOT_ROUTE,
-          { path: '/console/masters', component: Stub, meta: { requires: 'admin-role' } },
+          { path: '/admin/masters', component: Stub, meta: { requires: 'admin-role' } },
         ],
       })
       installAccessGuard(router)
       setAuthUser({ role: 'admin' })
-      loginDestination.value = '/console/masters?status=pending'
+      loginDestination.value = '/admin/masters?status=pending'
 
-      expect(await go(router, '/')).toBe('/console/masters?status=pending')
+      expect(await go(router, '/')).toBe('/admin/masters?status=pending')
     })
 
     it('the parent role requirement runs first: a user never reaches the status check', async () => {

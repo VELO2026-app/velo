@@ -64,8 +64,8 @@ describe('the mark', () => {
   })
 
   it('carries the destination of the sign-in; a destination that is not an app path is dropped', () => {
-    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/console/masters' })
-    expect(takeLoginMark()).toEqual({ state: 'S1', mark: 'M1', destination: '/console/masters' })
+    rememberLoginMark({ state: 'S1', mark: 'M1', destination: '/admin/masters' })
+    expect(takeLoginMark()).toEqual({ state: 'S1', mark: 'M1', destination: '/admin/masters' })
 
     localStorage.setItem(
       LOGIN_MARK_KEY,
@@ -127,7 +127,7 @@ describe('takeLoginReturn', () => {
 })
 
 describe('safeLoginDestination', () => {
-  it.each(['/console', '/console/masters?status=pending'])('an app path is kept: %s', (path) => {
+  it.each(['/admin', '/admin/masters?status=pending'])('an app path is kept: %s', (path) => {
     expect(safeLoginDestination(path)).toBe(path)
   })
 

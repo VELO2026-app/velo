@@ -84,10 +84,10 @@ async function askAgain(): Promise<void> {
     .catch(() => {})
 }
 
-async function mount(url = '/console/users', expectRows = true): Promise<HTMLElement> {
+async function mount(url = '/admin/users', expectRows = true): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/console/users', name: 'console-users', component: ConsoleUsersView }],
+    routes: [{ path: '/admin/users', name: 'console-users', component: ConsoleUsersView }],
   })
   await router.push(url)
   pinia = createPinia()
@@ -188,7 +188,7 @@ describe('ConsoleUsersView', () => {
 
   it('tells a failed load with an error state, and Retry asks again', async () => {
     vi.mocked(adminApi.getUsersList).mockRejectedValue(new Error('down'))
-    await mount('/console/users', false)
+    await mount('/admin/users', false)
     await vi.waitFor(() =>
       expect(root?.querySelector('[data-testid="screen-error"]')).not.toBeNull(),
     )

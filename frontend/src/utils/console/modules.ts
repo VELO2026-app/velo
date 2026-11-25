@@ -2,7 +2,7 @@
 // VELO Frontend -- the web console's modules (FE-262)
 // =============================================================================
 //
-// The console (/console) is the web version of the instance admin. A module
+// The console is the instance admin, a web app at CONSOLE_BASE (/admin). A module
 // is one menu item and the unit of access: a module the instance does not
 // have (an instance option is off) is not in the menu at all -- Finance
 // is the payments option's admin surface (promo codes, payouts), Schools the
@@ -53,6 +53,9 @@ export interface ConsoleModule {
   /** Live counter shown next to the item. */
   readonly badge?: ConsoleBadgeSource
 }
+
+/** Where the console lives (FE-272: the admin zone; /console until then). */
+export const CONSOLE_BASE = '/admin'
 
 /** Every console module, in menu order. */
 export const CONSOLE_MODULES: readonly ConsoleModule[] = [
