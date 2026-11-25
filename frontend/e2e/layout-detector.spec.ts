@@ -33,6 +33,7 @@ import {
 import {
   LAYOUT_SIZES,
   TELEGRAM_BANDS,
+  WEB_WINDOW,
   checkLayout,
   inspectLayout,
   isLayoutAllowed,
@@ -277,6 +278,29 @@ test('text cut off at a side is reported; lines a clamp hides are not', async ({
       await scan(page, box('display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1')),
     ),
   ).not.toContain('overflow')
+})
+
+test('the web window has no tap-target floor; overflow still counts in it (FE-275)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const open = (body: string): Promise<void> =>
+    page.setContent(`<body style="margin:0;font:16px sans-serif">${body}</body>`)
+  const web = (): Promise<LayoutFinding[]> =>
+    inspectLayout(page, WEB_WINDOW.bands, WEB_WINDOW.targetPx)
+
+  // A 32 px button: a miss for a finger, fine for a pointer.
+  await open('<button style="width:32px;height:32px">x</button>')
+  expect(rules(await inspectLayout(page, WEB_WINDOW.bands))).toContain('small-target')
+  expect(rules(await web())).not.toContain('small-target')
+
+  // A row wider than the window is a bug on any screen.
+  await open(
+    '<div style="display:flex;gap:8px">' +
+      '<button style="flex:none;width:400px;height:48px">One</button>'.repeat(4) +
+      '</div>',
+  )
+  expect(rules(await web())).toContain('overflow')
 })
 
 test('a hit area grown by ::after counts; one that ignores the pointer does not', async ({

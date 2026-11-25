@@ -43,6 +43,18 @@ export const TELEGRAM_BANDS: SafeBands = {
   bottom: IPHONE_FULLSCREEN.safe.bottom,
 }
 
+/**
+ * What a browser window on a computer has instead of a phone in Telegram: no
+ * controls of the host over the page, no home indicator (so no bands), and a
+ * pointer, not a finger (so no tap-target floor: 0 turns `small-target` off).
+ * The web console (FE-275) is judged with these; `overflow`, `overlap` and
+ * `covered-target` stay in force.
+ */
+export const WEB_WINDOW: { bands: SafeBands; targetPx: number } = {
+  bands: { top: 0, bottom: 0 },
+  targetPx: 0,
+}
+
 /** One breakage at the size the screen was judged at, before the allowlist. */
 export interface LayoutFinding extends ScanFinding {
   /** `390x844`. */
@@ -122,9 +134,14 @@ export function layoutSignals(
  * Judge the screen of `route` (a sweep route name) as loaded and hand what
  * LAYOUT_ALLOWLIST leaves to the crash detector, which fails the test.
  */
-export async function checkLayout(page: Page, crashes: Crashes, route: string): Promise<void> {
+export async function checkLayout(
+  page: Page,
+  crashes: Crashes,
+  route: string,
+  window: { bands: SafeBands; targetPx: number } = { bands: TELEGRAM_BANDS, targetPx: TARGET_PX },
+): Promise<void> {
   const path = new URL(page.url()).pathname
-  const all = await inspectLayout(page, TELEGRAM_BANDS)
+  const all = await inspectLayout(page, window.bands, window.targetPx)
   const used = new Set<number>()
   const findings = all.filter((f) => {
     const entry = allowanceFor(f, route, LAYOUT_ALLOWLIST)
@@ -146,13 +163,17 @@ export async function checkLayout(page: Page, crashes: Crashes, route: string): 
 }
 
 /** Scan the page at its current size, once its fonts and geometry settled. */
-export async function inspectLayout(page: Page, bands: SafeBands): Promise<LayoutFinding[]> {
+export async function inspectLayout(
+  page: Page,
+  bands: SafeBands,
+  targetPx: number = TARGET_PX,
+): Promise<LayoutFinding[]> {
   const viewport = page.viewportSize()
   if (!viewport) throw new Error('inspectLayout: the page has no viewport size')
   await page.evaluate(() => document.fonts.ready.then(() => undefined))
   await layoutSettled(page)
   const size = sizeLabel(viewport)
-  return (await page.evaluate(scanLayout, { bands, targetPx: TARGET_PX })).map((f) => ({
+  return (await page.evaluate(scanLayout, { bands, targetPx })).map((f) => ({
     ...f,
     size,
   }))

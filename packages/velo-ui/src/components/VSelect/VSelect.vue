@@ -7,13 +7,25 @@
   White plate canon (Phase-3) — unified with VInput as the single field surface
   (was glass-blue). `required` -> pink IconRequired seal in the right gutter.
 
+  For a select that sits on the page, not in a form: `flush` takes the form
+  gap from under it; `outlined` gives the field the control outline (a white
+  plate on a white card needs none, one on a gradient page reads as a hole
+  without it).
+
   Usage:
     <VSelect v-model="lang" label="Language" :options="langOptions" />
     <VSelect v-model="dir" label="Direction" :options="opts" required />
 -->
 
 <template>
-  <div class="v-select" :class="{ 'v-select--error': !!error }">
+  <div
+    class="v-select"
+    :class="{
+      'v-select--error': !!error,
+      'v-select--flush': flush,
+      'v-select--outlined': outlined,
+    }"
+  >
     <label v-if="label" class="v-select__label" :for="fieldId">{{ label }}</label>
     <div class="v-select__row">
       <!-- The control wraps the native select so the chevron can be a layer
@@ -83,6 +95,10 @@ withDefaults(
     disabled?: boolean
     /** Show the pink IconRequired seal in the right gutter (DS required marker). */
     required?: boolean
+    /** No form gap under the field (a select on the page, beside other controls). */
+    flush?: boolean
+    /** The field has the control outline (a select on a page that is not white). */
+    outlined?: boolean
   }>(),
   {
     modelValue: '',
@@ -92,6 +108,8 @@ withDefaults(
     error: '',
     disabled: false,
     required: false,
+    flush: false,
+    outlined: false,
   },
 )
 
@@ -103,6 +121,10 @@ defineEmits<{
 <style scoped>
 .v-select {
   margin-bottom: var(--space-4);
+}
+
+.v-select--flush {
+  margin-bottom: 0;
 }
 
 .v-select__label {
@@ -168,6 +190,10 @@ defineEmits<{
 /* The chevron fades with the disabled field (opacity 0.5 below). */
 .v-select__control--disabled::after {
   opacity: 0.5;
+}
+
+.v-select--outlined .v-select__field {
+  border-color: var(--velo-control-border);
 }
 
 .v-select__field:focus {

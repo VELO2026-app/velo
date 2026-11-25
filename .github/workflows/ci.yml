@@ -641,11 +641,15 @@ jobs:
       # an iPhone, judged by the layout detector. On a PR (owner, 24.11): the
       # common size on both brand skins and the narrow one on gold; the rest
       # of the grid (430, and 320 on goodo) runs nightly (e2e-stack.yml).
+      # FE-275: the web console in desktop windows (1440, 1280, 768), on both
+      # brand skins -- the phone projects only show its device stub.
       projects: >-
         sweep
         sweep-layout-390@velo-brand
         sweep-layout-390@goodo-brand
         sweep-layout-320@velo-brand
+        sweep-console@velo-brand
+        sweep-console@goodo-brand
     # The brand skin packages may be private (the read key, as visual.yml).
     secrets:
       BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
@@ -696,7 +700,7 @@ jobs:
         id: plan
         run: |
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email --mood-icons
           echo "cells=$(node frontend/scripts/build-matrix.mjs --list --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS)" >> "$GITHUB_OUTPUT"
 
   matrix:
@@ -741,7 +745,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/facts"
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email --mood-icons
           pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS --cell "$CELL" --facts-out "$RUNNER_TEMP/facts/cell.json"
 
       - uses: actions/upload-artifact@v7
@@ -792,7 +796,7 @@ jobs:
           i=0
           for f in "$RUNNER_TEMP"/facts/*/cell.json; do i=$((i + 1)); cp "$f" "$RUNNER_TEMP/facts-flat/$i.json"; done
           node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email
+          node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email --mood-icons
           node frontend/scripts/build-matrix.mjs --check-assets "$RUNNER_TEMP/facts-flat" --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo" $BRAND_SKIN_ARGS
 
   # FE-159: the image the machine runs. The stand fell three times (05-07.11)

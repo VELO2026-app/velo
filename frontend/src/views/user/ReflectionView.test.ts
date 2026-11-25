@@ -215,7 +215,7 @@ function submitBtn(): HTMLButtonElement | undefined {
 
 /** Scoped read (SC-14b): the variant copy, never any matching string on the host. */
 function questionTitle(): string {
-  return host?.querySelector('.form-shell__question h3')?.textContent?.trim() ?? ''
+  return host?.querySelector('.form-shell__question h2')?.textContent?.trim() ?? ''
 }
 
 function questionSubtitle(): string {
@@ -519,7 +519,7 @@ describe('ReflectionView', () => {
       await flush()
       getPracticeMock.mockClear()
 
-      button('Повторить')!.click()
+      button('Повторить')?.click()
       await flush()
 
       expect(getPracticeMock).toHaveBeenCalledWith('p1')

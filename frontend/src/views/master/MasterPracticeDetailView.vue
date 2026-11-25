@@ -204,12 +204,7 @@
           class="practice-detail__section"
         >
           <div v-if="practice.description" class="pd-acc" :class="{ 'pd-acc--open': descOpen }">
-            <button
-              class="pd-acc__hd"
-              :aria-expanded="descOpen"
-              :aria-label="descOpen ? t('ui.collapse') : t('ui.expand')"
-              @click="descOpen = !descOpen"
-            >
+            <button class="pd-acc__hd" :aria-expanded="descOpen" @click="descOpen = !descOpen">
               <span class="pd-acc__title">{{
                 t('masterScreens.masterPracticeDetail.sections.description')
               }}</span>
@@ -234,7 +229,6 @@
             <button
               class="pd-acc__hd"
               :aria-expanded="contraOpen"
-              :aria-label="contraOpen ? t('ui.collapse') : t('ui.expand')"
               @click="contraOpen = !contraOpen"
             >
               <span class="pd-acc__title">{{
@@ -254,12 +248,7 @@
           </div>
 
           <div v-if="practice.what_to_prepare" class="pd-acc" :class="{ 'pd-acc--open': prepOpen }">
-            <button
-              class="pd-acc__hd"
-              :aria-expanded="prepOpen"
-              :aria-label="prepOpen ? t('ui.collapse') : t('ui.expand')"
-              @click="prepOpen = !prepOpen"
-            >
+            <button class="pd-acc__hd" :aria-expanded="prepOpen" @click="prepOpen = !prepOpen">
               <span class="pd-acc__title">{{
                 t('masterScreens.masterPracticeDetail.sections.whatToBring')
               }}</span>

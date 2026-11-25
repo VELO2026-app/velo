@@ -24,6 +24,13 @@ import type { AdminPracticeDetailResponse, AdminRosterEntry } from '@/api/types'
 
 vi.mock('@/api/admin')
 
+// The instance options: the Zoom attendance is the zoom option's.
+const options = vi.hoisted(() => ({ zoom: true }))
+vi.mock('@/platform/instance', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/platform/instance')>()),
+  isOptionEnabled: (name: string) => (name === 'zoom' ? options.zoom : true),
+}))
+
 const toastError = vi.fn()
 vi.mock('@/composables/useToast', () => ({
   useToast: () => ({ error: toastError, info: vi.fn(), success: vi.fn() }),
@@ -197,6 +204,7 @@ async function refetchInBackground(key: EntryKey): Promise<void> {
 }
 
 beforeEach(() => {
+  options.zoom = true
   width.narrow = false
   width.medium = false
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -383,6 +391,16 @@ describe('ConsolePracticeDetailView', () => {
   })
 
   describe('Zoom attendance', () => {
+    it('has no tab on an instance without the zoom option', async () => {
+      options.zoom = false
+      await mount()
+
+      const tabs = Array.from(host?.querySelectorAll('[role="tab"]') ?? []).map((tab) =>
+        tab.textContent?.replace(/\s+/g, ' ').trim(),
+      )
+      expect(tabs).toEqual([expect.stringContaining('Участники')])
+    })
+
     it('is asked only when its tab opens, then shows the meeting, the matches and the leftovers', async () => {
       await mount()
       expect(adminApi.getAdminZoomAttendance).not.toHaveBeenCalled()

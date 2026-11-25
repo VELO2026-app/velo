@@ -77,6 +77,7 @@ describe('route table: instance options (FE-151, meta.option)', () => {
       'master-promocode-new': 'payments',
       'admin-withdrawals': 'payments',
       'admin-withdrawal-detail': 'payments',
+      'console-finance': 'payments',
       'user-calendar-school': 'schools',
       'user-my-schools': 'schools',
       'user-schools': 'schools',

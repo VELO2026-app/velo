@@ -97,6 +97,7 @@
           :when="practiceTime"
           :duration="practiceDuration"
           :clickable="false"
+          :heading-level="2"
         />
 
         <!-- The entry card -->

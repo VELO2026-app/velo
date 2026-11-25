@@ -34,7 +34,7 @@
           ><span class="cpm__v">{{ bank }}</span>
         </div>
         <div class="cpm__row">
-          <span class="cpm__k">{{ t('payout.master') }}</span
+          <span class="cpm__k">{{ masterLabel ?? t('payout.master') }}</span
           ><span class="cpm__v">{{ master }}</span>
         </div>
       </div>
@@ -59,6 +59,8 @@ defineProps<{
   net: string
   bank: string
   master: string
+  /** Caption of the person line; i18n:payout.master when omitted. */
+  masterLabel?: string
   loading?: boolean
 }>()
 

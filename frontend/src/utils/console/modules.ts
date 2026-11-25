@@ -4,7 +4,9 @@
 //
 // The console (/console) is the web version of the instance admin. A module
 // is one menu item and the unit of access: a module the instance does not
-// have (an instance option is off) is not in the menu at all. Role
+// have (an instance option is off) is not in the menu at all -- Finance
+// is the payments option's admin surface (promo codes, payouts), Schools the
+// schools option's. Role
 // permissions join the same filter later (one predicate per module); until
 // the backend has roles, the admin role sees every module.
 //
@@ -62,14 +64,18 @@ export const CONSOLE_MODULES: readonly ConsoleModule[] = [
   { key: 'catalog', group: 'content' },
   { key: 'moderation', group: 'requests', badge: 'pendingModeration' },
   { key: 'support', group: 'requests' },
-  { key: 'finance', group: 'money' },
+  { key: 'finance', group: 'money', option: 'payments' },
   { key: 'analytics', group: 'growth' },
   { key: 'mail', group: 'growth' },
   { key: 'settings', group: 'system' },
 ]
 
+/** A console route name: a module's screen or a screen inside a module. */
+export type ConsoleRouteName =
+  `console-${ConsoleModuleKey}` | 'console-masters-detail' | 'console-practices-detail'
+
 /** The route name of a module's main screen. */
-export function consoleRouteName(key: ConsoleModuleKey): string {
+export function consoleRouteName<K extends ConsoleModuleKey>(key: K): `console-${K}` {
   return `console-${key}`
 }
 

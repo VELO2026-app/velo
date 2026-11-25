@@ -733,6 +733,373 @@
         "addFailed": "Failed to add the style"
       },
       "note": "A direction or a style is never deleted: hide it instead. Masters keep the methods they already chose."
+    },
+    "moderation": {
+      "tabs": {
+        "methods": "Method changes",
+        "decided": "Decided"
+      },
+      "about": "Complaint: {target}",
+      "submitted": "Filed {date} · No. {id}",
+      "reporter": "Reported by",
+      "target": "About",
+      "decision": "Decision",
+      "decisionHint": "The text is required for \"Take action\". When you dismiss, you can leave it empty.",
+      "resolve": "Take action",
+      "emptyPending": "No new complaints",
+      "emptyDecided": "No decided complaints yet",
+      "pickTitle": "No complaint selected",
+      "pickText": "Choose a complaint in the list.",
+      "methodsAsk": "{name} asks to change their methods",
+      "rejectWithReason": "Reject with a reason",
+      "backToList": "Back to complaints"
+    },
+    "support": {
+      "tabs": {
+        "open": "Open",
+        "mine": "Mine",
+        "closed": "Closed",
+        "stats": "Statistics"
+      },
+      "ticketMeta": "Ticket No. {id} · opened {date}",
+      "take": "Take it",
+      "close": "Close",
+      "closeTitle": "Close the ticket",
+      "replyPlaceholder": "Reply to the user…",
+      "emptyMine": "None of the loaded tickets are yours",
+      "pickTitle": "No ticket selected",
+      "pickText": "Choose a ticket in the list.",
+      "backToList": "Back to tickets",
+      "user": {
+        "title": "User",
+        "status": "Status",
+        "category": "Category",
+        "opened": "Opened",
+        "changed": "Changed",
+        "taker": "Assignee",
+        "resolvedBy": "Resolved by"
+      },
+      "stats": {
+        "total": "Tickets this month",
+        "rating": "Answer rating",
+        "share": "Share of 4–5 ratings",
+        "versusPrevious": "{delta} vs previous month",
+        "columns": {
+          "admin": "Admin",
+          "rated": "Ratings",
+          "average": "Average",
+          "share": "4–5 share"
+        }
+      },
+      "filters": {
+        "category": "Category",
+        "rating": "Rating",
+        "period": "Period",
+        "today": "Today",
+        "week": "7 days",
+        "month": "30 days"
+      }
+    },
+    "telegramId": "ID: {id}",
+    "masters": {
+      "invite": "Invite a master",
+      "tabs": {
+        "all": "All",
+        "pending": "Under review",
+        "rejected": "Rejected"
+      },
+      "columns": {
+        "master": "Master",
+        "methods": "Methods",
+        "schools": "Schools",
+        "status": "Status"
+      },
+      "empty": {
+        "all": "No masters yet",
+        "pending": "No applications under review",
+        "rejected": "No rejected applications"
+      },
+      "detail": {
+        "back": "Back to list",
+        "profile": "Profile",
+        "review": "Application review",
+        "reviewText": "Approve the application or reject it with a reason. The master sees the reason.",
+        "rights": "Master rights",
+        "schoolRight": "Can create schools",
+        "schoolRightHint": "Revoking the right only closes new schools: existing ones stay.",
+        "revoke": "Revoke master status",
+        "revokeText": "The master becomes a regular user again and their schools freeze. Data is kept; access can be restored with \"Make a master\".",
+        "email": "Email",
+        "removeCertificate": "Remove certificate: {name}",
+        "quoted": "“{label}”"
+      },
+      "status": {
+        "pending": "Awaiting verification",
+        "verified": "Verified",
+        "rejected": "Rejected",
+        "suspended": "Revoked",
+        "cancelled_by_user": "Account deleted"
+      }
+    },
+    "users": {
+      "tabs": {
+        "all": "All",
+        "user": "Members",
+        "master": "Masters",
+        "admin": "Admins"
+      },
+      "columns": {
+        "user": "User",
+        "role": "Role",
+        "registered": "Registered",
+        "lastSeen": "Last seen"
+      },
+      "filter": {
+        "label": "Activity",
+        "all": "All",
+        "active": "Active",
+        "inactive": "Inactive"
+      }
+    },
+    "schools": {
+      "columns": {
+        "name": "Name",
+        "curator": "Curator",
+        "masters": "Masters",
+        "students": "Members",
+        "created": "Created",
+        "status": "Status"
+      }
+    },
+    "period": {
+      "label": "Period",
+      "prev": "Previous period",
+      "next": "Next period"
+    },
+    "delta": {
+      "vsPrevious": "vs previous period",
+      "points": "{value} pp",
+      "none": "nothing to compare with",
+      "failed": "the comparison failed to load"
+    },
+    "metrics": {
+      "checkin": "Practices with check-in",
+      "feedback": "Practices with feedback",
+      "return": "Returning participants"
+    },
+    "dashboard": {
+      "attention": {
+        "title": "Needs attention",
+        "note": "queues waiting for your action",
+        "loadFailed": "Failed to load the queues",
+        "queuesLabel": "Queues waiting for action",
+        "unknown": "no data",
+        "queues": {
+          "verifications": "Masters to review",
+          "complaints": "Complaints",
+          "methods": "Method changes",
+          "tickets": "Open tickets",
+          "payouts": "Payouts"
+        }
+      },
+      "figures": {
+        "title": "Figures",
+        "loadFailed": "Failed to load the figures",
+        "revenue": "Revenue",
+        "practices": "Practices",
+        "newUsers": "New users",
+        "newMasters": "New masters"
+      },
+      "engagement": {
+        "title": "Engagement"
+      },
+      "today": {
+        "title": "Today",
+        "remaining": "{n} practice left | {n} practices left",
+        "all": "All practices",
+        "loadFailed": "Failed to load practices",
+        "empty": "No more practices today",
+        "tableLabel": "Practices today",
+        "columns": {
+          "time": "Time",
+          "practice": "Practice",
+          "booked": "Booked"
+        }
+      }
+    },
+    "analytics": {
+      "metricsLabel": "Engagement",
+      "loadFailed": "Failed to load the metric",
+      "empty": "No data for this period",
+      "checkin": {
+        "records": "Total records",
+        "done": "Checked in",
+        "trend": "Check-in trend, %",
+        "lowTitle": "Practices with low check-in",
+        "lowRow": "{pct}% · {total} records"
+      },
+      "feedback": {
+        "visited": "Visited",
+        "left": "Left feedback",
+        "distribution": "Rating distribution"
+      },
+      "return": {
+        "users": "Participants in the period",
+        "returning": "Attended before",
+        "top": "Most frequent participants",
+        "practices": "{n} practice | {n} practices"
+      }
+    },
+    "mail": {
+      "newTitle": "New announcement",
+      "audience": {
+        "label": "To",
+        "all": "All participants",
+        "masters": "Masters"
+      },
+      "titleLabel": "Title",
+      "bodyLabel": "Text",
+      "counter": "{count} of {max}",
+      "send": "Send",
+      "errors": {
+        "titleRequired": "Enter a title",
+        "bodyRequired": "Enter the text"
+      },
+      "confirm": {
+        "title": "Send the announcement?",
+        "all": "Every participant of the platform will receive the announcement. It cannot be recalled once sent.",
+        "masters": "Every master of the platform will receive the announcement. It cannot be recalled once sent.",
+        "confirm": "Send",
+        "cancel": "Do not send"
+      },
+      "sent": "Announcement sent",
+      "sendFailed": "Failed to send the announcement",
+      "history": {
+        "title": "Sent",
+        "emptyTitle": "History will appear later",
+        "emptyBody": "The server does not keep sent announcements yet, so there is no list to show."
+      },
+      "sendUnknown": "The server did not answer; the announcement may have gone out. Do not send it again until you are sure."
+    },
+    "finance": {
+      "tabs": {
+        "label": "Finance sections",
+        "withdrawals": "Payouts",
+        "promos": "Promo codes"
+      },
+      "withdrawals": {
+        "statusLabel": "Payout status",
+        "status": {
+          "pending": "Awaiting",
+          "approved": "Approved",
+          "rejected": "Rejected"
+        },
+        "tableLabel": "Payout requests",
+        "columns": {
+          "recipient": "Recipient",
+          "amount": "Amount",
+          "net": "To pay out",
+          "details": "Payout details",
+          "requested": "Requested",
+          "actions": "Actions",
+          "decision": "Decision"
+        },
+        "bank": "Bank",
+        "netLine": "To pay out {amount}",
+        "note": "An approved payout goes to the master through the instance's payment service; a rejected one returns to the balance with the reason.",
+        "approve": "Approve",
+        "reject": "Reject",
+        "approveFor": "Approve the payout of {amount}",
+        "rejectFor": "Reject the payout of {amount}",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "empty": {
+          "pending": "No payout requests",
+          "approved": "No approved payouts yet",
+          "rejected": "No rejected payouts yet"
+        },
+        "loadFailed": "Failed to load the payouts",
+        "toast": {
+          "approved": "The payout has been approved",
+          "approveFailed": "Failed to approve the payout",
+          "rejected": "The payout has been rejected",
+          "rejectFailed": "Failed to reject the payout",
+          "alreadyDecided": "This payout has already been decided"
+        },
+        "rejectModal": {
+          "title": "Reject the payout",
+          "text": "A request for {amount}. The funds return to the master's balance.",
+          "reason": "Rejection reason",
+          "placeholder": "What is wrong with the request",
+          "required": "State the rejection reason",
+          "submit": "Reject the payout",
+          "cancel": "Cancel"
+        }
+      },
+      "promos": {
+        "filterLabel": "Whose promo codes",
+        "filter": {
+          "all": "All",
+          "company": "Company",
+          "master": "Masters"
+        },
+        "create": "Create a promo code",
+        "tableLabel": "Promo codes",
+        "columns": {
+          "code": "Code",
+          "owner": "Owner",
+          "discount": "Discount",
+          "used": "Used",
+          "until": "Until",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "ownerCompany": "{brand} company",
+        "ownerFallback": "User",
+        "percent": "{n}%",
+        "usedOf": "{used} / {max}",
+        "untilLine": "until {date}",
+        "status": {
+          "active": "Active",
+          "exhausted": "Used up",
+          "expired": "Expired",
+          "inactive": "Deactivated"
+        },
+        "deactivate": "Deactivate",
+        "deactivateFor": "Deactivate the promo code {code}",
+        "deactivateConfirm": "Deactivate the promo code {code}? It will no longer be usable.",
+        "toast": {
+          "deactivated": "The promo code has been deactivated",
+          "deactivateFailed": "Failed to deactivate the promo code"
+        },
+        "empty": {
+          "all": "No promo codes yet",
+          "company": "No company promo codes yet",
+          "master": "No masters' promo codes yet"
+        },
+        "loadFailed": "Failed to load the promo codes",
+        "createModal": {
+          "title": "New company promo code",
+          "code": "Code",
+          "codePlaceholder": "For example, WINTER25",
+          "discount": "Discount",
+          "maxUses": "Limit",
+          "maxUsesPlaceholder": "No limit",
+          "until": "Valid until",
+          "firstPurchaseOnly": "First purchase only",
+          "submit": "Create the promo code",
+          "cancel": "Cancel",
+          "created": "The promo code has been created",
+          "failed": "Failed to create the promo code",
+          "refused": "The promo code was not created: the code already exists or the discount is not allowed",
+          "refusedDate": "The promo code was not created: the end date has already passed",
+          "errors": {
+            "code": "The code takes 3 to 50 characters",
+            "maxUses": "Enter a whole number from 1, or leave it empty",
+            "until": "The date cannot be in the past"
+          }
+        }
+      }
     }
   }
 }

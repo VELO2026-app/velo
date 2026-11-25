@@ -9,8 +9,10 @@
 //   - the shell and the dashboard: the counters (`GET /admin/stats` + the
 //     count of reports awaiting moderation: the tab badges, the banners,
 //     the lists' "all" badges -- one entry, so the shell and the screens
-//     read the same answer) and the period window (the overview cards and
-//     the four engagement / revenue figures, one entry per (period, offset));
+//     read the same answer), the counts of the dashboard's other queues
+//     (open tickets, pending payouts) and the period window (the overview
+//     cards and the four engagement / revenue figures, one entry per
+//     (period, offset));
 //   - the platform's practices and participants lists;
 //   - the catalogs: the method catalog editor, the schools, the promo
 //     oversight list, one practice's oversight detail.
@@ -76,6 +78,7 @@ import {
   getReportById,
   type AdminMasterDetail,
   type AdminWithdrawalResponse,
+  type WithdrawalStatus,
   type ReportStatusFilter,
   type AdminPaginatedPromosResponse,
   type AdminPracticeScope,
@@ -220,8 +223,14 @@ export const ADMIN_INVALIDATES = {
    * an item added, renamed, switched off or on -- the catalog editor's tree.
    */
   changeTaxonomy: [adminKeys.taxonomy()],
-  /** `PATCH /admin/promos/{id}/deactivate`: the promo turns inactive -- every tab of the promo list. */
-  deactivatePromo: [adminKeys.promosAll()],
+  /**
+   * `POST /admin/promos`: a company promo is born -- every tab of the promo
+   * list, in the mobile admin (every page loaded so far) and in the web
+   * console (one page per entry).
+   */
+  createPromo: [adminKeys.promosAll(), adminKeys.promoPagesAll()],
+  /** `PATCH /admin/promos/{id}/deactivate`: the promo turns inactive -- every tab of the promo list, in both admins. */
+  deactivatePromo: [adminKeys.promosAll(), adminKeys.promoPagesAll()],
   /**
    * `POST /admin/masters/invite`: a one-time invite link, answered to the
    * caller only -- no list shows invites, nothing goes stale.
@@ -342,7 +351,11 @@ export const ADMIN_INVALIDATES = {
    * (its status) and the support stats (they count statuses, spam and who
    * resolved). Not the ticket itself: the screen writes the answer into it.
    */
-  changeTicketStatus: [adminKeys.supportTicketsAll(), adminKeys.supportStatsAll()],
+  changeTicketStatus: [
+    adminKeys.supportTicketsAll(),
+    adminKeys.supportStatsAll(),
+    adminKeys.openTickets(),
+  ],
   /**
    * A support ticket taken, handed over or released: every ticket list (its
    * taker). Not the stats (a taker is not counted) nor the ticket itself
@@ -363,6 +376,11 @@ export const ADMIN_INVALIDATES = {
    * prepared and its polling picks up the result.
    */
   retryTranslation: [],
+  /**
+   * `POST /admin/announcements`: handed to comms -- the server stores no row
+   * of it (the history needs BE-256), so no held list or counter goes stale.
+   */
+  sendAnnouncement: [],
 } as const satisfies Record<string, readonly EntryKey[]>
 
 /** Name of an admin mutation that has a row in `ADMIN_INVALIDATES`. */
@@ -571,6 +589,47 @@ export function adminFigures<T>(
   }
 }
 
+/** Tickets read to count the open ones: the API's page cap. */
+export const ADMIN_OPEN_TICKETS_LIMIT = 100
+
+/** How many support tickets are open; `more` -- there are more than were counted. */
+export interface OpenTicketsCount {
+  count: number
+  more: boolean
+}
+
+/**
+ * Query options for the count of open support tickets (`GET /support/tickets?status=open`).
+ *
+ * @remarks
+ * The ticket list answers with a page and a cursor, never a total, so the
+ * dashboard counts one full page: past it the count reads "100+" (`more`).
+ * It counts OPEN tickets; whether a person is still waiting for a first
+ * answer is not in the API (BE-259).
+ */
+export const adminOpenTicketsQuery = defineQueryOptions(() => ({
+  key: adminKeys.openTickets(),
+  query: async (): Promise<OpenTicketsCount> => {
+    const page = await listAdminTickets({ status: 'open', limit: ADMIN_OPEN_TICKETS_LIMIT })
+    return { count: page.tickets.length, more: page.next_cursor !== null }
+  },
+  staleTime: 0,
+}))
+
+/**
+ * Query options for how many payout requests are pending
+ * (`GET /admin/withdrawals?status=pending`, the answer's total).
+ *
+ * @param enabled - Off on an instance without the payments option: there is
+ *   no payout queue to count.
+ */
+export const adminPendingWithdrawalsQuery = defineQueryOptions((enabled: boolean) => ({
+  key: adminKeys.withdrawalsPending(),
+  query: async (): Promise<number> => (await getAdminWithdrawals('pending', 1, 0)).total,
+  staleTime: 0,
+  enabled,
+}))
+
 /** Practices the platform list asks for (one page, no "show more"). */
 export const ADMIN_PRACTICES_LIMIT = 100
 
@@ -749,6 +808,30 @@ export const adminPromosQuery = defineInfiniteQueryOptions((filter: AdminPromoFi
   staleTime: 0,
 }))
 
+/** A tab of the web console's promo table: no "inactive" tab -- a deactivated promo shows under "all" with its status. */
+export type ConsolePromoFilter = Exclude<AdminPromoFilter, 'inactive'>
+
+/**
+ * Query options for one page (1-based) of one tab of the promo table
+ * (`GET /admin/promos`), the web console. The page is part of the key: a
+ * page switch is a cache entry of its own.
+ */
+export const adminPromosPageQuery = defineQueryOptions(
+  ({ filter, page }: { filter: ConsolePromoFilter; page: number }) => ({
+    key: adminKeys.promosPage(filter, page),
+    query: () => {
+      const { type, isActive } = promoParams(filter)
+      return getAdminPromos(
+        type,
+        isActive,
+        ADMIN_PROMOS_PAGE_SIZE,
+        (page - 1) * ADMIN_PROMOS_PAGE_SIZE,
+      )
+    },
+    staleTime: 0,
+  }),
+)
+
 /** Query options for one practice with its roster (`GET /admin/practices/{id}`). */
 export const adminPracticeQuery = defineQueryOptions((practiceId: string) => ({
   key: adminKeys.practice(practiceId),
@@ -893,6 +976,100 @@ export const adminRevokePreviewQuery = defineQueryOptions(
   }),
 )
 
+// =============================================================================
+// The web console's people tables (FE-262): numbered pages, one tab each
+// =============================================================================
+//
+// The /console tables page by number, the server pages by offset: one entry
+// per (tab, page), all under the prefix of the list they show, so the
+// verdicts of ADMIN_INVALIDATES refetch the page on screen and make the
+// others stale. A tab's total is its own one-row request, so the tab labels
+// carry counts without loading the tab.
+
+/** Rows per page of the web console's people tables. */
+export const CONSOLE_PAGE_SIZE = 20
+
+/** A tab of the console masters table: every master or one verification status. */
+export type ConsoleMastersTab = 'all' | 'pending' | 'rejected'
+
+/** A tab of the console users table: every user or one role. */
+export type ConsoleUsersTab = 'all' | 'user' | 'master' | 'admin'
+
+/** Offset of a 1-based page. */
+function pageOffset(page: number): number {
+  return (page - 1) * CONSOLE_PAGE_SIZE
+}
+
+/** Query options for one page of one tab of the console masters table (`GET /admin/masters/list`). */
+export const consoleMastersPageQuery = defineQueryOptions(
+  ({ tab, page }: { tab: ConsoleMastersTab; page: number }) => ({
+    key: adminKeys.mastersPage(tab, page),
+    query: async () => {
+      const [res] = await Promise.all([
+        getMastersList(tab === 'all' ? undefined : tab, CONSOLE_PAGE_SIZE, pageOffset(page)),
+        primeTaxonomy(),
+      ])
+      return res
+    },
+    staleTime: 0,
+  }),
+)
+
+/** Query options for the total of one tab of the console masters table. */
+export const consoleMastersCountQuery = defineQueryOptions((tab: ConsoleMastersTab) => ({
+  key: adminKeys.mastersCount(tab),
+  query: async () => (await getMastersList(tab === 'all' ? undefined : tab, 1, 0)).total,
+  staleTime: 0,
+}))
+
+/** The activity filter of the console users table: every user, or only the active or the inactive. */
+export type ConsoleUsersActivity = 'all' | 'active' | 'inactive'
+
+/** The `is_active` value the server takes for an activity filter (none -- every user). */
+function activityParam(activity: ConsoleUsersActivity): boolean | undefined {
+  return activity === 'all' ? undefined : activity === 'active'
+}
+
+/** Query options for one page of one tab of the console users table (`GET /admin/users`). */
+export const consoleUsersPageQuery = defineQueryOptions(
+  ({
+    tab,
+    activity,
+    page,
+  }: {
+    tab: ConsoleUsersTab
+    activity: ConsoleUsersActivity
+    page: number
+  }) => ({
+    key: adminKeys.usersPage(tab, activity, page),
+    query: () =>
+      getUsersList(
+        tab === 'all' ? undefined : tab,
+        CONSOLE_PAGE_SIZE,
+        pageOffset(page),
+        activityParam(activity),
+      ),
+    staleTime: 0,
+  }),
+)
+
+/** Query options for the total of one tab of the console users table. */
+export const consoleUsersCountQuery = defineQueryOptions(
+  ({ tab, activity }: { tab: ConsoleUsersTab; activity: ConsoleUsersActivity }) => ({
+    key: adminKeys.usersCount(tab, activity),
+    query: async () =>
+      (await getUsersList(tab === 'all' ? undefined : tab, 1, 0, activityParam(activity))).total,
+    staleTime: 0,
+  }),
+)
+
+/** Query options for one page of the console schools table (`GET /admin/schools`). */
+export const consoleSchoolsPageQuery = defineQueryOptions((page: number) => ({
+  key: adminKeys.schoolsPage(page),
+  query: () => getAdminSchools(CONSOLE_PAGE_SIZE, pageOffset(page)),
+  staleTime: 0,
+}))
+
 /** Requests per page of `GET /admin/masters/method-change-requests`. */
 export const ADMIN_METHOD_REQUESTS_PAGE_SIZE = 20
 
@@ -985,6 +1162,30 @@ export const adminReportQuery = defineQueryOptions(
   }),
 )
 
+/**
+ * Drop a decided complaint from every complaints list held, at once -- the
+ * list loses the row and its total before the verdict's refetch answers
+ * (as `dropMethodRequest` does for the method queue).
+ */
+export function dropReport(queryCache: QueryCache, reportId: string): void {
+  for (const entry of queryCache.getEntries({ key: adminKeys.reportsAll() })) {
+    if (entry.state.value.data === undefined) continue
+    setInfiniteQueryData<PaginatedReportsResponse, number>(queryCache, entry.key, (data) => {
+      const pages = data?.pages ?? []
+      // A refetch between two pages can repeat a row: still one complaint off the list.
+      const dropped = pages.some((page) => page.items.some((r) => r.id === reportId)) ? 1 : 0
+      return {
+        pageParams: data?.pageParams ?? [],
+        pages: pages.map((page) => ({
+          ...page,
+          items: page.items.filter((r) => r.id !== reportId),
+          total: Math.max(0, page.total - dropped),
+        })),
+      }
+    })
+  }
+}
+
 /** Payout requests per page of `GET /admin/withdrawals`. */
 export const ADMIN_WITHDRAWALS_PAGE_SIZE = 20
 
@@ -1020,6 +1221,25 @@ export function setWithdrawal(queryCache: QueryCache, decided: AdminWithdrawalRe
     }),
   )
 }
+
+/**
+ * Query options for one page (1-based) of one status of the payout queue
+ * (`GET /admin/withdrawals?status=`), the web console's table. The page is
+ * part of the key; every page sits under `adminKeys.withdrawals()`, so a
+ * verdict (ADMIN_INVALIDATES.decideWithdrawal) makes them all stale.
+ */
+export const adminWithdrawalsPageQuery = defineQueryOptions(
+  ({ status, page }: { status: WithdrawalStatus; page: number }) => ({
+    key: adminKeys.withdrawalsPage(status, page),
+    query: () =>
+      getAdminWithdrawals(
+        status,
+        ADMIN_WITHDRAWALS_PAGE_SIZE,
+        (page - 1) * ADMIN_WITHDRAWALS_PAGE_SIZE,
+      ),
+    staleTime: 0,
+  }),
+)
 
 // =============================================================================
 // Support

@@ -450,7 +450,7 @@ function onDayClick(dateKey: string): void {
 .week-strip__days {
   display: flex;
   /* Figma 2266:2307 — the gap between day pills is 5px, not --space-2 (8). */
-  gap: var(--velo-card-gap-icon-title);
+  gap: var(--velo-gap-5);
   width: max-content;
   /* The slider's moving part. The transition lives on the --anim modifier
      (snap/commit phases only) -- during a raw drag it is OFF so the ribbon

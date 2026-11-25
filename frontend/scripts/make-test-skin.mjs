@@ -11,7 +11,7 @@
 // a background and a self-hosted font file. Not a brand; nothing is committed.
 // The e2e builds in CI carry it too (FE-230: the core has no look to test).
 //
-// Usage: node scripts/make-test-skin.mjs <out-dir> [--logo] [--support-email]
+// Usage: node scripts/make-test-skin.mjs <out-dir> [--logo] [--support-email] [--mood-icons]
 //                (out-dir must not exist)
 //        --logo           ship the logo set too (the core's, made distinct)
 //                         -- the matrix builds one skin with it and one
@@ -19,8 +19,12 @@
 //        --support-email  put a supportEmail in the brand record (contract
 //                         2.2, FE-251) -- the matrix builds one skin with an
 //                         address and one without
+//        --mood-icons     ship the mood icon set (assets/mood/, contract 2.3,
+//                         FE-273): five tiny distinct icons -- the matrix
+//                         looks for them in the skin's bundle, never in the
+//                         core's
 // CI:    node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin"
-//        node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email
+//        node frontend/scripts/make-test-skin.mjs "$RUNNER_TEMP/ci-skin-logo" --logo --support-email --mood-icons
 //        pnpm -C frontend build:matrix --no-restore --skin "$RUNNER_TEMP/ci-skin" --skin "$RUNNER_TEMP/ci-skin-logo"
 //        node frontend/scripts/make-test-skin.mjs frontend/public/skin   (e2e)
 // =============================================================================
@@ -31,6 +35,7 @@ import {
   BRAND_EXTENSION,
   LOGO_ASSETS,
   MANDATORY_ASSETS,
+  MOOD_KEYS,
   SKIN_CONTRACT,
   loadSkinPackage,
   readGoldenTokens,
@@ -38,11 +43,14 @@ import {
 
 const args = process.argv.slice(2)
 const out = args.find((a) => !a.startsWith('--'))
-const FLAGS = ['--logo', '--support-email']
+const FLAGS = ['--logo', '--support-email', '--mood-icons']
 const withLogo = args.includes('--logo')
 const withSupportEmail = args.includes('--support-email')
+const withMoodIcons = args.includes('--mood-icons')
 if (!out || args.some((a) => a.startsWith('--') && !FLAGS.includes(a))) {
-  console.error('usage: node scripts/make-test-skin.mjs <out-dir> [--logo] [--support-email]')
+  console.error(
+    'usage: node scripts/make-test-skin.mjs <out-dir> [--logo] [--support-email] [--mood-icons]',
+  )
   process.exit(1)
 }
 const dir = resolve(out)
@@ -71,6 +79,23 @@ const distinct = (from, to) => {
 // through the spill onto /icons/ and the matrix's byte check.
 for (const name of [...MANDATORY_ASSETS, ...(withLogo ? LOGO_ASSETS : [])])
   distinct(join(publicDir, 'icons', name), join(dir, 'assets', name))
+// The mood icon set (contract 2.3): a glow and a line mark each, the path
+// data distinct per key -- the matrix finds it in the skin's bundle and must
+// never find it in the core's. The mark is currentColor, like a real set.
+if (withMoodIcons) {
+  mkdirSync(join(dir, 'assets', 'mood'), { recursive: true })
+  MOOD_KEYS.forEach((key, i) => {
+    writeFileSync(
+      join(dir, 'assets', 'mood', `${key}.svg`),
+      `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="4 4 32 32" fill="none">
+<defs><radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(20 20) scale(20)"><stop stop-color="#14213D"/><stop offset="1" stop-color="#14213D" stop-opacity="0"/></radialGradient></defs>
+<circle cx="20" cy="20" r="20" fill="url(#glow)"/>
+<path d="M${10 + i} 12h${4 + i}v${6 + i}h-${4 + i}z" fill="currentColor"/>
+</svg>
+`,
+    )
+  })
+}
 // The core ships no photo (FE-230): a 1x1 lossless WebP stands in. The build
 // re-points --velo-app-bg-image at it, so the skin cell exercises the WebP path.
 writeFileSync(
