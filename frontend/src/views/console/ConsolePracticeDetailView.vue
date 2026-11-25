@@ -269,6 +269,7 @@ import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { formatWhen } from '@/utils/console/date'
+import { CONSOLE_BASE } from '@/utils/console/modules'
 import { labelOrRaw } from '@/utils/console/labelOrRaw'
 import type { ConsoleTone } from '@/utils/console/tone'
 import { formatCount } from '@/utils/format'
@@ -276,7 +277,7 @@ import { directionLabel } from '@/utils/methodTaxonomy'
 import { ZOOM_MEETING_TONES, isZoomMeetingStatus } from '@/utils/zoomMeetingStatus'
 
 /** The practices list, with or without its query: where a way back may lead. */
-const LIST_PATH = /^\/console\/practices(\?|$)/
+const LIST_PATH = new RegExp(`^${CONSOLE_BASE}/practices(\\?|$)`)
 
 const route = useRoute()
 const router = useRouter()

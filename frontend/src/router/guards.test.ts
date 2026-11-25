@@ -60,19 +60,6 @@ vi.mock('@/composables/useRoleFreshness', () => ({
     refreshRoleIfStale(...args),
 }))
 
-// Where the app runs: roleRedirect sends a browser admin to /console and a
-// Telegram admin to /admin. Read through a getter, so each test can switch it.
-let platformName: 'telegram' | 'standalone' = 'standalone'
-vi.mock('@/platform', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/platform')>()
-  return {
-    ...actual,
-    get platform() {
-      return { ...actual.platform, name: platformName }
-    },
-  }
-})
-
 // Guards ignore (to, from, next) entirely at runtime -- call bare, matching
 // how vue-router actually invokes them. NavigationGuardWithThis's declared
 // 3-required-param signature is a vue-router typing convenience, not a real
@@ -113,7 +100,6 @@ function setAuthUser(overrides: Partial<UserResponse> & Record<string, unknown> 
 
 describe('router/guards', () => {
   beforeEach(() => {
-    platformName = 'standalone'
     setActivePinia(createPinia())
     resetAuthState()
     sessionStorage.clear()
@@ -130,14 +116,7 @@ describe('router/guards', () => {
   })
 
   describe('roleRedirect', () => {
-    it('admin inside Telegram -> /admin/dashboard', async () => {
-      platformName = 'telegram'
-      __setReadyForTest(true)
-      setAuthUser({ role: 'admin' })
-      expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
-    })
-
-    it('admin in a browser -> /admin/dashboard as well', async () => {
+    it('admin -> /admin/dashboard (the console, in a browser and in Telegram alike)', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'admin' })
       expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
@@ -718,14 +697,14 @@ describe('router/guards', () => {
         history: createMemoryHistory(),
         routes: [
           ROOT_ROUTE,
-          { path: '/console/masters', component: Stub, meta: { requires: 'admin-role' } },
+          { path: '/admin/masters', component: Stub, meta: { requires: 'admin-role' } },
         ],
       })
       installAccessGuard(router)
       setAuthUser({ role: 'admin' })
-      loginDestination.value = '/console/masters?status=pending'
+      loginDestination.value = '/admin/masters?status=pending'
 
-      expect(await go(router, '/')).toBe('/console/masters?status=pending')
+      expect(await go(router, '/')).toBe('/admin/masters?status=pending')
     })
 
     it('the parent role requirement runs first: a user never reaches the status check', async () => {

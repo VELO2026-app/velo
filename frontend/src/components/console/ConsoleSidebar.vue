@@ -4,7 +4,7 @@
   The web console's left menu: the instance mark, the module groups
   (utils/console/nav.ts -- only the modules this instance has), and at the
   bottom the way back to the user mode and who is signed in. Masters and Moderation carry the live
-  counters of the admin stats, the query the mobile AdminShell reads; a
+  counters of the admin stats query (queries/admin.ts); a
   failed load says so once per run of failures.
 
   Below 1200px (a tablet, a small laptop) the menu folds to an icon rail:

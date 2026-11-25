@@ -93,11 +93,11 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let router: Router
 
-async function mount(url = '/console/analytics'): Promise<HTMLElement> {
+async function mount(url = '/admin/analytics'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/console/analytics', name: 'console-analytics', component: { render: () => null } },
+      { path: '/admin/analytics', name: 'console-analytics', component: { render: () => null } },
     ],
   })
   await router.push(url)
@@ -247,7 +247,7 @@ describe('ConsoleAnalyticsView', () => {
   })
 
   it('the URL says the metric, the period and the offset; the dashboard links open it', async () => {
-    await mount('/console/analytics?metric=return&period=month&offset=-2')
+    await mount('/admin/analytics?metric=return&period=month&offset=-2')
 
     expect(card('return').getAttribute('aria-pressed')).toBe('true')
     expect(adminApi.getReturnMetric).toHaveBeenCalledWith('month', -2)
@@ -256,7 +256,7 @@ describe('ConsoleAnalyticsView', () => {
   })
 
   it('a URL it cannot mean falls back to this week and the check-in', async () => {
-    await mount('/console/analytics?metric=audience&period=year&offset=3')
+    await mount('/admin/analytics?metric=audience&period=year&offset=3')
 
     expect(card('checkin').getAttribute('aria-pressed')).toBe('true')
     expect(adminApi.getCheckinMetric).toHaveBeenCalledWith('week', 0)

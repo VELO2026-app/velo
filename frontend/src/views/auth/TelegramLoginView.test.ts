@@ -93,7 +93,7 @@ describe('TelegramLoginView', () => {
   })
 
   it('the sign-in carries the address the person was on', async () => {
-    loginDestination.value = '/console'
+    loginDestination.value = '/admin'
     vi.mocked(api.post).mockResolvedValue({ url: 'https://oauth.telegram.org/auth', state: 'S9' })
     const w = mount(TelegramLoginView)
 
@@ -101,7 +101,7 @@ describe('TelegramLoginView', () => {
     await flushPromises()
 
     const kept = JSON.parse(localStorage.getItem(LOGIN_MARK_KEY) ?? 'null')
-    expect(kept).toMatchObject({ state: 'S9', destination: '/console' })
+    expect(kept).toMatchObject({ state: 'S9', destination: '/admin' })
   })
 
   it('a refused start says why and lets the person try again', async () => {

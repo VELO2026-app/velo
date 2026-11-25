@@ -1,5 +1,5 @@
 /**
- * The web console's layout sweep (FE-275): every `/console` screen of the
+ * The web console's layout sweep (FE-275): every `/admin` screen of the
  * sweep table, opened in a browser window of each CONSOLE_SIZES size and
  * judged by the layout detector (docs/agents/e2e.md). The console is for a
  * computer, so the window is a desktop browser -- no Telegram host, no safe
@@ -24,7 +24,7 @@ for (const size of CONSOLE_SIZES) {
     test.use({ viewport: size })
 
     for (const [name, entry] of Object.entries(SWEEP)) {
-      if ('skip' in entry || !entry.path.startsWith('/console/')) continue
+      if ('skip' in entry || !name.startsWith('console-')) continue
       for (const role of entry.roles) {
         test(
           `[${role}] ${entry.path}`,

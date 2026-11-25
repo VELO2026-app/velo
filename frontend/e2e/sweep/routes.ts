@@ -334,8 +334,6 @@ export const SWEEP: Record<string, SweepRow> = {
   'console-analytics': { path: '/admin/analytics', roles: A, webViewport: CONSOLE_VIEWPORT },
   'console-mail': { path: '/admin/mail', roles: A, webViewport: CONSOLE_VIEWPORT },
   'console-settings': { path: '/admin/settings', roles: A, webViewport: CONSOLE_VIEWPORT },
-  // No get-by-id endpoint: the screen reads history.state from the list and a
-  // deep link is sent back to the list -- which is what the sweep checks.
 }
 
 /**

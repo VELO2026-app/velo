@@ -227,10 +227,10 @@ let app: App | null = null
 let host: HTMLElement | null = null
 let router: Router
 
-async function mount(path = '/console/support'): Promise<HTMLElement> {
+async function mount(path = '/admin/support'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/console/support', name: 'console-support', component: ConsoleSupportView }],
+    routes: [{ path: '/admin/support', name: 'console-support', component: ConsoleSupportView }],
   })
   await router.push(path)
   host = document.createElement('div')
@@ -328,14 +328,14 @@ describe('ConsoleSupportView: the tabs', () => {
   })
 
   it('lists on the mine tab only the open tickets this admin holds', async () => {
-    await mount('/console/support?tab=mine')
+    await mount('/admin/support?tab=mine')
 
     expect(rowTitles()).toEqual([TOPIC_PAYMENT])
     expect(feedText()).toContain('The payment failed twice')
   })
 
   it('lists resolved tickets on the closed tab and another closing status through the chips', async () => {
-    await mount('/console/support?tab=closed')
+    await mount('/admin/support?tab=closed')
 
     expect(supportApi.listAdminTickets).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'resolved' }),
@@ -360,7 +360,7 @@ describe('ConsoleSupportView: the tabs', () => {
   })
 
   it('says a ticket named in the URL is not found when the server has none', async () => {
-    await mount('/console/support?ticket=t_missing')
+    await mount('/admin/support?ticket=t_missing')
 
     expect(byId('ticket-detail')?.textContent).toContain('Обращение не найдено')
   })
@@ -393,7 +393,7 @@ describe('ConsoleSupportView: taking a ticket and replying', () => {
   })
 
   it('sends the trimmed reply once, shows it in the feed and clears the field', async () => {
-    await mount('/console/support?tab=mine')
+    await mount('/admin/support?tab=mine')
     expect(byId('ticket-send')?.hasAttribute('disabled')).toBe(true)
 
     typeInto(composer(), '  We are on it  ')
@@ -415,7 +415,7 @@ describe('ConsoleSupportView: taking a ticket and replying', () => {
     { after: 'a refusal', failure: new ApiResponseError(403, 'no'), sameKey: false },
   ])('sends the text again under the same key: $sameKey, after $after', async (c) => {
     vi.mocked(supportApi.sendAdminSupportReply).mockRejectedValueOnce(c.failure)
-    await mount('/console/support?tab=mine')
+    await mount('/admin/support?tab=mine')
     typeInto(composer(), 'Same text')
     await flush()
 
@@ -431,7 +431,7 @@ describe('ConsoleSupportView: taking a ticket and replying', () => {
     vi.mocked(supportApi.sendAdminSupportReply).mockRejectedValueOnce(
       new ApiResponseError(403, 'no'),
     )
-    await mount('/console/support?tab=mine')
+    await mount('/admin/support?tab=mine')
 
     typeInto(composer(), 'Draft text')
     await flush()
@@ -469,7 +469,7 @@ describe('ConsoleSupportView: moving a ticket on', () => {
   })
 
   it('hands a ticket over to another admin, the caller not offered', async () => {
-    await mount('/console/support?tab=mine&ticket=t_mine_0002')
+    await mount('/admin/support?tab=mine&ticket=t_mine_0002')
 
     await click(button('Назначить'))
     const offered = Array.from(document.body.querySelectorAll('.v-menu-row')).map((r) =>
@@ -483,7 +483,7 @@ describe('ConsoleSupportView: moving a ticket on', () => {
   })
 
   it('gives a held ticket back to the pool', async () => {
-    await mount('/console/support?tab=mine&ticket=t_mine_0002')
+    await mount('/admin/support?tab=mine&ticket=t_mine_0002')
 
     await click(button('Освободить'))
 
@@ -492,7 +492,7 @@ describe('ConsoleSupportView: moving a ticket on', () => {
   })
 
   it('brings a resolved ticket back to work', async () => {
-    await mount('/console/support?tab=closed')
+    await mount('/admin/support?tab=closed')
 
     await click(button('Вернуть в работу'))
 
@@ -505,14 +505,14 @@ describe('ConsoleSupportView: moving a ticket on', () => {
       ...T_SPAM,
       status_changed_at: new Date(Date.now() - 40 * 86400000).toISOString(),
     }
-    await mount('/console/support?tab=closed')
+    await mount('/admin/support?tab=closed')
     await click(button('Спам'))
     expect(hasButton('Не спам')).toBe(false)
 
     app?.unmount()
     host?.remove()
     server.tickets.t_spam_0005 = { ...T_SPAM, status_changed_at: new Date().toISOString() }
-    await mount('/console/support?tab=closed')
+    await mount('/admin/support?tab=closed')
     await click(button('Спам'))
     expect(hasButton('Не спам')).toBe(true)
   })
@@ -520,7 +520,7 @@ describe('ConsoleSupportView: moving a ticket on', () => {
 
 describe('ConsoleSupportView: the person', () => {
   it("shows the person's name, the taker and the rating from the ticket", async () => {
-    await mount('/console/support?tab=closed')
+    await mount('/admin/support?tab=closed')
 
     const aside = byId('ticket-aside')?.textContent ?? ''
     expect(aside).toContain('Ivan')
@@ -617,7 +617,7 @@ describe('ConsoleSupportView: statistics', () => {
 
   it('shows the running month, its rating and its admins, without a comparison', async () => {
     vi.mocked(supportApi.getSupportStats).mockResolvedValue(stats(80))
-    await mount('/console/support?tab=stats')
+    await mount('/admin/support?tab=stats')
 
     const tile = (id: string) => byId(id)?.textContent?.replace(/\s+/g, ' ') ?? ''
     expect(tile('stats-tile-total')).toContain('80')
@@ -641,7 +641,7 @@ describe('ConsoleSupportView: statistics', () => {
     vi.mocked(supportApi.getSupportStats).mockImplementation(async (from) =>
       DateTime.fromISO(from).toMillis() === october ? stats(80) : stats(68),
     )
-    await mount('/console/support?tab=stats')
+    await mount('/admin/support?tab=stats')
 
     await click(byId('stats-prev') as HTMLElement)
 
@@ -651,7 +651,7 @@ describe('ConsoleSupportView: statistics', () => {
 
   it('gives the running month no comparison again after a step back and forward', async () => {
     vi.mocked(supportApi.getSupportStats).mockResolvedValue(stats(80))
-    await mount('/console/support?tab=stats')
+    await mount('/admin/support?tab=stats')
     await click(byId('stats-prev') as HTMLElement)
     expect(byId('stats-tile-total')?.textContent).toContain('к прошлому месяцу')
 
@@ -662,7 +662,7 @@ describe('ConsoleSupportView: statistics', () => {
 
   it('steps back one month at a time and never past the current one', async () => {
     vi.mocked(supportApi.getSupportStats).mockResolvedValue(stats(80))
-    await mount('/console/support?tab=stats')
+    await mount('/admin/support?tab=stats')
     const next = byId('stats-next') as HTMLButtonElement
     expect(next.disabled).toBe(true)
 
@@ -681,7 +681,7 @@ describe('ConsoleSupportView: statistics', () => {
       categories: [{ category: 'tech', tickets: 10, rated: 0, average: null, share_4_5: null }],
       resolvers: [],
     })
-    await mount('/console/support?tab=stats')
+    await mount('/admin/support?tab=stats')
 
     expect(byId('stats-tile-rating')?.textContent).toContain('—')
     expect(byId('stats-tile-share')?.textContent).toContain('—')
@@ -730,7 +730,7 @@ describe('ConsoleSupportView: empty and failed reads', () => {
 
   it('shows the ticket error with a retry that reads the ticket again', async () => {
     vi.mocked(supportApi.getAdminTicket).mockRejectedValueOnce(new ApiResponseError(500, 'boom'))
-    await mount('/console/support?ticket=t_done_0004')
+    await mount('/admin/support?ticket=t_done_0004')
     expect(byId('ticket-detail')?.textContent).toContain('Ошибка загрузки')
 
     await click(button('Повторить'))
@@ -755,7 +755,7 @@ describe('ConsoleSupportView: empty and failed reads', () => {
 describe('ConsoleSupportView: handover conflicts', () => {
   it('tells that the ticket changed hands meanwhile and reads it again', async () => {
     vi.mocked(supportApi.assignTicket).mockRejectedValueOnce(new ApiResponseError(409, 'moved'))
-    await mount('/console/support?tab=mine&ticket=t_mine_0002')
+    await mount('/admin/support?tab=mine&ticket=t_mine_0002')
     await click(button('Назначить'))
     const reads = vi.mocked(supportApi.getAdminTicket).mock.calls.length
 
@@ -767,7 +767,7 @@ describe('ConsoleSupportView: handover conflicts', () => {
 
   it('keeps the roster open and reads it again when the chosen admin stopped being one', async () => {
     vi.mocked(supportApi.assignTicket).mockRejectedValueOnce(new ApiResponseError(422, 'no'))
-    await mount('/console/support?tab=mine&ticket=t_mine_0002')
+    await mount('/admin/support?tab=mine&ticket=t_mine_0002')
 
     await click(button('Назначить'))
     const reads = getUsersList.mock.calls.length
@@ -780,7 +780,7 @@ describe('ConsoleSupportView: handover conflicts', () => {
 
   it('tells that a release met a change and reads the ticket again', async () => {
     vi.mocked(supportApi.releaseTicket).mockRejectedValueOnce(new ApiResponseError(409, 'moved'))
-    await mount('/console/support?tab=mine&ticket=t_mine_0002')
+    await mount('/admin/support?tab=mine&ticket=t_mine_0002')
 
     const reads = vi.mocked(supportApi.getAdminTicket).mock.calls.length
     await click(button('Освободить'))
@@ -791,7 +791,7 @@ describe('ConsoleSupportView: handover conflicts', () => {
 
   it('shows the not-found state, with no toast, when the spam bin emptied a ticket under a reopen', async () => {
     vi.mocked(supportApi.reopenTicket).mockRejectedValueOnce(new ApiResponseError(404, 'gone'))
-    await mount('/console/support?tab=closed&ticket=t_done_0004')
+    await mount('/admin/support?tab=closed&ticket=t_done_0004')
 
     await click(button('Вернуть в работу'))
 
@@ -828,7 +828,7 @@ describe('ConsoleSupportView: statistics failure', () => {
       spam: 1,
       resolvers: [],
     })
-    await mount('/console/support?tab=stats')
+    await mount('/admin/support?tab=stats')
     expect(byId('stats-tile-total')).toBeNull()
     expect(host?.textContent).toContain('Не удалось загрузить')
 
@@ -903,7 +903,7 @@ describe('ConsoleSupportView: filters', () => {
   })
 
   it('resets a filter with "all"', async () => {
-    await mount('/console/support?cat=payments')
+    await mount('/admin/support?cat=payments')
     expect(lastListQuery()).toMatchObject({ categories: ['payments'] })
 
     await click(pill('category'))
@@ -914,7 +914,7 @@ describe('ConsoleSupportView: filters', () => {
   })
 
   it('reads the filters from the URL on load and ignores values it does not know', async () => {
-    await mount('/console/support?cat=payments&rating=5&period=today')
+    await mount('/admin/support?cat=payments&rating=5&period=today')
     expect(lastListQuery()).toMatchObject({
       status: 'open',
       categories: ['payments'],
@@ -925,12 +925,12 @@ describe('ConsoleSupportView: filters', () => {
     app?.unmount()
     host?.remove()
     vi.mocked(supportApi.listAdminTickets).mockClear()
-    await mount('/console/support?cat=bogus&rating=9&period=year')
+    await mount('/admin/support?cat=bogus&rating=9&period=year')
     expect(lastListQuery()).toEqual({ status: 'open', limit: 20 })
   })
 
   it('lets go of the open ticket when a filter changes, and keeps the filters across the tabs', async () => {
-    await mount('/console/support?ticket=t_mine_0002&cat=payments')
+    await mount('/admin/support?ticket=t_mine_0002&cat=payments')
 
     await click(pill('rating'))
     await click(choiceByText('5 ★'))
@@ -949,7 +949,7 @@ describe('ConsoleSupportView: filters', () => {
 
   it('says nothing matches the filters, and closes the choices on Escape', async () => {
     vi.mocked(supportApi.listAdminTickets).mockResolvedValue({ tickets: [], next_cursor: null })
-    await mount('/console/support?cat=payments')
+    await mount('/admin/support?cat=payments')
     expect(host?.textContent).toContain('По выбранным фильтрам ничего не найдено')
 
     await click(pill('period'))
@@ -1000,7 +1000,7 @@ describe('ConsoleSupportView: background refetch', () => {
   })
 
   it('keeps the feed and the reply draft on screen while the feed refetches', async () => {
-    await mount('/console/support?tab=mine')
+    await mount('/admin/support?tab=mine')
     typeInto(composer(), 'Half a reply')
     await flush()
     const held = gate()
@@ -1058,7 +1058,7 @@ describe('ConsoleSupportView: background refetch', () => {
   })
 
   it('keeps the not-found state when the missing ticket is read again in the background', async () => {
-    await mount('/console/support?ticket=t_missing')
+    await mount('/admin/support?ticket=t_missing')
     expect(byId('ticket-detail')?.textContent).toContain('Обращение не найдено')
 
     await refetch(adminKeys.supportTicket('t_missing'))

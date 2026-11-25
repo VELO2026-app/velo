@@ -136,16 +136,16 @@ async function mount(from?: string): Promise<HTMLElement> {
   router = createRouter({
     history: createWebHistory(),
     routes: [
-      { path: '/console/practices', name: 'console-practices', component: { render: () => null } },
+      { path: '/admin/practices', name: 'console-practices', component: { render: () => null } },
       {
-        path: '/console/practices/:id',
+        path: '/admin/practices/:id',
         name: 'console-practices-detail',
         component: { render: () => null },
       },
     ],
   })
   if (from !== undefined) await router.push(from)
-  await router.push('/console/practices/p_1')
+  await router.push('/admin/practices/p_1')
   await router.isReady()
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -370,7 +370,7 @@ describe('ConsolePracticeDetailView', () => {
 
   describe('"Back"', () => {
     it('returns to the list the admin came from, with its tab and page', async () => {
-      await mount('/console/practices?scope=all&page=3')
+      await mount('/admin/practices?scope=all&page=3')
 
       button('К практикам')?.click()
       await flush()

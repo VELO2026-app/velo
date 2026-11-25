@@ -64,13 +64,13 @@ async function askAgain(): Promise<void> {
     .catch(() => {})
 }
 
-async function mount(url = '/console/schools', expectRows = true): Promise<HTMLElement> {
+async function mount(url = '/admin/schools', expectRows = true): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/console/schools', name: 'console-schools', component: ConsoleSchoolsView },
+      { path: '/admin/schools', name: 'console-schools', component: ConsoleSchoolsView },
       {
-        path: '/console/masters/:id',
+        path: '/admin/masters/:id',
         name: 'console-masters-detail',
         component: { render: () => null },
       },
@@ -122,7 +122,7 @@ describe('ConsoleSchoolsView', () => {
 
   it('tells a failed load with an error state, and Retry asks again', async () => {
     vi.mocked(schoolsApi.getAdminSchools).mockRejectedValue(new Error('down'))
-    await mount('/console/schools', false)
+    await mount('/admin/schools', false)
     await vi.waitFor(() =>
       expect(root?.querySelector('[data-testid="screen-error"]')).not.toBeNull(),
     )
@@ -188,7 +188,7 @@ describe('ConsoleSchoolsView', () => {
   })
 
   it('asks for the page named by the URL', async () => {
-    await mount('/console/schools?page=3')
+    await mount('/admin/schools?page=3')
 
     expect(schoolsApi.getAdminSchools).toHaveBeenCalledWith(20, 40)
   })

@@ -2,7 +2,7 @@
   VELO Frontend -- ConsoleMasterDetailView (FE-262, slice 1)
 
   The master's card in the web console (console-masters-detail,
-  /console/masters/:id): the web layout of AdminMasterReviewView.
+  /admin/masters/:id): the master's card of the console.
 
     left   -- who the master is: avatar, name, email, directions and the
               counters the list carries (schools, practices, students, payout);
@@ -137,6 +137,7 @@ import { useToast } from '@/composables/useToast'
 import { routeParam } from '@/router/routeParam'
 import { masterDisplayName } from '@/utils/adminHelpers'
 import { consoleHasPayments } from '@/utils/console/options'
+import { CONSOLE_BASE } from '@/utils/console/modules'
 
 // The payout balance is the payments option's: without it the stat is not there.
 const paymentsEnabled = consoleHasPayments()
@@ -205,7 +206,7 @@ const stats = computed(() => {
 /** Back to the screen the card was opened from, or the masters list for a direct link. */
 function back(): void {
   const previous = (host.history.state as { back?: string | null } | null)?.back
-  if (previous && previous.startsWith('/console/')) router.back()
+  if (previous && previous.startsWith(`${CONSOLE_BASE}/`)) router.back()
   else void router.push({ name: 'console-masters' })
 }
 

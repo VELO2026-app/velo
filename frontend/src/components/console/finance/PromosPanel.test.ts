@@ -95,11 +95,11 @@ let host: HTMLElement | null = null
 let router: Router
 let pinia: Pinia
 
-async function mount(url = '/console/finance?tab=promos'): Promise<HTMLElement> {
+async function mount(url = '/admin/finance?tab=promos'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/console/finance', name: 'console-finance', component: { render: () => null } },
+      { path: '/admin/finance', name: 'console-finance', component: { render: () => null } },
     ],
   })
   await router.push(url)
@@ -373,7 +373,7 @@ describe('PromosPanel', () => {
   describe('tabs and pages', () => {
     it('a tab asks its owner from the first page; the old rows do not stand in', async () => {
       server = [...companyPromos(45), at(server, 1)]
-      await mount('/console/finance?tab=promos&page=2')
+      await mount('/admin/finance?tab=promos&page=2')
 
       const slow = deferred<Page>()
       vi.mocked(adminApi.getAdminPromos).mockImplementation(() => slow.promise)
@@ -401,7 +401,7 @@ describe('PromosPanel', () => {
     })
 
     it('a tab the URL cannot mean falls back to all, and a bad page to the first', async () => {
-      await mount('/console/finance?tab=promos&filter=inactive&page=0')
+      await mount('/admin/finance?tab=promos&filter=inactive&page=0')
 
       expect(adminApi.getAdminPromos).toHaveBeenCalledWith(undefined, undefined, 20, 0)
       expect(codes()).toEqual(['WINTER25', 'ANNA50'])
@@ -435,13 +435,13 @@ describe('PromosPanel', () => {
     it.each([
       // 45 rows are 3 pages: page 9 goes to the last, an empty list to the first.
       {
-        url: '/console/finance?tab=promos&page=9',
+        url: '/admin/finance?tab=promos&page=9',
         total: 45,
         query: { tab: 'promos', page: '3' },
         shown: 'Показано 41–45 из 45',
       },
       {
-        url: '/console/finance?tab=promos&page=2',
+        url: '/admin/finance?tab=promos&page=2',
         total: 0,
         query: { tab: 'promos' },
         shown: undefined,
@@ -805,11 +805,11 @@ describe('PromosPanel', () => {
     it.each([
       // The new company promo must be visible: the masters' tab would hide it.
       {
-        from: '/console/finance?tab=promos&filter=master',
+        from: '/admin/finance?tab=promos&filter=master',
         query: { tab: 'promos', filter: 'company' },
       },
       {
-        from: '/console/finance?tab=promos&filter=company',
+        from: '/admin/finance?tab=promos&filter=company',
         query: { tab: 'promos', filter: 'company' },
       },
     ])('after a creation on $from the admin sees the company promos', async ({ from, query }) => {
@@ -824,7 +824,7 @@ describe('PromosPanel', () => {
 
     it('after a creation from a later page the admin lands on the first page', async () => {
       server = companyPromos(45)
-      await mount('/console/finance?tab=promos&page=3')
+      await mount('/admin/finance?tab=promos&page=3')
       await openForm()
       fill('Код', 'WELCOME')
       submit()

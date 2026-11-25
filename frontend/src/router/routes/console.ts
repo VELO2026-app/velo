@@ -14,7 +14,12 @@
 
 import type { Component } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
-import { CONSOLE_MODULES, consoleRouteName, type ConsoleRouteName } from '@/utils/console/modules'
+import {
+  CONSOLE_BASE,
+  CONSOLE_MODULES,
+  consoleRouteName,
+  type ConsoleRouteName,
+} from '@/utils/console/modules'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -44,7 +49,7 @@ const LEGACY_ADMIN: RouteRecordRaw[] = [
     redirect: (to) =>
       to.query.tab === 'complaints'
         ? { name: 'console-moderation', query: { tab: 'complaints' } }
-        : { name: 'console-support' },
+        : { name: 'console-support', query: {} },
   },
   {
     path: 'reports/:id',
@@ -54,22 +59,23 @@ const LEGACY_ADMIN: RouteRecordRaw[] = [
     }),
   },
   { path: 'profile', redirect: { name: 'console-dashboard' } },
-  {
-    path: 'metrics/check-in',
-    redirect: { name: 'console-analytics', query: { metric: 'checkin' } },
-  },
-  {
-    path: 'metrics/feedback',
-    redirect: { name: 'console-analytics', query: { metric: 'feedback' } },
-  },
-  { path: 'metrics/return', redirect: { name: 'console-analytics', query: { metric: 'return' } } },
+  ...(
+    [
+      ['check-in', 'checkin'],
+      ['feedback', 'feedback'],
+      ['return', 'return'],
+    ] as const
+  ).map(([path, metric]) => ({
+    path: `metrics/${path}`,
+    redirect: { name: 'console-analytics', query: { metric } },
+  })),
   { path: 'revenue', redirect: { name: 'console-finance' } },
   { path: 'participants', redirect: { name: 'console-users', query: { tab: 'user' } } },
-  { path: 'withdrawals', redirect: { name: 'console-finance', query: { tab: 'withdrawals' } } },
-  {
-    path: 'withdrawals/:id',
+  // A payout's own address loses the payout: the queue has no open item.
+  ...['withdrawals', 'withdrawals/:id'].map((path) => ({
+    path,
     redirect: { name: 'console-finance', query: { tab: 'withdrawals' } },
-  },
+  })),
   { path: 'promos', redirect: { name: 'console-finance', query: { tab: 'promos' } } },
   { path: 'support/stats', redirect: { name: 'console-support', query: { tab: 'stats' } } },
   {
@@ -82,7 +88,7 @@ const LEGACY_ADMIN: RouteRecordRaw[] = [
 export function consoleRoutes(): RouteRecordRaw[] {
   return [
     {
-      path: '/admin',
+      path: CONSOLE_BASE,
       component: () => import('@/views/shells/ConsoleShell.vue'),
       meta: { catalogs: ['admin'], requires: 'admin-role', web: true },
       children: [
@@ -116,10 +122,9 @@ export function consoleRoutes(): RouteRecordRaw[] {
     {
       path: '/console/:rest(.*)*',
       redirect: (to) => {
-        const rest = Array.isArray(to.params.rest)
-          ? to.params.rest.join('/')
-          : String(to.params.rest ?? '')
-        return { path: `/admin/${rest}`, query: to.query, hash: to.hash }
+        // A repeatable param is always an array here.
+        const rest = (to.params.rest as string[]).join('/')
+        return { path: `${CONSOLE_BASE}/${rest}`, query: to.query, hash: to.hash }
       },
     },
   ]

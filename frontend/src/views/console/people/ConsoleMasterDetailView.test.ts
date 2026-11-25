@@ -109,14 +109,14 @@ async function mount(expectCard = true): Promise<HTMLElement> {
     history: createMemoryHistory(),
     routes: [
       {
-        path: '/console/masters/:id',
+        path: '/admin/masters/:id',
         name: 'console-masters-detail',
         component: ConsoleMasterDetailView,
       },
-      { path: '/console/masters', name: 'console-masters', component: { render: () => null } },
+      { path: '/admin/masters', name: 'console-masters', component: { render: () => null } },
     ],
   })
-  await router.push('/console/masters/m1')
+  await router.push('/admin/masters/m1')
   pinia = createPinia()
   setActivePinia(pinia)
   root = document.createElement('div')

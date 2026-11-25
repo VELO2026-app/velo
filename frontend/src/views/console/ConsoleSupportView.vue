@@ -7,8 +7,8 @@
   statistics tab is the month's figures (SupportStatsPanel).
 
   The tab rides the URL (`?tab=open|mine|closed|stats`, open by default).
-  The bot's deep link still opens the mobile ticket screen
-  (/admin/support/:id) -- it is not routed here.
+  The bot's deep link (and the old /admin/support/:id) opens a ticket here
+  through `?ticket=` (FE-272).
 -->
 
 <template>

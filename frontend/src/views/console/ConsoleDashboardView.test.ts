@@ -122,17 +122,17 @@ const MODULE_ROUTES = [
   'practices',
 ] as const
 
-async function mount(url = '/console/dashboard'): Promise<HTMLElement> {
+async function mount(url = '/admin/dashboard'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
       ...MODULE_ROUTES.map((key) => ({
-        path: `/console/${key}`,
+        path: `/admin/${key}`,
         name: `console-${key}`,
         component: { render: () => null },
       })),
       {
-        path: '/console/practices/:id',
+        path: '/admin/practices/:id',
         name: 'console-practices-detail',
         component: { render: () => null },
       },
@@ -268,11 +268,11 @@ describe('ConsoleDashboardView: needs attention', () => {
         queue(key).getAttribute('href'),
       ]),
     ).toEqual([
-      ['verifications', '2', '/console/masters?tab=pending'],
-      ['complaints', '3', '/console/moderation?tab=complaints'],
-      ['methods', '1', '/console/moderation?tab=methods'],
-      ['tickets', '5', '/console/support?tab=open'],
-      ['payouts', '4', '/console/finance'],
+      ['verifications', '2', '/admin/masters?tab=pending'],
+      ['complaints', '3', '/admin/moderation?tab=complaints'],
+      ['methods', '1', '/admin/moderation?tab=methods'],
+      ['tickets', '5', '/admin/support?tab=open'],
+      ['payouts', '4', '/admin/finance'],
     ])
     expect(adminApi.getAdminWithdrawals).toHaveBeenCalledWith('pending', 1, 0)
     expect(supportApi.listAdminTickets).toHaveBeenCalledWith({ status: 'open', limit: 100 })
@@ -342,7 +342,7 @@ describe('ConsoleDashboardView: needs attention', () => {
     await flush()
 
     expect(queueCount('tickets')).toBe('5')
-    expect(queue('tickets').getAttribute('href')).toBe('/console/support?tab=open')
+    expect(queue('tickets').getAttribute('href')).toBe('/admin/support?tab=open')
     expect(queueRetry('tickets')).toBeNull()
   })
 
@@ -357,7 +357,7 @@ describe('ConsoleDashboardView: needs attention', () => {
     await flush()
 
     expect(queueCount('payouts')).toBe('4')
-    expect(queue('payouts').getAttribute('href')).toBe('/console/finance')
+    expect(queue('payouts').getAttribute('href')).toBe('/admin/finance')
   })
 })
 
@@ -416,14 +416,14 @@ describe('ConsoleDashboardView: figures', () => {
   })
 
   it('the window comes from the URL: a link or a return from the analytics keeps it; what it cannot mean is this week', async () => {
-    await mount('/console/dashboard?period=month&offset=-2')
+    await mount('/admin/dashboard?period=month&offset=-2')
     expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('month', -2)
     expect(adminApi.getAdminStatsOverview).toHaveBeenCalledTimes(1)
     expect(step('Следующий период').disabled).toBe(false)
   })
 
   it('a window the URL cannot mean is this week', async () => {
-    await mount('/console/dashboard?period=year&offset=3')
+    await mount('/admin/dashboard?period=year&offset=3')
     expect(adminApi.getAdminStatsOverview).toHaveBeenLastCalledWith('week', 0)
     expect(step('Следующий период').disabled).toBe(true)
   })
@@ -468,7 +468,7 @@ describe('ConsoleDashboardView: figures', () => {
 
     expect(rates()).toEqual(['78%', '65%', '42%'])
     const link = host?.querySelector<HTMLAnchorElement>('[data-testid="engagement-feedback"]')
-    expect(link?.getAttribute('href')).toBe('/console/analytics?metric=feedback')
+    expect(link?.getAttribute('href')).toBe('/admin/analytics?metric=feedback')
 
     periodTab('Месяц').click()
     await flush()
@@ -478,7 +478,7 @@ describe('ConsoleDashboardView: figures', () => {
       host
         ?.querySelector<HTMLAnchorElement>('[data-testid="engagement-return"]')
         ?.getAttribute('href'),
-    ).toBe('/console/analytics?metric=return&period=month&offset=-1')
+    ).toBe('/admin/analytics?metric=return&period=month&offset=-1')
   })
 
   it('a failed read shows the error in the figures and in the rates, with Retry; the day stays on screen', async () => {

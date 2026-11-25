@@ -75,13 +75,13 @@ let host: HTMLElement | null = null
 let router: Router
 let pinia: Pinia
 
-async function mount(url = '/console/practices'): Promise<HTMLElement> {
+async function mount(url = '/admin/practices'): Promise<HTMLElement> {
   router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/console/practices', name: 'console-practices', component: { render: () => null } },
+      { path: '/admin/practices', name: 'console-practices', component: { render: () => null } },
       {
-        path: '/console/practices/:id',
+        path: '/admin/practices/:id',
         name: 'console-practices-detail',
         component: { render: () => null },
       },
@@ -229,7 +229,7 @@ describe('ConsolePracticesView', () => {
 
   it('pages the past scope as the API lists it: a page button loads its offset', async () => {
     server.past = newestFirst(45)
-    await mount('/console/practices?scope=past')
+    await mount('/admin/practices?scope=past')
 
     expect(summary()).toBe('Показано 1–20 из 45')
     expect(rowTitles()[0]).toBe('Практика 45')
@@ -247,7 +247,7 @@ describe('ConsolePracticesView', () => {
   })
 
   it('a scope tab asks that scope from its first page; the old rows do not stand in', async () => {
-    await mount('/console/practices?scope=all&page=2')
+    await mount('/admin/practices?scope=all&page=2')
     server.all = newestFirst(45)
 
     let resolvePast!: (value: Awaited<ReturnType<typeof adminApi.getAdminPractices>>) => void
@@ -283,7 +283,7 @@ describe('ConsolePracticesView', () => {
   })
 
   it('a scope or page the URL cannot mean falls back to the first page of the upcoming', async () => {
-    await mount('/console/practices?scope=archive&page=-3')
+    await mount('/admin/practices?scope=archive&page=-3')
 
     expect(adminApi.getAdminPractices).toHaveBeenCalledWith('upcoming', 2, 0)
     expect(vi.mocked(adminApi.getAdminPractices).mock.calls.map(([scope]) => scope)).not.toContain(
@@ -294,13 +294,13 @@ describe('ConsolePracticesView', () => {
   it.each([
     // 45 rows are 3 pages: page 9 goes to the last, an empty list to the first.
     {
-      url: '/console/practices?scope=past&page=9',
+      url: '/admin/practices?scope=past&page=9',
       total: 45,
       query: { scope: 'past', page: '3' },
       shown: 'Показано 41–45 из 45',
     },
     {
-      url: '/console/practices?scope=past&page=2',
+      url: '/admin/practices?scope=past&page=2',
       total: 0,
       query: { scope: 'past' },
       shown: undefined,
@@ -375,7 +375,7 @@ describe('ConsolePracticesView', () => {
 
   describe('background refetch (a return to the app)', () => {
     it('keeps the rows on screen while it runs, then shows the fresh answer', async () => {
-      await mount('/console/practices?scope=past')
+      await mount('/admin/practices?scope=past')
       expect(rowTitles()).toEqual(['Практика 2', 'Практика 1'])
 
       let resolveFresh!: (value: Awaited<ReturnType<typeof adminApi.getAdminPractices>>) => void
@@ -403,7 +403,7 @@ describe('ConsolePracticesView', () => {
     })
 
     it('failing again and again is told once, until an answer arrives; the rows stay', async () => {
-      await mount('/console/practices?scope=past')
+      await mount('/admin/practices?scope=past')
       vi.mocked(adminApi.getAdminPractices).mockImplementation(() =>
         Promise.reject(new Error('down')),
       )

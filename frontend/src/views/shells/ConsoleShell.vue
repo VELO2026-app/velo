@@ -1,7 +1,7 @@
 <!--
   VELO Frontend -- ConsoleShell (FE-262)
 
-  Layout of every /console/* route: the web admin for a computer or a
+  Layout of every /admin/* route (the console, FE-272): the web admin for a computer or a
   tablet. In a large enough browser window it is the menu (ConsoleSidebar)
   plus the current screen; inside Telegram or in a small window it is
   ConsoleDeviceStub instead (utils/console/access.ts). The menu, with its

@@ -50,7 +50,7 @@ function buildRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       ...CONSOLE_MODULES.map((m) => ({
-        path: `/console/${m.key}`,
+        path: `/admin/${m.key}`,
         name: `console-${m.key}`,
         component: StubChild,
       })),
@@ -221,7 +221,7 @@ describe('ConsoleShell: copying the console link on the stub', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
   }
 
-  it('copies the console link and says so, then reads «copy» again', async () => {
+  it('copies the address asked for and says so, then reads «copy» again', async () => {
     const writeText = vi.fn(() => Promise.resolve())
     stubWithClipboard(writeText)
     await mount('console-dashboard')
@@ -231,7 +231,7 @@ describe('ConsoleShell: copying the console link on the stub', () => {
     await vi.waitFor(() =>
       expect(byTestId('console-stub-copy')?.textContent?.trim()).toBe('Ссылка скопирована'),
     )
-    expect(writeText).toHaveBeenCalledWith(`${location.origin}/admin`)
+    expect(writeText).toHaveBeenCalledWith(`${location.origin}/admin/dashboard`)
 
     await vi.advanceTimersByTimeAsync(3000)
     expect(byTestId('console-stub-copy')?.textContent?.trim()).toBe('Скопировать ссылку')

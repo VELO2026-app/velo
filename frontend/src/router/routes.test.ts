@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import router from '@/router'
 
 // =============================================================================
@@ -221,17 +222,10 @@ describe('route table: the console at /admin answers the old addresses (FE-272)'
   })
 })
 
-/** Follow a location's record redirects the way the router does, without navigating. */
-async function resolveRedirects(path: string): Promise<ReturnType<typeof router.resolve>> {
-  let current = router.resolve(path)
-  for (let hops = 0; hops < 5; hops++) {
-    const record = current.matched.at(-1)
-    if (!record?.redirect) return current
-    const next =
-      typeof record.redirect === 'function'
-        ? record.redirect(current as never, current as never)
-        : record.redirect
-    current = router.resolve(next as Parameters<typeof router.resolve>[0])
-  }
-  return current
+/** Where the router itself lands for an address (a fresh router on the app's
+ *  route table, no guards: the record redirects alone). */
+async function resolveRedirects(path: string) {
+  const fresh = createRouter({ history: createMemoryHistory(), routes: router.options.routes })
+  await fresh.push(path)
+  return fresh.currentRoute.value
 }
