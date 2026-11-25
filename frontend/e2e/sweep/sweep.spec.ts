@@ -65,7 +65,10 @@ for (const [name, entry] of Object.entries(SWEEP)) {
         'the screen rendered something',
       ).toBeVisible()
       await expect(page.getByTestId(GATES), 'a sign-in gate instead of the screen').toHaveCount(0)
-      const lands = typeof entry.lands === 'function' ? entry.lands(role) : entry.lands
+      const lands =
+        typeof entry.lands === 'function'
+          ? entry.lands(role, layout ? 'telegram' : 'browser')
+          : entry.lands
       await expect(page).toHaveURL(lands ?? new RegExp(`${escape(path!)}$`))
       if (layout) await checkLayout(page, crashes, name)
     })

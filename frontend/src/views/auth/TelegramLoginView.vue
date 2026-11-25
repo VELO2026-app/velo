@@ -9,7 +9,8 @@
 
   What the screen says comes from loginNotice: why the last attempt did not
   get in (useAuth.ts, LoginNotice), worded here as a phrase -- never an error
-  code. Pressing the button again clears it.
+  code. Pressing the button again clears it. The sign-in carries the address
+  the person was on (loginDestination), so it ends there, not on the role's zone.
 
   Same look as TelegramStubView (01_Welcome.png): logo, title, pill button.
 -->
@@ -34,7 +35,12 @@ import { t } from '@/locales'
 import { computed, ref } from 'vue'
 import { VeloLogo } from '@/components/ui'
 import { useAuthStore } from '@/stores/auth'
-import { loginNotice, loginNoticeFor, type LoginNotice } from '@/composables/useAuth'
+import {
+  loginDestination,
+  loginNotice,
+  loginNoticeFor,
+  type LoginNotice,
+} from '@/composables/useAuth'
 
 // tz-i18n: phrases resolve per notice code from auth.notice.*.
 const PHRASES: Record<LoginNotice, string> = {
@@ -74,7 +80,7 @@ async function onLogin(): Promise<void> {
   try {
     // Leaves the page for Telegram on success; the button stays disabled
     // until the browser navigates away.
-    await authStore.startBrowserLogin()
+    await authStore.startBrowserLogin(loginDestination.value)
   } catch (error) {
     loginNotice.value = loginNoticeFor(error)
     starting.value = false

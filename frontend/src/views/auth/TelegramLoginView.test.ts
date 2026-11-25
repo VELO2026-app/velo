@@ -6,17 +6,21 @@
 // attempt did not get in -- always a phrase, never an error code.
 // =============================================================================
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import TelegramLoginView from '@/views/auth/TelegramLoginView.vue'
-import { loginNotice, type LoginNotice } from '@/composables/useAuth'
-import { ApiResponseError } from '@/api/client'
+import { loginDestination, loginNotice, type LoginNotice } from '@/composables/useAuth'
+import { api, ApiResponseError } from '@/api/client'
+import { LOGIN_MARK_KEY } from '@/platform/browser-login'
 
-const startBrowserLogin = vi.fn()
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ startBrowserLogin }),
-}))
+// The real auth store; only the network and the page change are stand-ins.
+vi.mock('@/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/client')>()
+  return { ...actual, api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() } }
+})
+
+const START = '/api/v1/auth/telegram/browser/start'
 
 const ALL_NOTICES: LoginNotice[] = [
   'cancelled',
@@ -36,7 +40,14 @@ function button(w: ReturnType<typeof mount>) {
 beforeEach(() => {
   setActivePinia(createPinia())
   loginNotice.value = null
-  startBrowserLogin.mockReset()
+  loginDestination.value = null
+  localStorage.clear()
+  vi.mocked(api.post).mockReset()
+  vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('TelegramLoginView', () => {
@@ -69,20 +80,32 @@ describe('TelegramLoginView', () => {
 
   it('pressing the button clears the old notice and starts; the button holds while leaving', async () => {
     loginNotice.value = 'expired'
-    startBrowserLogin.mockImplementation(() => new Promise(() => {})) // navigating away
+    vi.mocked(api.post).mockImplementation(() => new Promise(() => {})) // navigating away
     const w = mount(TelegramLoginView)
 
     await button(w).trigger('click')
     await flushPromises()
 
-    expect(startBrowserLogin).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(api.post).mock.calls.filter((call) => call[0] === START)).toHaveLength(1)
     expect(loginNotice.value).toBeNull()
     expect(button(w).attributes('disabled')).toBeDefined()
     expect(button(w).text()).toBe('Открываем Telegram…')
   })
 
+  it('the sign-in carries the address the person was on', async () => {
+    loginDestination.value = '/console'
+    vi.mocked(api.post).mockResolvedValue({ url: 'https://oauth.telegram.org/auth', state: 'S9' })
+    const w = mount(TelegramLoginView)
+
+    await button(w).trigger('click')
+    await flushPromises()
+
+    const kept = JSON.parse(localStorage.getItem(LOGIN_MARK_KEY) ?? 'null')
+    expect(kept).toMatchObject({ state: 'S9', destination: '/console' })
+  })
+
   it('a refused start says why and lets the person try again', async () => {
-    startBrowserLogin.mockRejectedValue(new ApiResponseError(503, 'x', 'service_unavailable'))
+    vi.mocked(api.post).mockRejectedValue(new ApiResponseError(503, 'x', 'service_unavailable'))
     const w = mount(TelegramLoginView)
 
     await button(w).trigger('click')

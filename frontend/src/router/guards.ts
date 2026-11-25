@@ -42,13 +42,14 @@ import type {
 } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { waitUntilReady, pendingStartParam } from '@/composables/useAuth'
+import { waitUntilReady, pendingStartParam, takeLoginDestination } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
 import { parseStartParam } from '@/router/deepLinks'
 import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import { isOptionEnabled, type OptionName } from '@/platform/instance'
+import { platform } from '@/platform'
 
 /**
  * The master-profile queries, imported on first use (FE-157): only the
@@ -133,6 +134,10 @@ function zoneDashboard(role: UserRole | null): { path: string } {
  * Async: awaits auth initialization so role is guaranteed to be set
  * before the switch. Without the await, role is always null on first load.
  *
+ * Browser sign-in: a signed-in session with a sign-in destination (useAuth.ts,
+ * loginDestination) lands there first, once. Without one, an admin in a
+ * browser goes to the web console (/console), not the mobile /admin.
+ *
  * TD-F01: if pendingStartParam is set and parses to a route for this role,
  * redirect there instead of the dashboard
  * and clear the pending link so subsequent navigations go normally. A
@@ -158,6 +163,17 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
     return { path: '/auth-error' }
   }
 
+  // A browser sign-in ends here: the first navigation of the return page goes
+  // from RETURN_PATH to `/` (its route record redirects). Land on the address
+  // the person was on before the login screen, once. A string, not
+  // `{ path }`: vue-router reads a query only from a full location string.
+  // The access guard still checks it -- an address the role may not enter
+  // is refused there as on any navigation.
+  if (auth.isAuthenticated) {
+    const destination = takeLoginDestination()
+    if (destination) return destination
+  }
+
   // TD-F01: consume the pending startapp parameter. Links (3 October): it is
   // parsed HERE, with the session role -- a notification button carries no
   // viewer, and some verbs land in different zones for user and master. An
@@ -175,6 +191,10 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
   // to /user/dashboard, so a returning rejected applicant never saw the
   // screen the guard now permits.
   if (hasUnseenRejection(auth)) return { path: '/master/pending' }
+
+  // Owner ruling (FE-272, 25.11): in a browser the admin's home is the web
+  // console; the mobile /admin stays the admin's home inside Telegram.
+  if (auth.role === 'admin' && platform.name === 'standalone') return { path: '/console' }
 
   return zoneDashboard(auth.role)
 }

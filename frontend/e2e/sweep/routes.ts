@@ -62,8 +62,9 @@ export interface SweepVisit {
   roles: SweepRole[]
   /** Route parameter -> key in params.json, or `=literal`. */
   params?: Record<string, ParamKey | `=${string}`>
-  /** The URL the screen settles on, for a route that redirects by design. */
-  lands?: RegExp | ((role: SweepRole) => RegExp)
+  /** The URL the screen settles on, for a route that redirects by design;
+   *  a function gets the role and where the app runs (SweepHost). */
+  lands?: RegExp | ((role: SweepRole, host: SweepHost) => RegExp)
   /** Signals this screen produces by design; each with its reason. */
   allow?: (role: SweepRole) => CrashAllowance[]
   /** The window the screen is opened in by the gates that look at its web
@@ -72,6 +73,10 @@ export interface SweepVisit {
    *  console shows its device stub on a phone). */
   webViewport?: { width: number; height: number }
 }
+
+/** Where a test runs the app: a browser tab (signIn) or the Telegram Mini App
+ *  (the layout sweep's launchInTelegram). */
+export type SweepHost = 'browser' | 'telegram'
 
 /** A small laptop: the window the web console's screens are audited and shot in. */
 export const CONSOLE_VIEWPORT = { width: 1280, height: 800 } as const
@@ -107,8 +112,12 @@ export const SWEEP: Record<string, SweepRow> = {
   root: {
     path: '/',
     roles: ['student', 'master', 'admin'],
-    // Each role to ITS zone's dashboard.
-    lands: (role) => new RegExp(`/${ZONE[role]}/dashboard$`),
+    // Each role to ITS zone's dashboard; an admin in a browser to the web
+    // console (owner ruling, FE-272), inside Telegram to the mobile /admin.
+    lands: (role, host) =>
+      role === 'admin' && host === 'browser'
+        ? /\/console\/dashboard$/
+        : new RegExp(`/${ZONE[role]}/dashboard$`),
   },
   'auth-error': {
     path: '/auth-error',
