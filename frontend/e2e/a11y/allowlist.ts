@@ -72,14 +72,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['root'],
-    detail: '#2f9ea8 on #ffffff',
-    skins: ['gold'],
-    reason: REASON.STATUS_COLORS,
-    task: 'FE-245',
-  },
-  {
-    rule: 'color-contrast',
     routes: ['user-master-public'],
     detail: '#619cd2 on #e2f0fd',
     skins: ['gold'],
@@ -107,13 +99,6 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
     routes: ['practice-detail', 'user-master-public'],
     detail: '#a16124 on #fdf3e2',
     skins: ['gold'],
-    reason: REASON.STATUS_COLORS,
-    task: 'FE-245',
-  },
-  {
-    rule: 'color-contrast',
-    routes: ['root'],
-    detail: '#d66674 on #ffffff',
     reason: REASON.STATUS_COLORS,
     task: 'FE-245',
   },
