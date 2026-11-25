@@ -157,17 +157,30 @@ describe('initAuth outside Telegram', () => {
     expect(loginDestination.value).toBe('/console')
   })
 
-  it('a session that ends on a page (expired, logged out): the next sign-in lands there', async () => {
+  it('a session dropped on a page (expired, revoked): the next sign-in lands there', async () => {
     localStorage.setItem(SESSION_TOKEN_KEY, 'kept_tok')
     vi.mocked(usersApi.getMe).mockResolvedValue(user({ role: 'admin' }))
     vi.mocked(api.post).mockResolvedValue(undefined)
     await run()
     window.history.replaceState(null, '', '/console/masters?status=pending')
 
-    await useAuthStore().logout()
+    await useAuthStore().discardSession()
 
     expect(useAuth().isAuthenticated.value).toBe(false)
     expect(loginDestination.value).toBe('/console/masters?status=pending')
+  })
+
+  it('a logout leaves no destination: the next sign-in may be another account', async () => {
+    localStorage.setItem(SESSION_TOKEN_KEY, 'kept_tok')
+    vi.mocked(usersApi.getMe).mockResolvedValue(user({ role: 'admin' }))
+    vi.mocked(api.post).mockResolvedValue(undefined)
+    await run()
+    window.history.replaceState(null, '', '/console/settings?tab=texts')
+
+    await useAuthStore().logout()
+
+    expect(useAuth().isAuthenticated.value).toBe(false)
+    expect(loginDestination.value).toBeNull()
   })
 
   it('a saved session survives a relaunch of the installed app', async () => {
