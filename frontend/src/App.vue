@@ -160,7 +160,7 @@ provideToast()
 type EntryStage = 'welcome' | 'onboarding' | 'app'
 const stage = ref<EntryStage | null>(null)
 
-// FE-262: a web screen (route meta.web -- the /console zone) spans the whole
+// FE-262: a web screen (route meta.web -- the /admin zone) spans the whole
 // window instead of the phone column, once the app itself is on screen.
 const route = useRoute()
 const wideFrame = computed(
