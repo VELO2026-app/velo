@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import TelegramLoginView from '@/views/auth/TelegramLoginView.vue'
-import { loginNotice, type LoginNotice } from '@/composables/useAuth'
+import { loginDestination, loginNotice, type LoginNotice } from '@/composables/useAuth'
 import { ApiResponseError } from '@/api/client'
 
 const startBrowserLogin = vi.fn()
@@ -36,6 +36,7 @@ function button(w: ReturnType<typeof mount>) {
 beforeEach(() => {
   setActivePinia(createPinia())
   loginNotice.value = null
+  loginDestination.value = null
   startBrowserLogin.mockReset()
 })
 
@@ -79,6 +80,16 @@ describe('TelegramLoginView', () => {
     expect(loginNotice.value).toBeNull()
     expect(button(w).attributes('disabled')).toBeDefined()
     expect(button(w).text()).toBe('Открываем Telegram…')
+  })
+
+  it('the sign-in carries the address the person opened', async () => {
+    loginDestination.value = '/console'
+    startBrowserLogin.mockImplementation(() => new Promise(() => {}))
+    const w = mount(TelegramLoginView)
+
+    await button(w).trigger('click')
+
+    expect(startBrowserLogin).toHaveBeenCalledWith('/console')
   })
 
   it('a refused start says why and lets the person try again', async () => {

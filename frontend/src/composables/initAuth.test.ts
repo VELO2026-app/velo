@@ -14,7 +14,13 @@ import { setActivePinia, createPinia } from 'pinia'
 import { api, ApiNetworkError, ApiResponseError, ApiTimeoutError } from '@/api/client'
 import * as usersApi from '@/api/users'
 import { useAuthStore } from '@/stores/auth'
-import { useAuth, initDataUserId, loginNoticeFor, type LoginNotice } from '@/composables/useAuth'
+import {
+  useAuth,
+  initDataUserId,
+  loginDestination,
+  loginNoticeFor,
+  type LoginNotice,
+} from '@/composables/useAuth'
 import { LOGIN_MARK_KEY, RETURN_PATH, rememberLoginMark } from '@/platform/browser-login'
 import { SESSION_TOKEN_KEY } from '@/platform/session-token'
 import type { UserResponse } from '@/api/types'
@@ -102,6 +108,40 @@ describe('initAuth outside Telegram', () => {
     expect(auth.isAuthenticated.value).toBe(false)
     expect(auth.loginNotice.value).toBeNull()
     expect(auth.restoreUnreachable.value).toBe(false)
+  })
+
+  it('the login screen keeps the address the person opened, for after the sign-in', async () => {
+    window.history.replaceState(null, '', '/console/masters?tab=new')
+
+    await run()
+
+    expect(loginDestination.value).toBe('/console/masters?tab=new')
+  })
+
+  it('the return lands where the sign-in started: the mark gives back its destination', async () => {
+    rememberLoginMark({ state: 'S1', mark: 'M1', next: '/console' })
+    openReturn('code=C1&state=S1')
+    vi.mocked(api.post).mockResolvedValue({
+      session_token: 'new_tok',
+      user: user({ role: 'admin' }),
+      bot_access_granted: true,
+    })
+
+    const auth = await run()
+
+    expect(auth.isAuthenticated.value).toBe(true)
+    expect(loginDestination.value).toBe('/console')
+  })
+
+  it('a refused return keeps the destination for the next try', async () => {
+    rememberLoginMark({ state: 'S1', mark: 'M1', next: '/console' })
+    openReturn('code=C1&state=S1')
+    vi.mocked(api.post).mockRejectedValue(new ApiResponseError(400, 'x', 'telegram_failed'))
+
+    const auth = await run()
+
+    expect(auth.loginNotice.value).toBe('telegram_failed')
+    expect(loginDestination.value).toBe('/console')
   })
 
   it('a saved session survives a relaunch of the installed app', async () => {
@@ -495,6 +535,17 @@ describe('startBrowserLogin', () => {
     const kept = JSON.parse(localStorage.getItem(LOGIN_MARK_KEY) ?? 'null')
     expect(kept).toEqual({ state: 'S9', mark: body.mark })
     expect(assign).toHaveBeenCalledWith('https://oauth.telegram.org/auth?x=1')
+    assign.mockRestore()
+  })
+
+  it('keeps the destination it is given with the mark', async () => {
+    vi.mocked(api.post).mockResolvedValue({ url: 'https://oauth.telegram.org/auth', state: 'S9' })
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+
+    await useAuthStore().startBrowserLogin('/console')
+
+    const kept = JSON.parse(localStorage.getItem(LOGIN_MARK_KEY) ?? 'null')
+    expect(kept).toMatchObject({ state: 'S9', next: '/console' })
     assign.mockRestore()
   })
 

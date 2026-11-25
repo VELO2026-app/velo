@@ -27,12 +27,15 @@
 // sends the browser back to RETURN_PATH, and initAuth() completes it here,
 // before isReady -- so the router's first navigation and the App.vue stage
 // already see the signed-in user. A failed or refused return leaves a
-// LoginNotice for the login screen to word.
+// LoginNotice for the login screen to word. The address the person opened
+// before the login screen rides along with the sign-in (loginDestination) and
+// roleRedirect lands there once signed in.
 // =============================================================================
 
 import { ref, computed, watch } from 'vue'
 import { platform } from '@/platform'
-import { takeLoginMark, takeLoginReturn } from '@/platform/browser-login'
+import { loginTarget, takeLoginMark, takeLoginReturn } from '@/platform/browser-login'
+import { host } from '@/platform/host'
 import { onSessionEnd } from '@/platform/session'
 import { useAuthStore } from '@/stores/auth'
 import { ApiNetworkError, ApiResponseError, ApiTimeoutError } from '@/api/client'
@@ -126,6 +129,17 @@ onSessionEnd((reason) => {
 })
 
 /**
+ * Where to land after the browser sign-in (an in-app path), or null.
+ *
+ * @remarks Set when the login screen comes up: the address the person opened
+ * (the router has not moved yet -- its first navigation waits for isReady).
+ * TelegramLoginView hands it to startBrowserLogin, which keeps it with the
+ * mark; the return sets it back from the mark, and roleRedirect lands there
+ * once, signed in, then clears it. A failed return keeps it for the retry.
+ */
+export const loginDestination = ref<string | null>(null)
+
+/**
  * The raw startapp parameter of this launch, pending its deep link (TD-F01).
  * roleRedirect parses it with the session role (parseStartParam,
  * router/deepLinks.ts) once, then clears it.
@@ -158,6 +172,7 @@ export function resetAuthState(): void {
   isReady.value = false
   isLoggingOut.value = false
   pendingStartParam.value = null
+  loginDestination.value = null
   loginNotice.value = null
   botAccessHint.value = false
   restoreUnreachable.value = false
@@ -321,6 +336,9 @@ async function initStandalone(authStore: ReturnType<typeof useAuthStore>): Promi
     return
   }
   restoreUnreachable.value = outcome === 'unreachable'
+  // Not signed in: the login screen is next. A failed return has already
+  // put back the destination its mark carried.
+  loginDestination.value ??= loginTarget(host.location.pathname + host.location.search)
 }
 
 /**
@@ -336,6 +354,7 @@ async function completeFromReturn(authStore: ReturnType<typeof useAuthStore>): P
   const back = takeLoginReturn()
   if (!back) return false
   const started = takeLoginMark()
+  loginDestination.value = started?.next ?? null
 
   if (back.error) {
     loginNotice.value = 'cancelled'

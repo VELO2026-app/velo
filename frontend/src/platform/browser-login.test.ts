@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   LOGIN_MARK_KEY,
   RETURN_PATH,
+  loginTarget,
   newMark,
   rememberLoginMark,
   takeLoginMark,
@@ -62,6 +63,17 @@ describe('the mark', () => {
     expect(localStorage.getItem(LOGIN_MARK_KEY)).toBeNull()
   })
 
+  it('carries the destination of the sign-in; a destination that is not an app path is dropped', () => {
+    rememberLoginMark({ state: 'S1', mark: 'M1', next: '/console/masters' })
+    expect(takeLoginMark()).toEqual({ state: 'S1', mark: 'M1', next: '/console/masters' })
+
+    localStorage.setItem(
+      LOGIN_MARK_KEY,
+      JSON.stringify({ state: 'S1', mark: 'M1', next: 'https://evil.example/' }),
+    )
+    expect(takeLoginMark()).toEqual({ state: 'S1', mark: 'M1' })
+  })
+
   it('storage that throws: no mark (the return is then refused -- the safe side)', () => {
     const blocked = (): Storage => {
       throw new DOMException('blocked', 'SecurityError')
@@ -111,5 +123,27 @@ describe('takeLoginReturn', () => {
     expect(takeLoginReturn()).toBeNull()
     expect(window.location.pathname).toBe('/user/dashboard')
     expect(window.location.search).toBe('?code=C1&state=S1')
+  })
+})
+
+describe('loginTarget', () => {
+  it.each([
+    ['/console', '/console'],
+    ['/console/masters?tab=new', '/console/masters?tab=new'],
+  ])('an app path is kept: %s', (path, kept) => {
+    expect(loginTarget(path)).toBe(kept)
+  })
+
+  it.each([
+    ['another host', '//evil.example/console'],
+    ['another host, backslash', '/\\evil.example'],
+    ['an absolute URL', 'https://evil.example/console'],
+    ['the root', '/'],
+    ['the root with a query', '/?x=1'],
+    ['the return path', `${RETURN_PATH}?code=C&state=S`],
+    ['too long', `/${'a'.repeat(1024)}`],
+    ['not a string', 42],
+  ])('not a destination: %s', (_label, path) => {
+    expect(loginTarget(path)).toBeNull()
   })
 })

@@ -42,7 +42,7 @@ import type {
 } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { waitUntilReady, pendingStartParam } from '@/composables/useAuth'
+import { waitUntilReady, pendingStartParam, loginDestination } from '@/composables/useAuth'
 import type { ReadyResult } from '@/composables/useAuth'
 import { parseStartParam } from '@/router/deepLinks'
 import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
@@ -133,6 +133,9 @@ function zoneDashboard(role: UserRole | null): { path: string } {
  * Async: awaits auth initialization so role is guaranteed to be set
  * before the switch. Without the await, role is always null on first load.
  *
+ * Browser sign-in: a signed-in session with a loginDestination (useAuth.ts)
+ * lands there first, once -- the address opened before the login screen.
+ *
  * TD-F01: if pendingStartParam is set and parses to a route for this role,
  * redirect there instead of the dashboard
  * and clear the pending link so subsequent navigations go normally. A
@@ -156,6 +159,16 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
   // Redirect to error screen instead of routing with null role.
   if (timedOut && auth.role === null) {
     return { path: '/auth-error' }
+  }
+
+  // A browser sign-in ends on `/` (the return path redirects here): land on
+  // the address the person opened before the login screen, once. The access
+  // guard still checks it -- an address the role may not enter is refused
+  // there as on any navigation.
+  if (auth.isAuthenticated && loginDestination.value) {
+    const path = loginDestination.value
+    loginDestination.value = null
+    return { path }
   }
 
   // TD-F01: consume the pending startapp parameter. Links (3 October): it is

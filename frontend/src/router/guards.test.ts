@@ -37,7 +37,12 @@ import {
 import { applyInstanceConfig } from '@/platform/instance'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { resetAuthState, __setReadyForTest, pendingStartParam } from '@/composables/useAuth'
+import {
+  resetAuthState,
+  __setReadyForTest,
+  pendingStartParam,
+  loginDestination,
+} from '@/composables/useAuth'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import type { UserResponse } from '@/api/types'
 
@@ -126,6 +131,24 @@ describe('router/guards', () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'user' })
       expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
+    })
+
+    it('after a browser sign-in: lands on the address opened before the login screen, once', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'admin' })
+      loginDestination.value = '/console'
+
+      expect(await call(roleRedirect)).toEqual({ path: '/console' })
+      expect(loginDestination.value).toBeNull()
+      expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
+    })
+
+    it('not signed in: the destination waits for the sign-in', async () => {
+      __setReadyForTest(true)
+      loginDestination.value = '/console'
+
+      expect(await call(roleRedirect)).toEqual({ path: '/user/dashboard' })
+      expect(loginDestination.value).toBe('/console')
     })
 
     // Links (3 October): this used to set an already-PARSED route. Right while
