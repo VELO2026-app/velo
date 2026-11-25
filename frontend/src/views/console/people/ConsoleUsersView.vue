@@ -30,7 +30,8 @@
       />
       <div class="users-filter">
         <VSelect
-          class="users-filter__select"
+          flush
+          outlined
           :model-value="activity"
           :options="activityOptions"
           :aria-label="t('console.users.filter.label')"
@@ -236,14 +237,5 @@ async function doMakeMaster(): Promise<void> {
 <style scoped>
 .users-filter {
   width: 200px;
-}
-
-/* The select sits on the page, not on a card. VSelect brings a form margin
-   (it would push the field off the segment's centre line) and no border (on a
-   gradient page a white plate with no outline reads as a hole): the kit's
-   style hooks set both. */
-.users-filter__select {
-  --v-select-gap: 0;
-  --v-select-border: var(--velo-control-border);
 }
 </style>
