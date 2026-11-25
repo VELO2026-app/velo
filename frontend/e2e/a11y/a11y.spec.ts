@@ -118,7 +118,7 @@ function registerRoutes(skin: SkinName, brand: Brand): void {
 
         await page.goto(path!)
         await settle(page, tracker)
-        const lands = typeof entry.lands === 'function' ? entry.lands(role) : entry.lands
+        const lands = typeof entry.lands === 'function' ? entry.lands(role, 'browser') : entry.lands
         await expect(page).toHaveURL(lands ?? new RegExp(`${escape(path!)}$`))
 
         // The build under test IS the package under test: a stale or wrong

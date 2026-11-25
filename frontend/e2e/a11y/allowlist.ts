@@ -209,6 +209,9 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
       'console-settings',
       'console-support',
       'console-users',
+      // An admin in a browser lands on /console; at the phone size the console
+      // shows its device stub, whose secondary button carries this pair.
+      'root',
     ],
     detail: '#4c6589 on #cdd9e9',
     skins: ['gold'],
