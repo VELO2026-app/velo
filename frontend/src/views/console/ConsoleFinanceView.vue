@@ -47,7 +47,7 @@ import ConsolePage from '@/components/console/ConsolePage.vue'
 import PromosPanel from '@/components/console/finance/PromosPanel.vue'
 import WithdrawalsPanel from '@/components/console/finance/WithdrawalsPanel.vue'
 import { countedLabel } from '@/components/console/finance/financeFormat'
-import { useUrlChoice } from '@/components/console/finance/useUrlChoice'
+import { useUrlChoice } from '@/composables/console/useUrlChoice'
 import { adminPendingWithdrawalsQuery } from '@/composables/queries/admin'
 
 type FinanceTab = 'withdrawals' | 'promos'

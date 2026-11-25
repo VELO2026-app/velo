@@ -269,31 +269,36 @@ watch(
   padding: var(--space-1) var(--space-2);
   box-sizing: border-box;
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  border: var(--velo-border-width) solid var(--velo-border-input-rest);
   border-radius: var(--velo-radius-badge);
 }
 
 .v-textarea__field {
   flex: 1;
   min-width: 0;
-  padding: var(--velo-gap-11) var(--space-4);
+  /* The rim is 1px, the text sits where it did under the old 2px border. */
+  padding: calc(var(--velo-gap-11) + var(--velo-border-width))
+    calc(var(--space-4) + var(--velo-border-width));
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
   /* Figma: form fields are SOLID WHITE plates (was glass-blue). Single standard. */
   background: var(--velo-bg-card-solid);
-  border: 2px solid transparent;
+  /* 1px rim at rest, 2px ring on focus and error (the VInput recipe, FE-249). */
+  border: var(--velo-border-width) solid var(--velo-border-input-rest);
   border-radius: var(--velo-radius-badge);
-  transition: border-color var(--transition-base);
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
   min-height: 100px;
   resize: vertical;
 }
 
 /* Auto-grow variant: JS drives the height to content; CSS caps it at the DS
-   token and switches to internal scroll. min-height:0 so a 1-row field can sit
-   at the VInput height instead of the 100px fixed-rows floor. */
+   token and switches to internal scroll. The floor is the 44px tap target
+   (FE-249, the VInput height) instead of the 100px fixed-rows one. */
 .v-textarea__field--autogrow {
-  min-height: 0;
+  min-height: var(--velo-size-44);
   max-height: var(--velo-textarea-autogrow-max);
   resize: none;
   overflow-y: auto;
@@ -301,22 +306,23 @@ watch(
 
 .v-textarea__field:focus {
   outline: none;
-  border-color: var(--velo-border-input-focus);
+  border-color: var(--velo-border-input-ring);
+  box-shadow: var(--velo-shadow-field-focus);
 }
 
 /* T24-18 (PROMPT №639): opt-in visible border at rest. DERIVED (not
    owner-given) -- see the prop's own doc comment above for why this exact
    value. Written as its own rule (not folded into the base `.v-textarea__field`)
    so every other caller stays byte-identical. The explicit `:focus` override
-   right after keeps the ALREADY-correct focus colour (--velo-border-input-focus,
-   unchanged) winning regardless of source order -- only the rest state changes. */
+   right after keeps the ALREADY-correct focus colour (--velo-border-input-ring,
+   FE-249) winning regardless of source order -- only the rest state changes. */
 .v-textarea__field--bordered-rest {
   border-width: 1.5px;
   border-color: var(--velo-primary);
 }
 
 .v-textarea__field--bordered-rest:focus {
-  border-color: var(--velo-border-input-focus);
+  border-color: var(--velo-border-input-ring);
 }
 
 .v-textarea__field::placeholder {
@@ -331,6 +337,7 @@ watch(
 
 .v-textarea--error .v-textarea__field {
   border-color: var(--velo-error);
+  box-shadow: var(--velo-shadow-field-error);
 }
 
 /* Required seal — sits beside the field, never shrinks, gutter always reserved

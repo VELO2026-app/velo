@@ -41,7 +41,11 @@
       <!-- Avatar + change photo (stub) -->
       <div class="edit-profile__avatar-block">
         <VAvatar :name="displayName" :url="user?.avatar_url ?? undefined" size="xl" />
-        <button type="button" class="edit-profile__change-photo" @click="onChangePhoto">
+        <button
+          type="button"
+          class="edit-profile__change-photo velo-tap-target"
+          @click="onChangePhoto"
+        >
           {{ t('user.screens.editProfile.changePhoto') }}
         </button>
       </div>

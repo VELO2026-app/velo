@@ -70,7 +70,7 @@
               <button
                 v-if="targetRoute"
                 type="button"
-                class="report-detail__meta-val report-detail__meta-val--mono report-detail__meta-val--link"
+                class="report-detail__meta-val report-detail__meta-val--mono report-detail__meta-val--link velo-tap-target"
                 @click="router.push(targetRoute)"
               >
                 {{ report.target_id.slice(0, 8) }}…

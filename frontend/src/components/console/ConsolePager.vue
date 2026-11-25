@@ -8,7 +8,9 @@
 
 <template>
   <nav class="console-pager" :aria-label="t('console.pager.nav')">
-    <span class="console-pager__summary" data-testid="console-pager-summary">{{ summary }}</span>
+    <span class="console-pager__summary" data-testid="console-pager-summary">{{
+      summaryText
+    }}</span>
     <div v-if="pageCount > 1" class="console-pager__pages">
       <template v-for="(item, index) in items" :key="index">
         <span v-if="item === null" class="console-pager__gap" aria-hidden="true">...</span>
@@ -19,7 +21,7 @@
           :class="{ 'console-pager__page--current': item === page }"
           :aria-label="t('console.pager.page', { n: item })"
           :aria-current="item === page ? 'page' : undefined"
-          @click="emit('update:page', item)"
+          @click="item !== page && emit('update:page', item)"
         >
           {{ item }}
         </button>
@@ -31,22 +33,33 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { computed } from 'vue'
-import { pagerItems } from '@/utils/console/pagerItems'
+import { pageCountOf, pagerItems } from '@/utils/console/pagerItems'
 
 const props = defineProps<{
   /** Current page, 1-based. */
   page: number
-  /** Number of pages. */
-  pageCount: number
-  /** The summary text on the left. */
-  summary: string
+  /** Rows per page. */
+  pageSize: number
+  /** Rows in the whole list. */
+  total: number
+  /** Rows on the current page. */
+  shown: number
 }>()
 
 const emit = defineEmits<{
   'update:page': [page: number]
 }>()
 
-const items = computed(() => pagerItems(props.page, props.pageCount))
+const pageCount = computed(() => pageCountOf(props.total, props.pageSize))
+const items = computed(() => pagerItems(props.page, pageCount.value))
+
+// "Showing 21-40 of 70": the rows of this page by their place in the list
+// (an empty list reads 0-0).
+const summaryText = computed(() => {
+  const from = props.shown === 0 ? 0 : (props.page - 1) * props.pageSize + 1
+  const to = props.shown === 0 ? 0 : from + props.shown - 1
+  return t('console.pager.shown', { from, to, total: props.total })
+})
 </script>
 
 <style scoped>

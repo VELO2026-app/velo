@@ -37,7 +37,7 @@ import { VSegment } from '@/components/ui'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import MethodRequestsPanel from '@/components/console/requests/MethodRequestsPanel.vue'
 import ReportsPanel from '@/components/console/requests/ReportsPanel.vue'
-import { useUrlTab } from '@/components/console/requests/useUrlTab'
+import { useUrlTab } from '@/composables/console/useUrlTab'
 import { useAdminStats } from '@/composables/queries/admin'
 
 const { pendingModeration, pendingMethodChanges } = useAdminStats()

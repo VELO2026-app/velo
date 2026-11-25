@@ -9,8 +9,8 @@
     },
     "goodo-brand": {
       "repo": "VELO2026-app/goodo-brand",
-      "tag": "v0.3.1",
-      "sha": "86d88fde5f4d95148296495d29110f4a62bf660e",
+      "tag": "v0.4.0",
+      "sha": "879cdb6d1fde1aab21b8fba7e2960183606d4c22",
       "dir": "skin"
     }
   }

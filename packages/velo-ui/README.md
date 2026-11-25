@@ -170,7 +170,10 @@
 --velo-text-on-bg-secondary # VEmptyState title
 --velo-text-on-bg-muted    # VEmptyState description, VSegment item
 # --- P8 batch 1 (tz-ui-package §4 P8): skeleton family, VEmptyState, VMenuRow, field family ---
---velo-border-input-focus  # VSelect focus ring
+--velo-border-input-ring   # VInput/VSelect/VTextarea focus ring (FE-249)
+--velo-border-input-rest   # VInput/VSelect/VTextarea rim at rest (FE-249)
+--velo-shadow-field-focus  # VInput/VSelect/VTextarea inner ring on focus (FE-249)
+--velo-shadow-field-error  # VInput/VSelect/VTextarea inner ring on error (FE-249)
 --velo-card-height-list    # VSkeletonPracticeCard list-card skeleton height
 --velo-card-iconcol-w      # VSkeletonPracticeCard icon column
 --velo-card-letter-spacing-meta # VMoreLink meta label tracking (P8 batch 3)

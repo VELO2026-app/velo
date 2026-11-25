@@ -55,7 +55,9 @@
           />
         </template>
         <template #cell-role="{ row }">
-          <PeoplePill :tone="roleTone(row.user.role)">{{ roleLabel(row.user.role) }}</PeoplePill>
+          <ConsoleBadge :tone="roleTone(row.user.role)">{{
+            roleLabel(row.user.role)
+          }}</ConsoleBadge>
         </template>
         <template #cell-registered="{ row }">{{ formatDay(row.user.created_at) }}</template>
         <template #cell-lastSeen="{ row }">
@@ -73,7 +75,7 @@
         </template>
         <template #empty>{{ t('adminScreens.adminUsers.empty.title') }}</template>
       </ConsoleTable>
-      <PeoplePager
+      <ConsolePager
         :page="page"
         :page-size="CONSOLE_PAGE_SIZE"
         :total="total"
@@ -102,8 +104,8 @@ import { VButton, VConfirmDialog, VSegment, VSelect } from '@/components/ui'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import PeopleListCard from '@/components/console/people/PeopleListCard.vue'
-import PeoplePager from '@/components/console/people/PeoplePager.vue'
-import PeoplePill from '@/components/console/people/PeoplePill.vue'
+import ConsolePager from '@/components/console/ConsolePager.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import PersonCell from '@/components/console/people/PersonCell.vue'
 import {
   DASH,

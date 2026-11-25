@@ -109,6 +109,9 @@ const emit = defineEmits<{
 }
 
 .v-segment-track__btn {
+  /* The track keeps its size: the 44px tap target is an invisible layer
+     (FE-249; the scrollable variant below clips it, so it grows instead). */
+  position: relative;
   font-family: var(--font-body);
   background: transparent;
   border: none;
@@ -118,6 +121,12 @@ const emit = defineEmits<{
     background-color var(--transition-fast),
     color var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
+}
+
+.v-segment-track__btn::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((100% - var(--velo-size-44)) / 2));
 }
 
 .v-segment-track__btn--active {
@@ -178,6 +187,14 @@ const emit = defineEmits<{
 .v-segment-track--scrollable .v-segment-track__btn {
   flex: 0 0 auto;
   white-space: nowrap;
+  /* A scroll box clips the invisible layer: the button itself is 44px tall
+     and at least 44px wide. */
+  min-height: var(--velo-size-44);
+  min-width: var(--velo-size-44);
+}
+
+.v-segment-track--scrollable .v-segment-track__btn::after {
+  content: none;
 }
 
 /* Optional icon+label composition (the blocked-tab lock,

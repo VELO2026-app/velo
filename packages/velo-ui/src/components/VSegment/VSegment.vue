@@ -91,6 +91,8 @@ defineEmits<{
   justify-content: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
+  /* 44px tap target (FE-249). */
+  min-height: var(--velo-size-44);
   font-family: var(--font-body);
   font-size: var(--velo-fs-16);
   color: var(--velo-text-on-bg-muted);
@@ -134,6 +136,10 @@ defineEmits<{
 
 .v-segment--compact .v-segment__item {
   flex: 0 0 auto;
+  /* The pill keeps its size: the 44px tap target is an invisible layer
+     (FE-249; the scrollable variant below clips it, so it grows instead). */
+  position: relative;
+  min-height: 0;
   padding: var(--space-1) var(--space-3);
   font-size: var(--velo-fs-14);
   color: var(--velo-text-primary);
@@ -141,6 +147,12 @@ defineEmits<{
   border: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+.v-segment--compact .v-segment__item::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((100% - var(--velo-size-44)) / 2));
 }
 
 .v-segment--compact .v-segment__item--active {
@@ -167,9 +179,21 @@ defineEmits<{
 .v-segment--scrollable .v-segment__item {
   flex: 0 0 auto;
   white-space: nowrap;
+  /* A short label ("All") must not leave the tap target under 44px wide
+     (FE-249). */
+  min-width: var(--velo-size-44);
 }
 
 .v-segment--compact.v-segment--scrollable {
   display: flex;
+}
+
+/* A scroll box clips the invisible layer: the item itself is 44px tall. */
+.v-segment--compact.v-segment--scrollable .v-segment__item {
+  min-height: var(--velo-size-44);
+}
+
+.v-segment--compact.v-segment--scrollable .v-segment__item::after {
+  content: none;
 }
 </style>

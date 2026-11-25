@@ -160,7 +160,7 @@
           </div>
         </template>
         <div v-if="languages.length" class="profile-form__chips">
-          <PeoplePill v-for="l in languages" :key="l">{{ l }}</PeoplePill>
+          <ConsoleBadge v-for="l in languages" :key="l">{{ l }}</ConsoleBadge>
         </div>
         <span v-else class="profile-form__muted">{{ DASH }}</span>
       </ConsoleFieldRow>
@@ -185,7 +185,7 @@
           readonly
         />
         <div v-else-if="methods.length" class="profile-form__chips">
-          <PeoplePill v-for="m in methods" :key="m">{{ m }}</PeoplePill>
+          <ConsoleBadge v-for="m in methods" :key="m">{{ m }}</ConsoleBadge>
         </div>
         <span v-else class="profile-form__muted">{{ DASH }}</span>
       </ConsoleFieldRow>
@@ -225,7 +225,7 @@
           </div>
         </template>
         <div v-if="certifications.length" class="profile-form__chips">
-          <PeoplePill v-for="(c, i) in certifications" :key="`${c}-${i}`">{{ c }}</PeoplePill>
+          <ConsoleBadge v-for="(c, i) in certifications" :key="`${c}-${i}`">{{ c }}</ConsoleBadge>
         </div>
         <span v-else class="profile-form__muted">{{ DASH }}</span>
       </ConsoleFieldRow>
@@ -241,7 +241,7 @@ import { VButton, VChip, VInput, VTextarea } from '@/components/ui'
 import { IconClose } from '@/components/icons'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsoleFieldRow from '@/components/console/people/ConsoleFieldRow.vue'
-import PeoplePill from '@/components/console/people/PeoplePill.vue'
+import ConsoleBadge from '@/components/console/ConsoleBadge.vue'
 import { DASH } from '@/components/console/people/peopleTable'
 import {
   buildProfilePatch,
