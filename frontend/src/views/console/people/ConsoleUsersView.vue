@@ -236,4 +236,16 @@ async function doMakeMaster(): Promise<void> {
 .users-filter {
   width: 200px;
 }
+
+/* The select sits on the page, not on a card. VSelect brings a form margin
+   (it would push the field off the segment's centre line) and a clear
+   border (on a gradient page a white plate with no outline reads as a hole). */
+.users-filter :deep(.v-select) {
+  margin-bottom: 0;
+}
+
+.users-filter :deep(.v-select__field) {
+  border-width: var(--velo-border-width);
+  border-color: var(--velo-control-border);
+}
 </style>

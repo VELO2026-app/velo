@@ -93,6 +93,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
 import { VButton, VSegment } from '@/components/ui'
+import { isOptionEnabled } from '@/platform/instance'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/ConsoleTable.vue'
 import MasterInviteModal from '@/components/console/people/MasterInviteModal.vue'
@@ -173,32 +174,35 @@ const tabOptions = computed(() =>
 
 // FE-264: practices, students and payout stand in for the design's sessions,
 // rating and per-session rate columns until the backend has them (BE-246, BE-249).
-const columns = computed<ConsoleTableColumn[]>(() => [
-  { key: 'master', label: t('console.masters.columns.master') },
-  { key: 'methods', label: t('console.masters.columns.methods') },
-  { key: 'status', label: t('console.masters.columns.status'), width: 200 },
-  {
-    key: 'practices',
-    label: t('adminScreens.adminMasters.practicesStat'),
-    width: 80,
-    align: 'end',
-    secondary: true,
-  },
-  {
-    key: 'students',
-    label: t('adminScreens.adminMasters.studentsStat'),
-    width: 90,
-    align: 'end',
-    secondary: true,
-  },
-  {
-    key: 'payout',
-    label: t('adminScreens.adminMasters.toWithdrawStat'),
-    width: 110,
-    align: 'end',
-    secondary: true,
-  },
-])
+const columns = computed<ConsoleTableColumn[]>(() =>
+  [
+    { key: 'master', label: t('console.masters.columns.master') },
+    { key: 'methods', label: t('console.masters.columns.methods') },
+    { key: 'status', label: t('console.masters.columns.status'), width: 200 },
+    {
+      key: 'practices',
+      label: t('adminScreens.adminMasters.practicesStat'),
+      width: 80,
+      align: 'end' as const,
+      secondary: true,
+    },
+    {
+      key: 'students',
+      label: t('adminScreens.adminMasters.studentsStat'),
+      width: 90,
+      align: 'end' as const,
+      secondary: true,
+    },
+    {
+      key: 'payout',
+      label: t('adminScreens.adminMasters.toWithdrawStat'),
+      width: 110,
+      align: 'end' as const,
+      secondary: true,
+    },
+    // The payout balance is the payments option's: without it the column is not there.
+  ].filter((column) => column.key !== 'payout' || isOptionEnabled('payments')),
+)
 
 const emptyText = computed(() => t(`console.masters.empty.${tab.value}`))
 

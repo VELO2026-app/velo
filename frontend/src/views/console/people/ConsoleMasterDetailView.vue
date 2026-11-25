@@ -111,6 +111,7 @@
 <script setup lang="ts">
 import { t } from '@/locales'
 import { host } from '@/platform/host'
+import { isOptionEnabled } from '@/platform/instance'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
@@ -190,11 +191,16 @@ const stats = computed(() => {
       label: t('adminScreens.adminMasters.studentsStat'),
       value: countText(m.students_count),
     },
-    {
-      key: 'payout',
-      label: t('adminScreens.adminMasters.toWithdrawStat'),
-      value: payoutText(m.available_cents),
-    },
+    // The payout balance is the payments option's.
+    ...(isOptionEnabled('payments')
+      ? [
+          {
+            key: 'payout',
+            label: t('adminScreens.adminMasters.toWithdrawStat'),
+            value: payoutText(m.available_cents),
+          },
+        ]
+      : []),
   ]
 })
 

@@ -17,6 +17,26 @@ describe('consoleNavGroups', () => {
     ])
   })
 
+  it('drops Finance without the payments option, and nothing else with it', () => {
+    const groups = consoleNavGroups((option) => option !== 'payments')
+
+    expect(groups.flatMap((g) => g.modules.map((m) => m.key))).toEqual([
+      'dashboard',
+      'masters',
+      'users',
+      'schools',
+      'practices',
+      'catalog',
+      'moderation',
+      'support',
+      'analytics',
+      'mail',
+      'settings',
+    ])
+    // The group goes with its only module.
+    expect(groups.map((g) => g.key)).not.toContain('money')
+  })
+
   it('drops the module of an option the instance does not have', () => {
     const groups = consoleNavGroups((option) => option !== 'schools')
 

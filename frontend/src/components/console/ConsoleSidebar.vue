@@ -178,7 +178,8 @@ function toUserMode(): void {
 .console-sidebar__brand-sub,
 .console-sidebar__caption {
   font-size: var(--velo-fs-12);
-  color: var(--velo-text-muted);
+  /* The menu is glass over the page: page-text ink, as the crumbs. */
+  color: var(--velo-text-on-bg-muted);
 }
 
 /* On the white card the muted color is under 4.5:1; secondary is the
@@ -195,6 +196,10 @@ function toUserMode(): void {
   gap: var(--space-1);
   min-height: 0;
   overflow-y: auto;
+  /* A menu taller than the window scrolls; the fade over the last 12px says
+     there is more below. The padding keeps a menu that fits clear of it. */
+  padding-bottom: var(--space-3);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--space-3)), transparent);
 }
 
 .console-sidebar__group {
@@ -350,6 +355,72 @@ function toUserMode(): void {
   .console-sidebar__me {
     justify-content: center;
     padding: var(--space-2) 0;
+  }
+}
+
+/* A laptop window is about 780px tall once the browser chrome is out: the
+   twelve modules, the captions and the footer must all show without
+   scrolling the menu (an item below the fold is not found). The menu gets
+   denser as the window gets lower, three steps. Last in the file, so it wins
+   over the icon rail's sizes. */
+@media (max-height: 900px) {
+  .console-sidebar {
+    gap: var(--space-1);
+    padding-top: var(--space-4);
+  }
+
+  .console-sidebar__brand {
+    padding-bottom: var(--space-2);
+  }
+
+  .console-sidebar__caption {
+    padding-top: var(--space-2);
+  }
+
+  .console-sidebar__item {
+    min-height: 32px;
+  }
+
+  .console-sidebar__footer {
+    padding-top: var(--space-1);
+  }
+
+  .console-sidebar__me {
+    margin-top: var(--space-1);
+    padding-top: var(--space-1);
+    padding-bottom: var(--space-1);
+  }
+}
+
+@media (max-height: 820px) {
+  .console-sidebar__caption {
+    padding-top: var(--space-1);
+  }
+
+  .console-sidebar__item {
+    min-height: 30px;
+  }
+}
+
+/* A very low window: the captions give way to the dividers of the icon rail
+   (the captions stay for a screen reader). */
+@media (max-height: 740px) {
+  .console-sidebar__caption {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .console-sidebar__group + .console-sidebar__group {
+    padding-top: var(--space-1);
+    border-top: 1px solid var(--velo-border-light);
+  }
+
+  .console-sidebar__item {
+    min-height: 28px;
   }
 }
 </style>

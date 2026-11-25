@@ -53,8 +53,9 @@
           t('common.retry')
         }}</VButton>
       </OverviewEmpty>
-      <div v-else class="dashboard__tiles">
+      <div v-else class="dashboard__tiles" :style="{ '--dashboard-tiles': tileCount }">
         <FigureTile
+          v-if="paymentsEnabled"
           :label="t('console.dashboard.figures.revenue')"
           :value="revenueText"
           :delta="overview?.revenue_delta_pct"
@@ -96,6 +97,7 @@ import { t, getLocale } from '@/locales'
 import { computed, useId } from 'vue'
 import { useQuery } from '@pinia/colada'
 import { VButton } from '@/components/ui'
+import { isOptionEnabled } from '@/platform/instance'
 import ConsoleCard from '@/components/console/ConsoleCard.vue'
 import ConsolePage from '@/components/console/ConsolePage.vue'
 import ConsoleLoading from '@/components/console/content/ConsoleLoading.vue'
@@ -136,6 +138,11 @@ const overview = computed(() => figures.data.value)
 function countText(count: number | undefined): string {
   return count === undefined ? '—' : formatCount(count)
 }
+// The revenue figure is the payments option's: without it the tile is not there.
+const paymentsEnabled = isOptionEnabled('payments')
+// Four tiles with the revenue one, three without: the row fills its width.
+const tileCount = paymentsEnabled ? 4 : 3
+
 const revenueText = computed(() =>
   overview.value === null
     ? '—'
@@ -194,7 +201,7 @@ const engagementRows = computed<EngagementRow[]>(() =>
 
 .dashboard__tiles {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--dashboard-tiles, 4), minmax(0, 1fr));
   gap: var(--space-4);
 }
 
