@@ -605,6 +605,43 @@ describe('ConsoleDashboardView: today', () => {
     )
   })
 
+  /** `count` practices of today, five minutes apart from 10:05Z, newest first as the API lists them. */
+  function busyDay(count: number): AdminPracticeListItem[] {
+    return Array.from({ length: count }, (_, i) =>
+      practice({
+        id: `p_today_${i}`,
+        title: `Практика ${i}`,
+        scheduled_at: new Date(Date.UTC(2026, 10, 24, 10, 5 + 5 * i)).toISOString(),
+      }),
+    ).reverse()
+  }
+
+  it('a busy day is listed whole, past one page of practices (FE-260)', async () => {
+    upcoming = [
+      practice({ id: 'p_tomorrow', scheduled_at: '2026-11-25T07:00:00Z' }),
+      ...busyDay(35),
+    ]
+    await mount()
+
+    const titles = todayTitles()
+    expect(titles).toHaveLength(35)
+    expect(titles[0]).toContain('Практика0')
+    expect(titles[34]).toContain('Практика34')
+    expect(norm(host?.querySelector('[data-testid="today-card"]')?.textContent)).toContain(
+      'ещё35практик',
+    )
+  })
+
+  it('a day past the read cap says "N+", not a count that looks whole (FE-260)', async () => {
+    upcoming = busyDay(120)
+    await mount()
+
+    expect(todayTitles()).toHaveLength(100)
+    expect(norm(host?.querySelector('[data-testid="today-card"]')?.textContent)).toContain(
+      'ещё100+практик',
+    )
+  })
+
   it('says so when no practice is left today', async () => {
     upcoming = [practice({ id: 'p_tomorrow', scheduled_at: '2026-11-25T07:00:00Z' })]
     await mount()

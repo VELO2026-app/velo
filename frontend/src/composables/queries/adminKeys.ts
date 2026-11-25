@@ -36,6 +36,8 @@ export const adminKeys = {
   revenueAll: () => ['admin', 'metric', { kind: 'revenue' }] as const,
   /** `GET /admin/practices?scope=&limit=&offset=` -- one page of the platform's practices (the web console). */
   practicesPage: (scope: string, page: number) => ['admin', 'practices', { scope, page }] as const,
+  /** The practices still ahead today, every page of them (the dashboard's "Today"). Under the practices prefix. */
+  practicesToday: () => ['admin', 'practices', { scope: 'upcoming', today: true }] as const,
   /** Prefix of every platform practices list. */
   practicesAll: () => ['admin', 'practices'] as const,
   /** `GET /admin/practices/{id}` -- one practice with its roster. */

@@ -491,6 +491,28 @@ describe('ConsoleSupportView: moving a ticket on', () => {
     expect(byId('ticket-taker')?.textContent).toBe('Взял: Olga')
   })
 
+  it('offers every admin for a hand-over, past one page of them (FE-260)', async () => {
+    const admins = Array.from({ length: 130 }, (_, i) => ({
+      id: `a_${i}`,
+      first_name: `Admin${i}`,
+      last_name: null,
+    }))
+    getUsersList.mockImplementation(async (_role, limit = 100, offset = 0) => ({
+      items: admins.slice(offset, offset + limit),
+      total: admins.length,
+      limit,
+      offset,
+    }))
+    await mount('/admin/support?tab=mine&ticket=t_mine_0002')
+
+    await click(button('Назначить'))
+
+    const offered = Array.from(document.body.querySelectorAll('.v-menu-row'))
+    expect(offered).toHaveLength(130)
+    expect(offered.at(-1)?.textContent?.trim()).toBe('Admin129')
+    expect(getUsersList.mock.calls.map(([, , offset]) => offset)).toEqual([0, 100])
+  })
+
   it('gives a held ticket back to the pool', async () => {
     await mount('/admin/support?tab=mine&ticket=t_mine_0002')
 
@@ -545,7 +567,12 @@ describe('ConsoleSupportView: the person', () => {
 
     await click(button('История обращений'))
 
-    expect(supportApi.getAdminSupportMessages).toHaveBeenCalledWith('h_0003', 100, undefined)
+    expect(supportApi.getAdminSupportMessages).toHaveBeenCalledWith(
+      'h_0003',
+      expect.any(Number),
+      undefined,
+      expect.any(AbortSignal),
+    )
     expect(feedText()).toContain('An older talk before tickets')
   })
 })
@@ -720,36 +747,97 @@ describe('ConsoleSupportView: statistics', () => {
 })
 
 describe('ConsoleSupportView: a long conversation', () => {
-  it('shows every message, the oldest too, however many pages the feed takes', async () => {
-    server.feeds.t_free_0001 = Array.from({ length: 230 }, (_, i) =>
-      message('t_free_0001', {
+  /** `count` messages of the free ticket, oldest first, a minute apart. */
+  function longFeed(count: number, from = 0): SupportMessage[] {
+    return Array.from({ length: count }, (_, n) => {
+      const i = from + n
+      return message('t_free_0001', {
         id: `m_long_${i}`,
         body: `Message number ${i}`,
         created_at: DateTime.fromISO('2026-11-20T10:00:00Z').plus({ minutes: i }).toISO() ?? '',
-      }),
+      })
+    })
+  }
+  function bubbles(): string[] {
+    return Array.from(byId('ticket-detail')?.querySelectorAll('.bubble__body') ?? []).map(
+      (el) => el.textContent?.trim() ?? '',
     )
+  }
+  function cursorsRead(): (string | undefined)[] {
+    return vi
+      .mocked(supportApi.getAdminSupportMessages)
+      .mock.calls.filter(([threadId]) => threadId === 't_free_0001')
+      .map(([, , cursor]) => cursor)
+  }
+  async function askAgain(): Promise<void> {
+    useQueryCache()
+      .invalidateQueries({ key: adminKeys.supportMessages('t_free_0001') as never })
+      .catch(() => {})
+    await flush()
+  }
+
+  it('shows every message in order, the oldest first, across the pages it takes', async () => {
+    server.feeds.t_free_0001 = longFeed(230)
     await mount()
 
-    const text = byId('ticket-detail')?.textContent ?? ''
-    expect(text).toContain('Message number 0')
-    expect(text).toContain('Message number 229')
-    expect(vi.mocked(supportApi.getAdminSupportMessages).mock.calls).toContainEqual([
-      't_free_0001',
-      100,
-      '200',
+    const shown = bubbles()
+    expect(shown).toEqual(longFeed(230).map((m) => m.body))
+    // The pages meet between 129 and 130 (the API reads newest first).
+    expect(shown.slice(128, 132)).toEqual([
+      'Message number 128',
+      'Message number 129',
+      'Message number 130',
+      'Message number 131',
     ])
+    expect(cursorsRead()).toEqual([undefined, '100', '200'])
+  })
+
+  it('a later read takes the newest page only and joins it to what is held', async () => {
+    server.feeds.t_free_0001 = longFeed(230)
+    await mount()
+    vi.mocked(supportApi.getAdminSupportMessages).mockClear()
+
+    server.feeds.t_free_0001 = [...longFeed(230), ...longFeed(2, 230)]
+    await askAgain()
+
+    expect(cursorsRead()).toEqual([undefined])
+    const shown = bubbles()
+    expect(shown).toHaveLength(232)
+    expect(shown[0]).toBe('Message number 0')
+    expect(shown.slice(-2)).toEqual(['Message number 230', 'Message number 231'])
+  })
+
+  it('reads the whole feed again when more came than one page holds', async () => {
+    server.feeds.t_free_0001 = longFeed(50)
+    await mount()
+    vi.mocked(supportApi.getAdminSupportMessages).mockClear()
+
+    server.feeds.t_free_0001 = longFeed(200)
+    await askAgain()
+
+    expect(cursorsRead()).toEqual([undefined, undefined, '100'])
+    expect(bubbles()).toEqual(longFeed(200).map((m) => m.body))
   })
 })
 
 describe('ConsoleSupportView: a feed whose cursor repeats', () => {
   it('stops reading at the repeated cursor and still shows what came', async () => {
-    vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(async (threadId) => ({
-      messages: [message(threadId, { body: 'Stuck page' })],
-      next_cursor: 'same',
-    }))
+    vi.mocked(supportApi.getAdminSupportMessages).mockImplementation(
+      async (threadId, _limit, cursor) => ({
+        messages: [
+          message(threadId, {
+            id: `m_stuck_${cursor ?? 'first'}`,
+            body: `Page ${cursor ?? 'first'}`,
+          }),
+        ],
+        next_cursor: 'same',
+      }),
+    )
     await mount()
 
-    expect(byId('ticket-detail')?.textContent).toContain('Stuck page')
+    const text = byId('ticket-detail')?.textContent ?? ''
+    expect(text).toContain('Page first')
+    expect(text).toContain('Page same')
     const reads = vi
       .mocked(supportApi.getAdminSupportMessages)
       .mock.calls.filter(([threadId]) => threadId === 't_free_0001')

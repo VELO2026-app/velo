@@ -216,10 +216,13 @@ describe('ConsoleMastersView', () => {
   })
 
   it('cuts nothing: past one page the pager reaches every master (FE-260)', async () => {
+    const everyone = Array.from({ length: 130 }, (_, i) =>
+      master({ id: `m_${i + 1}`, first_name: `Master${i + 1}`, last_name: null }),
+    )
     vi.mocked(adminApi.getMastersList).mockImplementation(
-      async (status, limit = 100, offset = 0) => ({
-        items: limit === 1 ? [] : (BY_STATUS[status ?? 'all'] ?? []),
-        total: 130,
+      async (_status, limit = 100, offset = 0) => ({
+        items: limit === 1 ? [] : everyone.slice(offset, offset + limit),
+        total: everyone.length,
         limit,
         offset,
       }),
@@ -232,7 +235,9 @@ describe('ConsoleMastersView', () => {
 
     pages().at(-1)?.click()
 
-    await vi.waitFor(() => expect(adminApi.getMastersList).toHaveBeenCalledWith(undefined, 20, 120))
+    await vi.waitFor(() => expect(rows()[0]?.textContent).toContain('Master121'))
+    expect(rows()).toHaveLength(10)
+    expect(rows().at(-1)?.textContent).toContain('Master130')
     expect(router.currentRoute.value.query.page).toBe('7')
   })
 

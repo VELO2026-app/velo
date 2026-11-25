@@ -43,6 +43,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       patch: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
+      request: vi.fn(),
     },
   }
 })
@@ -196,6 +197,18 @@ describe('admin -- the thread routes keyed by the ticket id (unchanged)', () => 
     await getAdminSupportMessages('t_9')
 
     expect(api.get).toHaveBeenCalledWith(`${S}/threads/t_9/messages?limit=50`)
+  })
+
+  it('getAdminSupportMessages with a signal reads one page by its cursor, cancellable', async () => {
+    const { signal } = new AbortController()
+    await getAdminSupportMessages('t_9', 100, 'c_2', signal)
+
+    expect(api.request).toHaveBeenCalledWith(
+      'GET',
+      `${S}/threads/t_9/messages?limit=100&cursor=c_2`,
+      { signal },
+    )
+    expect(api.get).not.toHaveBeenCalled()
   })
 
   it('sendAdminSupportReply POSTs {body} under the attempt key', async () => {

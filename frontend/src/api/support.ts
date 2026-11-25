@@ -334,17 +334,20 @@ export function spamWithinRetention(statusChangedAt: string, now: number = Date.
 
 /** A support thread's feed, newest-first: a ticket, or a person's history.
  *  Read access is universal for admins -- no claim required. 404s if
- *  `threadId` does not name a known support thread. */
+ *  `threadId` does not name a known support thread. A `signal` lets the
+ *  caller drop a read it no longer needs (the request is then not shared). */
 export function getAdminSupportMessages(
   threadId: string,
   limit = 50,
   cursor?: string,
+  signal?: AbortSignal,
 ): Promise<SupportMessageList> {
   const qs = new URLSearchParams({ limit: String(limit) })
   if (cursor) qs.set('cursor', cursor)
-  return api.get<SupportMessageList>(
-    path`/api/v1/support/threads/${threadId}/messages?${raw(qs.toString())}`,
-  )
+  const url = path`/api/v1/support/threads/${threadId}/messages?${raw(qs.toString())}`
+  return signal
+    ? api.request<SupportMessageList>('GET', url, { signal })
+    : api.get<SupportMessageList>(url)
 }
 
 /**

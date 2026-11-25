@@ -646,6 +646,7 @@
       "today": {
         "title": "Today",
         "remaining": "{n} practice left | {n} practices left",
+        "remainingMore": "{n}+ practices left",
         "all": "All practices",
         "loadFailed": "Failed to load practices",
         "empty": "No more practices today",
