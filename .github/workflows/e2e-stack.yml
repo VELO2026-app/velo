@@ -50,7 +50,7 @@ on:
     inputs:
       projects:
         type: string
-        default: sweep sweep-layout sweep-webkit
+        default: sweep sweep-layout sweep-webkit sweep-console@velo-brand sweep-console@goodo-brand
 
 permissions:
   contents: read
@@ -83,7 +83,7 @@ jobs:
       - id: split
         env:
           # The schedule has no inputs: both engines and the layout sweep.
-          PROJECTS: ${{ inputs.projects || 'sweep sweep-layout sweep-webkit' }}
+          PROJECTS: ${{ inputs.projects || 'sweep sweep-layout sweep-webkit sweep-console@velo-brand sweep-console@goodo-brand' }}
         run: |
           # The `width: <n>` entries of LAYOUT_SIZES; the brands of the pins.
           LAYOUT_WIDTHS=$(grep -oE 'width: [0-9]+' frontend/e2e/support/layout-sizes.ts | awk '{print $2}' | tr '\n' ' ')

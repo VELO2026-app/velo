@@ -12,7 +12,7 @@ import { settle, trackApi } from '../support/settle'
 import { test } from '../support/test'
 import { fillPath } from '../sweep/routes'
 import { HAR_DIR, META_FILE, harOf, type HarMeta } from './har'
-import { ROLES, SCREENS, rowOf, VIEWPORT } from './screens'
+import { ROLES, SCREENS, rowOf, viewportOf, VIEWPORT } from './screens'
 
 const recordedAt = new Date().toISOString()
 const params = readParams()
@@ -42,6 +42,8 @@ for (const role of ROLES) {
         const path = fillPath(rowOf(screen), params)
         if (!path) throw new Error(`visual: no params for ${screen.name}`)
         paths[screen.name] = path
+        // The window of the replay: a web screen asks for other data in a laptop window.
+        await page.setViewportSize(viewportOf(screen))
         await page.goto(path)
         await settle(page, tracker)
       }

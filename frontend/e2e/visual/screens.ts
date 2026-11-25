@@ -41,6 +41,22 @@ export const SCREENS: VisualScreen[] = [
   { name: 'admin-dashboard', role: A },
   { name: 'admin-masters', role: A },
   { name: 'admin-reports', role: A },
+  // FE-275: the web console, every screen, in the laptop window of its sweep
+  // row (webViewport) -- on both skins, as the rest.
+  { name: 'console-dashboard', role: A },
+  { name: 'console-masters', role: A },
+  { name: 'console-masters-detail', role: A },
+  { name: 'console-users', role: A },
+  { name: 'console-schools', role: A },
+  { name: 'console-practices', role: A },
+  { name: 'console-practices-detail', role: A },
+  { name: 'console-catalog', role: A },
+  { name: 'console-moderation', role: A },
+  { name: 'console-support', role: A },
+  { name: 'console-finance', role: A },
+  { name: 'console-analytics', role: A },
+  { name: 'console-mail', role: A },
+  { name: 'console-settings', role: A },
 ]
 
 /** The sweep row of a screen; throws on a name the table does not have. */
@@ -55,5 +71,10 @@ export function rowOf(screen: VisualScreen): SweepVisit {
 /** The roles that have at least one screen: one HAR each. */
 export const ROLES: SweepRole[] = [...new Set(SCREENS.map((s) => s.role))]
 
-/** Viewport of every shot. */
+/** Viewport of a shot, unless the screen's sweep row names a window of its own. */
 export const VIEWPORT = { width: 390, height: 844 }
+
+/** The window a screen is shot (and recorded) in. */
+export function viewportOf(screen: VisualScreen): { width: number; height: number } {
+  return rowOf(screen).webViewport ?? VIEWPORT
+}

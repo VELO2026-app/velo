@@ -24,6 +24,9 @@
 //           fullscreen on an iPhone (safe-area insets) at one screen size
 //           each, judged by the layout detector as well (FE-240,
 //           docs/agents/e2e.md).
+//   sweep-console -- every /console screen in a desktop browser window of
+//           three sizes (e2e/support/console-sizes.ts), judged by the layout
+//           detector with the web window's rules (FE-275, docs/agents/e2e.md).
 //   sweep-webkit -- the same on WebKit (Telegram on iOS); nightly, or on demand.
 //
 // Every test of every project runs under the crash detector (e2e/support/test.ts).
@@ -41,6 +44,8 @@ const DIST = process.env.VISUAL_DIST ?? 'dist'
 const PREVIEW_URL = `http://127.0.0.1:${PORT}`
 const BASE_URL = process.env.E2E_BASE_URL ?? PREVIEW_URL
 const CI = !!process.env.CI
+// The console's layout sweep: its own project, not the phone projects' business.
+const CONSOLE_SPEC = 'sweep/console.spec.ts'
 
 export default defineConfig({
   testDir: 'e2e',
@@ -83,7 +88,16 @@ export default defineConfig({
     {
       name: 'sweep',
       testMatch: 'sweep/*.spec.ts',
+      testIgnore: CONSOLE_SPEC,
       dependencies: ['sweep-setup'],
+    },
+    {
+      // FE-275: the web console in a desktop window; the phone projects only
+      // show its device stub.
+      name: 'sweep-console',
+      testMatch: CONSOLE_SPEC,
+      dependencies: ['sweep-setup'],
+      use: { ...devices['Desktop Chrome'] },
     },
     // FE-240: the sweep as Telegram on an iPhone in fullscreen opens it
     // (safe-area insets), plus the layout detector -- one project per screen
@@ -117,6 +131,7 @@ export default defineConfig({
     {
       name: 'sweep-webkit',
       testMatch: 'sweep/*.spec.ts',
+      testIgnore: CONSOLE_SPEC,
       dependencies: ['sweep-setup'],
       use: { ...devices['iPhone 15'] },
     },

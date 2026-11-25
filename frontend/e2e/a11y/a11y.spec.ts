@@ -120,7 +120,7 @@ function registerRoutes(skin: SkinName, brand: Brand): void {
         expect(path, `no value for a parameter of ${entry.path} in params.json`).not.toBeNull()
         for (const allowance of entry.allow?.(role) ?? []) crashes.allow(allowance)
         await signIn(page, role)
-        if (entry.a11yViewport) await page.setViewportSize(entry.a11yViewport)
+        if (entry.webViewport) await page.setViewportSize(entry.webViewport)
         const tracker = trackApi(page)
 
         await page.goto(path!)

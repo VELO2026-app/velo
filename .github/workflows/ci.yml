@@ -641,11 +641,15 @@ jobs:
       # an iPhone, judged by the layout detector. On a PR (owner, 24.11): the
       # common size on both brand skins and the narrow one on gold; the rest
       # of the grid (430, and 320 on goodo) runs nightly (e2e-stack.yml).
+      # FE-275: the web console in desktop windows (1440, 1280, 768), on both
+      # brand skins -- the phone projects only show its device stub.
       projects: >-
         sweep
         sweep-layout-390@velo-brand
         sweep-layout-390@goodo-brand
         sweep-layout-320@velo-brand
+        sweep-console@velo-brand
+        sweep-console@goodo-brand
     # The brand skin packages may be private (the read key, as visual.yml).
     secrets:
       BRAND_REPO_TOKEN: ${{ secrets.BRAND_REPO_TOKEN }}
