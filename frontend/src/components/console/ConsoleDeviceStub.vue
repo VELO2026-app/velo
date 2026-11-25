@@ -56,12 +56,13 @@ const uiStore = useUiStore()
 const route = useRoute()
 // The address asked for (a bot's ticket link, say), so the browser opens
 // the same screen; the console's home when it is not a console address.
-const consoleUrl = computed(() =>
-  new URL(
-    route.fullPath.startsWith(`${CONSOLE_BASE}/`) ? route.fullPath : CONSOLE_BASE,
-    host.location.origin,
-  ).toString(),
-)
+// Path and query only: a hash may carry Telegram's signed launch data.
+const consoleUrl = computed(() => {
+  const asked = route.path.startsWith(`${CONSOLE_BASE}/`)
+    ? router.resolve({ path: route.path, query: route.query }).fullPath
+    : CONSOLE_BASE
+  return new URL(asked, host.location.origin).toString()
+})
 
 /** How long the copy button says what happened before it reads «Copy» again. */
 const COPY_FEEDBACK_MS = 2500

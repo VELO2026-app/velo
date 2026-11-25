@@ -122,8 +122,8 @@ export function consoleRoutes(): RouteRecordRaw[] {
     {
       path: '/console/:rest(.*)*',
       redirect: (to) => {
-        // A repeatable param is always an array here.
-        const rest = (to.params.rest as string[]).join('/')
+        // A repeatable param: an array, or '' for a bare /console.
+        const rest = [to.params.rest ?? []].flat().join('/')
         return { path: `${CONSOLE_BASE}/${rest}`, query: to.query, hash: to.hash }
       },
     },

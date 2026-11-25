@@ -575,6 +575,41 @@ describe('ConsoleMasterDetailView: the summary', () => {
   })
 })
 
+describe('ConsoleMasterDetailView: the way back', () => {
+  function backButton(): HTMLButtonElement {
+    const found = Array.from(root?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+      (b) => b.textContent?.trim() === 'К списку',
+    )
+    if (!found) throw new Error('no back button')
+    return found
+  }
+
+  afterEach(() => {
+    window.history.replaceState(null, '')
+  })
+
+  it('goes back to the console screen the card was opened from', async () => {
+    await mount()
+    window.history.replaceState({ back: '/admin/moderation?tab=complaints' }, '')
+    const goBack = vi.spyOn(router, 'back').mockImplementation(() => {})
+
+    backButton().click()
+
+    expect(goBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens the masters list after a direct link', async () => {
+    await mount()
+    window.history.replaceState({ back: null }, '')
+    const goBack = vi.spyOn(router, 'back')
+
+    backButton().click()
+    await vi.waitFor(() => expect(router.currentRoute.value.name).toBe('console-masters'))
+
+    expect(goBack).not.toHaveBeenCalled()
+  })
+})
+
 describe('ConsoleMasterDetailView: background refetch', () => {
   /** Colada asks the stale card again on focus and visibilitychange; the entry is asked the same way here. */
   const askAgain = () =>

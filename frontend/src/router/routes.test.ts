@@ -207,6 +207,8 @@ describe('route table: the console at /admin answers the old addresses (FE-272)'
     ['/admin/masters/invite', 'console-masters', {}],
     ['/admin/profile', 'console-dashboard', {}],
     ['/admin', 'console-dashboard', {}],
+    ['/console', 'console-dashboard', {}],
+    ['/console/', 'console-dashboard', {}],
   ])('%s -> %s', async (from, name, query) => {
     const landed = await resolveRedirects(from)
 
