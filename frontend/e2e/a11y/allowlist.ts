@@ -190,7 +190,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['master-practice-reviews'],
+    routes: ['master-analytics', 'master-practice-reviews'],
     detail: '#4c6589 on #b5eb88',
     skins: ['gold'],
     reason: REASON.GOLD_PRIMARY,
@@ -217,7 +217,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
   },
   {
     rule: 'color-contrast',
-    routes: ['master-practice-reviews'],
+    routes: ['master-analytics', 'master-practice-reviews'],
     detail: '#4c6589 on #f7cf17',
     skins: ['gold'],
     reason: REASON.GOLD_PRIMARY,
@@ -273,6 +273,7 @@ export const A11Y_ALLOWLIST: A11yAllowance[] = [
       'admin-checkin-rate',
       'admin-profile',
       'admin-report-detail',
+      'master-analytics',
       'master-edit-profile',
       'master-practice-reviews',
       'user-diary-activity-new',
