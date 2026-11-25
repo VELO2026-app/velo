@@ -60,6 +60,19 @@ vi.mock('@/composables/useRoleFreshness', () => ({
     refreshRoleIfStale(...args),
 }))
 
+// Where the app runs: roleRedirect sends a browser admin to /console and a
+// Telegram admin to /admin. Read through a getter, so each test can switch it.
+let platformName: 'telegram' | 'standalone' = 'standalone'
+vi.mock('@/platform', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/platform')>()
+  return {
+    ...actual,
+    get platform() {
+      return { ...actual.platform, name: platformName }
+    },
+  }
+})
+
 // Guards ignore (to, from, next) entirely at runtime -- call bare, matching
 // how vue-router actually invokes them. NavigationGuardWithThis's declared
 // 3-required-param signature is a vue-router typing convenience, not a real
@@ -100,6 +113,7 @@ function setAuthUser(overrides: Partial<UserResponse> & Record<string, unknown> 
 
 describe('router/guards', () => {
   beforeEach(() => {
+    platformName = 'standalone'
     setActivePinia(createPinia())
     resetAuthState()
     sessionStorage.clear()
@@ -116,10 +130,17 @@ describe('router/guards', () => {
   })
 
   describe('roleRedirect', () => {
-    it('admin -> /admin/dashboard', async () => {
+    it('admin inside Telegram -> /admin/dashboard', async () => {
+      platformName = 'telegram'
       __setReadyForTest(true)
       setAuthUser({ role: 'admin' })
       expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
+    })
+
+    it('admin in a browser -> the web console', async () => {
+      __setReadyForTest(true)
+      setAuthUser({ role: 'admin' })
+      expect(await call(roleRedirect)).toEqual({ path: '/console' })
     })
 
     it('master -> /master/dashboard', async () => {
@@ -137,11 +158,11 @@ describe('router/guards', () => {
     it('after a browser sign-in: lands on the address opened before the login screen, once', async () => {
       __setReadyForTest(true)
       setAuthUser({ role: 'admin' })
-      loginDestination.value = '/console'
+      loginDestination.value = '/console/masters'
 
-      expect(await call(roleRedirect)).toBe('/console')
+      expect(await call(roleRedirect)).toBe('/console/masters')
       expect(loginDestination.value).toBeNull()
-      expect(await call(roleRedirect)).toEqual({ path: '/admin/dashboard' })
+      expect(await call(roleRedirect)).toEqual({ path: '/console' })
     })
 
     it('not signed in: the destination waits for the sign-in', async () => {

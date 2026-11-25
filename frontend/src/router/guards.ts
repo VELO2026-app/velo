@@ -49,6 +49,7 @@ import { refreshRoleIfStale } from '@/composables/useRoleFreshness'
 import type { UserRole } from '@/api/types'
 import { MASTER_APPLIED_KEY, masterRejectionSeenKey } from '@/utils/constants'
 import { isOptionEnabled, type OptionName } from '@/platform/instance'
+import { platform } from '@/platform'
 
 /**
  * The master-profile queries, imported on first use (FE-157): only the
@@ -134,7 +135,8 @@ function zoneDashboard(role: UserRole | null): { path: string } {
  * before the switch. Without the await, role is always null on first load.
  *
  * Browser sign-in: a signed-in session with a sign-in destination (useAuth.ts,
- * loginDestination) lands there first, once.
+ * loginDestination) lands there first, once. Without one, an admin in a
+ * browser goes to the web console (/console), not the mobile /admin.
  *
  * TD-F01: if pendingStartParam is set and parses to a route for this role,
  * redirect there instead of the dashboard
@@ -189,6 +191,10 @@ export const roleRedirect: NavigationGuardWithThis<undefined> = async () => {
   // to /user/dashboard, so a returning rejected applicant never saw the
   // screen the guard now permits.
   if (hasUnseenRejection(auth)) return { path: '/master/pending' }
+
+  // Owner ruling (FE-272, 25.11): in a browser the admin's home is the web
+  // console; the mobile /admin stays the admin's home inside Telegram.
+  if (auth.role === 'admin' && platform.name === 'standalone') return { path: '/console' }
 
   return zoneDashboard(auth.role)
 }
