@@ -552,6 +552,47 @@ describe('ConsoleCatalogView', () => {
       expect(field('Стиль').value).toBe('Метта-бхавана')
     })
 
+    it('Enter in the order field saves only the new order', async () => {
+      vi.mocked(taxonomyApi.updateTaxonomyStyle).mockImplementation(async (id, body) => {
+        const styles = (DIR_A.styles ?? []).map((s) => (s.id === id ? { ...s, ...body } : s))
+        catalog = [{ ...DIR_A, styles } as TaxonomyDirectionItem, DIR_B, DIR_C]
+        return styles[0] as TaxonomyStyleItem
+      })
+      await mountAndLoad()
+
+      await click(byLabel('Изменить стиль Метта'))
+      const order = field('Порядок')
+      type(order, '5')
+      await flush()
+      order.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await flush()
+
+      expect(taxonomyApi.updateTaxonomyStyle).toHaveBeenCalledWith('st_a2', { display_order: 5 })
+    })
+
+    it('a rejected add tells it and adds nothing', async () => {
+      vi.mocked(taxonomyApi.createTaxonomyStyle).mockRejectedValue(new Error('boom'))
+      await mountAndLoad()
+
+      await click(button('Добавить стиль'))
+      type(field('Название стиля'), 'Дзадзен')
+      await flush()
+      await click(byTestId('style-add-confirm'))
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось добавить стиль')
+      expect(styleRows()).toEqual(['Випассана #1 on', 'Метта #2 on'])
+    })
+
+    it('a failed visibility change tells it and keeps the style as it was', async () => {
+      vi.mocked(taxonomyApi.updateTaxonomyStyle).mockRejectedValue(new Error('boom'))
+      await mountAndLoad()
+
+      await click(byRoleLabel('Виден: Метта'))
+
+      expect(toastError).toHaveBeenCalledWith('Не удалось изменить видимость')
+      expect(styleRows()).toEqual(['Випассана #1 on', 'Метта #2 on'])
+    })
+
     it('is hidden with its visibility switch', async () => {
       vi.mocked(taxonomyApi.updateTaxonomyStyle).mockImplementation(async (id, body) => {
         const styles = (DIR_A.styles ?? []).map((s) => (s.id === id ? { ...s, ...body } : s))

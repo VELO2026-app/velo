@@ -3,7 +3,9 @@ import {
   DASH,
   countText,
   masterStatusLabel,
+  masterStatusTone,
   payoutText,
+  roleTone,
   tabOptions,
 } from '@/components/console/people/peopleTable'
 
@@ -46,5 +48,25 @@ describe('masterStatusLabel', () => {
 
   it('shows a status the console does not know as the server sent it', () => {
     expect(masterStatusLabel('on_hold')).toBe('on_hold')
+  })
+})
+
+describe('masterStatusTone and roleTone', () => {
+  it.each([
+    ['verified', 'success'],
+    ['pending', 'warning'],
+    ['rejected', 'error'],
+    ['suspended', 'error'],
+    ['something-new', 'muted'],
+  ])('master status %s reads as %s', (status, tone) => {
+    expect(masterStatusTone(status)).toBe(tone)
+  })
+
+  it.each([
+    ['admin', 'warning'],
+    ['master', 'success'],
+    ['user', 'muted'],
+  ])('role %s reads as %s', (role, tone) => {
+    expect(roleTone(role)).toBe(tone)
   })
 })
