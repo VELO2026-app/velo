@@ -260,7 +260,6 @@ const GOLDEN_ASSET_SHA256 = new Set([
   '2fd312a1724f49efee3d71e05ec18bf02d1b33feae09884a915ba07d8b6a629c', // favicon.svg
   '12c2dea232636ae1f050974f8674def76ec2a47b9c9cd814a1d8e7b5e94818bd', // fonts/marmelad-subset.woff2
   'f97d42bb38a286fc1223e93184cd329c94fb23e328a69ee8dbd88a4dafac8d01', // fonts/velo-marmelad-bold.woff2 (v0.3.0)
-  '2dabc9711af9c23e277ae6df0a84811ab2c1f09e18d1299946a232f3e4f96918', // fonts/velo-marmelad-light.woff2 (v0.3.0)
   '07bd8a58511bac33027e4ea03f3a1ea56454c433b9e7e3d06602761ef82cbce9', // fonts/velo-marmelad-medium.woff2 (v0.3.0)
   'bb4c065112d0ec075990a214eb3ccb33be655f49370daadc114cb37605c5ed43', // fonts/velo-marmelad-regular.woff2 (v0.3.0)
   'c5482fe8a177af4ff0536ae66bcc90263f4bc5e903a6f5fca34faa448bc43655', // icon-192.png
