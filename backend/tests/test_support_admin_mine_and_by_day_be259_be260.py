@@ -1,5 +1,6 @@
 # =============================================================================
-# VELO -- support: the admin console's list filter and statistics (BE-259, BE-260)
+# VELO -- support: the admin console's "mine" filter and statistics by day
+# (BE-259, BE-260)
 # =============================================================================
 # Band 71400-71439.
 #
@@ -7,13 +8,19 @@
 #
 #   1. "MINE" (BE-259): GET /support/tickets?claimed_by_me=true keeps the
 #      tickets the CALLER has taken -- the caller is the session's, so there
-#      is no id to ask another admin's tickets with -- and composes with the
-#      filters beside it.
+#      is no id to ask another admin's tickets with -- composes with the
+#      filters beside it, and pages by the list's own cursor.
 #   2. BY DAY (BE-260): GET /support/stats answers `by_day`, the period's
-#      tickets per calendar day of the ADMIN'S zone (oldest first, empty
-#      days at zero, spam out), which add up to `total`; a period past the
-#      cap lists only the days that have tickets; a stored zone name that is
-#      not a zone reads as UTC.
+#      tickets per calendar day of the ADMIN'S zone (oldest first, every day
+#      of the period listed, spam out), which add up to `total`; a period
+#      longer than 366 days is a 400; a stored zone name that is not one
+#      Postgres knows is made canonical, or read as UTC.
+#
+# Every ticket here is created in a past window of its own (March and
+# November 2020, a leap year for the period test), and every read names that
+# window through created_from / created_to: tickets other files leave in
+# the table are never in the answer, so the assertions are about this band
+# alone.
 #
 # Not here: the tab counts, the user's data in a ticket, the first-reply time
 # and "resolved in a day" of BE-259 / BE-260 -- they are not built yet.
@@ -74,25 +81,23 @@ async def _person(
 async def _ticket(
     db_session: AsyncSession,
     user_id: str,
+    created_at: datetime,
     *,
     status: str = "open",
-    created_at: datetime | None = None,
-    age_minutes: int = 0,
     claimed_by: str | None = None,
 ) -> UUID:
     thread_id = uuid4()
     pointer = SupportThread(comms_thread_id=thread_id, client_user_id=UUID(user_id))
     db_session.add(pointer)
     await db_session.flush()
-    when = created_at or datetime.now(UTC) - timedelta(minutes=age_minutes)
     db_session.add(
         SupportTicket(
             support_thread_id=pointer.id,
             topic="technical",
             category=TOPICS["technical"].category,
             status=status,
-            status_changed_at=when,
-            created_at=when,
+            status_changed_at=created_at,
+            created_at=created_at,
             claimed_by_user_id=UUID(claimed_by) if claimed_by else None,
             version=1,
         )
@@ -101,9 +106,23 @@ async def _ticket(
     return thread_id
 
 
+def _utc(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> datetime:
+    return datetime(year, month, day, hour, minute, tzinfo=UTC)
+
+
 # ---------------------------------------------------------------------------
 # 1. "Mine"
 # ---------------------------------------------------------------------------
+
+# The window every list read of this band names.
+MARCH = {
+    "created_from": _utc(2020, 3, 1).isoformat(),
+    "created_to": _utc(2020, 3, 2).isoformat(),
+}
+
+
+def _march(minute: int) -> datetime:
+    return _utc(2020, 3, 1, 10, minute)
 
 
 class TestClaimedByMe:
@@ -115,17 +134,17 @@ class TestClaimedByMe:
         user = await _person(client, db_session, 3)
         uid = user["user"]["id"]
         mine_id, other_id = me["user"]["id"], other["user"]["id"]
-        mine_open = await _ticket(db_session, uid, claimed_by=mine_id, age_minutes=40)
+        mine_open = await _ticket(db_session, uid, _march(10), claimed_by=mine_id)
         mine_done = await _ticket(
-            db_session, uid, claimed_by=mine_id, status="resolved", age_minutes=30
+            db_session, uid, _march(20), claimed_by=mine_id, status="resolved"
         )
-        theirs = await _ticket(db_session, uid, claimed_by=other_id, age_minutes=20)
-        nobodys = await _ticket(db_session, uid, age_minutes=10)
+        theirs = await _ticket(db_session, uid, _march(30), claimed_by=other_id)
+        nobodys = await _ticket(db_session, uid, _march(40))
 
         async def ids(who: dict, **params) -> list[str]:
             resp = await client.get(
                 TICKETS_URL,
-                params=params,
+                params={**MARCH, **params},
                 headers=auth_headers(who["session_token"]),
             )
             assert resp.status_code == 200, resp.text
@@ -140,16 +159,41 @@ class TestClaimedByMe:
         # Beside the other filters: "mine, and still open".
         assert await ids(me, claimed_by_me="true", status="open") == [str(mine_open)]
 
-    async def test_the_flag_is_for_admins_only(
+    async def test_the_flag_pages_by_the_lists_own_cursor(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        user = await _person(client, db_session, 4)
-        resp = await client.get(
-            TICKETS_URL,
-            params={"claimed_by_me": "true"},
-            headers=auth_headers(user["session_token"]),
-        )
-        assert resp.status_code == 403
+        """One row a page: the cursor walks the admin's own tickets and only
+        them, none lost between pages, none of another admin's in them."""
+        me = await _person(client, db_session, 4, admin=True)
+        other = await _person(client, db_session, 5, admin=True)
+        user = await _person(client, db_session, 6)
+        uid = user["user"]["id"]
+        mine = [
+            await _ticket(db_session, uid, _march(m), claimed_by=me["user"]["id"])
+            for m in (10, 30, 50)
+        ]
+        await _ticket(db_session, uid, _march(20), claimed_by=other["user"]["id"])
+        await _ticket(db_session, uid, _march(40))
+        headers = auth_headers(me["session_token"])
+
+        seen: list[str] = []
+        cursor = None
+        for _ in range(10):  # a bound, not an expectation: three pages end it
+            params = {
+                **MARCH,
+                "claimed_by_me": "true",
+                "limit": 1,
+                **({"cursor": cursor} if cursor else {}),
+            }
+            resp = await client.get(TICKETS_URL, params=params, headers=headers)
+            body = resp.json()
+            assert len(body["tickets"]) == 1
+            seen += [t["id"] for t in body["tickets"]]
+            cursor = body["next_cursor"]
+            if cursor is None:
+                break
+
+        assert seen == [str(t) for t in reversed(mine)]
 
 
 # ---------------------------------------------------------------------------
@@ -157,8 +201,8 @@ class TestClaimedByMe:
 # ---------------------------------------------------------------------------
 
 
-def _utc(day: int, hour: int, minute: int = 0, *, month: int = 11) -> datetime:
-    return datetime(2026, month, day, hour, minute, tzinfo=UTC)
+def _nov(day: int, hour: int, minute: int = 0) -> datetime:
+    return _utc(2020, 11, day, hour, minute)
 
 
 class TestStatsByDay:
@@ -170,27 +214,27 @@ class TestStatsByDay:
         has its line; the period's own edges (inclusive start, exclusive
         end) and a spam ticket stay out of the counts."""
         admin = await _person(
-            client, db_session, 5, admin=True, timezone="Asia/Tokyo"
+            client, db_session, 7, admin=True, timezone="Asia/Tokyo"
         )
-        user = await _person(client, db_session, 6)
+        user = await _person(client, db_session, 8)
         uid = user["user"]["id"]
         for created_at, status in (
-            (_utc(10, 14, 59), "open"),  # a minute before the period
-            (_utc(10, 15, 0), "open"),  # 11th 00:00 -- the first instant of day one
-            (_utc(11, 14, 59), "resolved"),  # 11th 23:59
-            (_utc(12, 16, 0), "open"),  # 13th 01:00
-            (_utc(13, 14, 59), "open"),  # 13th 23:59
-            (_utc(13, 15, 0), "rejected"),  # 14th 00:00
-            (_utc(13, 20, 0), "spam"),  # 14th, but spam: not counted
-            (_utc(14, 15, 0), "open"),  # 15th 00:00 -- created_to is exclusive
+            (_nov(10, 14, 59), "open"),  # a minute before the period
+            (_nov(10, 15, 0), "open"),  # 11th 00:00 -- the first instant of day one
+            (_nov(11, 14, 59), "resolved"),  # 11th 23:59
+            (_nov(12, 16, 0), "open"),  # 13th 01:00
+            (_nov(13, 14, 59), "open"),  # 13th 23:59
+            (_nov(13, 15, 0), "rejected"),  # 14th 00:00
+            (_nov(13, 20, 0), "spam"),  # 14th, but spam: not counted
+            (_nov(14, 15, 0), "open"),  # 15th 00:00 -- created_to is exclusive
         ):
-            await _ticket(db_session, uid, status=status, created_at=created_at)
+            await _ticket(db_session, uid, created_at, status=status)
 
         resp = await client.get(
             STATS_URL,
             params={
-                "created_from": _utc(10, 15, 0).isoformat(),
-                "created_to": _utc(14, 15, 0).isoformat(),
+                "created_from": _nov(10, 15).isoformat(),
+                "created_to": _nov(14, 15).isoformat(),
             },
             headers=auth_headers(admin["session_token"]),
         )
@@ -199,47 +243,63 @@ class TestStatsByDay:
         stats = resp.json()
         assert stats["period"]["timezone"] == "Asia/Tokyo"
         assert stats["by_day"] == [
-            {"date": "2026-11-11", "tickets": 2},
-            {"date": "2026-11-12", "tickets": 0},
-            {"date": "2026-11-13", "tickets": 2},
-            {"date": "2026-11-14", "tickets": 1},
+            {"date": "2020-11-11", "tickets": 2},
+            {"date": "2020-11-12", "tickets": 0},
+            {"date": "2020-11-13", "tickets": 2},
+            {"date": "2020-11-14", "tickets": 1},
         ]
         assert stats["total"] == sum(d["tickets"] for d in stats["by_day"]) == 5
         assert stats["spam"] == 1
 
-    async def test_a_period_past_the_cap_lists_only_days_with_tickets(
-        self, client: AsyncClient, db_session: AsyncSession
+    @pytest.mark.parametrize(
+        "days,status",
+        [(366, 200), (367, 400)],
+    )
+    async def test_a_period_longer_than_366_days_is_refused(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        days: int,
+        status: int,
     ) -> None:
-        """Four hundred days are over the cap of filled days: the answer is
-        the days that have tickets, not four hundred lines."""
-        admin = await _person(client, db_session, 7, admin=True)
-        user = await _person(client, db_session, 8)
+        """The edge of the cap: 366 days are answered -- every one of them
+        listed, the ends with their tickets -- 367 are a 400."""
+        admin = await _person(client, db_session, 9, admin=True)
+        user = await _person(client, db_session, 10)
         uid = user["user"]["id"]
-        for day in (3, 1, 1):
-            await _ticket(
-                db_session, uid, created_at=datetime(2025, 6, day, 12, tzinfo=UTC)
-            )
+        start = _utc(2020, 1, 1)
+        await _ticket(db_session, uid, start)
+        await _ticket(db_session, uid, _utc(2020, 12, 31, 23, 59))
 
         resp = await client.get(
             STATS_URL,
             params={
-                "created_from": "2025-01-01T00:00:00+00:00",
-                "created_to": "2026-03-01T00:00:00+00:00",
+                "created_from": start.isoformat(),
+                "created_to": (start + timedelta(days=days)).isoformat(),
             },
             headers=auth_headers(admin["session_token"]),
         )
 
-        assert resp.status_code == 200, resp.text
-        assert resp.json()["by_day"] == [
-            {"date": "2025-06-01", "tickets": 2},
-            {"date": "2025-06-03", "tickets": 1},
-        ]
+        assert resp.status_code == status, resp.text
+        if status == 200:
+            by_day = resp.json()["by_day"]
+            assert len(by_day) == 366
+            assert by_day[0] == {"date": "2020-01-01", "tickets": 1}
+            assert by_day[-1] == {"date": "2020-12-31", "tickets": 1}
+            assert sum(d["tickets"] for d in by_day) == resp.json()["total"] == 2
 
     @pytest.mark.parametrize(
-        "stored,counted_in",
+        "stored,counted_in,dates",
         [
-            ("Asia/Katmandu", "Asia/Kathmandu"),  # an old browser spelling
-            ("Not/AZone", "UTC"),  # not a zone: UTC, not a 500
+            # +05:45: 1 November 00:00 UTC is 05:45 on the 1st, and the last
+            # instant before 3 November 00:00 UTC is 05:44 on the 3rd.
+            (
+                "Asia/Katmandu",  # an old browser spelling
+                "Asia/Kathmandu",
+                ["2020-11-01", "2020-11-02", "2020-11-03"],
+            ),
+            # Not a zone: UTC, not a 500 -- and two days, not three.
+            ("Not/AZone", "UTC", ["2020-11-01", "2020-11-02"]),
         ],
     )
     async def test_a_stored_zone_name_is_made_one_postgres_knows(
@@ -248,18 +308,19 @@ class TestStatsByDay:
         db_session: AsyncSession,
         stored: str,
         counted_in: str,
+        dates: list[str],
     ) -> None:
-        admin = await _person(client, db_session, 9, admin=True, timezone=stored)
+        admin = await _person(client, db_session, 11, admin=True, timezone=stored)
 
         resp = await client.get(
             STATS_URL,
             params={
-                "created_from": "2026-11-01T00:00:00+00:00",
-                "created_to": "2026-11-03T00:00:00+00:00",
+                "created_from": _utc(2020, 11, 1).isoformat(),
+                "created_to": _utc(2020, 11, 3).isoformat(),
             },
             headers=auth_headers(admin["session_token"]),
         )
 
         assert resp.status_code == 200, resp.text
         assert resp.json()["period"]["timezone"] == counted_in
-        assert len(resp.json()["by_day"]) >= 2
+        assert [d["date"] for d in resp.json()["by_day"]] == dates

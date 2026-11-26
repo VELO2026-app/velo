@@ -1492,10 +1492,10 @@ def _rating_figures(count: int, total: int | None, top: int | None) -> dict:
     }
 
 
-# The longest period whose days the statistics fill in, empty ones included
-# (BE-260). A longer one lists only the days that have tickets: the request
-# names both edges, and one that asks for a century must not build 36500 rows.
-_MAX_FILLED_DAYS = 366
+# The longest period the statistics answer (BE-260): the answer lists every
+# day of it, empty ones at zero, and a request that names both edges must not
+# be able to ask for a century of rows. A longer one is a 400.
+MAX_STATS_PERIOD = timedelta(days=366)
 
 
 def _stats_zone(name: str) -> str:
@@ -1518,8 +1518,8 @@ async def _tickets_by_day(
 ) -> list[dict[str, Any]]:
     """Tickets of the period per calendar day of `zone` (BE-260), oldest day
     first: the day a ticket was opened, spam not counted -- the same set as
-    `total`, so the days add up to it. A day with no tickets is listed with
-    zero when the period is at most _MAX_FILLED_DAYS days."""
+    `total`, so the days add up to it. Every day of the period is listed, a
+    day with no tickets at zero: one shape of answer, a continuous series."""
     local_day = func.date(func.timezone(zone, SupportTicket.created_at))
     counted: dict[date, int] = {
         day: count
@@ -1535,10 +1535,7 @@ async def _tickets_by_day(
     first = created_from.astimezone(local).date()
     # created_to is exclusive: the last instant of the period is just before it.
     last = (created_to - timedelta(microseconds=1)).astimezone(local).date()
-    if 0 <= (last - first).days < _MAX_FILLED_DAYS:
-        days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
-    else:
-        days = sorted(counted)
+    days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
     return [{"date": day.isoformat(), "tickets": counted.get(day, 0)} for day in days]
 
 
@@ -1547,7 +1544,7 @@ async def support_stats(
     *,
     created_from: datetime,
     created_to: datetime,
-    timezone: str = "UTC",
+    timezone: str,
 ) -> dict[str, Any]:
     """Support over a period of APPEALS -- tickets created in
     [created_from, created_to), the list's own date filter, so the
@@ -1560,13 +1557,20 @@ async def support_stats(
       total      -- the sum of the categories.
       by_day     -- (BE-260) the same tickets per calendar day, in the zone
                     the answer names (`period.timezone`: the admin's own),
-                    oldest day first; the days add up to `total`.
+                    oldest day first, every day of the period listed; the
+                    days add up to `total`.
       spam       -- the spam tickets of the period, one figure.
       resolvers  -- per admin a rating is about (rated_resolver), the same
                     rating figures, spam left out.
 
     History threads have no ticket and are not here (owner: statistics
     start with tickets).
+
+    `timezone` is the admin's own and is required, with no default: a
+    default would be UTC for every caller that forgot to decide (the rule of
+    core/periods.py).
+
+    A period longer than MAX_STATS_PERIOD (366 days) is a 400 (BadRequestError).
 
     SPAM THAT IS GONE STILL COUNTS (BE-162 delivery 2): the bin deletes a
     spam ticket after the retention and leaves a tombstone -- the date of
@@ -1575,6 +1579,10 @@ async def support_stats(
     the period's tombstones, by the date of the appeal like everything
     here.
     """
+    if created_to - created_from > MAX_STATS_PERIOD:
+        raise BadRequestError(
+            f"The period is longer than {MAX_STATS_PERIOD.days} days",
+        )
     in_period = (
         SupportTicket.created_at >= created_from,
         SupportTicket.created_at < created_to,

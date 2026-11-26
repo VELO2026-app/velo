@@ -243,8 +243,9 @@ async def stats(
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Support over the appeals of [created_from, created_to) -- see
-    service.support_stats. Both edges required, each with a time zone. The
-    days of `by_day` are the admin's own zone's days (BE-260)."""
+    service.support_stats. Both edges required, each with a time zone, at
+    most 366 days apart (400 otherwise). The days of `by_day` are the days of
+    the admin's own zone (BE-260)."""
     _reject_actor_override(request)
     for name, value in (("created_from", created_from), ("created_to", created_to)):
         if value.tzinfo is None:
