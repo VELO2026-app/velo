@@ -61,6 +61,7 @@ const {
   cssHasDecl,
   evaluateMatrix,
   fanInFails,
+  fontPreloadProblems,
   missingTokens,
   MODULE_CHUNKS,
   normalizeDecl,
@@ -70,6 +71,11 @@ const {
 } = matrixModule as unknown as {
   assetCountFails(entries: FactsEntry[]): string[]
   fanInFails(cellNames: string[], entries: FactsEntry[]): string[]
+  fontPreloadProblems(
+    fonts: Array<{ file: string; weight: number | string; style: string }>,
+    headingWeight: number | null,
+    html: string,
+  ): string[]
   bundleHas(bundle: string, text: string): boolean
   bundleHasAllMoodIcons(bundle: string, set: Record<string, MoodNode>): boolean
   bundleHasAnyMoodIcon(bundle: string, set: Record<string, MoodNode>): boolean
@@ -544,6 +550,31 @@ describe('real-brand cells (FE-234)', () => {
     it('one icon of a skin in a core build is a leak; a core bundle without them is clean', () => {
       expect(leakOf('x="M2 2h2z"')).toEqual(['goodo-brand moodIcons'])
       expect(leakOf('x="M9 9h2z"')).toEqual([])
+    })
+  })
+
+  describe('the font preload set (FE-278)', () => {
+    const face = (file: string, weight: number) => ({ file, weight, style: 'normal' })
+    const fonts = [
+      face('assets/fonts/r.woff2', 400),
+      face('assets/fonts/m.woff2', 500),
+      face('assets/fonts/b.woff2', 700),
+    ]
+    const link = (file: string) => `<link rel="preload" href="/skin/${file}" as="font" />`
+
+    it('Regular and the heading face, and nothing else, are the right set', () => {
+      const html = link('assets/fonts/r.woff2') + link('assets/fonts/m.woff2')
+      expect(fontPreloadProblems(fonts, 500, html)).toEqual([])
+    })
+
+    it('a missing due face and an extra face are both reported', () => {
+      expect(fontPreloadProblems(fonts, 500, link('assets/fonts/r.woff2'))).toEqual([
+        'no preload of assets/fonts/m.woff2 in index.html',
+      ])
+      const all = fonts.map((f) => link(f.file)).join('')
+      expect(fontPreloadProblems(fonts, 500, all)).toEqual([
+        'assets/fonts/b.woff2 is preloaded, but only the regular and heading faces should be',
+      ])
     })
   })
 

@@ -121,6 +121,40 @@ function resolveNumber(values, name, depth = 0) {
   return /^\d+(\.\d+)?$/.test(raw) ? Number(raw) : null
 }
 
+/** The numeric `normal` face the browser picks for `weight`: the exact one,
+ *  else (CSS font matching, simplified) the nearest heavier face from 500 up,
+ *  the nearest lighter one below that, and the other side if there is none.
+ *  @param {Array<{ weight: number | string, style: string }>} fonts
+ *  @param {number} weight */
+function faceFor(fonts, weight) {
+  const faces = fonts
+    .filter((font) => font.style === 'normal' && typeof font.weight === 'number')
+    .sort((a, b) => Number(a.weight) - Number(b.weight))
+  const exact = faces.find((font) => font.weight === weight)
+  if (exact) return exact
+  const heavier = faces.find((font) => Number(font.weight) > weight)
+  const lighter = [...faces].reverse().find((font) => Number(font.weight) < weight)
+  return weight >= 500 ? (heavier ?? lighter) : (lighter ?? heavier)
+}
+
+/** The faces of a package the page preloads (FE-278): Regular (400) and the
+ *  face of headings and buttons (`headingWeight`, the one token to move them
+ *  between Medium and Bold). The other faces load on demand through their
+ *  @font-face rule, when text of that weight is drawn. A package without such
+ *  a face (a single variable font, "200 800") preloads its first file. The ONE
+ *  rule: the build's index.html (platform/passport-html.ts) and the matrix
+ *  check (scripts/build-matrix.mjs) both read it from here.
+ *  @param {Array<{ weight: number | string, style: string }>} fonts
+ *  @param {number | null} headingWeight */
+export function preloadedFonts(fonts, headingWeight) {
+  const found = [400, headingWeight].flatMap((weight) => {
+    const face = weight === null ? undefined : faceFor(fonts, weight)
+    return face ? [face] : []
+  })
+  const unique = found.filter((face, at) => found.indexOf(face) === at)
+  return unique.length > 0 ? unique : fonts.slice(0, 1)
+}
+
 /** supportMark values: the logo set (the default) or the brand's app icon. */
 export const SUPPORT_MARKS = ['logo', 'icon']
 /** A support address: a plain local part, a domain with a dot. A closed

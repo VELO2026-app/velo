@@ -79,6 +79,7 @@ import {
   CORE_THEME_COLOR,
   SKIN_ASSETS,
   loadSkinPackage,
+  preloadedFonts,
   readGoldenTokens,
 } from './lib/skin-package.mjs'
 
@@ -506,14 +507,21 @@ function skinRecord(skin) {
   // The matrix packages are known-good fixtures: a null brand means the
   // package did not load, which loadSkinPackage reports in pkg.problems.
   if (pkg.brand === null) throw new Error(`${skin.label}: ${pkg.problems.join('; ')}`)
-  return { brand: pkg.brand, decls, files: pkg.files, moodIcons: pkg.moodIcons }
+  return {
+    brand: pkg.brand,
+    decls,
+    files: pkg.files,
+    moodIcons: pkg.moodIcons,
+    headingWeight: pkg.headingWeight,
+  }
 }
 
 /** Where the build must have put the package (FE-131): the fixed assets on
  *  /icons, assets/bg and assets/onboarding on /bg and /onboarding, byte for
- *  byte; dist/skin/ pruned to the fonts; every font behind an @font-face
- *  and a preload. Returns the problems, [] when the layout holds. */
-function skinLayout(source, files, brand, distDir, html, css) {
+ *  byte; dist/skin/ pruned to the fonts; every font behind an @font-face,
+ *  and a preload for exactly the faces preloadedFonts names (FE-278).
+ *  Returns the problems, [] when the layout holds. */
+function skinLayout(source, files, brand, headingWeight, distDir, html, css) {
   const problems = []
   const same = (a, b) => existsSync(b) && readFileSync(a).equals(readFileSync(b))
   // The logo set is optional (contract 2.1): only what the package ships.
@@ -548,8 +556,22 @@ function skinLayout(source, files, brand, distDir, html, css) {
     if (!shipped.includes(font.file)) problems.push(`dist/skin/${font.file} missing`)
     if (!css.includes(`/skin/${font.file}`))
       problems.push(`no @font-face for ${font.file} in dist CSS`)
-    if (!html.includes(`href="/skin/${font.file}"`))
-      problems.push(`no preload of ${font.file} in index.html`)
+  }
+  problems.push(...fontPreloadProblems(brand.fonts, headingWeight, html))
+  return problems
+}
+
+/** index.html preloads exactly the faces preloadedFonts names (FE-278): the
+ *  regular one and the one of headings and buttons -- not fewer, not more.
+ *  Returns the problems, [] when the set holds. */
+export function fontPreloadProblems(fonts, headingWeight, html) {
+  const due = preloadedFonts(fonts, headingWeight)
+  const problems = []
+  for (const font of fonts) {
+    const preloaded = html.includes(`href="/skin/${font.file}"`)
+    if (due.includes(font) && !preloaded) problems.push(`no preload of ${font.file} in index.html`)
+    if (!due.includes(font) && preloaded)
+      problems.push(`${font.file} is preloaded, but only the regular and heading faces should be`)
   }
   return problems
 }
@@ -573,7 +595,7 @@ function snapshot(cell, skins, goldenDecls, coreName) {
     ),
   }
   if (cell.skin) {
-    const { brand, decls, files, moodIcons } = skinRecord(cell.skin)
+    const { brand, decls, files, moodIcons, headingWeight } = skinRecord(cell.skin)
     facts.brandMissing = !bundleHas(js, brand.displayName)
     facts.supportEmailMissing =
       brand.supportEmail !== null && !bundleHasEmail(js, brand.supportEmail)
@@ -583,6 +605,7 @@ function snapshot(cell, skins, goldenDecls, coreName) {
       cell.skin.source,
       files,
       brand,
+      headingWeight,
       distDir,
       html,
       readAll(assetsDir, '.css'),

@@ -88,4 +88,8 @@ export function skinnable(path: string): boolean
 export function parseManifest(text: string): { fields?: Record<string, string>; error?: string }
 export function loadSkinPackage(dir: string, tokensDoc: unknown): LoadedSkinPackage
 export function isSkinPackage(dir: string): boolean
+export function preloadedFonts<F extends { weight: number | string; style: string }>(
+  fonts: F[],
+  headingWeight: number | null,
+): F[]
 export function skinCss(pkg: LoadedSkinPackage, urlBase?: string): string
