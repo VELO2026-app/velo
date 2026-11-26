@@ -132,6 +132,14 @@
           :title="t('masterScreens.masterSummary.allWell')"
           :description="t('masterScreens.masterSummary.attentionAppearHere')"
         />
+        <p v-if="!studentsComplete" class="summary__partial">
+          {{
+            t('masterScreens.masterSummary.checkedOf', {
+              shown: students.length,
+              total: studentsTotal,
+            })
+          }}
+        </p>
       </template>
     </div>
 
@@ -153,6 +161,7 @@ import { VCard, VAvatar, VLoader, VEmptyState, VButton } from '@/components/ui'
 import { IconMessages, IconWarning } from '@/components/icons'
 import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { getStudents, getMasterReviews } from '@/api/masters'
+import { useAllPages } from '@/composables/useAllPages'
 import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import type { StudentListItem, MasterReviewItem } from '@/api/types'
 
@@ -198,24 +207,18 @@ function goStudentFromReview(item: MasterReviewItem): void {
 }
 
 // -- Needs attention (i18n:masterScreens.masterSummary.needsAttention) — REAL
-//    (E5: GET /masters/me/students). Same source as
-//    MasterStudentsView; show only students flagged needs_attention. --
-const students = ref<StudentListItem[]>([])
-const attnLoading = ref(true)
-const attnError = ref('')
-
-async function loadStudents(): Promise<void> {
-  attnLoading.value = true
-  attnError.value = ''
-  try {
-    const res = await getStudents()
-    students.value = res.items
-  } catch {
-    attnError.value = t('common.tryAgain')
-  } finally {
-    attnLoading.value = false
-  }
-}
+//    (E5: GET /masters/me/students). Same source as MasterStudentsView,
+//    every page of it (FE-260: the first page alone missed students past
+//    it); show only students flagged needs_attention. --
+const {
+  items: students,
+  total: studentsTotal,
+  complete: studentsComplete,
+  loading: attnLoading,
+  failed: attnFailed,
+  load: loadStudents,
+} = useAllPages<StudentListItem>(getStudents, true)
+const attnError = computed(() => (attnFailed.value ? t('common.tryAgain') : ''))
 onMounted(() => {
   void loadStudents()
   void loadFeedbacks()
@@ -352,6 +355,14 @@ function openMessage(id: string, name: string): void {
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
+}
+
+.summary__partial {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--velo-fs-14);
+  color: var(--velo-text-secondary);
+  text-align: center;
 }
 
 .summary__attn-meta {

@@ -181,13 +181,21 @@ export function getMyWithdrawals(limit = 20, offset = 0): Promise<PaginatedWithd
 // =============================================================================
 
 /**
- * Fetch the master's students — everyone who attended their practices.
- * Paginated; search is applied client-side over the loaded page.
- * Only callable by users with role='master'.
+ * Fetch one page of the master's students — everyone who attended their
+ * practices. The screens read every page (utils/readAllPages.ts) and search
+ * client-side over them. Only callable by users with role='master'. A
+ * `signal` lets the caller drop a read it no longer needs (the request is
+ * then not shared).
  */
-export function getStudents(limit = 50, offset = 0): Promise<PaginatedStudentsResponse> {
-  const query = buildQuery({ limit, offset })
-  return api.get<PaginatedStudentsResponse>(`/api/v1/masters/me/students${query}`)
+export function getStudents(
+  limit = 50,
+  offset = 0,
+  signal?: AbortSignal,
+): Promise<PaginatedStudentsResponse> {
+  const url = `/api/v1/masters/me/students${buildQuery({ limit, offset })}`
+  return signal
+    ? api.request<PaginatedStudentsResponse>('GET', url, { signal })
+    : api.get<PaginatedStudentsResponse>(url)
 }
 
 /**
