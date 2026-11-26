@@ -8,8 +8,8 @@
   Data: `GET /admin/practices?scope=&limit=&offset=`, one Colada entry per
   scope and page (composables/queries/admin.ts). The scope and the page live
   in the URL (`?scope=past&page=2`), so a reload and the back button keep
-  them. The API lists newest first, so the upcoming scope is paged from the
-  end to put the nearest practices on page 1 (loadPracticesPage). The API has
+  them. The upcoming scope is shown nearest first whichever way the API
+  lists it (loadPracticesPage reads the order and sorts the page). The API has
   no search, filter by direction / master / date, format or price: the table
   shows what the answer carries.
 -->

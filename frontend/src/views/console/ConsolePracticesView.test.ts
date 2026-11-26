@@ -59,11 +59,21 @@ function practice(overrides: Partial<AdminPracticeListItem> = {}): AdminPractice
 }
 
 /** `count` distinguishable practices, newest first (titles numbered from `count` down to 1). */
+/** Practice n is n hours after the first: `count` of them, newest first as the backend has listed them. */
 function newestFirst(count: number): AdminPracticeListItem[] {
   return Array.from({ length: count }, (_, i) => {
     const n = count - i
-    return practice({ id: `p_${n}`, title: `Практика ${n}` })
+    return practice({
+      id: `p_${n}`,
+      title: `Практика ${n}`,
+      scheduled_at: new Date(Date.UTC(2026, 11, 20, 7 + n)).toISOString(),
+    })
   })
+}
+
+/** The same practices nearest first, as BE-257 lists the upcoming scope. */
+function ascending(count: number): AdminPracticeListItem[] {
+  return newestFirst(count).reverse()
 }
 
 type Scope = 'all' | 'upcoming' | 'past'
@@ -225,6 +235,38 @@ describe('ConsolePracticesView', () => {
       'Практика 45',
     ])
     expect(summary()).toBe('Показано 41–45 из 45')
+  })
+
+  it('pages an upcoming scope the API lists nearest first (BE-257) from the start, the same pages', async () => {
+    server.upcoming = ascending(45)
+    await mount()
+
+    expect(adminApi.getAdminPractices).toHaveBeenCalledWith('upcoming', 20, 0)
+    expect(rowTitles()).toHaveLength(20)
+    expect(rowTitles()[0]).toBe('Практика 1')
+    expect(rowTitles()[19]).toBe('Практика 20')
+    expect(summary()).toBe('Показано 1–20 из 45')
+
+    pageButton(3)?.click()
+    await flush()
+
+    expect(adminApi.getAdminPractices).toHaveBeenLastCalledWith('upcoming', 5, 40)
+    expect(rowTitles()).toEqual([
+      'Практика 41',
+      'Практика 42',
+      'Практика 43',
+      'Практика 44',
+      'Практика 45',
+    ])
+  })
+
+  it('sorts a page by date itself, whatever order its rows arrive in', async () => {
+    const [p1, p2, p3] = ascending(3)
+    if (!p1 || !p2 || !p3) throw new Error('fixture')
+    server.upcoming = [p1, p3, p2]
+    await mount()
+
+    expect(rowTitles()).toEqual(['Практика 1', 'Практика 2', 'Практика 3'])
   })
 
   it('pages the past scope as the API lists it: a page button loads its offset', async () => {

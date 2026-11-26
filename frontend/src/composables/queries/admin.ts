@@ -105,7 +105,7 @@ import type {
   ReturnMetricResponse,
 } from '@/api/types'
 import { adminKeys } from '@/composables/queries/adminKeys'
-import { nearestFirstWindow } from '@/utils/console/nearestFirst'
+import { nearestFirst, nearestFirstWindow, runsAscending } from '@/utils/console/nearestFirst'
 import { relativeDayCode } from '@/utils/format'
 import { keys } from '@/composables/queries/keys'
 import { extractApiError } from '@/composables/useApiError'
@@ -619,12 +619,11 @@ export const ADMIN_PRACTICES_PAGE_SIZE = 20
  * web console's table shows it.
  *
  * @remarks
- * The API lists every scope newest first. For `past` and `all` that is the
- * order wanted. For `upcoming` it puts the nearest practices on the last
- * page, so the console pages that scope from the end: one request for the
- * total, one for the slice that page 1 (the nearest) is made of
- * (utils/console/nearestFirst.ts), the rows turned around. When the backend
- * can sort `upcoming` ascending this goes and the scope pages like the others.
+ * `past` and `all` are listed newest first, the order wanted. `upcoming` is
+ * shown nearest first, whichever way the API runs it (newest first before
+ * BE-257, ascending after): one request reads the total and the first row,
+ * one the last row, which tell the order; the slice of the page
+ * (utils/console/nearestFirst.ts) is then read and sorted by date here.
  */
 async function loadPracticesPage(
   scope: AdminPracticeScope,
@@ -633,11 +632,14 @@ async function loadPracticesPage(
   const size = ADMIN_PRACTICES_PAGE_SIZE
   const offset = (page - 1) * size
   if (scope !== 'upcoming') return getAdminPractices(scope, size, offset)
-  const { total } = await getAdminPractices(scope, 1, 0)
-  const window = nearestFirstWindow(total, page, size)
+  const head = await getAdminPractices(scope, 1, 0)
+  const { total } = head
+  const tail = total > 1 ? await getAdminPractices(scope, 1, total - 1) : head
+  const ascending = runsAscending(head.items[0]?.scheduled_at, tail.items[0]?.scheduled_at)
+  const window = nearestFirstWindow(total, page, size, ascending)
   if (window === null) return { items: [], total, limit: size, offset }
   const slice = await getAdminPractices(scope, window.limit, window.offset)
-  return { items: [...slice.items].reverse(), total: slice.total, limit: size, offset }
+  return { items: nearestFirst(slice.items), total: slice.total, limit: size, offset }
 }
 
 /**

@@ -632,6 +632,19 @@ describe('ConsoleDashboardView: today', () => {
     )
   })
 
+  it('a busy day listed nearest first by the API (BE-257) is the same list', async () => {
+    upcoming = [
+      ...busyDay(35).reverse(),
+      practice({ id: 'p_tomorrow', scheduled_at: '2026-11-25T07:00:00Z' }),
+    ]
+    await mount()
+
+    const titles = todayTitles()
+    expect(titles).toHaveLength(35)
+    expect(titles[0]).toContain('Практика0')
+    expect(titles[34]).toContain('Практика34')
+  })
+
   it('a day past the read cap says "N+", not a count that looks whole (FE-260)', async () => {
     upcoming = busyDay(120)
     await mount()
