@@ -300,7 +300,7 @@ describe('MasterPromocodesView', () => {
       )
       mount()
 
-      await vi.waitFor(() => expect(text()).toContain('Показаны 2000 из 2050'))
+      await vi.waitFor(() => expect(text()).toContain('Проверено промокодов: 2000 из 2050'))
       expect(promosApi.getMyPromos).toHaveBeenCalledTimes(20)
       expect(codes()).toEqual(['CODEp0'])
     })

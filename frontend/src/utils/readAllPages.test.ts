@@ -3,8 +3,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ALL_PAGES_MAX, ALL_PAGES_SIZE, readAllPages } from '@/utils/readAllPages'
 
+const row = (i: number) => ({ id: `r${i}` })
+
 function server(rows: number, total = rows) {
-  const all = Array.from({ length: rows }, (_, i) => i)
+  const all = Array.from({ length: rows }, (_, i) => row(i))
   return vi.fn(async (limit: number, offset: number) => ({
     items: all.slice(offset, offset + limit),
     total,
@@ -22,7 +24,7 @@ describe('readAllPages', () => {
       [ALL_PAGES_SIZE, 100],
       [ALL_PAGES_SIZE, 200],
     ])
-    expect(all.items).toEqual(Array.from({ length: 250 }, (_, i) => i))
+    expect(all.items).toEqual(Array.from({ length: 250 }, (_, i) => row(i)))
     expect(all).toMatchObject({ total: 250, complete: true })
   })
 
@@ -51,6 +53,22 @@ describe('readAllPages', () => {
     expect(read).toHaveBeenCalledTimes(ALL_PAGES_MAX)
     expect(all.items).toHaveLength(ALL_PAGES_MAX * ALL_PAGES_SIZE)
     expect(all.complete).toBe(false)
+  })
+
+  it('a row added mid-read shifts one onto the next page: it is kept once', async () => {
+    // Newest first: after the first page, a new row lands at the top, so the
+    // second page (offset 100) starts with the last row of the first one.
+    let rows = Array.from({ length: 150 }, (_, i) => row(i))
+    const read = vi.fn(async (limit: number, offset: number) => {
+      const answer = { items: rows.slice(offset, offset + limit), total: rows.length }
+      if (offset === 0) rows = [row(-1), ...rows]
+      return answer
+    })
+
+    const all = await readAllPages(read)
+
+    expect(all.items.map((r) => r.id)).toEqual(Array.from({ length: 150 }, (_, i) => `r${i}`))
+    expect(all).toMatchObject({ total: 151, complete: true })
   })
 
   it('a failed page fails the read', async () => {

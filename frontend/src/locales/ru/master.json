@@ -750,7 +750,8 @@
       "loadFailed": "Не удалось загрузить промокоды",
       "discount": "Скидка: {n}%",
       "used": "Использовано: {label}",
-      "usedOf": "{used} из {max}"
+      "usedOf": "{used} из {max}",
+      "checkedOf": "Проверено промокодов: {shown} из {total}"
     },
     "masterStudentProfile": {
       "addToGroup": "Добавить в группу",

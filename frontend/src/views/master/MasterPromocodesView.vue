@@ -80,7 +80,7 @@
     </div>
 
     <p v-if="!complete" class="promo__partial">
-      {{ t('masterScreens.masterCommon.shownOf', { shown: promos.length, total }) }}
+      {{ t('masterScreens.masterPromocodes.checkedOf', { shown: promos.length, total }) }}
     </p>
     <Banner
       variant="warning"

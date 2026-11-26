@@ -750,7 +750,8 @@
       "loadFailed": "Failed to load the promo codes",
       "discount": "Discount: {n}%",
       "used": "Used: {label}",
-      "usedOf": "{used} of {max}"
+      "usedOf": "{used} of {max}",
+      "checkedOf": "Promo codes checked: {shown} of {total}"
     },
     "masterStudentProfile": {
       "addToGroup": "Add to a group",

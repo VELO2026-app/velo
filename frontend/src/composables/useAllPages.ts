@@ -41,7 +41,10 @@ export interface AllPagesState<T> {
  * @param startLoading - `loading` before the first read (a screen that
  *  mounts on its loader)
  */
-export function useAllPages<T>(read: PageReader<T>, startLoading = false): AllPagesState<T> {
+export function useAllPages<T extends { id: string }>(
+  read: PageReader<T>,
+  startLoading = false,
+): AllPagesState<T> {
   const items = ref<T[]>([]) as Ref<T[]>
   const total = ref(0)
   const complete = ref(true)
