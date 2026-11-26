@@ -22,10 +22,11 @@ afterAll(() => rmSync(root, { recursive: true, force: true }))
 interface Budget {
   entryGzip: number
   precacheBytes: number
-  ceiling?: { entryGzip: number; precacheBytes: number }
+  startupGzip?: number
+  ceiling?: { entryGzip: number; precacheBytes: number; startupGzip?: number }
 }
 
-const CEILING = { entryGzip: 1_000_000, precacheBytes: 1_000_000 }
+const CEILING = { entryGzip: 1_000_000, precacheBytes: 1_000_000, startupGzip: 1_000_000 }
 
 // Deterministic, poorly compressible entry content.
 let seed = 12345
@@ -34,6 +35,9 @@ const noise = Array.from({ length: 20000 }, () => {
   return String.fromCharCode(33 + (seed % 90))
 }).join('')
 const entryGzip = gzipSync(Buffer.from(noise)).length
+// FE-169: the startup JS is the entry script and the app chunk it imports.
+const startupGzip =
+  entryGzip + gzipSync(Buffer.from('import"./app-abc.js";import("./lazy-c.js")')).length
 const precacheBytes = 1000
 
 /** Build a minimal dist/ plus a budget file, run the gate, return exit code and output. */
@@ -46,14 +50,19 @@ function run(
 ) {
   const dir = join(root, name)
   mkdirSync(join(dir, 'assets'), { recursive: true })
-  writeFileSync(join(dir, 'index.html'), '<html></html>')
+  // The entry script loads the app chunk; the chunk it imports statically is
+  // startup JS too, the lazy one is not.
+  writeFileSync(join(dir, 'index.html'), '<script type="module" src="/assets/index-a.js"></script>')
+  writeFileSync(join(dir, 'assets/index-a.js'), 'import"./app-abc.js";import("./lazy-c.js")')
   writeFileSync(join(dir, 'assets/app-abc.js'), noise)
+  writeFileSync(join(dir, 'assets/lazy-c.js'), noise.split('').reverse().join(''))
   writeFileSync(join(dir, 'pre.bin'), Buffer.alloc(precacheBytes))
   if (withSw) {
     writeFileSync(join(dir, 'sw.js'), `precacheAndRoute([${swList}],{})`)
   }
   const budgetPath = join(dir, 'budget.json')
-  writeFileSync(budgetPath, JSON.stringify(withCeiling ? { ceiling: CEILING, ...budget } : budget))
+  const full = { startupGzip, ...budget }
+  writeFileSync(budgetPath, JSON.stringify(withCeiling ? { ceiling: CEILING, ...full } : full))
   const r = spawnSync('node', [script, '--dist', dir, '--budget', budgetPath], {
     encoding: 'utf8',
     env: { ...process.env, GITHUB_STEP_SUMMARY: '' },
@@ -95,11 +104,22 @@ describe('bundle-report --budget', () => {
     expect(r.out).toContain('bundle-report.mjs --modules')
   })
 
+  it('budgets the startup JS: the entry and its static imports, not the lazy chunk', () => {
+    expect(run('startup', { entryGzip, precacheBytes }).status).toBe(0)
+    const r = run('startup-over', {
+      entryGzip,
+      precacheBytes,
+      startupGzip: Math.floor(startupGzip / 1.03),
+    })
+    expect(r.status).toBe(1)
+    expect(r.out).toContain('startup JS gzip')
+  })
+
   it('fails over the ceiling even when the budget allows it', () => {
     const r = run('ceiling', {
       entryGzip,
       precacheBytes,
-      ceiling: { entryGzip: entryGzip - 1, precacheBytes: 1_000_000 },
+      ceiling: { entryGzip: entryGzip - 1, precacheBytes: 1_000_000, startupGzip: 1_000_000 },
     })
     expect(r.status).toBe(1)
     expect(r.out).toContain('over the ceiling')
@@ -129,5 +149,7 @@ describe('bundle-report --budget', () => {
     expect(Number.isFinite(b.precacheBytes)).toBe(true)
     expect(b.ceiling?.entryGzip).toBe(150_000)
     expect(b.ceiling?.precacheBytes).toBe(1_000_000)
+    expect(Number.isFinite(b.startupGzip)).toBe(true)
+    expect(b.ceiling?.startupGzip).toBe(150_000)
   })
 })

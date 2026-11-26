@@ -32,6 +32,8 @@ describe('perLocaleManifest', () => {
 
     const plugin = perLocaleManifest(frontendDir)
     ;(plugin.configResolved as Hook)({ root: frontendDir, build: { outDir } })
+    ;(plugin.buildStart as Hook)()
+    ;(plugin.writeBundle as Hook)()
     ;(plugin.closeBundle as unknown as { handler: Hook }).handler()
 
     for (const locale of MANIFEST_LOCALES) {
@@ -41,5 +43,24 @@ describe('perLocaleManifest', () => {
       expect(written.description).toBe(`desc-${locale}`)
     }
     expect(existsSync(join(frontendDir, 'dist'))).toBe(false)
+  })
+
+  it('leaves a failed build (no writeBundle) alone: its own error stays the one reported', () => {
+    const plugin = perLocaleManifest('/nonexistent-frontend')
+    ;(plugin.configResolved as Hook)({ root: '/', build: { outDir: '/nonexistent' } })
+    // A previous build of the same plugin wrote; this one fails before it.
+    ;(plugin.writeBundle as Hook)()
+    ;(plugin.buildStart as Hook)()
+    expect(() => (plugin.closeBundle as unknown as { handler: Hook }).handler()).not.toThrow()
+  })
+
+  it('fails a written build that has no manifest', () => {
+    const plugin = perLocaleManifest('/nonexistent-frontend')
+    ;(plugin.configResolved as Hook)({ root: '/', build: { outDir: '/nonexistent' } })
+    ;(plugin.buildStart as Hook)()
+    ;(plugin.writeBundle as Hook)()
+    expect(() => (plugin.closeBundle as unknown as { handler: Hook }).handler()).toThrow(
+      /is missing/,
+    )
   })
 })

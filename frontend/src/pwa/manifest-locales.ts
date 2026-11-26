@@ -16,6 +16,12 @@ export function perLocaleManifest(frontendDir: string): Plugin {
   // (bundle-report --modules, FE-157) must neither fail on a missing
   // frontend/dist nor rewrite the files of an earlier build there.
   let dist = join(frontendDir, 'dist')
+  // Rolldown (Vite 8) runs closeBundle after a FAILED build too -- for an
+  // error in generateBundle (the startup layout guard's) without passing the
+  // error, and renderError does not run; writeBundle never does. There is no
+  // manifest then, and a throw here would hide the build's own error behind
+  // "manifest is missing" (FE-169).
+  let written = false
   return {
     name: 'velo-per-locale-manifest',
     apply: 'build',
@@ -23,10 +29,17 @@ export function perLocaleManifest(frontendDir: string): Plugin {
     configResolved(config) {
       dist = resolve(config.root, config.build.outDir)
     },
+    buildStart() {
+      written = false
+    },
+    writeBundle() {
+      written = true
+    },
     closeBundle: {
       order: 'post',
       sequential: true,
       handler() {
+        if (!written) return
         const built = join(dist, 'manifest.webmanifest')
         if (!existsSync(built)) throw new Error(`per-locale manifests: ${built} is missing`)
         const base = JSON.parse(readFileSync(built, 'utf8')) as Record<string, unknown>
