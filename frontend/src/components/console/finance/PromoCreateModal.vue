@@ -11,7 +11,12 @@
 -->
 
 <template>
-  <VModal :open="open" @close="onClose">
+  <VModal
+    :open="open"
+    :dismissible="guard.dismissible.value"
+    @dismiss-attempt="guard.ask"
+    @close="onClose"
+  >
     <form class="promo-form" novalidate @submit.prevent="onSubmit">
       <h2 class="promo-form__title">{{ t('console.finance.promos.createModal.title') }}</h2>
       <VInput
@@ -50,7 +55,7 @@
         :label="t('console.finance.promos.createModal.firstPurchaseOnly')"
       />
       <div class="promo-form__actions">
-        <VButton type="button" variant="ghost" @click="onClose">
+        <VButton type="button" variant="ghost" @click="guard.leave">
           {{ t('console.finance.promos.createModal.cancel') }}
         </VButton>
         <VButton type="submit" variant="primary" :loading="creating">
@@ -59,6 +64,12 @@
       </div>
     </form>
   </VModal>
+
+  <DiscardChangesDialog
+    :open="guard.confirming.value"
+    @discard="guard.discard"
+    @keep-editing="guard.keepEditing"
+  />
 </template>
 
 <script setup lang="ts">
@@ -66,11 +77,13 @@ import { t } from '@/locales'
 import { ref, watch } from 'vue'
 import { VButton, VCheckbox, VInput, VModal, VSelect } from '@/components/ui'
 import { endOfDayIso, todayIn } from '@/components/console/finance/financeFormat'
+import DiscardChangesDialog from '@/components/shared/DiscardChangesDialog.vue'
 import { createCompanyPromo } from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import type { CreateCompanyPromoRequest } from '@/api/types'
 import { useAdminMutation } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
+import { useDiscardGuard } from '@/composables/useDiscardGuard'
 import { useToast } from '@/composables/useToast'
 import { useViewerTimezone } from '@/composables/useViewerTimezone'
 
@@ -96,12 +109,14 @@ const DISCOUNT_OPTIONS = DISCOUNTS.map((n) => ({
   value: String(n),
   label: t('console.finance.promos.percent', { n }),
 }))
+/** The discount a form opens with. */
+const DEFAULT_DISCOUNT = String(DISCOUNTS[1])
 
 const CODE_MIN = 3
 const CODE_MAX = 50
 
 const code = ref('')
-const discount = ref(String(DISCOUNTS[1]))
+const discount = ref(DEFAULT_DISCOUNT)
 const maxUses = ref('')
 const until = ref('')
 const firstPurchaseOnly = ref(false)
@@ -119,7 +134,7 @@ watch(
   (open) => {
     if (!open) return
     code.value = ''
-    discount.value = String(DISCOUNTS[1])
+    discount.value = DEFAULT_DISCOUNT
     maxUses.value = ''
     until.value = ''
     firstPurchaseOnly.value = false
@@ -165,6 +180,20 @@ function onClose(): void {
   if (creating.value) return
   emit('close')
 }
+
+// Anything filled in beyond the opening defaults is unsaved work: leaving asks
+// first (FE-233). While the request is in flight the window stays, as above.
+const guard = useDiscardGuard({
+  dirty: () =>
+    !creating.value &&
+    (code.value.trim() !== '' ||
+      discount.value !== DEFAULT_DISCOUNT ||
+      maxUses.value !== '' ||
+      until.value !== '' ||
+      firstPurchaseOnly.value),
+  onDiscard: onClose,
+  open: () => props.open,
+})
 
 /**
  * The words for a failed creation. The server answers 400 (code "bad_request")

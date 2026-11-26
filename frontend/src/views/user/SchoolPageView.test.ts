@@ -664,6 +664,78 @@ describe('SchoolPageView -- edit', () => {
   })
 })
 
+// -- Leaving the edit sheet with edits (FE-233) --------------------------------
+
+describe('SchoolPageView -- leaving the edit sheet (FE-233)', () => {
+  async function openEditSheet(): Promise<void> {
+    routeState.name = 'master-school'
+    mockHappyLoad('curator')
+    mount()
+    await flush()
+    rowWith('Редактировать школу')?.click()
+    await flush()
+  }
+  function fieldAt(index: number): HTMLInputElement | HTMLTextAreaElement | undefined {
+    return Array.from(
+      document.body.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea'),
+    )[index]
+  }
+  function pressEscape(): void {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  }
+  function asking(): boolean {
+    return text().includes('Сбросить изменения?')
+  }
+
+  it('untouched, the sheet closes at once', async () => {
+    await openEditSheet()
+
+    pressEscape()
+    await flush()
+
+    expect(openOverlay('.v-sheet__overlay')).toBeNull()
+    expect(asking()).toBe(false)
+  })
+
+  it.each([
+    { edit: 'the name', index: 0, value: 'Новое имя' },
+    { edit: 'the description', index: 1, value: 'Другое описание' },
+    { edit: 'the avatar link', index: 2, value: 'https://example.com/a.png' },
+  ])(
+    'an edited $edit: Escape asks and the sheet stays; discarding closes it, nothing is saved',
+    async ({ index, value }) => {
+      await openEditSheet()
+      typeInto(fieldAt(index), value)
+      await flush()
+
+      pressEscape()
+      await flush()
+      expect(asking()).toBe(true)
+      expect(openOverlay('.v-sheet__overlay')).not.toBeNull()
+
+      buttonWith('Сбросить')?.click()
+      await flush()
+      expect(openOverlay('.v-sheet__overlay')).toBeNull()
+      expect(cgApi.updateSchool).not.toHaveBeenCalled()
+    },
+  )
+
+  it('a save in flight closes the sheet as it always did, without asking', async () => {
+    vi.mocked(cgApi.updateSchool).mockReturnValue(new Promise(() => {}))
+    await openEditSheet()
+    typeInto(fieldAt(0), 'Новое имя')
+    await flush()
+    buttonWith('Сохранить')?.click()
+    await flush()
+
+    pressEscape()
+    await flush()
+
+    expect(asking()).toBe(false)
+    expect(openOverlay('.v-sheet__overlay')).toBeNull()
+  })
+})
+
 // -- Transfer banner (FE-21, server-driven) ------------------------------------
 
 describe('SchoolPageView -- transfer banner', () => {

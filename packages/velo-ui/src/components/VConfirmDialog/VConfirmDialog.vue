@@ -4,7 +4,10 @@
 
   Confirmation dialog over the shared <VModal> canon (white sheet). Message +
   Cancel/Confirm buttons, danger variant, loading guard (overlay/cancel blocked
-  while a request is in-flight).
+  while a request is in-flight). The guard is VModal's `dismissible=false`
+  (FE-233): while `loading`, the scrim, Escape and the host's native Back
+  button all leave the dialog standing, so the person cannot cancel under a
+  request that is already on its way.
 
   i18n seam (§7.2, cut by the move): the kit component renders its button
   labels PURE -- empty until `cancelLabel`/`confirmLabel` say something. The
@@ -89,7 +92,7 @@
 -->
 
 <template>
-  <VModal :open="open" :show-close="false" :close-on-overlay="!loading" @close="$emit('cancel')">
+  <VModal :open="open" :show-close="false" :dismissible="!loading" @close="$emit('cancel')">
     <h2
       v-if="title"
       class="v-confirm__title"

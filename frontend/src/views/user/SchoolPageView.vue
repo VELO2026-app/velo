@@ -229,6 +229,14 @@
       </template>
     </div>
 
+    <!-- Before the sheet on purpose: after the sheet's v-model slot vue-tsc no
+         longer sees the guard's type and reports `.value` on it. -->
+    <DiscardChangesDialog
+      :open="schoolEditGuard.confirming.value"
+      @discard="schoolEditGuard.discard"
+      @keep-editing="schoolEditGuard.keepEditing"
+    />
+
     <!-- Edit school (curator): name + description + avatar link, the same
          sheet shape MasterGroupDetailView's rename uses. -->
     <VBottomSheet
@@ -237,7 +245,9 @@
       compact-title
       :save-label="t('ui.save')"
       :save-disabled="!editName.trim()"
+      :dismissible="schoolEditGuard.dismissible.value"
       @save="onEditSave"
+      @dismiss-attempt="schoolEditGuard.ask"
       @close="editOpen = false"
     >
       <VInput
@@ -299,8 +309,10 @@ import {
 } from '@/composables/queries/schools'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { useDiscardGuard } from '@/composables/useDiscardGuard'
 import CalendarPracticeCard from '@/components/shared/CalendarPracticeCard.vue'
 import SchoolTransferBanner from '@/components/shared/SchoolTransferBanner.vue'
+import DiscardChangesDialog from '@/components/shared/DiscardChangesDialog.vue'
 import SchoolHeroCard from '@/components/shared/SchoolHeroCard.vue'
 import SchoolInviteField from '@/components/shared/SchoolInviteField.vue'
 import { schoolHashFromName } from '@/utils/schoolBranding'
@@ -539,15 +551,37 @@ const editDescription = ref('')
  *  simply not sent. */
 const editAvatar = ref('')
 const saving = ref(false)
+// What the sheet opened with: a refetch of the page under it must not move the
+// line between "edited" and "not".
+const editOpened = ref({ name: '', description: '', avatar: '' })
 
 /** Shared by the ⋯ menu item and the §1.6 edit-school row
  *  (i18n:user.screens.schoolPage.edit.title). */
 function openEdit(): void {
-  editName.value = page.value?.name ?? ''
-  editDescription.value = page.value?.description ?? ''
-  editAvatar.value = page.value?.avatar_url ?? ''
+  editOpened.value = {
+    name: page.value?.name ?? '',
+    description: page.value?.description ?? '',
+    avatar: page.value?.avatar_url ?? '',
+  }
+  editName.value = editOpened.value.name
+  editDescription.value = editOpened.value.description
+  editAvatar.value = editOpened.value.avatar
   editOpen.value = true
 }
+
+// An edited name, description or link is unsaved work: leaving asks first
+// (FE-233). While the save is in flight the sheet closes as it always did.
+const schoolEditGuard = useDiscardGuard({
+  dirty: () =>
+    !saving.value &&
+    (editName.value !== editOpened.value.name ||
+      editDescription.value !== editOpened.value.description ||
+      editAvatar.value !== editOpened.value.avatar),
+  onDiscard: () => {
+    editOpen.value = false
+  },
+  open: () => editOpen.value,
+})
 
 async function onEditSave(): Promise<void> {
   const name = editName.value.trim()

@@ -7,7 +7,12 @@
 -->
 
 <template>
-  <VModal :open="open" @close="emit('close')">
+  <VModal
+    :open="open"
+    :dismissible="guard.dismissible.value"
+    @dismiss-attempt="guard.ask"
+    @close="emit('close')"
+  >
     <div class="reject">
       <h2 class="reject__title">{{ t('console.finance.withdrawals.rejectModal.title') }}</h2>
       <p class="reject__text">
@@ -23,7 +28,7 @@
         @update:model-value="emit('update:reason', $event)"
       />
       <div class="reject__actions">
-        <VButton variant="ghost" @click="emit('close')">
+        <VButton variant="ghost" @click="guard.leave">
           {{ t('console.finance.withdrawals.rejectModal.cancel') }}
         </VButton>
         <VButton variant="danger" :loading="loading" @click="emit('confirm')">
@@ -32,16 +37,24 @@
       </div>
     </div>
   </VModal>
+
+  <DiscardChangesDialog
+    :open="guard.confirming.value"
+    @discard="guard.discard"
+    @keep-editing="guard.keepEditing"
+  />
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
 import { VButton, VModal, VTextarea } from '@/components/ui'
+import DiscardChangesDialog from '@/components/shared/DiscardChangesDialog.vue'
+import { useDiscardGuard } from '@/composables/useDiscardGuard'
 
 /** The longest note the server takes (`admin_action_note_max_length`); a longer one is refused with 422. */
 const NOTE_MAX_LENGTH = 1000
 
-defineProps<{
+const props = defineProps<{
   open: boolean
   /** The request's amount, formatted. */
   amount: string
@@ -58,6 +71,14 @@ const emit = defineEmits<{
   confirm: []
   close: []
 }>()
+
+// A typed reason is unsaved work: leaving asks first (FE-233). While the refusal
+// is being sent the dialog closes as it always did.
+const guard = useDiscardGuard({
+  dirty: () => props.reason.trim() !== '' && !props.loading,
+  onDiscard: () => emit('close'),
+  open: () => props.open,
+})
 </script>
 
 <style scoped>

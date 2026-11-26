@@ -18,6 +18,9 @@
 //      second tap adds no API call.
 //   4. EMPTY -- the send button (i18n:common.submitSend) with a blank field
 //      is a no-op, not an empty DM.
+//   5. LEAVING (FE-233) -- a typed draft is unsaved work: Escape, the scrim and
+//      the cancel button ask i18n:shared.discardChanges.title first; an empty
+//      field and a send in flight close as before.
 //
 // SC-07: VModal teleports to body, so every query goes to document.body, never
 // to the mount host. SC-13b: a closed VModal parks at v-modal-leave-active in
@@ -232,5 +235,77 @@ describe('SendMessageModal', () => {
     expect(chatsApi.sendChatMessage).not.toHaveBeenCalled()
     expect(toastSuccess).not.toHaveBeenCalled()
     expect(closed).not.toHaveBeenCalled()
+  })
+})
+
+describe('SendMessageModal -- leaving with a draft (FE-233)', () => {
+  function pressEscape(): void {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+  }
+
+  it('an empty or blank field closes at once, on Escape and on the cancel button', async () => {
+    await flush()
+    await typeDraft('   ')
+
+    pressEscape()
+    await flush()
+    expect(closed).toHaveBeenCalledTimes(1)
+
+    buttonWith('Отмена')?.click()
+    await flush()
+    expect(closed).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent).not.toContain('Сбросить изменения?')
+  })
+
+  it.each([
+    ['Escape', () => pressEscape()],
+    ['the cancel button', () => buttonWith('Отмена')?.click()],
+  ])(
+    'a typed draft: %s asks first; keeping the edits leaves the draft in place',
+    async (_, leave) => {
+      await flush()
+      await typeDraft('Черновик')
+
+      leave()
+      await flush()
+
+      expect(closed).not.toHaveBeenCalled()
+      expect(document.body.textContent).toContain('Сбросить изменения?')
+
+      Array.from(document.body.querySelectorAll('button'))
+        .find((b) => b.textContent?.trim() === 'Продолжить')
+        ?.click()
+      await flush()
+      expect(closed).not.toHaveBeenCalled()
+      expect(liveModal()?.querySelector('textarea')?.value).toBe('Черновик')
+    },
+  )
+
+  it('discarding the draft closes the sheet', async () => {
+    await flush()
+    await typeDraft('Черновик')
+    pressEscape()
+    await flush()
+
+    Array.from(document.body.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'Сбросить')
+      ?.click()
+    await flush()
+
+    expect(closed).toHaveBeenCalledTimes(1)
+  })
+
+  it('a send in flight closes as it always did, without asking', async () => {
+    vi.mocked(chatsApi.openStudentChat).mockReturnValue(new Promise<ChatThread>(() => {}))
+    await flush()
+    await typeDraft('Привет')
+    buttonWith('Отправить')?.click()
+    await flush()
+
+    pressEscape()
+    await flush()
+
+    expect(closed).toHaveBeenCalledTimes(1)
+    expect(document.body.textContent).not.toContain('Сбросить изменения?')
   })
 })

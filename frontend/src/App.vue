@@ -83,6 +83,7 @@ import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
 import { useKeyboardDismiss } from '@/composables/useKeyboardDismiss'
+import { useOverlayBackButton } from '@/composables/useOverlayBackButton'
 import { provideKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { startRoleFreshnessPoll } from '@/composables/useRoleFreshness'
 import { provideToast } from '@/composables/useToast'
@@ -139,6 +140,10 @@ useViewportGeometry()
 // GLOBAL tap-to-dismiss keyboard (batch L, B1): one app-level owner replacing
 // the per-view dismissKeyboardOnBlank copies. Installed once here.
 useKeyboardDismiss()
+
+// FE-233: while a modal, sheet or confirm dialog is open, Telegram's native
+// Back button is shown and closes the top one (a guarded form asks first).
+useOverlayBackButton()
 
 // FE-143: the kit field-scroll seam -- provides the real keyboard-aware
 // focus-scroll factory once at the root. Every useKeyboardFieldScroll()
