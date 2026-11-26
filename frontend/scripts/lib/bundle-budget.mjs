@@ -8,10 +8,14 @@
 // Two kinds of limit live in frontend/bundle-budget.json (bytes, 1 kB = 1000 B
 // as Vite prints it):
 //
-//   ceiling  -- the FE-157 targets (150 kB gzip app chunk, 1 MB precache).
+//   ceiling  -- the FE-157 targets (150 kB gzip app chunk, 1 MB precache;
+//               150 kB gzip for the whole startup JS too, FE-169).
 //               A hard limit with no tolerance: a build above it always fails.
 //               Raising it needs the `bundle-ceiling` label (the owner's).
-//   budget   -- the floating baseline (entryGzip, precacheBytes). A build may
+//   budget   -- the floating baseline (entryGzip, precacheBytes, startupGzip:
+//               the gzip of every JS file the first open loads -- the entry,
+//               its modulepreloads, their static imports; FE-169, Rolldown
+//               spreads the start over host + app + runtime). A build may
 //               sit within +-2% of it. Above: fail. Below by more than 2%: fail
 //               with the value to lower the budget to, so a saving is locked
 //               in the same PR instead of becoming headroom for the next
@@ -36,7 +40,7 @@ export const LOWER_HEADROOM_PCT = 1
  * The FE-157 targets in bytes: what a base branch without a `ceiling` is
  * taken to have, so introducing a higher ceiling is still a raise.
  */
-export const DEFAULT_CEILING = { entryGzip: 150000, precacheBytes: 1000000 }
+export const DEFAULT_CEILING = { entryGzip: 150000, precacheBytes: 1000000, startupGzip: 150000 }
 
 /** Label that allows raising the floating budget. */
 export const GROWTH_LABEL = 'bundle-growth'
@@ -48,6 +52,7 @@ export const CEILING_LABEL = 'bundle-ceiling'
 export const METRICS = [
   { key: 'entryGzip', name: 'app chunk gzip' },
   { key: 'precacheBytes', name: 'precache bytes' },
+  { key: 'startupGzip', name: 'startup JS gzip' },
 ]
 
 /** Command that finds what grew; printed on every failure. */
@@ -115,7 +120,7 @@ export function suggestBudget(actual) {
 /**
  * Check a build against the ceiling and the floating budget.
  *
- * @param sizes - Measured `{ entryGzip, precacheBytes }`; precacheBytes is null when dist/ has no sw.js.
+ * @param sizes - Measured `{ entryGzip, precacheBytes, startupGzip }`; precacheBytes is null when dist/ has no sw.js.
  * @param budget - Parsed bundle-budget.json (must pass assertBudgetShape).
  * @param [base] - Measured sizes of the base branch build; omitted when unknown.
  * @returns Markdown summary and the failures (empty = within budget).

@@ -30,8 +30,13 @@
 // then, or this gate silently goes blind.
 //
 // Pure (string in, findings out) so a unit test pins it; the CLI wrapper is
-// scripts/build-log-gate.mjs. Other build notices (the locale catalogs'
-// dynamic+static import note) are out of scope on purpose.
+// scripts/build-log-gate.mjs. Other build notices are out of scope on purpose.
+// Known ones on Vite 8 (FE-169): four INEFFECTIVE_DYNAMIC_IMPORT notes --
+// @pinia/colada, stores/auth.ts and composables/queries/schools.ts imported
+// dynamically by router/dataPrefetch.ts (schools also by router/firstScreen.ts),
+// views/auth/LoadingErrorView.vue by router/routes/public.ts, while the
+// startup imports each of them statically. The import() is a lazy-load
+// habit there, not a chunk boundary; Vite 7 printed the same four notes.
 // =============================================================================
 
 /** @typedef {{ rule: string, line: string }} BuildLogFinding */

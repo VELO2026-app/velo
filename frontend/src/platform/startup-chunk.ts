@@ -254,3 +254,77 @@ export function startupChunkName(
     return app.has(id) ? 'app' : null
   }
 }
+
+/** The slice of a Rolldown output chunk the layout check reads. */
+export interface LayoutChunk {
+  fileName: string
+  name: string
+  isEntry: boolean
+  moduleIds: readonly string[]
+  /** Static imports: file names of other chunks. */
+  imports: readonly string[]
+}
+
+/** Rolldown's helper module (`__export` and friends); its chunk may serve the startup. */
+const ROLLDOWN_RUNTIME = /rolldown[\\/]runtime/
+
+/**
+ * Checks the startup layout of a finished bundle (FE-169); empty = as designed.
+ * - No initial entry reaches the chunk of app.ts over static imports: app.ts
+ *   would run before prepareHost().
+ * - The chunk of app.ts imports statically only `host` and Rolldown's runtime
+ *   helpers: any other chunk is a startup file the group did not plan.
+ * - No module of `lazyOnly` is in the startup set (the entries, the app chunk
+ *   and their static imports): screens that start does not render, kept out
+ *   by the pure SFC wrappers of vite.config.ts.
+ */
+export function checkStartupLayout(
+  chunks: readonly LayoutChunk[],
+  appEntry: string,
+  lazyOnly: readonly RegExp[],
+): string[] {
+  const byFile = new Map(chunks.map((c) => [c.fileName, c]))
+  const closure = (roots: readonly LayoutChunk[]): Set<LayoutChunk> => {
+    const seen = new Set<LayoutChunk>()
+    const queue = [...roots]
+    while (queue.length > 0) {
+      const chunk = queue.pop() as LayoutChunk
+      if (seen.has(chunk)) continue
+      seen.add(chunk)
+      for (const file of chunk.imports) {
+        const dep = byFile.get(file)
+        if (dep) queue.push(dep)
+      }
+    }
+    return seen
+  }
+  const app = chunks.find((c) => c.moduleIds.includes(appEntry))
+  if (!app) return [`no chunk holds ${appEntry}`]
+  const entries = chunks.filter((c) => c.isEntry)
+  const problems: string[] = []
+  if (closure(entries).has(app)) {
+    problems.push(
+      `${app.fileName} is a static import of an entry: app.ts would run before the host is ready`,
+    )
+  }
+  for (const file of app.imports) {
+    const dep = byFile.get(file)
+    const helpers = dep !== undefined && dep.moduleIds.every((id) => ROLLDOWN_RUNTIME.test(id))
+    if (dep?.name !== 'host' && !helpers) {
+      problems.push(
+        `${app.fileName} imports ${file} statically: only host and the runtime helpers may start with it`,
+      )
+    }
+  }
+  const started = new Set<string>()
+  for (const chunk of closure([...entries, app])) {
+    for (const id of chunk.moduleIds) {
+      // One line per source file, not per SFC block (?vue&type=...).
+      const file = id.split('?')[0] as string
+      if (lazyOnly.some((re) => re.test(id)))
+        started.add(`${file} is in the startup set (${chunk.fileName})`)
+    }
+  }
+  problems.push(...started)
+  return problems
+}

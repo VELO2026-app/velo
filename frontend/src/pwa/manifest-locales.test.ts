@@ -32,6 +32,8 @@ describe('perLocaleManifest', () => {
 
     const plugin = perLocaleManifest(frontendDir)
     ;(plugin.configResolved as Hook)({ root: frontendDir, build: { outDir } })
+    ;(plugin.buildStart as Hook)()
+    ;(plugin.writeBundle as Hook)()
     ;(plugin.closeBundle as unknown as { handler: Hook }).handler()
 
     for (const locale of MANIFEST_LOCALES) {
@@ -41,5 +43,12 @@ describe('perLocaleManifest', () => {
       expect(written.description).toBe(`desc-${locale}`)
     }
     expect(existsSync(join(frontendDir, 'dist'))).toBe(false)
+  })
+
+  it('leaves a failed build (no writeBundle) alone: its own error stays the one reported', () => {
+    const plugin = perLocaleManifest(mkdtempSync(join(tmpdir(), 'velo-mf-')))
+    ;(plugin.configResolved as Hook)({ root: '/', build: { outDir: '/nonexistent' } })
+    ;(plugin.buildStart as Hook)()
+    expect(() => (plugin.closeBundle as unknown as { handler: Hook }).handler()).not.toThrow()
   })
 })

@@ -43,7 +43,7 @@ import {
 } from './scripts/lib/skin-package.mjs'
 import { validateSkin } from './scripts/validate-skin.mjs'
 import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
-import { startupChunkName } from './src/platform/startup-chunk'
+import { checkStartupLayout, startupChunkName } from './src/platform/startup-chunk'
 import type { Plugin } from 'vite'
 
 /** Modules of the Zoom Meeting SDK chunk: the SDK and its peer stack (its
@@ -179,15 +179,17 @@ function preloadAppChunk(): Plugin {
   }
 }
 
-/** FE-169: the SFC wrapper modules of the app (any .vue file under src/, no query) carry
- * no side effects of their own -- no SFC here has a module-level `<script>`;
- * <script setup> runs per instance. Rollup dropped a wrapper nobody used, its
- * <style> with it. Rolldown counts the wrapper's stylesheet import as a side
- * effect, so a barrel that re-exports a component (components/ui,
- * components/layout) loaded it, styles and icons included, on every start
- * even when no startup screen renders it. Declaring the wrappers pure, as
- * the kit's package.json does for its own (`sideEffects`), restores the
- * Rollup result; a wrapper that is used still brings its stylesheet. */
+/** FE-169: the SFC wrapper modules of the app (any .vue file under src/, no
+ * query) carry no side effects of their own -- no SFC here has a module-level
+ * `<script>`; <script setup> runs per instance. Rolldown counts a wrapper's
+ * stylesheet import as a side effect, so a barrel that re-exports a component
+ * (components/ui, components/layout) loaded it, its styles and icons, on
+ * every start even when no startup screen renders it. Declared pure, as the
+ * kit's package.json does for its own (`sideEffects`), an unused wrapper
+ * drops out; a used one still brings its stylesheet. This goes past the
+ * Rollup build too: Rollup kept the styles of VHeader and VRatingBadges in
+ * the startup CSS, here they load with the screens that render them.
+ * STARTUP_CANARIES below fails the build when this stops working. */
 function pureSfcWrappers(srcDir: string): Plugin {
   return {
     name: 'velo-pure-sfc-wrappers',
@@ -199,6 +201,31 @@ function pureSfcWrappers(srcDir: string): Plugin {
         if (!id.startsWith(srcDir)) return null
         return { code, map: null, moduleSideEffects: false }
       },
+    },
+  }
+}
+
+/** Lazy-only components that a broken pureSfcWrappers would put on the start. */
+const STARTUP_CANARIES = [
+  /\/src\/components\/layout\/VHeader\.vue(\?|$)/,
+  /\/src\/components\/ui\/VRatingBadges\.vue(\?|$)/,
+]
+
+/** FE-169: fails the build when the startup layout drifts from the design of
+ * platform/startup-chunk.ts (checkStartupLayout: app.ts never in an entry's
+ * static closure, the app chunk importing only host and the runtime helpers,
+ * no STARTUP_CANARIES module on the start). Module ids are only known here,
+ * not in dist/, so the check lives in the build. */
+function guardStartupLayout(appEntry: string): Plugin {
+  return {
+    name: 'velo-guard-startup-layout',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const chunks = Object.values(bundle).filter((out) => out.type === 'chunk')
+      const problems = checkStartupLayout(chunks, appEntry, STARTUP_CANARIES)
+      if (problems.length > 0) {
+        this.error(`startup layout (FE-169):\n- ${problems.join('\n- ')}`)
+      }
     },
   }
 }
@@ -310,6 +337,7 @@ export default defineConfig(({ mode }) => {
       }),
       vue(),
       pureSfcWrappers(join(frontendDir, 'src/')),
+      guardStartupLayout(SRC_APP),
       VitePWA({
         // Generate SW automatically from build output.
         strategies: 'generateSW',

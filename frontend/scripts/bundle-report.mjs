@@ -2,6 +2,7 @@
 //
 // Run AFTER `vite build` (or `pnpm build`). Prints:
 //   - the startup app chunk (assets/app-*.js): raw and gzip;
+//   - the startup JS (the entry, its modulepreloads, their static imports);
 //   - total JS and CSS (and JS without the lazy Zoom SDK chunk);
 //   - the PWA precache: entry count and bytes (parsed from dist/sw.js);
 //   - the 15 largest files of dist/.
@@ -125,6 +126,30 @@ function precacheOf(distDir) {
   return { entries: urls.length, bytes, missing }
 }
 
+/** Static import edges of a built chunk: `from"./x.js"` and bare `import"./x.js"`. */
+const STATIC_EDGE = /(?:from|import)\s*["']\.\/([^"']+\.js)["']/g
+
+/**
+ * The JS of the first open (FE-169): the files index.html loads (the entry
+ * script, the modulepreloads) and their static imports, transitively.
+ * Dynamic import() edges are not followed -- those are lazy screens.
+ */
+function startupJs(distDir) {
+  const html = readFileSync(join(distDir, 'index.html'), 'utf8')
+  /** @type {Set<string>} */
+  const seen = new Set()
+  /** @type {string[]} */
+  const queue = [...html.matchAll(/(?:src|href)="\/(assets\/[^"]+\.js)"/g)].map((m) => m[1] ?? '')
+  for (let file = queue.pop(); file !== undefined; file = queue.pop()) {
+    if (seen.has(file) || !existsSync(join(distDir, file))) continue
+    seen.add(file)
+    for (const m of readFileSync(join(distDir, file), 'utf8').matchAll(STATIC_EDGE)) {
+      queue.push(`assets/${m[1]}`)
+    }
+  }
+  return [...seen].sort()
+}
+
 /** Collect the size facts of a built dist/ directory. */
 function report(distDir) {
   if (!existsSync(join(distDir, 'index.html'))) {
@@ -149,6 +174,7 @@ function report(distDir) {
       js.filter((f) => !/^assets\/zoom-sdk-/.test(f)),
     ),
     css: sumSizes(distDir, css),
+    startup: sumSizes(distDir, startupJs(distDir)),
     precache: precacheOf(distDir),
     top: [...files].sort((a, b) => b.bytes - a.bytes).slice(0, 15),
   }
@@ -165,6 +191,10 @@ function printReport(r) {
     `${r.jsWithoutZoom.files} files  ${kb(r.jsWithoutZoom.bytes)} | gzip ${kb(r.jsWithoutZoom.gzip)}`,
   )
   line('CSS total', `${r.css.files} files  ${kb(r.css.bytes)} | gzip ${kb(r.css.gzip)}`)
+  line(
+    'startup JS',
+    `${r.startup.files} files  ${kb(r.startup.bytes)} | gzip ${kb(r.startup.gzip)}`,
+  )
   if (r.precache) {
     line('precache', `${r.precache.entries} entries  ${kb(r.precache.bytes)}`)
     if (r.precache.missing.length) {
@@ -312,7 +342,11 @@ if (argv.includes('--modules')) {
       next && !next.startsWith('--') ? next : join(frontendDir, 'bundle-budget.json')
     const budget = JSON.parse(readFileSync(budgetPath, 'utf8'))
     assertBudgetShape(budget, budgetPath)
-    const sizes = { entryGzip: r.entry.gzip, precacheBytes: r.precache ? r.precache.bytes : null }
+    const sizes = {
+      entryGzip: r.entry.gzip,
+      precacheBytes: r.precache ? r.precache.bytes : null,
+      startupGzip: r.startup.gzip,
+    }
     const basePath = flagValue(argv, '--base')
     const base =
       basePath && existsSync(basePath) ? JSON.parse(readFileSync(basePath, 'utf8')) : null
