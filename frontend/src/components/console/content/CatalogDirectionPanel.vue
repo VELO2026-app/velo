@@ -11,7 +11,7 @@
 -->
 
 <template>
-  <ConsoleCard class="catalog-direction" :title="direction.label">
+  <ConsoleCard class="catalog-direction" :title="title">
     <template #header-right>
       <label class="catalog-direction__visible">
         <span>{{ t('console.catalog.detail.visible') }}</span>
@@ -66,6 +66,7 @@ import { isWholeNumber } from '@/utils/console/displayOrder'
 import { useTaxonomyMutation } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { directionDisplayLabel } from '@/utils/practiceOptions'
 import {
   updateTaxonomyDirection,
   type TaxonomyDirectionItem,
@@ -83,6 +84,10 @@ const updateDirection = useTaxonomyMutation(
   ({ id, body }: { id: string; body: UpdateTaxonomyItemRequest }) =>
     updateTaxonomyDirection(id, body),
 )
+
+// The card's title is the name the app shows (the live locale); the NAME field
+// below edits the stored label, the catalog's canon.
+const title = computed(() => directionDisplayLabel(props.direction.value, props.direction.label))
 
 const draftLabel = ref(props.direction.label)
 const draftOrder = ref(String(props.direction.display_order))

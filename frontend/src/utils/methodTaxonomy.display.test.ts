@@ -1,0 +1,54 @@
+// =============================================================================
+// VELO Frontend -- methodTaxonomy.ts: stored methods and catalog rows in the
+// live locale (FE-275, the console on uk)
+// =============================================================================
+// The DB catalog and the stored "Direction — Style" strings carry the ru
+// storage canon. A non-ru UI must show them in its own words: the known
+// directions and styles through their keys, and a promoted direction (random
+// `custom_<8 hex>` slug) through the seed key its ru label names
+// (i18n:display.direction.therapy). A string the taxonomy does not know stays
+// verbatim. Display only: nothing here re-writes a stored string.
+// =============================================================================
+
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { setLocale } from '@/locales'
+import { applyTaxonomyCatalog, methodDisplayLabel } from '@/utils/methodTaxonomy'
+
+/** A promoted direction (random slug) the ru seed names by its label. */
+beforeAll(() => {
+  applyTaxonomyCatalog({
+    directions: [
+      {
+        id: 'd1',
+        value: 'custom_n8xq7g2q',
+        label: 'Терапия',
+        display_order: 10,
+        is_active: true,
+        source: 'custom',
+        styles: [],
+      },
+    ],
+  })
+})
+
+afterEach(async () => {
+  await setLocale('ru')
+})
+
+describe('methodDisplayLabel', () => {
+  it.each([
+    ['uk', 'Медитация — Звуковая медитация', 'Медитація — Звукова медитація'],
+    ['en', 'Йога — Хатха-йога', 'Yoga — Hatha yoga'],
+    ['uk', 'Дыхательные практики', 'Дихальні практики'],
+    ['uk', 'Терапия', 'Терапія'],
+  ])('%s: the stored "%s" reads "%s"', async (locale, stored, shown) => {
+    await setLocale(locale)
+    expect(methodDisplayLabel(stored)).toBe(shown)
+  })
+
+  it('leaves a string the taxonomy does not know verbatim', async () => {
+    await setLocale('uk')
+    expect(methodDisplayLabel('Мой уникальный метод')).toBe('Мой уникальный метод')
+    expect(methodDisplayLabel('Йога — Несуществующий вид')).toBe('Йога — Несуществующий вид')
+  })
+})
