@@ -1510,7 +1510,7 @@ html.is-keyboard-closing .diary-feed {
   background: transparent;
   font-family: var(--font-body);
   font-size: var(--velo-fs-16);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
   color: var(--velo-pink-700);
   cursor: pointer;
   transition: opacity var(--transition-fast);

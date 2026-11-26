@@ -237,11 +237,11 @@ h4,
 h5,
 h6 {
   font-family: var(--font-body);
-  /* Headings a touch heavier (operator 2026-06-17). A single-weight skin font
-     (the golden Marmelad ships only 400) gets a synthesized heavier face — 600
-     is the lightest step that triggers it (500 would fall back to 400). The
-     core's system stack has a real 600. */
-  font-weight: 600;
+  /* Headings a touch heavier (operator 2026-06-17): the skin's medium step.
+     --velo-fw-medium is 600 in the core (system stack) and for Goodo
+     (variable Manrope); the golden skin maps it to its Medium face, 500
+     (FE-278). */
+  font-weight: var(--velo-fw-medium);
   line-height: 1.3;
   color: var(--velo-text-primary);
 }
@@ -601,10 +601,12 @@ html.is-keyboard-open .mobile-layout__main--fog {
 }
 
 /* === Faux-bold (DS canon) ===
-   A single-weight skin font (the golden Marmelad ships only 400) cannot go
-   bolder, so some titles fake extra weight with a hair stroke. Single source for that technique — one line to change app-wide (or to
-   retire if a real bold face ever lands). Apply as a class, or reference the
-   --velo-text-stroke-strong token directly in a scoped rule. */
+   Some titles fake extra weight on the regular face with a hair stroke
+   (designer's choice, before the golden skin had Medium and Bold faces).
+   Single source for that technique — one line to change app-wide (or to
+   retire in favour of --velo-fw-medium / --velo-fw-bold). Apply as a class,
+   or reference the --velo-text-stroke-strong token directly in a scoped
+   rule. */
 .velo-text-strong {
   -webkit-text-stroke: var(--velo-text-stroke-strong) currentColor;
 }

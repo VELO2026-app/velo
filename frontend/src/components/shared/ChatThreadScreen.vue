@@ -833,7 +833,7 @@ html.is-keyboard-closing .chat-thread {
    above the body -- the service, never an admin's name. */
 .chat-thread__sender {
   font-size: var(--velo-fs-12);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
   opacity: 0.65;
   margin-bottom: var(--space-1);
 }

@@ -233,8 +233,8 @@ async function onTimezoneChange(value: string): Promise<void> {
   color: var(--velo-text-primary);
   letter-spacing: 0.02em;
   margin: 0;
-  /* Matches the SVG section headers (Marmelad has no bold weight; the design
-     thickens them with a 0.3 stroke). */
+  /* Matches the SVG section headers (the design thickens them with a 0.3
+     stroke). */
   -webkit-text-stroke: var(--velo-text-stroke-strong) currentColor;
 }
 

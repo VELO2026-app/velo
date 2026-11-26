@@ -815,8 +815,8 @@ script-эмуляцию. Контр-тест (убрать фикс → ошиб
     --velo-warning-bg/border/text/text-light --velo-error-bg/border/text
     --velo-success-bg/text --velo-info-bg/text --velo-mood-low/mid/high
     /* Типографика */ --font-body: "Marmelad",
-  "Noto Sans", sans-serif -- единственный шрифт,
-  weight 400 --font-heading: "Marmelad", ... -- алиас,
+  "Noto Sans", sans-serif -- семейство скина
+  (gold: VELO Marmelad) --font-heading: "Marmelad", ... -- алиас,
   тот же шрифт /* Spacing */ --space-1..10, --velo-content-width: 336px,
   --velo-screen-padding: 33px /* Радиусы */ --radius-sm/md/lg: 15px -- карточки
     --radius-xl: 100px -- теги --radius-full: 9999px -- pill (кнопки)
@@ -824,7 +824,7 @@ script-эмуляцию. Контр-тест (убрать фикс → ошиб
     7px #ffffff -- glow на всех кнопках;
 ```
 
-Шрифт: Marmelad Regular 400 — единственный вес, единственное начертание. Подключён через `<link>` в `index.html`.
+Шрифт gold: VELO Marmelad, четыре начертания (Light 300, Regular 400, Medium 500, Bold 700); файлы `woff2` и `@font-face` приходят из пакета скина `velo-brand` (FE-278, `tz-whitelabel.md` §3.5), заранее грузится только Regular. Вес 600 и 700 в коде задают токены `--velo-fw-medium` и `--velo-fw-bold`: у ядра и Goodo (Manrope) это 600 и 700, у gold — Medium 500 и Bold 700.
 
 Фон: красится на `#app::before { position: fixed; inset: 0; z-index: -1; background: url('/bg/background.png') center / cover no-repeat }` (`global.css` ~116-127), **НЕ на `body`** — фиксированный слой под контентом. `transform: translateY(var(--velo-bg-shift))` контр-сдвигает «танцующий фон» при reflow visual-viewport (клавиатура); at-rest `--velo-bg-shift = 0px` → инертно. Клавиатура-aware: `useBackgroundStabilizer` пишет высоту visual-viewport в `--velo-vvh` + тогглит `html.is-keyboard-open` (порог `KEYBOARD_VIEWPORT_THRESHOLD` = 150px) — гейтнутые правила ужимают `.mobile-layout__main` / `.v-modal__*` до видимой области + снимают fog-маску (`убрать туман при вводе`) ТОЛЬКО при открытой клавиатуре (at-rest байт-идентично). **Заморозка фото (KB#4 + SP-3, v1.10):** `#app::before` морозится (`transform:none`) при `html.is-keyboard-open`, а с v1.10 — ТАКЖЕ при `html.is-field-focused` (тогглится `useBackgroundStabilizer` на `focusin`/`focusout` текстового поля), чтобы фото не «сползало» в окне анимации клавиатуры ДО 150px-порога; классы композитятся (любой ⇒ `transform:none`). `resetKeyboardViewportState` (через `router.afterEach`) синхронно сбрасывает `--velo-bg-shift`/`--velo-vvh`/оба класса на смене роута. Фото из `Design_prototype`, sacred geometry overlay. Все layout-контейнеры прозрачные.
 

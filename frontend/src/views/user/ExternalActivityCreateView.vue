@@ -1050,7 +1050,7 @@ html.is-keyboard-open .ea__save-wrap {
   box-shadow: var(--velo-shadow-glass);
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
   color: var(--velo-text-primary);
   cursor: pointer;
   transition: opacity var(--transition-fast);

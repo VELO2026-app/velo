@@ -259,6 +259,10 @@ const GOLDEN_ASSET_SHA256 = new Set([
   '1dde39b76fb1537d8c5d42906fe9f525ade329d67139d18b698c1a071b7f8dda', // bg/background.webp
   '2fd312a1724f49efee3d71e05ec18bf02d1b33feae09884a915ba07d8b6a629c', // favicon.svg
   '12c2dea232636ae1f050974f8674def76ec2a47b9c9cd814a1d8e7b5e94818bd', // fonts/marmelad-subset.woff2
+  'a4c1c1f62c3f322f01fb1118e81c429e56fb0803ae041fda18d3d0dd13b3a86b', // fonts/velo-marmelad-bold.woff2 (v0.3.0)
+  '4503b7d6dd7df6c3f7699d7ab09dd202b91fe5e7488fa81d45ed3118fb260ee5', // fonts/velo-marmelad-light.woff2 (v0.3.0)
+  '3dd0be1b8770b432ee268229a3f16c73a1612783effdb0a81148ce2ac46eb612', // fonts/velo-marmelad-medium.woff2 (v0.3.0)
+  '100c04bec10f7d28ecea9c498a1bc21677c5dee2482019705f08333a2ec0ca51', // fonts/velo-marmelad-regular.woff2 (v0.3.0)
   'c5482fe8a177af4ff0536ae66bcc90263f4bc5e903a6f5fca34faa448bc43655', // icon-192.png
   '520eb5ce9845fc700ba8595dbe4f5877268dd6b6a4758b503dd6c9b70bfa7889', // icon-512.png
   '3634452ad3e9403f2be8a6c079fadba3647760ca71bc8a5631e66f24a13cf962', // icon-maskable-512.png

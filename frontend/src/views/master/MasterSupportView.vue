@@ -453,8 +453,8 @@ function onGoHome(): void {
   max-width: 336px;
   align-self: center;
   margin-top: var(--space-8);
-  /* Heavier label (operator 2026-06-19) — Marmelad is single-weight, so thicken
-     with the 0.3px stroke trick used by the section titles. */
+  /* Heavier label (operator 2026-06-19): thickened with the 0.3px stroke
+     trick used by the section titles. */
   -webkit-text-stroke: var(--velo-text-stroke-strong) currentColor;
 }
 </style>

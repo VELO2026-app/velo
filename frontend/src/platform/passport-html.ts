@@ -41,13 +41,22 @@ const PASSPORT_HTML_DEFAULTS: Record<string, string> = {
 
 const FONT_BLOCK = /<!--VELO:FONT-->[\s\S]*<!--\/VELO:FONT-->/
 
+/** The faces the first paint needs (FE-278): the Regular one (400, normal). The
+ *  other faces of the family (Medium, Bold, ...) load on demand through their
+ *  \@font-face rule, when text of that weight is drawn. A package without a
+ *  400 normal face (a single variable font, "200 800") preloads its first one. */
+function preloadedFaces(fonts: SkinPackage['fonts']): SkinPackage['fonts'] {
+  const regular = fonts.find((font) => font.weight === 400 && font.style === 'normal')
+  return regular ? [regular] : fonts.slice(0, 1)
+}
+
 /** A skin with self-hosted fonts (FE-131: assets/fonts/ of the package,
  *  declared by an \@font-face rule in virtual:skin-tokens.css) replaces the Google Fonts block
- *  with preloads of its own files -- no external request ships with it. */
+ *  with a preload of its regular face -- no external request ships with it. */
 function skinFontBlock(skin: SkinPackage): string {
   return [
     '<!--VELO:FONT-->',
-    ...skin.fonts.map(
+    ...preloadedFaces(skin.fonts).map(
       (font) =>
         `    <link rel="preload" href="/skin/${font.file}" as="font" type="font/woff2" crossorigin />`,
     ),
