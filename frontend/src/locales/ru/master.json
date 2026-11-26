@@ -812,7 +812,8 @@
       "needsAttention": "Требуют внимания",
       "needsAttentionSingular": "Требует внимания",
       "summaryAfterConnect": "Сводка появится, когда подключится аналитика",
-      "title": "Саммари недели"
+      "title": "Саммари недели",
+      "checkedOf": "Проверено учеников: {shown} из {total}"
     },
     "masterSupport": {
       "message": {
@@ -839,7 +840,8 @@
       "loadMoreFailed": "Не удалось загрузить ещё"
     },
     "masterCommon": {
-      "practicesCount": "Практик: {n}"
+      "practicesCount": "Практик: {n}",
+      "shownOf": "Показаны {shown} из {total}"
     }
   }
 }

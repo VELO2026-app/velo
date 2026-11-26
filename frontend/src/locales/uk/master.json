@@ -812,7 +812,8 @@
       "needsAttention": "Потребують уваги",
       "needsAttentionSingular": "Потребує уваги",
       "summaryAfterConnect": "Зведення з'явиться, коли підключиться аналітика",
-      "title": "Підсумок тижня"
+      "title": "Підсумок тижня",
+      "checkedOf": "Перевірено учнів: {shown} з {total}"
     },
     "masterSupport": {
       "message": {
@@ -839,7 +840,8 @@
       "loadMoreFailed": "Не вдалося завантажити ще"
     },
     "masterCommon": {
-      "practicesCount": "Практик: {n}"
+      "practicesCount": "Практик: {n}",
+      "shownOf": "Показано {shown} з {total}"
     }
   }
 }
