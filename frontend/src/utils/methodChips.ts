@@ -29,7 +29,12 @@
 
 import type { Component } from 'vue'
 import { DIRECTION_ICON, DIRECTION_ICON_FALLBACK } from '@/utils/displayHelpers'
-import { directionLabel, parseMethods, resolveStyleLabel } from '@/utils/methodTaxonomy'
+import {
+  customMethodLabel,
+  directionLabel,
+  parseMethods,
+  resolveStyleLabel,
+} from '@/utils/methodTaxonomy'
 
 /** A stored method string rendered as a chip: the direction's icon plus the short label. */
 export interface MethodChip {
@@ -64,7 +69,7 @@ export function methodChipFor(method: string): MethodChip {
   const parsed = parseMethods([method])
   const dir = parsed.directions[0]
   if (!dir) {
-    return { icon: DIRECTION_ICON_FALLBACK, label: parsed.customText || method }
+    return { icon: DIRECTION_ICON_FALLBACK, label: customMethodLabel(parsed.customText || method) }
   }
   const icon: Component = DIRECTION_ICON[dir] ?? DIRECTION_ICON_FALLBACK
   const styleValue = parsed.styles[dir]?.[0]

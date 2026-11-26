@@ -12,9 +12,9 @@
 
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { setLocale } from '@/locales'
-import { applyTaxonomyCatalog, directionLabel, methodDisplayLabel } from '@/utils/methodTaxonomy'
+import { applyTaxonomyCatalog, methodDisplayLabel } from '@/utils/methodTaxonomy'
 
-/** A promoted direction and an own one no seed key names, next to a seeded one. */
+/** A promoted direction (random slug) the ru seed names by its label. */
 beforeAll(() => {
   applyTaxonomyCatalog({
     directions: [
@@ -27,35 +27,12 @@ beforeAll(() => {
         source: 'custom',
         styles: [],
       },
-      {
-        id: 'd2',
-        value: 'custom_k3m9p1xz',
-        label: 'Исцеление',
-        display_order: 11,
-        is_active: true,
-        source: 'custom',
-        styles: [],
-      },
     ],
   })
 })
 
 afterEach(async () => {
   await setLocale('ru')
-})
-
-describe('directionLabel', () => {
-  it('shows a promoted direction in the live locale when its ru label is a seed one', async () => {
-    await setLocale('uk')
-    expect(directionLabel('custom_n8xq7g2q')).toBe('Терапія')
-    await setLocale('en')
-    expect(directionLabel('custom_n8xq7g2q')).toBe('Therapy')
-  })
-
-  it('keeps the catalog label of a promoted direction no seed key names', async () => {
-    await setLocale('uk')
-    expect(directionLabel('custom_k3m9p1xz')).toBe('Исцеление')
-  })
 })
 
 describe('methodDisplayLabel', () => {

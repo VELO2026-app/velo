@@ -50,6 +50,7 @@ import {
 import {
   DIRECTION_OPTIONS,
   directionDisplayLabel,
+  seedDirectionLabel,
   stylesForDirection,
   hasStyleLabel,
   styleLabel,
@@ -282,16 +283,29 @@ export function directionLabel(dir: string): string {
 }
 
 /**
+ * A stored string no direction took (parseMethods' custom variant) for
+ * DISPLAY. With a cold catalog (not loaded yet, a failed load, a hidden
+ * direction) a bare direction label the ru seed names -- the promoted
+ * "Therapy" of a master's own method (i18n:display.direction.therapy) -- is
+ * not matched, so it surfaces as custom; its live wording is still known by
+ * the label. Any other text stays verbatim: it is the master's own.
+ */
+export function customMethodLabel(text: string): string {
+  return seedDirectionLabel(text)
+}
+
+/**
  * One STORED method string for DISPLAY in the live locale: "Direction —
  * Style" with both halves through the display labels, a bare direction
  * through its label. A string the taxonomy does not know (a custom own
- * variant, legacy text) stays verbatim -- nothing vanishes. DISPLAY-ONLY: the
- * stored string itself is never re-written to the live words.
+ * variant, legacy text) stays verbatim -- nothing vanishes -- but for a bare
+ * label the seed names (customMethodLabel). DISPLAY-ONLY: the stored string
+ * itself is never re-written to the live words.
  */
 export function methodDisplayLabel(stored: string): string {
   const parsed = parseMethods([stored])
   const dir = parsed.directions[0]
-  if (!dir) return stored
+  if (!dir) return customMethodLabel(stored)
   const style = parsed.styles[dir]?.[0]
   const dirText = directionLabel(dir)
   return style === undefined ? dirText : `${dirText}${SEP}${resolveStyleLabel(dir, style)}`

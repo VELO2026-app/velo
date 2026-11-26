@@ -370,13 +370,15 @@ describe('ConsoleModerationView: method changes', () => {
   })
 
   it('shows the stored methods in the live locale, a custom one verbatim', async () => {
-    // The stored strings are the ru storage canon (FE-275).
+    // The stored strings are the ru storage canon (FE-275); the catalog is cold
+    // (primeMethodTaxonomyCatalog is stubbed), so "Therapy" is not matched.
     server.requests = [
       request({
         current_methods: ['Медитация — Звуковая медитация'],
         proposed_methods: [
           'Медитация — Звуковая медитация',
           'Дыхательные практики',
+          'Терапия',
           'Мой уникальный метод',
         ],
       }),
@@ -389,7 +391,7 @@ describe('ConsoleModerationView: method changes', () => {
     )
     expect(chips).toEqual([
       ['Медитація — Звукова медитація'],
-      ['Медитація — Звукова медитація', 'Дихальні практики', 'Мой уникальный метод'],
+      ['Медитація — Звукова медитація', 'Дихальні практики', 'Терапія', 'Мой уникальный метод'],
     ])
   })
 

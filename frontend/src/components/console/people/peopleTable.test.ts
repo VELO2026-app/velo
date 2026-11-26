@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { setLocale } from '@/locales'
 import {
   DASH,
   countText,
+  methodChips,
   masterStatusLabel,
   masterStatusTone,
   payoutText,
@@ -68,5 +70,26 @@ describe('masterStatusTone and roleTone', () => {
     ['user', 'muted'],
   ])('role %s reads as %s', (role, tone) => {
     expect(roleTone(role)).toBe(tone)
+  })
+})
+
+describe('methodChips', () => {
+  afterEach(async () => {
+    await setLocale('ru')
+  })
+
+  it('reads a bare direction the seed names in the live locale, with no catalog', async () => {
+    await setLocale('uk')
+
+    expect(methodChips({ methods: ['Терапия'] })).toEqual([{ label: 'Терапія', muted: false }])
+    expect(methodChips({ methods: ['Йога — Хатха-йога', 'Терапия'] })).toEqual([
+      { label: 'Йога', muted: false },
+      { label: 'Хатха-йога', muted: true },
+      { label: 'Терапія', muted: false },
+    ])
+    // The master's own text is not touched.
+    expect(methodChips({ methods: ['Мой уникальный метод'] })).toEqual([
+      { label: 'Мой уникальный метод', muted: false },
+    ])
   })
 })

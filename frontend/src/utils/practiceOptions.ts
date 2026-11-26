@@ -491,8 +491,18 @@ export function hasStyleLabel(styleValue: string): boolean {
 export function directionDisplayLabel(value: string, catalogLabel: string): string {
   const known = DIRECTION_OPTIONS.find((o) => o.value === value)
   if (known) return known.label
-  const seedKey = ruDirectionValueByLabel.get(catalogLabel)
-  return seedKey === undefined ? catalogLabel : t(`display.direction.${seedKey}`)
+  return seedDirectionLabel(catalogLabel)
+}
+
+/** DISPLAY text of a direction known only by its label: the live wording when
+ *  the ru seed names the label (i18n:display.direction.therapy), the label
+ *  itself otherwise. The one place a label finds its key, for a catalog row
+ *  with a random slug (directionDisplayLabel) and for a stored string no
+ *  direction took while the catalog is cold or does not list it
+ *  (methodTaxonomy.ts: customMethodLabel). */
+export function seedDirectionLabel(label: string): string {
+  const seedKey = ruDirectionValueByLabel.get(label.trim())
+  return seedKey === undefined ? label : t(`display.direction.${seedKey}`)
 }
 
 /** DISPLAY label for a catalog style row (same contract as

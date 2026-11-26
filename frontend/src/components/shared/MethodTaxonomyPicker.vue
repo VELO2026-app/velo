@@ -68,7 +68,7 @@
              it, matching the selected-direction chips above rather than
              bespoke markup. -->
         <VChip v-if="readonly && selection.customEnabled" size="md" :active="true">
-          {{ selection.customText }}
+          {{ customMethodLabel(selection.customText) }}
         </VChip>
       </div>
     </VCard>
@@ -123,6 +123,7 @@ import {
   flattenMethods,
   parseMethods,
   directionLabel,
+  customMethodLabel,
   applyTaxonomyCatalog,
   taxonomyCatalogVersion,
   type MethodSelection,

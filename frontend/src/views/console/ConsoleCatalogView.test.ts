@@ -271,9 +271,11 @@ describe('ConsoleCatalogView', () => {
         'Медитація',
       )
       expect(styleRows()).toEqual(['Медитація мовчання #0 on'])
-      expect(byLabel(t('console.catalog.styles.edit', { name: 'Медитація мовчання' }))).toBeTruthy()
-      // What the NAME field edits is the stored label, not the shown one.
+      // What the NAME fields edit is the stored label, not the shown one: the
+      // shown wording must never travel to the DB.
       expect(field(t('console.catalog.detail.name')).value).toBe('Медитация')
+      await click(byLabel(t('console.catalog.styles.edit', { name: 'Медитація мовчання' })))
+      expect(field(t('console.catalog.styles.name')).value).toBe('Медитация молчания')
     })
 
     it('an empty catalog says so', async () => {

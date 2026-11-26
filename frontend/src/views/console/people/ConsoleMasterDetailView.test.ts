@@ -24,6 +24,7 @@ import ConsoleMasterDetailView from '@/views/console/people/ConsoleMasterDetailV
 import * as adminApi from '@/api/admin'
 import * as taxonomyApi from '@/api/taxonomy'
 import { ApiResponseError } from '@/api/client'
+import { setLocale } from '@/locales'
 import type { AdminMasterDetail, RevokeMasterAdvisory } from '@/api/admin'
 
 vi.mock('@/api/admin')
@@ -174,12 +175,28 @@ beforeEach(() => {
   vi.mocked(taxonomyApi.getActiveTaxonomy).mockReset().mockRejectedValue(new Error('offline'))
 })
 
-afterEach(() => {
+afterEach(async () => {
   app?.unmount()
   root?.remove()
   document.body.querySelectorAll('.v-modal__overlay, .v-modal__scrim').forEach((el) => el.remove())
   app = null
   root = null
+  await setLocale('ru')
+})
+
+describe('ConsoleMasterDetailView: the methods of the card', () => {
+  it('words a single method the seed names in the live locale, with the catalog cold (FE-275)', async () => {
+    // The catalog never loads (beforeEach): parseMethods does not know "Therapy",
+    // so it surfaces as the custom variant -- in the header chips and the readonly picker.
+    serve(master({ methods: ['Терапия'] }))
+    await setLocale('uk')
+    await mount(false)
+
+    await vi.waitFor(() =>
+      expect(root?.querySelector('.profile-form__picker')?.textContent).toContain('Терапія'),
+    )
+    expect(root?.textContent).not.toContain('Терапия')
+  })
 })
 
 describe('ConsoleMasterDetailView: the counters of the card', () => {
