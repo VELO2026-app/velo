@@ -103,7 +103,7 @@ const TOKEN_LINE = 'Новые токены: accent/mint = #a1e0c7, gap 13px —
 
 test('H-10: an instance of a master on «Kit и токены» passes; one from «User App» is an error', async () => {
   /** @param {string} pageName */
-  const run = async (pageName) => {
+  const run = (pageName) => {
     const sec = section([TOKEN_LINE], undefined)
     const master = new Node('PAGE', pageName).appendChild(new Node('COMPONENT', 'VButton'))
     /** @type {any} */
