@@ -37,9 +37,10 @@
 import { toRaw } from 'vue'
 import { createI18n, type MessageFunction } from 'vue-i18n'
 
+import { pickBrowserLocale } from '@/locales/browserLocale'
 import { toMessageFunctions } from '@/locales/messageFunction'
 import { conformOverlay } from '@/locales/overlayShape'
-import { setRootLang } from '@/platform/dom'
+import { browserLanguages, setRootLang, telegramLanguageCode } from '@/platform/dom'
 import { INSTANCE, isSupportedLocale, SUPPORTED_LOCALES, type Locale } from '@/platform/instance'
 import { SKIN_BRAND } from 'virtual:skin-brand'
 
@@ -329,29 +330,96 @@ export function warmLocale(locale: string): void {
   loadLocale(locale).catch(() => undefined)
 }
 
+/** The newest locale switch asked for; an older one that is still loading gives way. */
+let switchGeneration = 0
+
 /**
- * Switch the UI language: load the catalogs via loadLocale, then flip the
- * composer, the root lang, and the boot hint. A locale with no folder is a
- * no-op (fallback keeps rendering). The language switcher UI (tz-i18n
- * phase 5) only ever offers locales that have catalogs.
+ * Load a locale's catalogs, then flip the composer and the root lang to it;
+ * `remember` also writes the boot hint. A locale with no folder is a no-op
+ * (fallback keeps rendering).
+ *
+ * @remarks
+ * Only the newest call flips: a switch that finishes loading after a later
+ * one was asked for does nothing. The signed-out switch races the sign-in
+ * this way (the user record arrives while the browser's catalog is still
+ * loading), and the older answer must not overwrite the profile's language.
  */
-export async function setLocale(locale: string): Promise<void> {
+async function switchLocale(locale: string, remember: boolean): Promise<void> {
   if (!isSupportedLocale(locale)) return
+  const generation = ++switchGeneration
   // Load BEFORE the same-locale exit: the current locale is not necessarily
   // a loaded one (a non-ru default starts aliased onto ru), so even a
   // no-flip call may still have chunks to fetch before it can render its
   // own text.
   await loadLocale(locale)
+  if (generation !== switchGeneration) return
   // No catalog folder -> the core never applied: keep the current locale
   // rendering on fallback rather than switching into void.
   if (!appliedParts.get(locale)?.has('core')) return
   if (i18n.global.locale.value === locale) return
   i18n.global.locale.value = locale
   setRootLang(locale)
+  if (!remember) return
   try {
     localStorage.setItem(LOCALE_HINT_KEY, locale)
   } catch {
     /* storage unavailable -- the hint simply won't persist */
+  }
+}
+
+/**
+ * Switch the UI language: load the catalogs via loadLocale, then flip the
+ * composer, the root lang, and the boot hint. A locale with no folder is a
+ * no-op (fallback keeps rendering). The language switcher UI (tz-i18n
+ * phase 5) only ever offers locales that have catalogs.
+ */
+export function setLocale(locale: string): Promise<void> {
+  return switchLocale(locale, true)
+}
+
+/**
+ * The language of a device that has not signed in (FE-261): the first
+ * language of the person's list the instance offers, else the instance
+ * default (locales/browserLocale.ts). The list is Telegram's language_code
+ * (inside Telegram), then the browser's languages in their order.
+ */
+export function signedOutLocale(): Locale {
+  const telegram = telegramLanguageCode()
+  const languages = telegram ? [telegram, ...browserLanguages()] : browserLanguages()
+  return pickBrowserLocale(languages, INSTANCE.locales, INSTANCE.defaultLocale)
+}
+
+/**
+ * Start, or return to, the signed-out language: load its catalogs and flip
+ * to it WITHOUT writing the boot hint. The hint is the last language the
+ * person CHOSE; a language guessed from the browser is not a choice, and a
+ * hint written for it would outlive the browser's next setting.
+ *
+ * @remarks
+ * The default language is loaded here too, not only a foreign one: a non-ru
+ * default starts aliased onto the ru catalog (see above) and nothing else
+ * loads its own catalog before a sign-in -- the signed-out screen of a uk
+ * instance spoke Russian under `<html lang="uk">`.
+ */
+export function setSignedOutLocale(): Promise<void> {
+  return switchLocale(signedOutLocale(), false)
+}
+
+/**
+ * The language of the first render: the last one the person chose (the boot
+ * hint), else the signed-out language. Called once before mount (app.ts);
+ * never throws.
+ */
+export async function setBootLocale(): Promise<void> {
+  const hint = readLocaleHint()
+  try {
+    if (isSupportedLocale(hint)) await setLocale(hint)
+    else await setSignedOutLocale()
+  } catch {
+    // A catalog chunk that did not load (network, a stale deploy) must not
+    // stop the mount: the app renders in the language it already holds. A
+    // failed fetch is forgotten, so the user-language watcher in App.vue or
+    // the language switcher loads it again.
   }
 }
 

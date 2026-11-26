@@ -32,6 +32,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import App from '@/App.vue'
 import { useAuthStore } from '@/stores/auth'
+import { clearLocaleHint, getLocale, readLocaleHint, setLocale } from '@/locales'
 import type { UserResponse } from '@/api/types'
 
 // FE-157 s2: the boot must not warm the other locales (App.vue used to load
@@ -243,8 +244,8 @@ describe('App entry gate (FE-39)', () => {
     await flushPromises()
 
     const enter = w.findAll('button').find((b) => b.text() === 'Войти')
-    expect(enter).toBeDefined()
-    await enter!.trigger('click')
+    if (!enter) throw new Error('the Welcome enter button is missing')
+    await enter.trigger('click')
     await flushPromises()
 
     const carousel = w.find('.onboarding-stub')
@@ -315,7 +316,8 @@ describe('App entry gate (FE-39)', () => {
 
     expect(w.find('.bot-hint').exists()).toBe(true)
     const close = w.findAll('.bot-hint button').find((b) => b.text() === 'Понятно')
-    await close!.trigger('click')
+    if (!close) throw new Error('the bot hint close button is missing')
+    await close.trigger('click')
     await flushPromises()
     expect(w.find('.bot-hint').exists()).toBe(false)
     expect(botAccessHint.value).toBe(false)
@@ -345,5 +347,29 @@ describe('App boot -- no locale warm-up (FE-157 s2)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('App sign-out -- the signed-out language (FE-261)', () => {
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+    clearLocaleHint()
+    await setLocale('ru')
+    clearLocaleHint()
+  })
+
+  it('a user who signs out lands on the browser language the instance offers, with no hint left', async () => {
+    vi.stubEnv('VITE_LOCALES', 'ru,en,uk')
+    vi.spyOn(window.navigator, 'languages', 'get').mockReturnValue(['uk-UA'])
+    await mountGate()
+    // The user record arrives after the mount, as it does from initAuth().
+    setAuthUser({ language: 'en' })
+    await vi.waitFor(() => expect(getLocale()).toBe('en'))
+
+    useAuthStore().user = null
+
+    await vi.waitFor(() => expect(getLocale()).toBe('uk'))
+    expect(readLocaleHint()).toBeNull()
   })
 })

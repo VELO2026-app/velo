@@ -78,8 +78,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { firstScreenReady } from '@/router/firstScreen'
 import { useAuth, isSchoolInviteStartParam } from '@/composables/useAuth'
 import { useAuthStore } from '@/stores/auth'
-import { applyUserLanguage, clearLocaleHint, setLocale } from '@/locales'
-import { INSTANCE } from '@/platform/instance'
+import { applyUserLanguage, clearLocaleHint, setSignedOutLocale } from '@/locales'
 import { platform } from '@/platform'
 import { useBackgroundStabilizer } from '@/composables/useBackgroundStabilizer'
 import { useViewportGeometry } from '@/composables/useViewportGeometry'
@@ -109,11 +108,12 @@ const inTelegram = platform.name === 'telegram'
 watch(
   () => authStore.user?.language,
   (language) => {
-    // Logout (user -> null): drop the boot hint and return to the default
-    // locale -- a signed-out device must not keep the personal language.
+    // Logout (user -> null): drop the boot hint and return to the signed-out
+    // language (the browser's when the instance offers it, else the default)
+    // -- a signed-out device must not keep the personal language.
     if (language == null) {
       clearLocaleHint()
-      void setLocale(INSTANCE.defaultLocale)
+      void setSignedOutLocale()
       return
     }
     applyUserLanguage(language)
