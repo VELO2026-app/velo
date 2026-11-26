@@ -293,14 +293,16 @@ describe('MasterPromocodesView', () => {
     })
 
     it('past the read cap says how many of the total it read', async () => {
+      // One live code among inactive ones: the read is the same, the screen light.
       serve(
-        Array.from({ length: 2050 }, (_, i) => promo(`p${i}`)),
+        Array.from({ length: 2050 }, (_, i) => promo(`p${i}`, { is_active: i === 0 })),
         2050,
       )
       mount()
 
       await vi.waitFor(() => expect(text()).toContain('Показаны 2000 из 2050'))
-      expect(items()).toHaveLength(2000)
+      expect(promosApi.getMyPromos).toHaveBeenCalledTimes(20)
+      expect(codes()).toEqual(['CODEp0'])
     })
   })
 
