@@ -217,6 +217,7 @@ async function dumpModules() {
               file: out.fileName,
               isEntry: out.isEntry,
               isDynamicEntry: out.isDynamicEntry,
+              facadeModuleId: out.facadeModuleId,
               imports: out.imports,
               modules: Object.fromEntries(
                 Object.entries(out.modules).map(([id, m]) => [id, m.renderedLength]),
@@ -234,10 +235,13 @@ async function dumpModules() {
 /** The chunks loaded on start: initial entries + the app chunk, with static imports. */
 function startupSet(chunks) {
   const byFile = new Map(chunks.map((c) => [c.file, c]))
+  // The dynamic entry of app.ts: the chunk holding it, or (Vite 8, FE-169)
+  // the facade chunk that imports the 'app' group chunk.
+  const isApp = (id) => id?.endsWith('/src/app.ts') ?? false
   const roots = chunks.filter(
     (c) =>
       c.isEntry ||
-      (c.isDynamicEntry && Object.keys(c.modules).some((id) => id.endsWith('/src/app.ts'))),
+      (c.isDynamicEntry && (isApp(c.facadeModuleId) || Object.keys(c.modules).some(isApp))),
   )
   const seen = new Set()
   const visit = (file) => {
