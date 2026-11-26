@@ -206,6 +206,10 @@ async def list_tickets(
     status: StatusCode | None = Query(default=None),
     created_from: datetime | None = Query(default=None),
     created_to: datetime | None = Query(default=None),
+    # BE-259: "mine" -- only the tickets the caller has taken. A flag, not
+    # an id: whose tickets are "mine" is the session's answer, so no admin
+    # can ask for another's through it.
+    claimed_by_me: bool = Query(default=False),
     limit: int = Query(default=20, ge=1, le=100),
     cursor: str | None = Query(default=None),
     admin: User = Depends(get_current_admin),
@@ -226,6 +230,7 @@ async def list_tickets(
         created_to=created_to,
         limit=limit,
         cursor=cursor,
+        claimed_by=admin.id if claimed_by_me else None,
     )
 
 
@@ -238,13 +243,17 @@ async def stats(
     session: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """Support over the appeals of [created_from, created_to) -- see
-    service.support_stats. Both edges required, each with a time zone."""
+    service.support_stats. Both edges required, each with a time zone. The
+    days of `by_day` are the admin's own zone's days (BE-260)."""
     _reject_actor_override(request)
     for name, value in (("created_from", created_from), ("created_to", created_to)):
         if value.tzinfo is None:
             raise BadRequestError(f"{name} must carry a time zone")
     return await support_stats(
-        session, created_from=created_from, created_to=created_to,
+        session,
+        created_from=created_from,
+        created_to=created_to,
+        timezone=admin.timezone,
     )
 
 
