@@ -34,6 +34,7 @@ from app.core.config import settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.admin.withdrawals.schemas import (
     AdminWithdrawalResponse,
+    AdminWithdrawalRow,
     PaginatedAdminWithdrawalsResponse,
 )
 from app.modules.payments.models import (
@@ -43,17 +44,11 @@ from app.modules.payments.models import (
     PaymentStatus,
 )
 from app.modules.payments.service import record_company_ledger, record_master_ledger
+from app.modules.practices.service import master_full_name
 from app.modules.users.models import User
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
 
 logger = structlog.get_logger()
-
-
-def _master_name(first_name: str | None, last_name: str | None) -> str:
-    """First + last name, else a neutral label (the withdrawing user is a
-    master). The same rule as admin/revenue's per-master names."""
-    name = " ".join(part for part in (first_name, last_name) if part).strip()
-    return name or "Мастер"
 
 
 async def to_admin_withdrawal_responses(
@@ -73,12 +68,11 @@ async def to_admin_withdrawal_responses(
                 )
             )
         ).all()
-        names = {uid: _master_name(first, last) for uid, first, last in name_rows}
-    fields = [f for f in AdminWithdrawalResponse.model_fields if f != "master_name"]
+        names = {uid: master_full_name(first, last) for uid, first, last in name_rows}
     return [
         AdminWithdrawalResponse(
-            **{field: getattr(w, field) for field in fields},
-            master_name=names.get(w.user_id, _master_name(None, None)),
+            **AdminWithdrawalRow.model_validate(w, from_attributes=True).model_dump(),
+            master_name=names.get(w.user_id, master_full_name(None, None)),
         )
         for w in withdrawals
     ]

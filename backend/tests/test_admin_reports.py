@@ -455,10 +455,14 @@ async def _master_with_practice(
     db_session: AsyncSession,
     telegram_id: int,
     profile_name: str | None,
+    first_name: str | None = "Acct",
+    last_name: str | None = "Master",
 ) -> tuple[str, str]:
-    """A master (account name "Acct Master") with a practice titled
-    "Evening Breathwork"; returns (master user id, practice id)."""
-    master_id = await _login_named(client, db_session, telegram_id, "Acct", "Master")
+    """A master (account name "Acct Master" unless given) with a practice
+    titled "Evening Breathwork"; returns (master user id, practice id)."""
+    master_id = await _login_named(
+        client, db_session, telegram_id, first_name, last_name,
+    )
     db_session.add(
         MasterProfile(
             user_id=master_id,
@@ -492,9 +496,10 @@ async def test_list_reports_names_the_reporter_and_every_kind_of_target(
     db_session: AsyncSession,
 ) -> None:
     """BE-258: a row names its reporter and its target -- a person, a master
-    (the profile's display name, else the account name), a practice by its
-    title -- and a target that is gone, or a nameless person, reads as the
-    fallback or null instead of failing the list."""
+    (one rule with the rest of the admin: the account's first and last name,
+    never the profile's display name), a practice by its title -- and a
+    target that is gone, or a nameless person, reads as the fallback or null
+    instead of failing the list."""
     token = await _make_admin(client, db_session)
     reporter = await _login_named(client, db_session, 59210, "Vera", "Reporter")
     nameless_reporter = await _login_named(client, db_session, 59211, None, None)
@@ -502,13 +507,17 @@ async def test_list_reports_names_the_reporter_and_every_kind_of_target(
     carded_master, practice_id = await _master_with_practice(
         client, db_session, 59311, "Lotus Master",
     )
-    plain_master, _ = await _master_with_practice(client, db_session, 59312, None)
+    nameless_master, _ = await _master_with_practice(
+        client, db_session, 59312, None, first_name=None, last_name=None,
+    )
     gone = str(uuid4())
 
     by_target = {
         person: await _report_row(db_session, reporter, "user", person),
         carded_master: await _report_row(db_session, reporter, "master", carded_master),
-        plain_master: await _report_row(db_session, reporter, "master", plain_master),
+        nameless_master: await _report_row(
+            db_session, reporter, "master", nameless_master,
+        ),
         practice_id: await _report_row(db_session, reporter, "practice", practice_id),
         gone: await _report_row(db_session, nameless_reporter, "practice", gone),
     }
@@ -525,8 +534,8 @@ async def test_list_reports_names_the_reporter_and_every_kind_of_target(
     }
     assert named == {
         person: ("Vera Reporter", "Pavel Target"),
-        carded_master: ("Vera Reporter", "Lotus Master"),
-        plain_master: ("Vera Reporter", "Acct Master"),
+        carded_master: ("Vera Reporter", "Acct Master"),
+        nameless_master: ("Vera Reporter", "Мастер"),
         practice_id: ("Vera Reporter", "Evening Breathwork"),
         gone: ("Участник", None),
     }

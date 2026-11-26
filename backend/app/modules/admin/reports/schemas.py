@@ -50,10 +50,10 @@ class AdminReportResponse(ReportResponse):
 
     # The reporter's name, "Участник" when the account has none.
     reporter_name: str
-    # What was reported, by its type: a person's name (user), a master's
-    # name -- the profile's display name first (master), the practice's title
-    # (practice). Null when the target is gone: the polymorphic reference
-    # has no foreign key, so nothing keeps it alive.
+    # What was reported, by its type: a person's name (user), a master's name
+    # as practices.service.master_full_name builds it (master), the
+    # practice's title (practice). Null when the target is gone: the
+    # polymorphic reference has no foreign key, so nothing keeps it alive.
     target_name: str | None
 
 

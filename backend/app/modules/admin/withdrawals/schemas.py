@@ -34,15 +34,13 @@ class RejectWithdrawalRequest(BaseModel):
     )
 
 
-class AdminWithdrawalResponse(BaseModel):
-    """Single withdrawal record for admin view."""
+class AdminWithdrawalRow(BaseModel):
+    """A withdrawal as it is stored: the fields of the admin view without the
+    master's name. Built from the ORM row; AdminWithdrawalResponse adds the
+    name (BE-226)."""
 
     id: UUID
     user_id: UUID
-    # BE-226: the master's name, as the finance console reads it -- first
-    # and last name, "Мастер" when the account has neither (the rule of
-    # admin/revenue's per-master rows, so both lists name a master alike).
-    master_name: str
     amount_cents: int
     fee_cents: int
     currency: str
@@ -55,7 +53,14 @@ class AdminWithdrawalResponse(BaseModel):
     created_at: datetime
     updated_at: datetime | None = None
 
-    model_config = {"from_attributes": True}
+
+class AdminWithdrawalResponse(AdminWithdrawalRow):
+    """Single withdrawal record for admin view."""
+
+    # BE-226: the master's name, as practices.service.master_full_name builds
+    # it -- the one rule for a master's name: first and last name, "Мастер"
+    # when the account has neither.
+    master_name: str
 
 
 class PaginatedAdminWithdrawalsResponse(BaseModel):

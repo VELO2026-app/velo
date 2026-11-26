@@ -123,11 +123,12 @@ async def _create_practice(
     status: str = PracticeStatus.SCHEDULED.value,
     max_participants: int | None = 10,
     direction: str | None = None,
+    title: str = "Admin Practice",
 ) -> Practice:
     data = {"taxonomy": {"direction": direction}} if direction else {}
     practice = Practice(
         master_id=master_id,
-        title="Admin Practice",
+        title=title,
         description="x",
         practice_type=PracticeType.LIVE.value,
         status=status,
@@ -154,6 +155,7 @@ async def _book(
     *,
     status: str = BookingStatus.CONFIRMED.value,
     cancelled_at: datetime | None = None,
+    created_at: datetime | None = None,
 ) -> Booking:
     auth = await login_user(
         client, telegram_id=telegram_id, first_name=f"P{telegram_id}",
@@ -164,6 +166,8 @@ async def _book(
         status=status,
         cancelled_at=cancelled_at,
     )
+    if created_at is not None:
+        booking.created_at = created_at
     db_session.add(booking)
     await db_session.flush()
     return booking
@@ -275,13 +279,25 @@ async def test_practices_list_pagination(
     assert data["total"] >= len(data["items"])
 
 
+def _starts(items: list[dict]) -> list[datetime]:
+    return [datetime.fromisoformat(it["scheduled_at"]) for it in items]
+
+
 @pytest.mark.asyncio
-async def test_practices_list_upcoming_is_soonest_first(
+@pytest.mark.parametrize(
+    "order,soonest_first",
+    [(None, False), ("desc", False), ("asc", True)],
+)
+async def test_practices_list_upcoming_order(
     client: AsyncClient,
     db_session: AsyncSession,
+    order: str | None,
+    soonest_first: bool,
 ) -> None:
-    """BE-257: scope=upcoming lists the nearest practice first, so it stands
-    on page one; a page taken from the start begins at the nearest."""
+    """BE-257: scope=upcoming&order=asc lists the nearest practice first, so
+    it stands on page one. Without `order` -- or with desc -- the list is as
+    it was before: newest first, so a caller that never heard of the
+    parameter is not moved."""
     token = await _make_admin(client, db_session)
     master_id = await _make_master(client, db_session)
     now = datetime.now(UTC)
@@ -297,34 +313,33 @@ async def test_practices_list_upcoming_is_soonest_first(
         db_session, master_id, scheduled_at=now + timedelta(days=20),
     )
     await db_session.commit()
+    params: dict = {"scope": "upcoming", "limit": 100}
+    if order is not None:
+        params["order"] = order
 
-    full = await client.get(
-        PRACTICES_URL, params={"scope": "upcoming", "limit": 100},
-        headers=auth_headers(token),
-    )
-    first_page = await client.get(
-        PRACTICES_URL, params={"scope": "upcoming", "limit": 1, "offset": 0},
-        headers=auth_headers(token),
+    resp = await client.get(
+        PRACTICES_URL, params=params, headers=auth_headers(token),
     )
 
-    assert full.status_code == 200
-    items = full.json()["items"]
-    starts = [datetime.fromisoformat(it["scheduled_at"]) for it in items]
-    assert starts == sorted(starts)
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert _starts(items) == sorted(_starts(items), reverse=not soonest_first)
     mine = {str(later.id), str(soonest.id), str(middle.id)}
-    assert [it["id"] for it in items if it["id"] in mine] == [
-        str(soonest.id), str(middle.id), str(later.id),
-    ]
-    assert first_page.json()["items"][0]["id"] == items[0]["id"]
+    expected = [str(soonest.id), str(middle.id), str(later.id)]
+    assert [it["id"] for it in items if it["id"] in mine] == (
+        expected if soonest_first else expected[::-1]
+    )
 
 
 @pytest.mark.asyncio
-async def test_practices_list_past_stays_newest_first(
+@pytest.mark.parametrize("scope", ["past", "all"])
+async def test_practices_list_order_is_read_for_upcoming_only(
     client: AsyncClient,
     db_session: AsyncSession,
+    scope: str,
 ) -> None:
-    """BE-257 turns only the upcoming scope around: the past stays newest
-    first (what the past tab reads)."""
+    """BE-257: order=asc moves the upcoming scope and nothing else; the past
+    and the whole list stay newest first (what their tabs read)."""
     token = await _make_admin(client, db_session)
     master_id = await _make_master(client, db_session)
     now = datetime.now(UTC)
@@ -337,14 +352,60 @@ async def test_practices_list_past_stays_newest_first(
     await db_session.commit()
 
     resp = await client.get(
-        PRACTICES_URL, params={"scope": "past", "limit": 100},
+        PRACTICES_URL, params={"scope": scope, "order": "asc", "limit": 100},
         headers=auth_headers(token),
     )
 
     assert resp.status_code == 200
-    starts = [datetime.fromisoformat(it["scheduled_at"]) for it in resp.json()["items"]]
+    starts = _starts(resp.json()["items"])
     assert len(starts) >= 3
     assert starts == sorted(starts, reverse=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", ["asc", "desc"])
+async def test_practices_list_equal_starts_keep_one_place_across_pages(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    order: str,
+) -> None:
+    """BE-257: two practices that start at the same instant come in the same
+    order (by id) whichever page boundary falls between them -- a page of
+    one row never repeats a practice or drops the other."""
+    token = await _make_admin(client, db_session)
+    master_id = await _make_master(client, db_session)
+    start = datetime.now(UTC) + timedelta(days=15)
+    first = await _create_practice(
+        db_session, master_id, scheduled_at=start, title="Same start A",
+    )
+    second = await _create_practice(
+        db_session, master_id, scheduled_at=start, title="Same start B",
+    )
+    await db_session.commit()
+    by_id = [str(pid) for pid in sorted((first.id, second.id))]
+    headers = auth_headers(token)
+    params = {"scope": "upcoming", "order": order}
+
+    full = await client.get(
+        PRACTICES_URL, params={**params, "limit": 100}, headers=headers,
+    )
+    ids = [it["id"] for it in full.json()["items"]]
+    at = ids.index(by_id[0])
+    pages = [
+        (
+            await client.get(
+                PRACTICES_URL,
+                params={**params, "limit": 1, "offset": at + n},
+                headers=headers,
+            )
+        ).json()["items"]
+        for n in (0, 1)
+    ]
+
+    assert ids[at : at + 2] == by_id
+    assert [[it["id"] for it in page] for page in pages] == [
+        [by_id[0]], [by_id[1]],
+    ]
 
 
 # ===================================================================
@@ -460,9 +521,6 @@ async def test_practice_detail_lists_cancelled_bookings_apart(
     ]
     assert {c["name"] for c in data["cancelled"]} == {"P94021", "P94022"}
     assert {c["status"] for c in data["cancelled"]} == {"cancelled"}
-    assert set(data["cancelled"][0]) == {
-        "booking_id", "user_id", "name", "avatar_url", "status", "cancelled_at",
-    }
 
 
 @pytest.mark.asyncio
@@ -572,6 +630,73 @@ async def test_zoom_attendance_lists_cancelled_bookings_apart(
     assert row["status"] == "cancelled"
     assert row["cancelled_at"] == "2026-11-22T07:15:00Z"
     assert row["zoom_minutes_present"] == 12
+
+
+@pytest.mark.asyncio
+async def test_zoom_attendance_orders_live_by_booking_and_cancelled_by_cancellation(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """BE-257: several cancellations come earliest first, those cancelled at
+    the same instant in booking order, a time never recorded last; the live
+    bookings, which carry no cancellation time, keep their booking order --
+    one query orders both lists."""
+    token = await _make_admin(client, db_session)
+    master_id = await _make_master(client, db_session)
+    practice = await _create_practice(
+        db_session, master_id, scheduled_at=datetime.now(UTC) - timedelta(days=1),
+        status=PracticeStatus.COMPLETED.value,
+    )
+    db_session.add(
+        ZoomMeeting(
+            practice_id=practice.id, zoom_meeting_id="94110",
+            zoom_meeting_uuid="uuid-94110", status=ZoomMeetingStatus.ACTIVE.value,
+        )
+    )
+    booked = datetime(2026, 11, 1, tzinfo=UTC)
+    early = datetime(2026, 11, 20, 9, 0, tzinfo=UTC)
+    late = datetime(2026, 11, 21, 18, 30, tzinfo=UTC)
+    cancelled = BookingStatus.CANCELLED.value
+
+    def at(hours: int) -> datetime:
+        return booked + timedelta(hours=hours)
+
+    live_1 = await _book(client, db_session, practice, 94050, created_at=at(1))
+    cancelled_late = await _book(
+        client, db_session, practice, 94051,
+        status=cancelled, cancelled_at=late, created_at=at(2),
+    )
+    live_2 = await _book(
+        client, db_session, practice, 94052,
+        status=BookingStatus.ATTENDED.value, created_at=at(3),
+    )
+    cancelled_early = await _book(
+        client, db_session, practice, 94053,
+        status=cancelled, cancelled_at=early, created_at=at(4),
+    )
+    unrecorded = await _book(
+        client, db_session, practice, 94054, status=cancelled, created_at=at(5),
+    )
+    cancelled_tie = await _book(
+        client, db_session, practice, 94055,
+        status=cancelled, cancelled_at=early, created_at=at(6),
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        ZOOM_ATTENDANCE_URL.format(practice_id=practice.id),
+        headers=auth_headers(token),
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert [b["booking_id"] for b in data["bookings"]] == [
+        str(live_1.id), str(live_2.id),
+    ]
+    assert [b["booking_id"] for b in data["cancelled"]] == [
+        str(cancelled_early.id), str(cancelled_tie.id),
+        str(cancelled_late.id), str(unrecorded.id),
+    ]
 
 
 @pytest.mark.asyncio

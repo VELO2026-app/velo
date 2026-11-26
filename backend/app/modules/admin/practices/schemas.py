@@ -106,7 +106,7 @@ class AdminZoomBookingAttendance(BaseModel):
     zoom_minutes_present: int | None
     attendance_decided_via: str | None  # zoom_report / legacy_proxy / null
     # BE-257: when a cancelled booking was cancelled; null on a live one.
-    cancelled_at: datetime | None = None
+    cancelled_at: datetime | None
 
 
 class AdminZoomUnmatchedRow(BaseModel):

@@ -94,6 +94,7 @@ function zoomAnswer(
         status: 'attended',
         zoom_minutes_present: 58,
         attendance_decided_via: 'zoom_report',
+        cancelled_at: null,
       },
       {
         booking_id: 'b_2',
@@ -102,6 +103,7 @@ function zoomAnswer(
         status: 'no_show',
         zoom_minutes_present: null,
         attendance_decided_via: 'legacy_proxy',
+        cancelled_at: null,
       },
     ],
     unmatched: [

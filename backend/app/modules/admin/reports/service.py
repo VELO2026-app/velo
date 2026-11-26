@@ -42,8 +42,8 @@ from app.modules.admin.reports.schemas import (
     AdminReportResponse,
     PaginatedReportsResponse,
 )
-from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice
+from app.modules.practices.service import master_full_name
 from app.modules.reports.models import Report, ReportStatus, ReportTargetType
 from app.modules.reports.schemas import ReportResponse
 from app.modules.users.helpers import display_name
@@ -83,23 +83,6 @@ async def to_admin_report_responses(
             ).all()
         }
 
-    # A master is named by the profile's display name ("визитка") first, as
-    # a master is across the admin lists; the account name is the fallback.
-    master_ids = by_type[ReportTargetType.MASTER.value]
-    cards: dict[UUID, str | None] = {}
-    if master_ids:
-        cards = {
-            uid: card
-            for uid, card in (
-                await session.execute(
-                    select(
-                        MasterProfile.user_id,
-                        MasterProfile.data["profile"]["display_name"].astext,
-                    ).where(MasterProfile.user_id.in_(master_ids))
-                )
-            ).all()
-        }
-
     practice_ids = by_type[ReportTargetType.PRACTICE.value]
     titles: dict[UUID, str] = {}
     if practice_ids:
@@ -119,14 +102,10 @@ async def to_admin_report_responses(
             name = people.get(report.target_id)
             return display_name(*name) if name else None
         if report.target_type == ReportTargetType.MASTER.value:
+            # The one rule for a master's name (practices.service), not the
+            # person's: "Мастер" for an account with no name.
             name = people.get(report.target_id)
-            if name is None:
-                return None
-            return (
-                cards.get(report.target_id)
-                or " ".join(part for part in name if part).strip()
-                or "Мастер"
-            )
+            return master_full_name(*name) if name else None
         if report.target_type == ReportTargetType.PRACTICE.value:
             return titles.get(report.target_id)
         return None

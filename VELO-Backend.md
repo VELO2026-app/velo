@@ -555,8 +555,8 @@ GET  /api/v1/admin/metrics/check-in?period=week|month   -- Метрика чек
 GET  /api/v1/admin/metrics/feedback?period=week|month   -- Метрика фидбэка (E9/4a)
 GET  /api/v1/admin/metrics/return?period=week|month     -- Метрика возвращаемости (E9/4a)
 GET  /api/v1/admin/revenue?period=week|month            -- Выручка платформы (E9/4b)
-GET  /api/v1/admin/practices?scope=all|upcoming|past    -- Глобальный список практик (E9/4c)
-GET  /api/v1/admin/practices/{id}                       -- Деталь практики + roster (E9/4c)
+GET  /api/v1/admin/practices?scope=all|upcoming|past[&order=asc|desc] -- Глобальный список практик (E9/4c; order читается только для upcoming, BE-257)
+GET  /api/v1/admin/practices/{id}                       -- Деталь практики + roster + cancelled (E9/4c, BE-257)
 
 POST /api/v1/admin/templates/reload                 -- Перезагрузить шаблоны уведомлений
 ```
@@ -571,7 +571,13 @@ POST /api/v1/admin/templates/reload                 -- Перезагрузит�
 > top_users}`. `revenue` → `{ revenue_cents (=GMV, SUM `paid_cents` completed),
 > commission_cents, payout_cents (NET, approved за период), per_master }` — тот же
 > ledger-слой, что E2. `practices` — пагинированный список (исключает draft/deleted,
-> `scheduled_at desc`) + деталь с roster; `status` временной (upcoming/past). Имена
+> `scheduled_at desc`; для `scope=upcoming` параметр `order=asc` отдаёт ближайшие первыми,
+> без него порядок прежний; при равном старте порядок по `id`) + деталь с roster и списком
+> `cancelled` (отменённые брони с `cancelled_at`, они не входят в roster и в `booked`; тот же
+> список есть в `zoom-attendance`); `status` временной (upcoming/past). Выплаты
+> (`/admin/withdrawals`) несут `master_name`, жалобы (`/admin/reports`, и `/{id}`, `resolve`,
+> `dismiss`) — `reporter_name` и `target_name`; имя мастера в выплатах и жалобах по
+> `practices.service.master_full_name`. Имена
 > схем — `Admin*`/уникальные (урок: `RatingDistribution` коллизился с diary →
 > `FeedbackRatingDistribution`). Seed (4d) населяет `payout` реальными
 > approved-выводами через production-flow (semaphore-safe — semaphores существовали на

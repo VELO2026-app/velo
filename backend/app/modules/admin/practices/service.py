@@ -8,9 +8,15 @@
 #   All platform practices except draft/deleted (matches the public
 #   practices_count definition), joined to their master for name + verified
 #   badge. scope filters on scheduled_at vs now; booked = non-cancelled
-#   bookings per practice (one grouped query for the page). Newest first --
-#   except scope=upcoming, which is soonest first (BE-257): the nearest
+#   bookings per practice (one grouped query for the page). Newest first;
+#   scope=upcoming with order=asc is soonest first (BE-257): the nearest
 #   practice is the one an admin looks for, and it must stand on page one.
+#   order is read for scope=upcoming only, and its default is the old order,
+#   so a caller that does not send it is not moved.
+#   OFFSET DRIFT: a page is cut by offset, so when the nearest practice
+#   starts (leaves the upcoming scope) between two page reads, the later
+#   pages shift by one row. Accepted: the list is read page by page by a
+#   person, not walked to the end by a job.
 #
 # DETAIL (GET /admin/practices/{id}):
 #   Practice + master + booked/attended counts + full non-cancelled roster
@@ -75,11 +81,12 @@ async def list_admin_practices(
     session: AsyncSession,
     *,
     scope: str = "all",
+    order: str = "desc",
     limit: int = 20,
     offset: int = 0,
 ) -> PaginatedAdminPracticesResponse:
     """List all platform practices (except draft/deleted), newest first;
-    scope=upcoming is soonest first (BE-257)."""
+    scope=upcoming with order="asc" is soonest first (BE-257)."""
     now = datetime.now(UTC)
 
     conditions = [Practice.status.notin_(_HIDDEN_STATUSES)]
@@ -101,10 +108,11 @@ async def list_admin_practices(
             .join(User, MasterProfile.user_id == User.id)
             .where(*conditions)
             .order_by(
-                # The id breaks a tie of start times, so a page boundary
-                # never repeats or drops a practice.
+                # The id breaks a tie of start times (the same way for both
+                # orders), so a page boundary never repeats or drops a
+                # practice.
                 Practice.scheduled_at.asc()
-                if scope == "upcoming"
+                if scope == "upcoming" and order == "asc"
                 else Practice.scheduled_at.desc(),
                 Practice.id,
             )
@@ -315,9 +323,15 @@ async def get_admin_zoom_attendance(
             select(Booking, User.first_name, User.last_name)
             .join(User, Booking.user_id == User.id)
             .where(Booking.practice_id == practice_id)
-            # BE-257: the live bookings have no cancellation time, so they
-            # keep their booking order; the cancelled ones come out earliest
-            # cancellation first, a time never recorded last.
+            # BE-257, THE INVARIANT THE ORDER RESTS ON: a live booking has
+            # cancelled_at IS NULL -- only the cancel paths write it
+            # (bookings/service.py, payments/refund.py, masters/groups_service.py,
+            # schools/service.py), and a cancelled booking is never revived.
+            # So ordering by cancelled_at first leaves the live bookings in
+            # booking order (all NULL, tied on it) and sorts the cancelled
+            # ones earliest cancellation first, a time never recorded last.
+            # A path that revived a booking without clearing cancelled_at
+            # would move it out of its booking place: clear it there.
             .order_by(
                 Booking.cancelled_at.asc().nulls_last(),
                 Booking.created_at,

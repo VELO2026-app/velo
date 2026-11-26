@@ -312,7 +312,6 @@ export interface AdminStatsResponse {
 export interface AdminWithdrawalResponse {
   id: string
   user_id: string
-  master_name: string
   amount_cents: number
   fee_cents: number
   currency: string
@@ -324,6 +323,7 @@ export interface AdminWithdrawalResponse {
   rejected_at?: string | null
   created_at: string
   updated_at?: string | null
+  master_name: string
 }
 
 /** GET /api/v1/admin/practices/{id}/zoom-attendance. */
@@ -346,7 +346,7 @@ export interface AdminZoomBookingAttendance {
   status: string
   zoom_minutes_present: number | null
   attendance_decided_via: string | null
-  cancelled_at?: string | null
+  cancelled_at: string | null
 }
 
 /** One raw report row Zoom sent us that we could not attribute to any known registrant -- the unmatched bucket, made visible (E21 plan sec 6). Not masked: this is an authenticated admin surface, not the throwaway probe's chat-paste output. */

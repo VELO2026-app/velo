@@ -3,7 +3,8 @@
 # =============================================================================
 #
 # ENDPOINTS:
-#   GET /api/v1/admin/practices?scope=all|upcoming|past  -- global list
+#   GET /api/v1/admin/practices?scope=all|upcoming|past[&order=asc|desc]
+#                                                        -- global list
 #   GET /api/v1/admin/practices/{practice_id}            -- detail + roster
 #
 # ROUTE ORDER: static /practices before dynamic /practices/{id}.
@@ -36,14 +37,19 @@ router = APIRouter()
 @router.get("/practices", response_model=PaginatedAdminPracticesResponse)
 async def list_practices_endpoint(
     scope: Literal["all", "upcoming", "past"] = Query(default="all"),
+    # BE-257: read for scope=upcoming only. asc is soonest first -- what the
+    # console's "upcoming" tab wants; the default stays newest first, so a
+    # caller that does not send it reads the list as before.
+    order: Literal["asc", "desc"] = Query(default="desc"),
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_reader),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> PaginatedAdminPracticesResponse:
-    """List all platform practices (except draft/deleted), newest first."""
+    """List all platform practices (except draft/deleted), newest first;
+    scope=upcoming with order=asc is soonest first."""
     return await list_admin_practices(
-        session, scope=scope, limit=limit, offset=offset,
+        session, scope=scope, order=order, limit=limit, offset=offset,
     )
 
 
