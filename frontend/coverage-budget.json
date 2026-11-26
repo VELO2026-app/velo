@@ -1,7 +1,7 @@
 {
-  "_comment": "Ratchet for scripts/coverage-budget.mjs (FE-157 5A.1). Floors, in percent, for `vitest run --coverage` over src/**/*.{ts,vue}; raised 2026-11-19 (FE-210) to the measured 90.26 / 84.52 / 85.76 / 91.66, rounded down to 0.1. They may only go up: when the measured value is higher, the script says so -- raise the floor in the same commit (the script flags a gap of 0.2 points or more). Lowering one is not allowed. FE-243: raised to 90.5 / 84.8 / 86.9 / 91.9 (measured 90.59 / 84.91 / 86.91 / 91.92; branches left 0.1 under the measurement, as the CI run can differ by a hundredth). FE-262 (after the web console slices, measured on deploy-machine 0358e76b): raised to 91.5 / 85.9 / 88.7 / 92.9 (measured 91.58 / 86.01 / 88.72 / 92.91; branches again 0.1 under the measurement). FE-272 (mobile admin removed, measured 91.72 / 86.04 / 89.21 / 93.13; CI measured the previous head 0.01-0.03 higher): raised to 91.7 / 85.9 / 89.1 / 93.1 (branches again 0.1 under the measurement; functions too, as two local runs of the same tree measured 89.19 and 89.21).",
-  "statements": 91.7,
-  "branches": 85.9,
-  "functions": 89.1,
-  "lines": 93.1
+  "_comment": "Ratchet for scripts/coverage-budget.mjs (FE-157 5A.1). Floors, in percent, for `vitest run --coverage` over src/**/*.{ts,vue}; raised 2026-11-19 (FE-210) to the measured 90.26 / 84.52 / 85.76 / 91.66, rounded down to 0.1. They may only go up: when the measured value is higher, the script says so -- raise the floor in the same commit (the script flags a gap of 0.2 points or more). Lowering one is not allowed. FE-243: raised to 90.5 / 84.8 / 86.9 / 91.9 (measured 90.59 / 84.91 / 86.91 / 91.92; branches left 0.1 under the measurement, as the CI run can differ by a hundredth). FE-262 (after the web console slices, measured on deploy-machine 0358e76b): raised to 91.5 / 85.9 / 88.7 / 92.9 (measured 91.58 / 86.01 / 88.72 / 92.91; branches again 0.1 under the measurement). FE-272 (mobile admin removed, measured 91.72 / 86.04 / 89.21 / 93.13; CI measured the previous head 0.01-0.03 higher): raised to 91.7 / 85.9 / 89.1 / 93.1 (branches again 0.1 under the measurement; functions too, as two local runs of the same tree measured 89.19 and 89.21). FE-260 master lists (measured 91.88 / 86.19 / 89.44 / 93.29): raised to 91.8 / 86.0 / 89.3 / 93.2 (branches and functions 0.1 under the rounded measurement, as before); after the review's tests branches measured 86.21 and rose to 86.1.",
+  "statements": 91.8,
+  "branches": 86.1,
+  "functions": 89.3,
+  "lines": 93.2
 }

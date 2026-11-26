@@ -750,7 +750,8 @@
       "loadFailed": "Failed to load the promo codes",
       "discount": "Discount: {n}%",
       "used": "Used: {label}",
-      "usedOf": "{used} of {max}"
+      "usedOf": "{used} of {max}",
+      "checkedOf": "Promo codes checked: {shown} of {total}"
     },
     "masterStudentProfile": {
       "addToGroup": "Add to a group",
@@ -812,7 +813,8 @@
       "needsAttention": "Needs attention",
       "needsAttentionSingular": "Needs attention",
       "summaryAfterConnect": "The summary will appear once the analytics is connected",
-      "title": "Weekly summary"
+      "title": "Weekly summary",
+      "checkedOf": "Students checked: {shown} of {total}"
     },
     "masterSupport": {
       "message": {
@@ -839,7 +841,8 @@
       "loadMoreFailed": "Failed to load more"
     },
     "masterCommon": {
-      "practicesCount": "Practices: {n}"
+      "practicesCount": "Practices: {n}",
+      "shownOf": "Showing {shown} of {total}"
     }
   }
 }

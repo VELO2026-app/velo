@@ -8,7 +8,8 @@
   LIVE (E5): getStudents() → GET /api/v1/masters/me/students →
   PaginatedStudentsResponse { items: StudentListItem[], total, limit, offset };
   each item = { id, name, avatar_url, practices_count, needs_attention }.
-  Search filters the loaded page client-side. The message action opens the
+  Every page is read (useAllPages, FE-260) and the search filters them
+  client-side; past the read cap a line says how many of the total show. The message action opens the
   shared send-message sheet, which posts into the eternal DM (T3 chat).
 -->
 
@@ -89,6 +90,10 @@
           @click="expanded = true"
         />
 
+        <p v-if="!complete" class="students__partial">
+          {{ t('masterScreens.masterCommon.shownOf', { shown: students.length, total }) }}
+        </p>
+
         <!-- Empty: no students at all vs no search match -->
         <VEmptyState
           v-if="students.length === 0"
@@ -125,6 +130,7 @@ import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import VShowMore from '@/components/shared/VShowMore.vue'
 import { getStudents } from '@/api/masters'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
+import { useAllPages } from '@/composables/useAllPages'
 import type { StudentListItem } from '@/api/types'
 
 const router = useRouter()
@@ -133,24 +139,17 @@ const router = useRouter()
 // composable) so it's not left under the keyboard on focus (K3).
 const { onFieldFocus } = useKeyboardFieldScroll()
 
-// -- Students (E5: GET /masters/me/students). Search filters the loaded page
-//    client-side; needs_attention drives the inline warning badge. --
-const students = ref<StudentListItem[]>([])
-const loading = ref(true)
-const error = ref('')
-
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = ''
-  try {
-    const res = await getStudents()
-    students.value = res.items
-  } catch {
-    error.value = t('common.tryAgain')
-  } finally {
-    loading.value = false
-  }
-}
+// -- Students (E5: GET /masters/me/students), every page of them. Search
+//    filters them client-side; needs_attention drives the inline warning badge. --
+const {
+  items: students,
+  total,
+  complete,
+  loading,
+  failed,
+  load,
+} = useAllPages<StudentListItem>(getStudents, true)
+const error = computed(() => (failed.value ? t('common.tryAgain') : ''))
 onMounted(load)
 
 const query = ref('')
@@ -316,6 +315,14 @@ function openMessage(id: string, name: string): void {
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   color: var(--velo-text-primary);
+}
+
+.students__partial {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--velo-fs-14);
+  color: var(--velo-text-secondary);
+  text-align: center;
 }
 
 .students__meta {

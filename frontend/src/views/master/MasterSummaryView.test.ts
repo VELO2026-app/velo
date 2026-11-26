@@ -381,7 +381,7 @@ describe('MasterSummaryView', () => {
       mount()
       await flush()
 
-      expect(host!.querySelector('.summary__insight')?.textContent?.trim()).toBe(
+      expect(host?.querySelector('.summary__insight')?.textContent?.trim()).toBe(
         'Сводка появится, когда подключится аналитика',
       )
       expect(mastersApi.getStudents).toHaveBeenCalledTimes(1)
@@ -684,7 +684,7 @@ describe('MasterSummaryView', () => {
 
       expect(errored(FEEDBACKS)).toBe(true)
       expect(errored(ATTENTION)).toBe(true)
-      expect(host!.querySelector('.summary__insight')?.textContent?.trim()).toBe(
+      expect(host?.querySelector('.summary__insight')?.textContent?.trim()).toBe(
         'Сводка появится, когда подключится аналитика',
       )
     })
@@ -706,13 +706,40 @@ describe('MasterSummaryView', () => {
       expect(mastersApi.getMasterReviews).toHaveBeenCalledWith(3, 0, false)
     })
 
-    it('asks for the students page with the wrapper defaults', async () => {
-      // .vue:203 -- getStudents(), bare. The wrapper's own defaults (limit 50,
-      // offset 0, api/masters.ts:175) are the page; this screen never paginates.
+    it('reads every page of the students: a flagged student past the first page is listed (FE-260)', async () => {
+      const everyone = Array.from({ length: 150 }, (_, i) =>
+        student(`s${i}`, { needs_attention: i === 140 }),
+      )
+      vi.mocked(mastersApi.getStudents).mockImplementation(async (limit = 50, offset = 0) => ({
+        items: everyone.slice(offset, offset + limit),
+        total: everyone.length,
+        limit,
+        offset,
+      }))
       mount()
-      await flush()
+      await vi.waitFor(() => expect(attnRows()).toHaveLength(1))
 
-      expect(mastersApi.getStudents).toHaveBeenCalledWith()
+      const offsets = vi.mocked(mastersApi.getStudents).mock.calls.map(([, offset]) => offset)
+      expect(offsets).toEqual([0, 100])
+      expect(attnRows().map((row) => row.textContent)).toEqual([
+        expect.stringContaining('Ученик s140'),
+      ])
+      expect(document.body.textContent).not.toContain('Проверено учеников')
+    })
+
+    it('past the read cap says how many students it checked', async () => {
+      vi.mocked(mastersApi.getStudents).mockImplementation(async (limit = 50, offset = 0) => ({
+        items: Array.from({ length: limit }, (_, i) => student(`s${offset + i}`)),
+        total: 5000,
+        limit,
+        offset,
+      }))
+      mount()
+
+      await vi.waitFor(() =>
+        expect(document.body.textContent).toContain('Проверено учеников: 2000 из 5000'),
+      )
+      expect(mastersApi.getStudents).toHaveBeenCalledTimes(20)
     })
 
     it('renders EVERY review the server returned -- the 3 is the request limit, not a client cap', async () => {
@@ -827,7 +854,7 @@ describe('MasterSummaryView', () => {
       mount()
       await flush()
 
-      host!.querySelector<HTMLButtonElement>('button[aria-label="Назад"]')?.click()
+      host?.querySelector<HTMLButtonElement>('button[aria-label="Назад"]')?.click()
       await flush()
 
       expect(push).toHaveBeenCalledWith({ name: 'master-dashboard' })
@@ -865,7 +892,7 @@ describe('MasterSummaryView', () => {
       await flush()
 
       expect(liveModal()).not.toBeNull()
-      expect(host!.querySelector('.v-modal__overlay')).toBeNull()
+      expect(host?.querySelector('.v-modal__overlay')).toBeNull()
       // The SECOND row's student -- a modal wired to a constant, or to
       // students[0], passes a one-row fixture and misdirects every real message.
       expect(modalName()).toBe('Вера')
