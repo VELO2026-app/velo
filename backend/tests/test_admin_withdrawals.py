@@ -474,3 +474,75 @@ async def test_list_withdrawals_filter_status(
     assert resp2.status_code == 200
     ids2 = [item["id"] for item in resp2.json()["items"]]
     assert withdrawal_id in ids2
+
+
+# ===================================================================
+# MASTER NAME (BE-226)
+# ===================================================================
+
+
+async def _name_master(
+    db_session: AsyncSession,
+    user_id: str,
+    first_name: str | None,
+    last_name: str | None,
+) -> None:
+    """Give the master the account name the finance console should show."""
+    await db_session.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(first_name=first_name, last_name=last_name)
+    )
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_list_withdrawals_names_each_master(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """BE-226: a row carries ITS master's name; an account with no name at
+    all reads as "Мастер", never as a blank or a literal None."""
+    named = await _make_verified_master(client, db_session, 78001)
+    nameless = await _make_verified_master(client, db_session, 78002)
+    await _name_master(db_session, named["user_id"], "Anna", "Orlova")
+    await _name_master(db_session, nameless["user_id"], None, None)
+    named_withdrawal = await _set_payout_and_withdraw(client, db_session, named)
+    nameless_withdrawal = await _set_payout_and_withdraw(
+        client, db_session, nameless,
+    )
+    admin = await _make_admin(client, db_session)
+
+    resp = await client.get(
+        ADMIN_WITHDRAWALS_URL,
+        headers=auth_headers(admin["session_token"]),
+    )
+
+    assert resp.status_code == 200
+    names = {item["id"]: item["master_name"] for item in resp.json()["items"]}
+    assert names[named_withdrawal] == "Anna Orlova"
+    assert names[nameless_withdrawal] == "Мастер"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", ["approve", "reject"])
+async def test_decided_withdrawal_carries_master_name(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    action: str,
+) -> None:
+    """BE-226: the answer of approve / reject names the master as the list
+    does, so a screen that swaps the row for the answer keeps the name."""
+    master = await _make_verified_master(client, db_session)
+    await _name_master(db_session, master["user_id"], "Anna", "Orlova")
+    withdrawal_id = await _set_payout_and_withdraw(client, db_session, master)
+    admin = await _make_admin(client, db_session)
+
+    resp = await client.post(
+        f"{ADMIN_WITHDRAWALS_URL}/{withdrawal_id}/{action}",
+        json={"note": "ok"},
+        headers=auth_headers(admin["session_token"]),
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["master_name"] == "Anna Orlova"

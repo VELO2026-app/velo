@@ -13,6 +13,9 @@
 # Times are raw (scheduled_at + duration_minutes); the frontend formats them.
 # roster carries each participant's booking status; the frontend buckets it
 # (upcoming -> registered = all; past -> present=attended / absent=no_show).
+# Cancelled bookings are NOT in the roster (its length is the live head-count):
+# they come in the separate `cancelled` list, each with the time of the
+# cancellation (BE-257).
 # Class names are Admin-prefixed to avoid OpenAPI component-name collisions.
 # =============================================================================
 
@@ -56,6 +59,20 @@ class AdminRosterEntry(BaseModel):
     status: str  # booking status: confirmed / attended / no_show / pending
 
 
+class AdminCancelledBooking(BaseModel):
+    """One cancelled booking of a practice (BE-257): who, and when."""
+
+    # One person may hold several cancelled bookings of a practice (cancel,
+    # book again, cancel), so the person is not a key of the list.
+    booking_id: UUID
+    user_id: UUID
+    name: str
+    avatar_url: str | None
+    status: str  # always "cancelled": the row reads like a roster entry
+    # Null only for a booking whose cancellation time was never recorded.
+    cancelled_at: datetime | None
+
+
 class AdminPracticeDetailResponse(BaseModel):
     """GET /api/v1/admin/practices/{id} -- detail + attendance + roster."""
 
@@ -72,6 +89,8 @@ class AdminPracticeDetailResponse(BaseModel):
     timezone: str  # IANA tz of the practice; FE renders local wall-clock time
     attended: int
     roster: list[AdminRosterEntry]
+    # BE-257: the cancelled bookings, earliest cancellation first.
+    cancelled: list[AdminCancelledBooking]
 
 
 # -- Zoom attendance (E21 step G, PROMPT №521) --
@@ -86,6 +105,8 @@ class AdminZoomBookingAttendance(BaseModel):
     status: str  # confirmed / attended / no_show / cancelled
     zoom_minutes_present: int | None
     attendance_decided_via: str | None  # zoom_report / legacy_proxy / null
+    # BE-257: when a cancelled booking was cancelled; null on a live one.
+    cancelled_at: datetime | None
 
 
 class AdminZoomUnmatchedRow(BaseModel):
@@ -108,6 +129,9 @@ class AdminZoomAttendanceResponse(BaseModel):
     zoom_meeting_status: str | None  # null if no ZoomMeeting row exists at all
     report_ingested: bool
     bookings: list[AdminZoomBookingAttendance]
+    # BE-257: the cancelled bookings, earliest cancellation first, with what
+    # Zoom recorded for them (a person may cancel and still join the room).
+    cancelled: list[AdminZoomBookingAttendance]
     unmatched: list[AdminZoomUnmatchedRow]
     unmatched_count: int
     # PK-Z2: ZoomMeeting.last_sync_error, previously write-only (16 assignment

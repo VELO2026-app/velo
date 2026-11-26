@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_reader, get_db_session
 from app.modules.admin.reports.schemas import (
+    AdminReportResponse,
     DismissReportRequest,
     PaginatedReportsResponse,
     ResolveReportRequest,
@@ -33,9 +34,9 @@ from app.modules.admin.reports.service import (
     get_report_by_id,
     list_reports,
     resolve_report,
+    to_admin_report_responses,
 )
 from app.modules.auth.dependencies import get_current_admin
-from app.modules.reports.schemas import ReportResponse
 from app.modules.users.models import User
 
 logger = structlog.get_logger()
@@ -62,28 +63,29 @@ async def get_reports(
     )
 
 
-@router.get("/{report_id}", response_model=ReportResponse)
+@router.get("/{report_id}", response_model=AdminReportResponse)
 async def get_report(
     report_id: UUID,
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_reader),
-) -> ReportResponse:
+) -> AdminReportResponse:
     """Fetch a single report by id.
 
     Used by admin detail screen as fallback when router state is unavailable
     (direct URL navigation, page refresh). Returns 404 if not found.
     """
     report = await get_report_by_id(report_id, session)
-    return ReportResponse.model_validate(report, from_attributes=True)
+    (response,) = await to_admin_report_responses(session, [report])
+    return response
 
 
-@router.post("/{report_id}/resolve", response_model=ReportResponse)
+@router.post("/{report_id}/resolve", response_model=AdminReportResponse)
 async def resolve_report_endpoint(
     report_id: UUID,
     body: ResolveReportRequest,
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
-) -> ReportResponse:
+) -> AdminReportResponse:
     """Resolve a pending report."""
     report = await resolve_report(
         report_id=report_id,
@@ -94,16 +96,17 @@ async def resolve_report_endpoint(
     await session.flush()
     await session.refresh(report)
 
-    return ReportResponse.model_validate(report, from_attributes=True)
+    (response,) = await to_admin_report_responses(session, [report])
+    return response
 
 
-@router.post("/{report_id}/dismiss", response_model=ReportResponse)
+@router.post("/{report_id}/dismiss", response_model=AdminReportResponse)
 async def dismiss_report_endpoint(
     report_id: UUID,
     body: DismissReportRequest,
     admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
-) -> ReportResponse:
+) -> AdminReportResponse:
     """Dismiss a pending report."""
     report = await dismiss_report(
         report_id=report_id,
@@ -114,4 +117,5 @@ async def dismiss_report_endpoint(
     await session.flush()
     await session.refresh(report)
 
-    return ReportResponse.model_validate(report, from_attributes=True)
+    (response,) = await to_admin_report_responses(session, [report])
+    return response

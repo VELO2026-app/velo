@@ -21,6 +21,7 @@
 #   No session.commit() (P-01). Router calls flush + refresh.
 # =============================================================================
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -33,6 +34,7 @@ from app.core.config import settings
 from app.core.exceptions import ConflictError, NotFoundError
 from app.modules.admin.withdrawals.schemas import (
     AdminWithdrawalResponse,
+    AdminWithdrawalRow,
     PaginatedAdminWithdrawalsResponse,
 )
 from app.modules.payments.models import (
@@ -42,10 +44,38 @@ from app.modules.payments.models import (
     PaymentStatus,
 )
 from app.modules.payments.service import record_company_ledger, record_master_ledger
+from app.modules.practices.service import master_full_name
 from app.modules.users.models import User
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
 
 logger = structlog.get_logger()
+
+
+async def to_admin_withdrawal_responses(
+    session: AsyncSession,
+    withdrawals: Sequence[Withdrawal],
+) -> list[AdminWithdrawalResponse]:
+    """Withdrawals as an admin reads them: the row plus the master's name
+    (BE-226). One query for all the names, whatever their number. Read-only:
+    the withdrawal's own fields are copied, nothing is written back."""
+    user_ids = {w.user_id for w in withdrawals}
+    names: dict[UUID, str] = {}
+    if user_ids:
+        name_rows = (
+            await session.execute(
+                select(User.id, User.first_name, User.last_name).where(
+                    User.id.in_(user_ids)
+                )
+            )
+        ).all()
+        names = {uid: master_full_name(first, last) for uid, first, last in name_rows}
+    return [
+        AdminWithdrawalResponse(
+            **AdminWithdrawalRow.model_validate(w, from_attributes=True).model_dump(),
+            master_name=names.get(w.user_id, master_full_name(None, None)),
+        )
+        for w in withdrawals
+    ]
 
 
 async def _load_pending_withdrawal(
@@ -274,10 +304,7 @@ async def list_withdrawals_admin(
     rows = result.scalars().all()
 
     return PaginatedAdminWithdrawalsResponse(
-        items=[
-            AdminWithdrawalResponse.model_validate(w, from_attributes=True)
-            for w in rows
-        ],
+        items=await to_admin_withdrawal_responses(session, rows),
         total=total,
         limit=limit,
         offset=offset,

@@ -29,6 +29,7 @@ from app.modules.admin.withdrawals.service import (
     approve_withdrawal,
     list_withdrawals_admin,
     reject_withdrawal,
+    to_admin_withdrawal_responses,
 )
 from app.modules.auth.dependencies import get_current_admin
 from app.modules.users.models import User
@@ -54,9 +55,8 @@ async def approve_withdrawal_endpoint(
     )
     await session.flush()
     await session.refresh(withdrawal)
-    return AdminWithdrawalResponse.model_validate(
-        withdrawal, from_attributes=True,
-    )
+    (response,) = await to_admin_withdrawal_responses(session, [withdrawal])
+    return response
 
 
 @router.post(
@@ -75,9 +75,8 @@ async def reject_withdrawal_endpoint(
     )
     await session.flush()
     await session.refresh(withdrawal)
-    return AdminWithdrawalResponse.model_validate(
-        withdrawal, from_attributes=True,
-    )
+    (response,) = await to_admin_withdrawal_responses(session, [withdrawal])
+    return response
 
 
 @router.get(

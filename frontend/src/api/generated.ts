@@ -60,6 +60,16 @@ export interface AddGroupMemberRequest {
   student_user_id: string
 }
 
+/** One cancelled booking of a practice (BE-257): who, and when. */
+export interface AdminCancelledBooking {
+  booking_id: string
+  user_id: string
+  name: string
+  avatar_url: string | null
+  status: string
+  cancelled_at: string | null
+}
+
 /** Response for verify/reject actions. */
 export interface AdminMasterActionResponse {
   user_id: string
@@ -169,6 +179,7 @@ export interface AdminPracticeDetailResponse {
   timezone: string
   attended: number
   roster: AdminRosterEntry[]
+  cancelled: AdminCancelledBooking[]
 }
 
 /** One practice in the global admin list. */
@@ -208,6 +219,23 @@ export interface AdminPromoResponse {
 
 export interface AdminReplyIn {
   body: string
+}
+
+/** A report as an admin reads it (BE-258): the user-facing fields plus the names behind the ids. The target's type is `target_type` already (user / master / practice). */
+export interface AdminReportResponse {
+  id: string
+  reporter_id: string
+  target_type: string
+  target_id: string
+  reason: string
+  status: string
+  resolved_by?: string | null
+  resolution_note?: string | null
+  resolved_at?: string | null
+  created_at: string
+  updated_at?: string | null
+  reporter_name: string
+  target_name: string | null
 }
 
 /** One master's earnings + payouts within the period. */
@@ -295,6 +323,7 @@ export interface AdminWithdrawalResponse {
   rejected_at?: string | null
   created_at: string
   updated_at?: string | null
+  master_name: string
 }
 
 /** GET /api/v1/admin/practices/{id}/zoom-attendance. */
@@ -303,6 +332,7 @@ export interface AdminZoomAttendanceResponse {
   zoom_meeting_status: string | null
   report_ingested: boolean
   bookings: AdminZoomBookingAttendance[]
+  cancelled: AdminZoomBookingAttendance[]
   unmatched: AdminZoomUnmatchedRow[]
   unmatched_count: number
   last_sync_error: string | null
@@ -316,6 +346,7 @@ export interface AdminZoomBookingAttendance {
   status: string
   zoom_minutes_present: number | null
   attendance_decided_via: string | null
+  cancelled_at: string | null
 }
 
 /** One raw report row Zoom sent us that we could not attribute to any known registrant -- the unmatched bucket, made visible (E21 plan sec 6). Not masked: this is an authenticated admin surface, not the throwaway probe's chat-paste output. */
@@ -1183,7 +1214,7 @@ export interface PaginatedPurchasesResponse {
 
 /** GET /api/v1/admin/reports -- paginated report list. */
 export interface PaginatedReportsResponse {
-  items: ReportResponse[]
+  items: AdminReportResponse[]
   total: number
   limit: number
   offset: number

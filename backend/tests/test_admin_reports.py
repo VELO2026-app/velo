@@ -9,6 +9,7 @@
 # =============================================================================
 
 from collections.abc import AsyncGenerator
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -16,6 +17,9 @@ from httpx import AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.masters.models import MasterProfile
+from app.modules.practices.models import Practice, PracticeStatus, PracticeType
+from app.modules.reports.models import Report
 from app.modules.users.models import User, UserRole
 from tests.helpers import auth_headers, login_user, full_cleanup_range
 
@@ -405,3 +409,166 @@ async def test_resolve_dismissed_report(
         headers=auth_headers(token),
     )
     assert resp2.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Names in a report (BE-258)
+# ---------------------------------------------------------------------------
+async def _login_named(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    telegram_id: int,
+    first_name: str | None,
+    last_name: str | None = None,
+) -> str:
+    """Create a user and give it exactly this account name; return its id."""
+    auth = await login_user(client, telegram_id=telegram_id)
+    await db_session.execute(
+        update(User)
+        .where(User.id == auth["user"]["id"])
+        .values(first_name=first_name, last_name=last_name)
+    )
+    await db_session.commit()
+    return auth["user"]["id"]
+
+
+async def _report_row(
+    db_session: AsyncSession,
+    reporter_id: str,
+    target_type: str,
+    target_id: str,
+) -> str:
+    """Insert a report directly (the polymorphic target needs no row)."""
+    report = Report(
+        reporter_id=reporter_id,
+        target_type=target_type,
+        target_id=target_id,
+        reason="Because",
+    )
+    db_session.add(report)
+    await db_session.commit()
+    return str(report.id)
+
+
+async def _master_with_practice(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    telegram_id: int,
+    profile_name: str | None,
+    first_name: str | None = "Acct",
+    last_name: str | None = "Master",
+) -> tuple[str, str]:
+    """A master (account name "Acct Master" unless given) with a practice
+    titled "Evening Breathwork"; returns (master user id, practice id)."""
+    master_id = await _login_named(
+        client, db_session, telegram_id, first_name, last_name,
+    )
+    db_session.add(
+        MasterProfile(
+            user_id=master_id,
+            data={"profile": {"display_name": profile_name}} if profile_name else {},
+        )
+    )
+    practice = Practice(
+        master_id=master_id,
+        title="Evening Breathwork",
+        description="x",
+        practice_type=PracticeType.LIVE.value,
+        status=PracticeStatus.SCHEDULED.value,
+        scheduled_at=datetime.now(UTC) + timedelta(days=2),
+        duration_minutes=60,
+        timezone="UTC",
+        max_participants=10,
+        current_participants=0,
+        is_free=True,
+        price_cents=0,
+        currency="eur",
+        data={},
+    )
+    db_session.add(practice)
+    await db_session.commit()
+    return master_id, str(practice.id)
+
+
+@pytest.mark.asyncio
+async def test_list_reports_names_the_reporter_and_every_kind_of_target(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """BE-258: a row names its reporter and its target -- a person, a master
+    (one rule with the rest of the admin: the account's first and last name,
+    never the profile's display name), a practice by its title -- and a
+    target that is gone, or a nameless person, reads as the fallback or null
+    instead of failing the list."""
+    token = await _make_admin(client, db_session)
+    reporter = await _login_named(client, db_session, 59210, "Vera", "Reporter")
+    nameless_reporter = await _login_named(client, db_session, 59211, None, None)
+    person = await _login_named(client, db_session, 59310, "Pavel", "Target")
+    carded_master, practice_id = await _master_with_practice(
+        client, db_session, 59311, "Lotus Master",
+    )
+    nameless_master, _ = await _master_with_practice(
+        client, db_session, 59312, None, first_name=None, last_name=None,
+    )
+    gone = str(uuid4())
+
+    by_target = {
+        person: await _report_row(db_session, reporter, "user", person),
+        carded_master: await _report_row(db_session, reporter, "master", carded_master),
+        nameless_master: await _report_row(
+            db_session, reporter, "master", nameless_master,
+        ),
+        practice_id: await _report_row(db_session, reporter, "practice", practice_id),
+        gone: await _report_row(db_session, nameless_reporter, "practice", gone),
+    }
+
+    resp = await client.get(
+        ADMIN_REPORTS_URL, params={"limit": 100}, headers=auth_headers(token),
+    )
+
+    assert resp.status_code == 200
+    rows = {item["id"]: item for item in resp.json()["items"]}
+    named = {
+        target: (rows[report_id]["reporter_name"], rows[report_id]["target_name"])
+        for target, report_id in by_target.items()
+    }
+    assert named == {
+        person: ("Vera Reporter", "Pavel Target"),
+        carded_master: ("Vera Reporter", "Acct Master"),
+        nameless_master: ("Vera Reporter", "Мастер"),
+        practice_id: ("Vera Reporter", "Evening Breathwork"),
+        gone: ("Участник", None),
+    }
+    assert rows[by_target[practice_id]]["target_type"] == "practice"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("read", ["get", "resolve", "dismiss"])
+async def test_report_card_and_decisions_carry_the_names(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    read: str,
+) -> None:
+    """BE-258: the card (GET /{id}) and the answers of resolve and dismiss
+    name the reporter and the target as the list does, so a screen that
+    swaps the row for the answer keeps the names."""
+    token = await _make_admin(client, db_session)
+    reporter = await _login_named(client, db_session, 59220, "Vera", "Reporter")
+    target = await _login_named(client, db_session, 59320, "Pavel", "Target")
+    report_id = await _report_row(db_session, reporter, "user", target)
+    url = f"{ADMIN_REPORTS_URL}/{report_id}"
+
+    if read == "get":
+        resp = await client.get(url, headers=auth_headers(token))
+    else:
+        resp = await client.post(
+            f"{url}/{read}",
+            json={"resolution_note": "Handled"},
+            headers=auth_headers(token),
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert (data["reporter_name"], data["target_name"]) == (
+        "Vera Reporter", "Pavel Target",
+    )

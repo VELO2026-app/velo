@@ -61,6 +61,7 @@ function request(
   return {
     id,
     user_id: `user_${id}`,
+    master_name: 'Anna Lebedeva',
     amount_cents: 68200,
     fee_cents: 150,
     currency: 'EUR',
