@@ -76,7 +76,7 @@ import * as groupsApi from '@/api/groups'
 import * as reportsApi from '@/api/reports'
 import * as chatsApi from '@/api/chats'
 import type { StudentDetailResponse } from '@/api/types'
-import type { StudentCheckinItem, StudentFeedbackItem } from '@/api/types'
+import type { StudentCheckinItem, StudentDetail, StudentFeedbackItem } from '@/api/types'
 
 vi.mock('@/api/masters')
 vi.mock('@/api/groups')
@@ -1254,6 +1254,30 @@ describe('MasterStudentProfileView', () => {
       expect(items[3]?.getAttribute('aria-label')).toBe('Заблокировать')
       expect(items[3]?.classList.contains('v-menu-item--danger')).toBe(true)
     })
+
+    // BE-185 (FE-126): a contact reached only through a chat cannot be added to a
+    // group (the POST answers 404), and the server says so in the profile. The
+    // fixture without the field above is the older server: the item stays.
+    it.each([
+      { canAdd: false, labels: ['Добавить тег', 'Удалить из группы', 'Заблокировать'] },
+      {
+        canAdd: true,
+        labels: ['Добавить тег', 'Добавить в группу', 'Удалить из группы', 'Заблокировать'],
+      },
+    ])(
+      'BE-185: can_add_to_group=$canAdd decides whether «Добавить в группу» is in the menu',
+      async ({ canAdd, labels }) => {
+        const answer: StudentDetail = { ...detail(), can_add_to_group: canAdd }
+        vi.mocked(mastersApi.getStudent).mockResolvedValue(answer)
+        mount()
+        await flush()
+
+        menuTrigger()?.click()
+        await flush()
+
+        expect(menuItems().map((i) => i.getAttribute('aria-label'))).toEqual(labels)
+      },
+    )
 
     it('T24-9: the trigger dots are horizontal at rest and rotate open', async () => {
       mount()
