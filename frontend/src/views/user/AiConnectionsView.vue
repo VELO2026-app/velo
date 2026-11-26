@@ -493,7 +493,7 @@ onMounted(load)
 
 .ai-conn__warning {
   margin: 0;
-  font-weight: var(--velo-fw-medium);
+  font-weight: var(--velo-fw-bold);
 }
 
 /* Selectable as a whole: the manual-copy fallback when the clipboard is

@@ -814,9 +814,9 @@ script-эмуляцию. Контр-тест (убрать фикс → ошиб
   --velo-sand- * -- примитивная палитра /* Семантика */
     --velo-warning-bg/border/text/text-light --velo-error-bg/border/text
     --velo-success-bg/text --velo-info-bg/text --velo-mood-low/mid/high
-    /* Типографика */ --font-body: "Marmelad",
-  "Noto Sans", sans-serif -- семейство скина
-  (gold: VELO Marmelad) --font-heading: "Marmelad", ... -- алиас,
+    /* Типографика */ --font-body: "VELO Marmelad",
+  "Noto Sans", sans-serif -- шрифт скина gold (ядро
+  без скина: системный стек) --font-heading: var(--font-body) -- алиас,
   тот же шрифт /* Spacing */ --space-1..10, --velo-content-width: 336px,
   --velo-screen-padding: 33px /* Радиусы */ --radius-sm/md/lg: 15px -- карточки
     --radius-xl: 100px -- теги --radius-full: 9999px -- pill (кнопки)

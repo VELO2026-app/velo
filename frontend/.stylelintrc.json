@@ -12,6 +12,7 @@
         "/^border-radius$/": ["/^var\\(--/", "inherit", "0"],
         "/^box-shadow$/": ["/^var\\(--/", "none"],
         "/^font-family$/": ["/^var\\(--/", "inherit"],
+        "/^font-weight$/": ["/^var\\(--/", "inherit", "normal", "400"],
         "/^font$/": ["/^var\\(--/", "inherit"],
         "/^line-height$/": [
           "/^var\\(--/",
@@ -55,18 +56,17 @@
         ]
       },
       {
-        "message": "Token gate (tz-whitelabel §3.1): font-size / border-radius / box-shadow / font-family take var(--…) tokens only (variables.css); font-family may also be inherit. line-height / letter-spacing (FE-154, 2026-11-10): only the values already in use or a var(--…) token; a new value means reusing an existing step or adding a token. The font shorthand takes inherit or a token only."
+        "message": "Token gate (tz-whitelabel §3.1): font-size / border-radius / box-shadow / font-family take var(--…) tokens only (variables.css); font-family may also be inherit. line-height / letter-spacing (FE-154, 2026-11-10): only the values already in use or a var(--…) token; a new value means reusing an existing step or adding a token. The font shorthand takes inherit or a token only. font-weight (FE-278): var(--velo-fw-medium) / var(--velo-fw-bold), inherit, normal or 400 -- a skin maps the weight tokens to the faces it ships, while a raw 300 / 500 / 600 / 700 / bold picks a face by CSS matching (on the golden skin a raw 600 lands on Bold)."
       }
     ],
     "declaration-property-value-disallowed-list": [
       {
         "/^(padding|margin|inset|scroll-padding|scroll-margin)(-.+)?$|^(grid-)?(row-|column-)?gap$/": [
           "/(?<!var\\(--[\\w-]+,\\s*-?)(?<![\\w.-])-?(?!0+(\\.0+)?[a-z]+\\b)\\d*\\.?\\d+(px|rem|em|pt|pc|ch|ex|cm|mm|in|q)\\b/i"
-        ],
-        "/^font-weight$/": ["/^(600|700|bold|bolder)$/"]
+        ]
       },
       {
-        "message": "Token gate (FE-278): font-weight 600 / 700 / bold / bolder take var(--velo-fw-medium) or var(--velo-fw-bold): a skin maps those to the faces it ships, a raw 600 lands on the Bold face of the golden skin. Token gate (2026-10-31): padding / margin / inset / gap / scroll-padding / scroll-margin take spacing tokens -- var(--space-*), var(--velo-gap-*), var(--velo-inset-*) or calc() of them (calc(-1 * var(--space-2)) for a negative). Allowed raw: 0, auto, %, viewport units, env(), unitless calc factors, and a fallback inside var(--token, 12px). No other exceptions."
+        "message": "Token gate (2026-10-31): padding / margin / inset / gap / scroll-padding / scroll-margin take spacing tokens -- var(--space-*), var(--velo-gap-*), var(--velo-inset-*) or calc() of them (calc(-1 * var(--space-2)) for a negative). Allowed raw: 0, auto, %, viewport units, env(), unitless calc factors, and a fallback inside var(--token, 12px). No other exceptions."
       }
     ]
   },

@@ -156,10 +156,16 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
     expect(out.match(/rel="preload"/g)).toHaveLength(1)
   })
 
-  it('no 400 face (one variable font): its file is the one preloaded (FE-278)', () => {
+  it('no 400 face (variable fonts): the first file is the one preloaded, not the last (FE-278)', () => {
     resolveWithRoot()
     const out = fontBlockOf([
       { family: 'Manrope', file: 'assets/fonts/manrope.woff2', weight: '200 800', style: 'normal' },
+      {
+        family: 'Manrope',
+        file: 'assets/fonts/manrope-italic.woff2',
+        weight: '200 800',
+        style: 'italic',
+      },
     ])
     expect(out).toContain('href="/skin/assets/fonts/manrope.woff2" as="font"')
     expect(out.match(/rel="preload"/g)).toHaveLength(1)

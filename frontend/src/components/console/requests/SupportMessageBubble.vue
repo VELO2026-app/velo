@@ -166,7 +166,7 @@ const shownText = computed<string>(() =>
 .bubble--mine .bubble__mark--failed,
 .bubble--mine .bubble__mark--undelivered {
   color: var(--velo-white);
-  font-weight: var(--velo-fw-medium);
+  font-weight: var(--velo-fw-bold);
 }
 
 .bubble__actions {
