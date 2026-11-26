@@ -127,8 +127,21 @@ describe('catalog label display mapping (directionDisplayLabel/styleDisplayLabel
     await setLocale('en')
     // Server sends its ru canon label; the seed key wins for display.
     expect(directionDisplayLabel('yoga', 'Йога')).toBe('Yoga')
-    // A catalog-only addition has no seed key -- the server label stands.
-    expect(directionDisplayLabel('therapy', 'Терапия')).toBe('Терапия')
+    // A catalog-only addition no seed key names -- the server label stands.
+    expect(directionDisplayLabel('custom_a1b2c3d4', 'Исцеление')).toBe('Исцеление')
+  })
+
+  it('a catalog-only direction with a RANDOM slug takes the live wording when its ru label is a seed one', async () => {
+    // An own method the admin approved into the catalog: the slug is generated
+    // (`custom_<8 hex>`), only the label ties it to the seed key
+    // (i18n:display.direction.therapy).
+    const stored = 'Терапия'
+    await setLocale('en')
+    expect(directionDisplayLabel('custom_n8xq7g2q', stored)).toBe('Therapy')
+    await setLocale('uk')
+    expect(directionDisplayLabel('custom_n8xq7g2q', stored)).toBe('Терапія')
+    await setLocale('ru')
+    expect(directionDisplayLabel('custom_n8xq7g2q', stored)).toBe(stored)
   })
 
   it('a known style renders the ACTIVE locale label, not the server one', async () => {
@@ -141,7 +154,7 @@ describe('catalog label display mapping (directionDisplayLabel/styleDisplayLabel
     await setLocale('en')
     const directions = catalogDirectionOptions(CATALOG_WITH_CUSTOM_DIRECTION)
     expect(directions).toContainEqual({ value: 'yoga', label: 'Yoga' })
-    expect(directions).toContainEqual({ value: 'therapy', label: 'Терапия' })
+    expect(directions).toContainEqual({ value: 'therapy', label: 'Therapy' })
     const styles = catalogStylesForDirection(CATALOG_WITH_CUSTOM_DIRECTION, 'yoga')
     expect(styles).toEqual([{ value: 'hatha', label: 'Hatha yoga' }])
     // ...and back to ru the same builders render the canon labels again.

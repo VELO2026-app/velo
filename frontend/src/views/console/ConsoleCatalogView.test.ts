@@ -18,6 +18,7 @@ import { PiniaColada, useQueryCache } from '@pinia/colada'
 import { coladaOptions } from '@/composables/queries/setup'
 import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsoleCatalogView from '@/views/console/ConsoleCatalogView.vue'
+import { setLocale, t } from '@/locales'
 import * as taxonomyApi from '@/api/taxonomy'
 import type { TaxonomyDirectionItem, TaxonomyStyleItem } from '@/api/taxonomy'
 
@@ -183,11 +184,12 @@ beforeEach(() => {
   toastSuccess.mockReset()
 })
 
-afterEach(() => {
+afterEach(async () => {
   app?.unmount()
   host?.remove()
   app = null
   host = null
+  await setLocale('ru')
 })
 
 describe('ConsoleCatalogView', () => {
@@ -237,6 +239,41 @@ describe('ConsoleCatalogView', () => {
 
       expect(selectedDirection()).toBe('Йога')
       expect(field('Название').value).toBe('Йога')
+    })
+
+    it('names the directions and styles in the live locale, and the name field keeps the stored label', async () => {
+      // The catalog serves the ru storage canon. A seeded value reads as the
+      // app shows it; a promoted direction (random slug) through its ru label.
+      catalog = [
+        direction({
+          id: 'dir_med',
+          value: 'meditation',
+          label: 'Медитация',
+          styles: [
+            style({
+              id: 'st_silence',
+              direction_id: 'dir_med',
+              value: 'silence',
+              label: 'Медитация молчания',
+            }),
+          ],
+        }),
+        direction({ id: 'dir_th', value: 'custom_n8xq7g2q', label: 'Терапия', source: 'custom' }),
+      ]
+      await setLocale('uk')
+      await mountAndLoad()
+
+      const names = Array.from(host?.querySelectorAll('.catalog-list__name') ?? []).map((el) =>
+        el.textContent?.trim(),
+      )
+      expect(names).toEqual(['Медитація', 'Терапія'])
+      expect(host?.querySelector('.catalog-direction .console-card__title')?.textContent).toBe(
+        'Медитація',
+      )
+      expect(styleRows()).toEqual(['Медитація мовчання #0 on'])
+      expect(byLabel(t('console.catalog.styles.edit', { name: 'Медитація мовчання' }))).toBeTruthy()
+      // What the NAME field edits is the stored label, not the shown one.
+      expect(field(t('console.catalog.detail.name')).value).toBe('Медитация')
     })
 
     it('an empty catalog says so', async () => {

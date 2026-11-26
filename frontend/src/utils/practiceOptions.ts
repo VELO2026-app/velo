@@ -13,6 +13,7 @@
 import type { PracticeDirection, PracticeAudienceKind } from '@/api/types'
 import type { TaxonomyListResponse } from '@/api/taxonomy'
 import i18n from '@/locales'
+import { ruDirectionValueByLabel } from '@/utils/taxonomySeed'
 
 const { t } = i18n.global
 
@@ -480,12 +481,18 @@ export function hasStyleLabel(styleValue: string): boolean {
  *  the known taxonomy, the server's own label otherwise. The DB catalog
  *  serves ONE label per row -- the ru storage canon (tz-i18n §3.1 item 1) --
  *  so on a non-ru UI the known directions would render Russian without this
- *  mapping. Catalog-only additions (admin-approved customs, no seed key)
- *  keep the server label until the backend ships per-locale labels (BE-165).
- *  DISPLAY-ONLY: flattenMethods keeps composing the stored "direction —
- *  style" canon from the server labels, so storage never forks. */
+ *  mapping. A catalog-only addition (an own method the admin approved into the
+ *  catalog) carries a RANDOM slug (`custom_<8 hex>`), so its value finds no key;
+ *  its label may still be one the ru seed names (i18n:display.direction.therapy),
+ *  and then the seed key gives the live wording. Any other
+ *  addition keeps the server label until the backend ships per-locale labels
+ *  (BE-165). DISPLAY-ONLY: flattenMethods keeps composing the stored "direction
+ *  — style" canon from the server labels, so storage never forks. */
 export function directionDisplayLabel(value: string, catalogLabel: string): string {
-  return DIRECTION_OPTIONS.find((o) => o.value === value)?.label ?? catalogLabel
+  const known = DIRECTION_OPTIONS.find((o) => o.value === value)
+  if (known) return known.label
+  const seedKey = ruDirectionValueByLabel.get(catalogLabel)
+  return seedKey === undefined ? catalogLabel : t(`display.direction.${seedKey}`)
 }
 
 /** DISPLAY label for a catalog style row (same contract as

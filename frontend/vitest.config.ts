@@ -33,6 +33,7 @@ const DOM_TESTS = [
   'src/utils/audio.test.ts',
   'src/utils/constants.test.ts',
   'src/utils/keyboardViewportState.test.ts',
+  'src/utils/methodTaxonomy.display.test.ts',
   'src/utils/methodTaxonomy.overlay.test.ts',
   'src/utils/practiceOptions.test.ts',
   'src/utils/ratingIcons.test.ts',

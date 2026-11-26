@@ -22,6 +22,7 @@ import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsoleModerationView from '@/views/console/ConsoleModerationView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
+import { setLocale } from '@/locales'
 import type { AdminMethodChangeItem, ReportResponse } from '@/api/admin'
 
 vi.mock('@/api/admin')
@@ -221,13 +222,14 @@ beforeEach(() => {
   toastSuccess.mockReset()
 })
 
-afterEach(() => {
+afterEach(async () => {
   app?.unmount()
   host?.remove()
   document.body.querySelectorAll('.v-modal__overlay, .v-modal__scrim').forEach((el) => el.remove())
   app = null
   host = null
   vi.clearAllMocks()
+  await setLocale('ru')
 })
 
 describe('ConsoleModerationView: complaints', () => {
@@ -365,6 +367,30 @@ describe('ConsoleModerationView: method changes', () => {
         e.textContent?.trim(),
       ),
     ).toEqual(['Мой уникальный метод'])
+  })
+
+  it('shows the stored methods in the live locale, a custom one verbatim', async () => {
+    // The stored strings are the ru storage canon (FE-275).
+    server.requests = [
+      request({
+        current_methods: ['Медитация — Звуковая медитация'],
+        proposed_methods: [
+          'Медитация — Звуковая медитация',
+          'Дыхательные практики',
+          'Мой уникальный метод',
+        ],
+      }),
+    ]
+    await setLocale('uk')
+    await mount('/admin/moderation?tab=methods')
+
+    const chips = Array.from(host?.querySelectorAll('.methods__chips') ?? []).map((box) =>
+      Array.from(box.children).map((chip) => chip.textContent?.trim()),
+    )
+    expect(chips).toEqual([
+      ['Медитація — Звукова медитація'],
+      ['Медитація — Звукова медитація', 'Дихальні практики', 'Мой уникальный метод'],
+    ])
   })
 
   it('approves a request whose methods are all in the catalog at once, and drops it', async () => {

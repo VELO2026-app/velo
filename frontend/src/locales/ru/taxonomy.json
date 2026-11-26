@@ -10,7 +10,8 @@
       "sound_healing": "Саундхиллинг",
       "art": "Арт-практики",
       "narrative": "Нарративные практики",
-      "movement": "Движение"
+      "movement": "Движение",
+      "therapy": "Терапия"
     },
     "difficulty": {
       "beginner": "Начальная",
