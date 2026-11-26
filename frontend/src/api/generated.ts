@@ -1968,7 +1968,7 @@ export interface StudentCheckinItem {
   created_at: string
 }
 
-/** GET /api/v1/masters/me/students/{id} -- per-student aggregate. name / avatar_url -- the student's identity, same source as StudentListItem (so a direct/refreshed deep-link renders the real name, not a fallback). practices_count -- number of this master's practices the student attended. hours -- attended duration_minutes summed, in hours (1 decimal). satisfaction_pct-- round(avg(rating) * 10) over the student's feedbacks on this master's practices; null when they left no feedback. recent_checkins -- newest-first, capped. feedbacks -- newest-first, capped. blocked -- T24-20 (PROMPT №638): True iff MasterStudent.blocked_at is set for THIS master. Lets the frontend swap the bottom action ("Заблокировать" / "Разблокировать") instead of guessing from the fact the request merely succeeded. Only this dossier can return blocked=True: its gate (has_master_link, INTERNAL -- BE-46 FIX) admits this master's lawful block, while the derived "Ученики" list excludes blocked students. */
+/** GET /api/v1/masters/me/students/{id} -- per-student aggregate. name / avatar_url -- the student's identity, same source as StudentListItem (so a direct/refreshed deep-link renders the real name, not a fallback). practices_count -- number of this master's practices the student attended. hours -- attended duration_minutes summed, in hours (1 decimal). satisfaction_pct-- round(avg(rating) * 10) over the student's feedbacks on this master's practices; null when they left no feedback. recent_checkins -- newest-first, capped. feedbacks -- newest-first, capped. blocked -- T24-20 (PROMPT №638): True iff MasterStudent.blocked_at is set for THIS master. Lets the frontend swap the bottom action ("Заблокировать" / "Разблокировать") instead of guessing from the fact the request merely succeeded. Only this dossier can return blocked=True: its gate (has_master_link, INTERNAL -- BE-46 FIX) admits this master's lawful block, while the derived "Ученики" list excludes blocked students. can_add_to_group-- BE-185: True iff POST /masters/me/groups/{id}/members would accept this student, i.e. has_master_link (GRANT_ACCESS) -- the strict link: a booking at any status, a waitlist entry, or membership of one of this master's groups. The dossier opens on the wider INTERNAL link (a chat, a lawful block), so a contact reached only that way gets False here and the same 404 from the POST. Informational: the POST re-checks the link itself and stays the only gate. */
 export interface StudentDetailResponse {
   name: string
   avatar_url: string | null
@@ -1978,6 +1978,7 @@ export interface StudentDetailResponse {
   recent_checkins: StudentCheckinItem[]
   feedbacks: StudentFeedbackItem[]
   blocked: boolean
+  can_add_to_group: boolean
 }
 
 /** One feedback left by the student (on this master's practices). */

@@ -125,6 +125,7 @@ function detail(over: Partial<StudentDetailResponse> = {}): StudentDetailRespons
     recent_checkins: [],
     feedbacks: [],
     blocked: false,
+    can_add_to_group: true,
     ...over,
   }
 }

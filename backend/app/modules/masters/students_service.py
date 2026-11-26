@@ -199,6 +199,15 @@ async def get_master_student_detail(
         master_id, student_id, session, action=MasterLinkAction.INTERNAL,
     ):
         raise NotFoundError("Student not found")
+    # BE-185: the gate of POST /masters/me/groups/{id}/members, asked as a
+    # question instead of enforced. The dossier opens on the wider INTERNAL
+    # link, so this is how the screen tells a contact it may put into a group
+    # from one that would get the 404. Same function, same action as
+    # add_group_member -- a second copy of the rule is how the button and the
+    # endpoint would drift apart. The POST still checks for itself.
+    can_add_to_group = await has_master_link(
+        master_id, student_id, session, action=MasterLinkAction.GRANT_ACCESS,
+    )
     blocked_at = await session.scalar(
         select(MasterStudent.blocked_at).where(
             MasterStudent.master_id == master_id,
@@ -297,4 +306,5 @@ async def get_master_student_detail(
             for rating, comment, created_at in feedback_rows
         ],
         "blocked": blocked_at is not None,
+        "can_add_to_group": can_add_to_group,
     }

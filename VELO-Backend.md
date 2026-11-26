@@ -191,8 +191,8 @@ GET   /api/v1/masters/me/income?period=week|month   -- Доход за пери�
 GET   /api/v1/masters/me/stats?period=week|month     -- Стат-сетка дашборда: практики/участники/доход + дельты (E7)
 GET   /api/v1/masters/me/transactions               -- Лента транзакций (signed, пагинация, E2)
 GET   /api/v1/masters/me/students                    -- Мои ученики (поиск, пагинация, E5)
-GET   /api/v1/masters/me/students/{id}               -- Профиль ученика (E5)
-GET   /api/v1/masters/me/reviews?attention=          -- Cross-practice лента отзывов (+practice_title, #3)
+GET   /api/v1/masters/me/students/{id}               -- Профиль ученика (E5; can_add_to_group — строгая связь, BE-185)
+GET   /api/v1/masters/me/reviews?attention=&period=  -- Cross-practice лента отзывов (+practice_title, #3; period=week|month|quarter — практики календарного периода мастера, как /me/analytics, BE-228)
 ```
 
 > **E2 (доход/лента).** `income` = знаковая сумма title-помеченных DONE-движений
