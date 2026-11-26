@@ -95,7 +95,7 @@ let figma
 let F
 function setup() {
   const doc = new Node('DOCUMENT', 'doc')
-  const pages = ['Gold · Приложение', 'Kit и токены', 'Веб-версия · концепт'].map((n) =>
+  const pages = ['Gold · Приложение', 'Kit и токены', 'User App'].map((n) =>
     doc.appendChild(new Node('PAGE', n)),
   )
   const sheet = pages[0].appendChild(new Node('SECTION', 'Screen / user.home / Home'))
@@ -196,7 +196,7 @@ test('c2fSeal: an edit inside the sheet changes it, moving the sheet does not', 
 test('write: a designer page is refused before the version; a mirror page is written under a lock', async () => {
   const front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
   await assert.rejects(
-    front.write(['Веб-версия · концепт'], 'x', () => {}),
+    front.write(['User App'], 'x', () => {}),
     /may not write to page/,
   )
   assert.deepEqual(figma.versions, [])
@@ -209,7 +209,7 @@ test('write: a designer page is refused before the version; a mirror page is wri
   assert.deepEqual(figma.versions, ['agent:front FE-1 ok'])
 })
 
-test('write: only the front agent pages pass; concept, designer, archive and the old «Фронт · …» names are refused', async () => {
+test('write: only the listed pages pass; copies, look-alikes, designer pages, archive and the old «Фронт · …» names are refused', async () => {
   const front = F.makeFront({ thread: 'thr_a', task: 'FE-1' })
   const own = [
     'Обложка',
@@ -220,12 +220,20 @@ test('write: only the front agent pages pass; concept, designer, archive and the
     'Goodo · Библиотека',
     'Админка · Gold',
     'Админка · Goodo',
+    'Веб-версия · концепт',
+    'Админка · цель (ждёт бэкенд)',
   ]
   const other = [
-    'Админка · цель (ждёт бэкенд)',
-    'Веб-версия · концепт',
+    'Админка · Веб · Gold',
+    'Админка · концепт',
+    'Админка · Цель (ждёт бэкенд)',
+    'Админка · Goodo (копия)',
+    'Эксперименты · Приложение',
+    'Веб-версия · Приложение',
     'Icons',
     'User App',
+    'Master App',
+    'Admin Panel',
     'Архив',
     'Фронт · Экраны',
     'Goodo · Демо',
