@@ -230,7 +230,7 @@ export type {
 // `export type { X } from './generated'` re-exports X to consumers of this
 // file but does not bind X for use WITHIN this file; PracticeType is used
 // locally below (PracticeFilters), so it needs its own local binding.
-import type { PracticeType } from './generated'
+import type { PracticeType, StudentDetailResponse } from './generated'
 
 // FE-157: the former hand-written bridges (CreatePracticeRequest,
 // UpdatePracticeRequest, PracticeResponse, PracticeSummary,
@@ -420,6 +420,20 @@ export interface PracticeFilters {
 export type ReportStatusFilter = 'pending' | 'resolved' | 'dismissed'
 /** Admin report-list target-type filter literals. */
 export type ReportTargetTypeFilter = 'user' | 'master' | 'practice'
+
+// -- Temporary bridge: BE-185 (can_add_to_group) -----------------------------
+
+/**
+ * `StudentDetailResponse` with `can_add_to_group` as an optional field.
+ *
+ * @remarks
+ * The backend adds the flag in BE-185 (PR #232), so generated.ts does not carry it
+ * yet. Absent means "no answer": the screen then acts as it did before the flag
+ * (the action is shown and the POST stays the only gate). Once generated.ts has
+ * the field, this type equals `StudentDetailResponse`: point the two users back
+ * at it and delete this alias.
+ */
+export type StudentDetail = StudentDetailResponse & { can_add_to_group?: boolean }
 
 // -- Convenience re-export for generic paginated response -------------------
 

@@ -31,7 +31,7 @@ import type {
   PaginatedWithdrawalsResponse,
   WithdrawalResponse,
   PaginatedStudentsResponse,
-  StudentDetailResponse,
+  StudentDetail,
   IncomeResponse,
   PaginatedTransactionsResponse,
   MasterStatsResponse,
@@ -192,11 +192,12 @@ export function getStudents(limit = 50, offset = 0): Promise<PaginatedStudentsRe
 
 /**
  * Fetch one student's aggregate (practices_count, hours, satisfaction_pct,
- * recent check-ins and feedbacks) over THIS master's practices.
+ * recent check-ins and feedbacks) over THIS master's practices, and whether the
+ * student can be added to one of the master's groups (`can_add_to_group`, BE-185).
  * Note: the response carries no name/avatar — the calling list passes those.
  */
-export function getStudent(id: string): Promise<StudentDetailResponse> {
-  return api.get<StudentDetailResponse>(path`/api/v1/masters/me/students/${id}`)
+export function getStudent(id: string): Promise<StudentDetail> {
+  return api.get<StudentDetail>(path`/api/v1/masters/me/students/${id}`)
 }
 
 // =============================================================================
