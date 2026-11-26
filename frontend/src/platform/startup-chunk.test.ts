@@ -189,6 +189,16 @@ describe('checkStartupLayout', () => {
       /^\/s\/VHeader\.vue is in the startup set \(app-1\.js\)$/,
     ],
     ['no chunk holding app.ts', edit('app-1.js', { moduleIds: ['/s/App.vue'] }), /no chunk holds/],
+    [
+      'a canary that matches no module (renamed component)',
+      layout().filter((c) => c.fileName !== 'VHeader-1.js'),
+      /canary .*VHeader.* matches no module/,
+    ],
+    [
+      'an empty chunk taken for the runtime helpers',
+      [...edit('app-1.js', { imports: ['host-1.js', 'empty-1.js'] }), chunk('empty-1.js')],
+      /imports empty-1\.js statically/,
+    ],
   ])('fails on %s', (_, chunks, message) => {
     const problems = check(chunks)
     expect(problems).toHaveLength(1)

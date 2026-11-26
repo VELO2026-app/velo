@@ -224,7 +224,12 @@ function guardStartupLayout(appEntry: string): Plugin {
       const chunks = Object.values(bundle).filter((out) => out.type === 'chunk')
       const problems = checkStartupLayout(chunks, appEntry, STARTUP_CANARIES)
       if (problems.length > 0) {
-        this.error(`startup layout (FE-169):\n- ${problems.join('\n- ')}`)
+        this.error(
+          `startup layout (FE-169):\n- ${problems.join('\n- ')}\n` +
+            'If the change is intended, update STARTUP_CANARIES (vite.config.ts) or ' +
+            'startupChunkName (src/platform/startup-chunk.ts); find a module with ' +
+            "`node scripts/bundle-report.mjs --modules --find '<regex>'`.",
+        )
       }
     },
   }

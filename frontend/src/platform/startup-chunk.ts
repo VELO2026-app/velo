@@ -274,6 +274,8 @@ const ROLLDOWN_RUNTIME = /rolldown[\\/]runtime/
  *   would run before prepareHost().
  * - The chunk of app.ts imports statically only `host` and Rolldown's runtime
  *   helpers: any other chunk is a startup file the group did not plan.
+ * - Every `lazyOnly` pattern matches some module of the bundle (a renamed
+ *   component must not blind the check).
  * - No module of `lazyOnly` is in the startup set (the entries, the app chunk
  *   and their static imports): screens that start does not render, kept out
  *   by the pure SFC wrappers of vite.config.ts.
@@ -309,7 +311,10 @@ export function checkStartupLayout(
   }
   for (const file of app.imports) {
     const dep = byFile.get(file)
-    const helpers = dep !== undefined && dep.moduleIds.every((id) => ROLLDOWN_RUNTIME.test(id))
+    const helpers =
+      dep !== undefined &&
+      dep.moduleIds.length > 0 &&
+      dep.moduleIds.every((id) => ROLLDOWN_RUNTIME.test(id))
     if (dep?.name !== 'host' && !helpers) {
       problems.push(
         `${app.fileName} imports ${file} statically: only host and the runtime helpers may start with it`,
@@ -326,5 +331,12 @@ export function checkStartupLayout(
     }
   }
   problems.push(...started)
+  // A canary that matches nothing (a renamed or moved component) would keep
+  // the check green while it watches nothing.
+  for (const re of lazyOnly) {
+    if (!chunks.some((c) => c.moduleIds.some((id) => re.test(id)))) {
+      problems.push(`the canary ${String(re)} matches no module of the bundle`)
+    }
+  }
   return problems
 }

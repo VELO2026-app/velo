@@ -46,9 +46,21 @@ describe('perLocaleManifest', () => {
   })
 
   it('leaves a failed build (no writeBundle) alone: its own error stays the one reported', () => {
-    const plugin = perLocaleManifest(mkdtempSync(join(tmpdir(), 'velo-mf-')))
+    const plugin = perLocaleManifest('/nonexistent-frontend')
     ;(plugin.configResolved as Hook)({ root: '/', build: { outDir: '/nonexistent' } })
+    // A previous build of the same plugin wrote; this one fails before it.
+    ;(plugin.writeBundle as Hook)()
     ;(plugin.buildStart as Hook)()
     expect(() => (plugin.closeBundle as unknown as { handler: Hook }).handler()).not.toThrow()
+  })
+
+  it('fails a written build that has no manifest', () => {
+    const plugin = perLocaleManifest('/nonexistent-frontend')
+    ;(plugin.configResolved as Hook)({ root: '/', build: { outDir: '/nonexistent' } })
+    ;(plugin.buildStart as Hook)()
+    ;(plugin.writeBundle as Hook)()
+    expect(() => (plugin.closeBundle as unknown as { handler: Hook }).handler()).toThrow(
+      /is missing/,
+    )
   })
 })
