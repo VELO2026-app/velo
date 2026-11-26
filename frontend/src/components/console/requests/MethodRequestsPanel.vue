@@ -55,7 +55,9 @@
           <section class="methods__block">
             <h3 class="methods__caption">{{ t('adminScreens.adminMethodRequests.now') }}</h3>
             <div class="methods__chips">
-              <RequestChip v-for="m in item.current_methods ?? []" :key="m">{{ m }}</RequestChip>
+              <RequestChip v-for="m in item.current_methods ?? []" :key="m">{{
+                methodDisplayLabel(m)
+              }}</RequestChip>
               <span v-if="!item.current_methods?.length" class="methods__empty">—</span>
             </div>
           </section>
@@ -64,9 +66,9 @@
             <div class="methods__chips">
               <template v-for="m in item.proposed_methods ?? []" :key="m">
                 <ConsoleBadge v-if="isAdded(item, m)" tone="success" data-testid="method-added">{{
-                  m
+                  methodDisplayLabel(m)
                 }}</ConsoleBadge>
-                <RequestChip v-else>{{ m }}</RequestChip>
+                <RequestChip v-else>{{ methodDisplayLabel(m) }}</RequestChip>
               </template>
             </div>
           </section>
@@ -158,7 +160,7 @@ import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { formatRelative, masterDisplayName } from '@/utils/adminHelpers'
-import { parseMethods } from '@/utils/methodTaxonomy'
+import { methodDisplayLabel, parseMethods } from '@/utils/methodTaxonomy'
 
 const toast = useToast()
 

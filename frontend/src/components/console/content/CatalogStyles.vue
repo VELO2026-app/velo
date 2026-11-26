@@ -40,7 +40,7 @@
           @keydown.enter.prevent="saveEdit(row)"
           @keydown.esc="cancelEdit"
         />
-        <span v-else :class="{ 'catalog-styles__off': !row.is_active }">{{ row.label }}</span>
+        <span v-else :class="{ 'catalog-styles__off': !row.is_active }">{{ nameOf(row) }}</span>
       </template>
       <template #cell-display_order="{ row }">
         <VInput
@@ -59,7 +59,7 @@
         <VSwitch
           :model-value="row.is_active"
           :disabled="busyId === row.id"
-          :aria-label="`${t('console.catalog.styles.visible')}: ${row.label}`"
+          :aria-label="`${t('console.catalog.styles.visible')}: ${nameOf(row)}`"
           @update:model-value="setVisible(row, $event)"
         />
       </template>
@@ -87,7 +87,7 @@
           v-else
           type="button"
           class="catalog-styles__icon"
-          :aria-label="t('console.catalog.styles.edit', { name: row.label })"
+          :aria-label="t('console.catalog.styles.edit', { name: nameOf(row) })"
           @click="startEdit(row)"
         >
           <IconPen :size="18" />
@@ -110,6 +110,7 @@ import { newTaxonomySlug } from '@/utils/console/taxonomySlug'
 import { useTaxonomyMutation } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { styleDisplayLabel } from '@/utils/practiceOptions'
 import {
   createTaxonomyStyle,
   updateTaxonomyStyle,
@@ -136,6 +137,12 @@ const updateStyle = useTaxonomyMutation(
 // Spread: ConsoleTable rows are plain records, the API items are interfaces.
 const rows = computed(() => (props.direction.styles ?? []).map((style) => ({ ...style })))
 type StyleRow = (typeof rows.value)[number]
+
+/** The name the app shows for a style (the live locale). The edit field holds
+ *  the stored label, the catalog's canon. */
+function nameOf(row: StyleRow): string {
+  return styleDisplayLabel(row.value, row.label)
+}
 
 const columns = computed<ConsoleTableColumn[]>(() => [
   { key: 'label', label: t('console.catalog.styles.name') },

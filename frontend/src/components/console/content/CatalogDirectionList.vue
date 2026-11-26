@@ -56,7 +56,7 @@
           data-testid="direction-item"
           @click="emit('select', dir.id)"
         >
-          <span class="catalog-list__name">{{ dir.label }}</span>
+          <span class="catalog-list__name">{{ directionDisplayLabel(dir.value, dir.label) }}</span>
           <span v-if="!dir.is_active" class="catalog-list__meta">{{
             t('console.catalog.hidden')
           }}</span>
@@ -83,6 +83,7 @@ import { newTaxonomySlug } from '@/utils/console/taxonomySlug'
 import { useTaxonomyMutation } from '@/composables/queries/admin'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
+import { directionDisplayLabel } from '@/utils/practiceOptions'
 import {
   createTaxonomyDirection,
   type CreateDirectionRequest,

@@ -10,7 +10,12 @@ import type { ConsoleTone } from '@/utils/console/tone'
 import type { AdminMasterListItem } from '@/api/admin'
 import { getLocale, t } from '@/locales'
 import { formatMoney } from '@/utils/format'
-import { directionLabel, parseMethods, resolveStyleLabel } from '@/utils/methodTaxonomy'
+import {
+  customMethodLabel,
+  directionLabel,
+  parseMethods,
+  resolveStyleLabel,
+} from '@/utils/methodTaxonomy'
 
 /** What a cell shows for a value the server does not have. */
 export const DASH = '—'
@@ -76,13 +81,16 @@ export interface MethodChip {
 /**
  * A master's methods as chips: the direction filled, its styles muted. A
  * method the taxonomy does not know stays as a verbatim chip, so nothing
- * vanishes (the same reading as the mobile masters card).
+ * vanishes (the same reading as the mobile masters card); a bare direction
+ * label the seed names reads in the live locale even with a cold catalog.
  */
 export function methodChips(master: Pick<AdminMasterListItem, 'methods'>): MethodChip[] {
   const methods = master.methods ?? []
   if (methods.length === 0) return []
   const parsed = parseMethods(methods)
-  if (parsed.directions.length === 0) return methods.map((label) => ({ label, muted: false }))
+  if (parsed.directions.length === 0) {
+    return methods.map((label) => ({ label: customMethodLabel(label), muted: false }))
+  }
   const chips: MethodChip[] = []
   for (const dir of parsed.directions) {
     chips.push({ label: directionLabel(dir), muted: false })
@@ -91,7 +99,7 @@ export function methodChips(master: Pick<AdminMasterListItem, 'methods'>): Metho
     }
   }
   if (parsed.customEnabled && parsed.customText) {
-    chips.push({ label: parsed.customText, muted: false })
+    chips.push({ label: parsed.custom.map(customMethodLabel).join(', '), muted: false })
   }
   return chips
 }

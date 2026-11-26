@@ -21,6 +21,7 @@ import * as adminApi from '@/api/admin'
 import type { AdminMasterListItem } from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
 import { errorMessage } from '@/composables/useApiError'
+import { setLocale } from '@/locales'
 
 vi.mock('@/api/admin')
 
@@ -155,12 +156,13 @@ beforeEach(() => {
   vi.mocked(adminApi.inviteMaster).mockReset()
 })
 
-afterEach(() => {
+afterEach(async () => {
   app?.unmount()
   root?.remove()
   document.body.querySelectorAll('.v-modal__overlay, .v-modal__scrim').forEach((el) => el.remove())
   app = null
   root = null
+  await setLocale('ru')
 })
 
 describe('ConsoleMastersView', () => {
@@ -175,6 +177,21 @@ describe('ConsoleMastersView', () => {
     await vi.waitFor(() =>
       expect(tabLabels()).toEqual(['Все · 3', 'На проверке · 1', 'Отклонённые · 1']),
     )
+  })
+
+  it('words a method the seed names in the live locale, with the catalog cold (FE-275)', async () => {
+    // primeMethodTaxonomyCatalog is stubbed above: parseMethods does not know "Therapy".
+    vi.mocked(adminApi.getMastersList).mockImplementation(async (_status, limit) => ({
+      items: limit === 1 ? [] : [master({ methods: ['Терапия'] })],
+      total: 1,
+      limit: limit ?? 100,
+      offset: 0,
+    }))
+    await setLocale('uk')
+    await mount()
+
+    expect(rows()[0]?.textContent).toContain('Терапія')
+    expect(rows()[0]?.textContent).not.toContain('Терапия')
   })
 
   it('shows the payout balance column, and drops it on an instance without payments', async () => {

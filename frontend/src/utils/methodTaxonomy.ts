@@ -41,13 +41,16 @@ import type { PracticeDirection } from '@/api/types'
 import i18n from '@/locales'
 // Storage-canon seed: the SERVER catalog's labels are the canon; the ru seed
 // catalogs cover a cold cache (the historic storage vocabulary).
-// ?raw + JSON.parse: VueI18nPlugin precompiles every plain locales/**/*.json
-// import into message ASTs; these seeds are DATA (storage-canon labels read
-// here, not through t()), so their leaves must stay plain strings.
-import taxonomySeedRaw from '@/locales/ru/taxonomy.json?raw'
-import practiceSeedRaw from '@/locales/ru/practice.json?raw'
+import {
+  ruDirectionSeed,
+  ruDirectionValueByLabel,
+  ruStyleSeed,
+  ruStyleValueByLabel,
+} from '@/utils/taxonomySeed'
 import {
   DIRECTION_OPTIONS,
+  directionDisplayLabel,
+  seedDirectionLabel,
   stylesForDirection,
   hasStyleLabel,
   styleLabel,
@@ -63,31 +66,6 @@ import { getActiveTaxonomy, type TaxonomyListResponse } from '@/api/taxonomy'
 //               composing from the server catalog's labels, or the ru seed
 //               when the cache is cold) -- a non-ru UI never forks the
 //               stored vocabulary.
-const taxonomySeed = JSON.parse(taxonomySeedRaw) as unknown as {
-  display?: { direction?: Record<string, string> }
-}
-const practiceSeed = JSON.parse(practiceSeedRaw) as unknown as {
-  practice?: { styles?: Record<string, string> }
-}
-const ruSeed = {
-  display: {
-    direction: taxonomySeed.display?.direction ?? {},
-  },
-  practice: {
-    styles: practiceSeed.practice?.styles ?? {},
-  },
-}
-
-/** `ru seed label -> value`, a Map (a stored string like "constructor" must
- *  not find an inherited key). Built once: the seed is bundled data read raw,
- *  so no locale switch, instance overlay or catalog apply can make it stale.
- *  The LIVE labels are not cached on purpose -- they follow the locale and
- *  the overlay, so they are read on every lookup. */
-function seedValueByLabel(labelByValue: Record<string, string>): ReadonlyMap<string, string> {
-  return new Map(Object.entries(labelByValue).map(([value, label]) => [label, value]))
-}
-const seedDirectionValueByLabel = seedValueByLabel(ruSeed.display.direction)
-const seedStyleValueByLabel = seedValueByLabel(ruSeed.practice.styles)
 
 /** The two-level picker's selection state. Mirrors the fields the wizard held
  *  inline (selectedDirections / selectedStyles / otherMethod*). */
@@ -266,7 +244,7 @@ function resolveDirectionValue(label: string): PracticeDirection | undefined {
     label,
     catalogDirectionValueByLabel.value?.[label],
     DIRECTION_OPTIONS,
-    seedDirectionValueByLabel,
+    ruDirectionValueByLabel,
   ) as PracticeDirection | undefined
 }
 
@@ -276,7 +254,7 @@ function resolveStyleValue(dirValue: PracticeDirection, label: string): string |
     label,
     catalogStyleValueByLabel.value?.[dirValue]?.[label],
     stylesForDirection(dirValue),
-    seedStyleValueByLabel,
+    ruStyleValueByLabel,
   )
 }
 
@@ -294,26 +272,57 @@ export function resolveStyleLabel(dirValue: string, styleValue: string): string 
 }
 
 /** `direction value -> label` for DISPLAY: hardcoded key (live locale) first,
- *  server catalog second, raw value last. */
+ *  server catalog second (its label, in the live locale when the ru seed
+ *  names it: directionDisplayLabel), raw value last. */
 export function directionLabel(dir: string): string {
   if (i18n.global.te(`display.direction.${dir}`, 'ru')) {
     return i18n.global.t(`display.direction.${dir}`)
   }
-  return catalogDirectionLabelByValue.value?.[dir] ?? dir
+  const catalogLabel = catalogDirectionLabelByValue.value?.[dir]
+  return catalogLabel === undefined ? dir : directionDisplayLabel(dir, catalogLabel)
+}
+
+/**
+ * A stored string no direction took (parseMethods' custom variant) for
+ * DISPLAY. With a cold catalog (not loaded yet, a failed load, a hidden
+ * direction) a bare direction label the ru seed names -- the promoted
+ * "Therapy" of a master's own method (i18n:display.direction.therapy) -- is
+ * not matched, so it surfaces as custom; its live wording is still known by
+ * the label. Any other text stays verbatim: it is the master's own.
+ */
+export function customMethodLabel(text: string): string {
+  return seedDirectionLabel(text)
+}
+
+/**
+ * One STORED method string for DISPLAY in the live locale: "Direction —
+ * Style" with both halves through the display labels, a bare direction
+ * through its label. A string the taxonomy does not know (a custom own
+ * variant, legacy text) stays verbatim -- nothing vanishes -- but for a bare
+ * label the seed names (customMethodLabel). DISPLAY-ONLY: the stored string
+ * itself is never re-written to the live words.
+ */
+export function methodDisplayLabel(stored: string): string {
+  const parsed = parseMethods([stored])
+  const dir = parsed.directions[0]
+  if (!dir) return customMethodLabel(stored)
+  const style = parsed.styles[dir]?.[0]
+  const dirText = directionLabel(dir)
+  return style === undefined ? dirText : `${dirText}${SEP}${resolveStyleLabel(dir, style)}`
 }
 
 /** `direction value -> label` for STORAGE (flattenMethods): the server
  *  catalog's label is the canon, the ru seed covers a cold cache (the
  *  historic storage vocabulary), the raw value is the last resort. */
 function canonicalDirectionLabel(dir: string): string {
-  return catalogDirectionLabelByValue.value?.[dir] ?? ruSeed.display?.direction?.[dir] ?? dir
+  return catalogDirectionLabelByValue.value?.[dir] ?? ruDirectionSeed[dir] ?? dir
 }
 
 /** `style value -> label` for STORAGE under a direction (same canon chain). */
 function canonicalStyleLabel(dirValue: string, styleValue: string): string {
   return (
     catalogStyleLabelByValue.value?.[dirValue]?.[styleValue] ??
-    ruSeed.practice?.styles?.[styleValue] ??
+    ruStyleSeed[styleValue] ??
     styleValue
   )
 }
