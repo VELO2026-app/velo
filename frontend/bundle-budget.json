@@ -8,9 +8,9 @@
   },
   "skinned": {
     "package": "velo-brand",
-    "tag": "v0.1.1",
+    "tag": "v0.3.0",
     "repo": "https://github.com/VELO2026-app/velo-brand.git",
     "entryGzip": 136789,
-    "precacheBytes": 632843
+    "precacheBytes": 713181
   }
 }

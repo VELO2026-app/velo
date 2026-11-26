@@ -27,7 +27,7 @@
 
 import { loadEnv, type Plugin } from 'vite'
 
-import { CORE_SKIN, type SkinPackage } from './skin'
+import { CORE_SKIN, type SkinFont, type SkinPackage } from './skin'
 
 /** Placeholder (as written in index.html, between the %) mapped to the env var
  *  that values it. */
@@ -41,22 +41,43 @@ const PASSPORT_HTML_DEFAULTS: Record<string, string> = {
 
 const FONT_BLOCK = /<!--VELO:FONT-->[\s\S]*<!--\/VELO:FONT-->/
 
-/** The faces the first paint needs (FE-278): the Regular one (400, normal). The
- *  other faces of the family (Medium, Bold, ...) load on demand through their
- *  \@font-face rule, when text of that weight is drawn. A package without a
- *  400 normal face (a single variable font, "200 800") preloads its first one. */
-function preloadedFaces(fonts: SkinPackage['fonts']): SkinPackage['fonts'] {
-  const regular = fonts.find((font) => font.weight === 400 && font.style === 'normal')
-  return regular ? [regular] : fonts.slice(0, 1)
+/** The numeric `normal` face the browser picks for `weight`: the exact one,
+ *  else (CSS font matching, simplified) the nearest heavier face from 500 up,
+ *  the nearest lighter one below that, and the other side if there is none. */
+function faceFor(fonts: SkinPackage['fonts'], weight: number): SkinFont | undefined {
+  const faces = fonts
+    .filter((font) => font.style === 'normal' && typeof font.weight === 'number')
+    .sort((a, b) => Number(a.weight) - Number(b.weight))
+  const exact = faces.find((font) => font.weight === weight)
+  if (exact) return exact
+  const heavier = faces.find((font) => Number(font.weight) > weight)
+  const lighter = [...faces].reverse().find((font) => Number(font.weight) < weight)
+  return weight >= 500 ? (heavier ?? lighter) : (lighter ?? heavier)
+}
+
+/** The faces the first paint needs (FE-278): Regular (400) and the face of
+ *  headings and buttons (`skin.headingWeight`, the one token to move them
+ *  between Medium and Bold). The other faces of the family load on demand
+ *  through their \@font-face rule, when text of that weight is drawn. A package
+ *  without such a face (a single variable font, "200 800") preloads its first
+ *  file. */
+function preloadedFaces(skin: SkinPackage): SkinPackage['fonts'] {
+  const wanted = [400, skin.headingWeight]
+  const faces = wanted.flatMap((weight) => {
+    const face = weight === null ? undefined : faceFor(skin.fonts, weight)
+    return face ? [face] : []
+  })
+  const unique = faces.filter((face, at) => faces.indexOf(face) === at)
+  return unique.length > 0 ? unique : skin.fonts.slice(0, 1)
 }
 
 /** A skin with self-hosted fonts (FE-131: assets/fonts/ of the package,
  *  declared by an \@font-face rule in virtual:skin-tokens.css) replaces the Google Fonts block
- *  with a preload of its regular face -- no external request ships with it. */
+ *  with preloads of its regular and heading faces -- no external request ships with it. */
 function skinFontBlock(skin: SkinPackage): string {
   return [
     '<!--VELO:FONT-->',
-    ...preloadedFaces(skin.fonts).map(
+    ...preloadedFaces(skin).map(
       (font) =>
         `    <link rel="preload" href="/skin/${font.file}" as="font" type="font/woff2" crossorigin />`,
     ),

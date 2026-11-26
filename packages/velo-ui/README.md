@@ -111,7 +111,7 @@
 --velo-fs-24
 --velo-fs-28
 --velo-fs-32
---velo-fw-medium           # VButton label weight (FE-278)
+--velo-fw-heading          # VButton label weight (FE-278)
 --velo-gap-11
 --velo-gap-2
 --velo-gap-21

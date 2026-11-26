@@ -142,8 +142,8 @@ defineEmits<{
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   /* Slightly heavier to match the section-heading reset (operator 2026-06-17);
-     the weight is the skin's medium step (--velo-fw-medium). */
-  font-weight: var(--velo-fw-medium);
+     the weight is the heading step (--velo-fw-heading). */
+  font-weight: var(--velo-fw-heading);
   color: var(--velo-primary);
   white-space: nowrap;
   overflow: hidden;

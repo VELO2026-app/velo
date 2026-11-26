@@ -79,9 +79,9 @@ const normalizedSize = computed(() => (props.size === 'lg' ? 'md' : props.size))
   justify-content: center;
   gap: var(--space-2);
   font-family: var(--font-body);
-  /* Button labels a touch heavier (operator 2026-06-17): the skin's medium
-     step (--velo-fw-medium). */
-  font-weight: var(--velo-fw-medium);
+  /* Button labels a touch heavier (operator 2026-06-17): the heading step
+     (--velo-fw-heading), the same weight as the headings. */
+  font-weight: var(--velo-fw-heading);
   border: 1px solid var(--velo-glass-border);
   cursor: pointer;
   /* Explicit list, never `all`: a state change (disabled -> enabled, a skin

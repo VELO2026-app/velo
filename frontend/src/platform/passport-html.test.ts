@@ -121,7 +121,7 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
   })
 
   /** The font block of a skin that ships these faces. */
-  function fontBlockOf(fonts: SkinPackage['fonts']): string {
+  function fontBlockOf(fonts: SkinPackage['fonts'], headingWeight: number | null = null): string {
     const plugin = passportHtmlDefaults(
       fakeSkin({
         displayName: 'VELO',
@@ -129,6 +129,7 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
         themeColor: '#334D6E',
         backgroundColor: '#ffffff',
         fonts,
+        headingWeight,
       }),
     )
     return (plugin as unknown as HtmlPlugin).transformIndexHtml.handler(FONT_HTML)
@@ -154,6 +155,28 @@ describe('passportHtmlDefaults -- skin derivatives (tz-whitelabel F2, §1/§3)',
     ])
     expect(out).toContain('href="/skin/assets/fonts/v-regular.woff2" as="font"')
     expect(out.match(/rel="preload"/g)).toHaveLength(1)
+  })
+
+  /** The golden skin's faces, in a scrambled order. */
+  const MARMELAD = [
+    { family: 'VELO Marmelad', file: 'assets/fonts/v-bold.woff2', weight: 700, style: 'normal' },
+    { family: 'VELO Marmelad', file: 'assets/fonts/v-regular.woff2', weight: 400, style: 'normal' },
+    { family: 'VELO Marmelad', file: 'assets/fonts/v-medium.woff2', weight: 500, style: 'normal' },
+  ] as SkinPackage['fonts']
+
+  it.each([
+    ['the exact face', 500, ['v-regular', 'v-medium']],
+    ['the next heavier face when none is exact', 600, ['v-regular', 'v-bold']],
+    ['the heaviest face when none is heavier', 800, ['v-regular', 'v-bold']],
+    ['Regular alone when headings are Regular too', 400, ['v-regular']],
+    ['the regular face when it is the nearest', 300, ['v-regular']],
+  ])('headings and Regular are preloaded together: %s (FE-278)', (_, headingWeight, files) => {
+    resolveWithRoot()
+    const out = fontBlockOf(MARMELAD, headingWeight)
+    const preloaded = [...out.matchAll(/href="\/skin\/assets\/fonts\/([\w-]+)\.woff2"/g)].map(
+      (m) => m[1],
+    )
+    expect(preloaded).toEqual(files)
   })
 
   it('no 400 face (variable fonts): the first file is the one preloaded, not the last (FE-278)', () => {
