@@ -171,6 +171,18 @@ export function isWebKitEngine(): boolean {
   return /iPhone|iPad|iPod/.test(navigator.userAgent)
 }
 
+/**
+ * The browser's languages, most preferred first: navigator.languages, or the
+ * one navigator.language where the list is missing. Empty where there is no
+ * navigator (plain node: utils/ tests import the locales module there).
+ */
+export function browserLanguages(): readonly string[] {
+  if (typeof navigator === 'undefined') return []
+  const { languages, language } = navigator
+  if (languages?.length) return languages
+  return language ? [language] : []
+}
+
 /** A duration token on the root (`--velo-dur-*`) in ms.
  *
  * @returns `fallback` where the token is not set or not parseable

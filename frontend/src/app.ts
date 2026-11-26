@@ -49,9 +49,8 @@ import { installRenderDebug } from './platform/render-debug'
 import { installGlobalErrorHandlers } from './platform/error-reporter'
 import { accountScopePlugin } from './platform/session'
 import { coladaOptions } from './composables/queries/setup'
-import { readLocaleHint, setLocale } from './locales'
+import { setBootLocale } from './locales'
 import { loadInstanceTexts } from './platform/texts'
-import { isSupportedLocale } from './platform/instance'
 
 // Initialize the Telegram SDK (best-effort) before mounting. Safe outside
 // Telegram: it detects the environment and no-ops on failure.
@@ -94,8 +93,9 @@ const instanceTexts = loadInstanceTexts()
 // catalog chunk loads in parallel here (~tens of ms), so the splash grows by
 // roughly nothing; the server value later corrects a stale hint via the
 // App.vue watcher (same-locale no-op when they agree).
-const localeHint = readLocaleHint()
-if (localeHint && isSupportedLocale(localeHint)) await setLocale(localeHint)
+// No hint (a first visit, a signed-out device) -> the browser's language when
+// the instance offers it, else the instance default (FE-261).
+await setBootLocale()
 // Both loads ran side by side; the first render waits for the overlays too.
 await instanceTexts
 
