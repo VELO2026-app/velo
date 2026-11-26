@@ -41,12 +41,14 @@ import {
 import { ApiResponseError } from '@/api/client'
 import {
   getMasterAnalytics,
+  getMasterReviews,
   getMyMasterProfile,
   getMyPractices,
   type MasterAnalyticsPeriod,
 } from '@/api/masters'
 import type {
   MasterProfileResponse,
+  MasterReviewItem,
   PaginatedPracticesResponse,
   PracticeResponse,
 } from '@/api/types'
@@ -293,5 +295,35 @@ export async function myPracticesChanged(queryCache: QueryCache): Promise<void> 
 export const masterAnalyticsQuery = defineQueryOptions((period: MasterAnalyticsPeriod) => ({
   key: keys.masters.analytics(period),
   query: () => getMasterAnalytics(period),
+  staleTime: 0,
+}))
+
+/**
+ * Every review that needs attention in the master's calendar period.
+ *
+ * @remarks
+ * The server bounds the period in the master's own timezone, with the same
+ * window and practices as the period's analytics (BE-228); the screen sends
+ * the name only and filters nothing. A page holds at most the server's largest
+ * page, so when the answer's `total` is more than the reviews in hand the
+ * rest is read page by page: the block shows the whole period, never a
+ * silently cut list. A page that brings nothing ends the read.
+ *
+ * One entry per period and no placeholder from the previous one: the block
+ * never shows another period's reviews under this period's label. staleTime 0:
+ * a review lands whenever a student sends one.
+ */
+export const masterAttentionReviewsQuery = defineQueryOptions((period: MasterAnalyticsPeriod) => ({
+  key: keys.masters.attentionReviews(period),
+  query: async (): Promise<MasterReviewItem[]> => {
+    const first = await getMasterReviews(undefined, 0, true, period)
+    const items = [...first.items]
+    while (items.length < first.total) {
+      const next = await getMasterReviews(undefined, items.length, true, period)
+      if (next.items.length === 0) break
+      items.push(...next.items)
+    }
+    return items
+  },
   staleTime: 0,
 }))

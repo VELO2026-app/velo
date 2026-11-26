@@ -12,10 +12,11 @@
 //     new label (the loader stands in), and a failed request is the retry state;
 //   - the practices of the period come as cards with their four blocks, the
 //     first three shown and the rest behind the reveal;
-//   - the needs-attention section is gone when there is nobody to show.
+//   - the needs-attention section is gone when there is nobody to show; it asks
+//     the server for the selected period's reviews (BE-228, FE-214) and shows
+//     the server's answer as it is: the screen cuts nothing by the clock.
 //
-// TIME IS PINNED to 2026-07-20T12:00:00Z: the attention section cuts reviews on
-// the period's days from the wall clock. Fixtures carry LITERAL dates.
+// Fixtures carry LITERAL dates. The screen reads no wall clock.
 // The payments tab is parked (PAYMENTS_TAB_ENABLED = false): not rendered.
 // =============================================================================
 
@@ -79,6 +80,13 @@ function blockLine(card: HTMLElement, heading: string): string {
   const h2 = Array.from(card.querySelectorAll('h2')).find((h) => h.textContent?.trim() === heading)
   if (!h2?.parentElement) throw new Error(`no block ${heading}`)
   return (h2.parentElement.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
+/** The element behind a selector, inside the mounted screen or inside `root`; a missing one fails the test by name. */
+function must(selector: string, root: ParentNode | null = host): HTMLElement {
+  const el = root?.querySelector<HTMLElement>(selector)
+  if (!el) throw new Error(`no element ${selector}`)
+  return el
 }
 
 function clickText(label: string): void {
@@ -153,25 +161,28 @@ function analytics(over: Partial<MasterAnalyticsResponse> = {}): MasterAnalytics
   }
 }
 
-function attentionReview(): MasterReviewItem {
+function attentionReview(over: Partial<MasterReviewItem> = {}): MasterReviewItem {
   return {
     user_id: 'u1',
     reviewer_name: 'Анна',
+    avatar_url: null,
     practice_title: 'Дыхание',
     rating: 'low',
     comment: 'Было тяжело',
     created_at: '2026-07-18T10:00:00+00:00',
-  } as unknown as MasterReviewItem
+    ...over,
+  }
+}
+
+/** One page of the reviews feed; `total` counts the whole narrowed feed. */
+function reviewsPage(items: MasterReviewItem[], total = items.length) {
+  return { items, total, limit: 100, offset: 0 }
 }
 
 describe('AnalyticsView (master)', () => {
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-07-20T12:00:00Z'))
     vi.mocked(mastersApi.getMasterAnalytics).mockReset().mockResolvedValue(analytics())
-    vi.mocked(mastersApi.getMasterReviews)
-      .mockReset()
-      .mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 } as never)
+    vi.mocked(mastersApi.getMasterReviews).mockReset().mockResolvedValue(reviewsPage([]))
   })
 
   afterEach(() => {
@@ -179,7 +190,6 @@ describe('AnalyticsView (master)', () => {
     app = null
     host?.remove()
     host = null
-    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
@@ -300,17 +310,17 @@ describe('AnalyticsView (master)', () => {
     mount()
     await flush()
 
-    host!.querySelector<HTMLElement>('.conducted-practice__detail')!.click()
+    must('.conducted-practice__detail').click()
     expect(push).not.toHaveBeenCalled()
 
-    host!.querySelector<HTMLElement>('.conducted-practice__summary')!.click()
+    must('.conducted-practice__summary').click()
     expect(push).toHaveBeenCalledWith({ name: 'master-practice-reviews', params: { id: 'p2' } })
   })
 
   it('Enter and Space on a practice summary open its analytics', async () => {
     mount()
     await flush()
-    const summary = cardOf('Медитация').querySelector<HTMLElement>('.conducted-practice__summary')!
+    const summary = must('.conducted-practice__summary', cardOf('Медитация'))
 
     summary.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     expect(push).toHaveBeenLastCalledWith({
@@ -333,12 +343,7 @@ describe('AnalyticsView (master)', () => {
 
     app?.unmount()
     host?.remove()
-    vi.mocked(mastersApi.getMasterReviews).mockResolvedValue({
-      items: [attentionReview()],
-      total: 1,
-      limit: 20,
-      offset: 0,
-    } as never)
+    vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(reviewsPage([attentionReview()]))
     mount()
     await flush()
     expect(text()).toContain('Требуют внимания')
@@ -352,18 +357,109 @@ describe('AnalyticsView (master)', () => {
 
     expect(host?.querySelector('[data-testid="screen-error"]')).not.toBeNull()
 
-    vi.mocked(mastersApi.getMasterReviews).mockResolvedValue({
-      items: [attentionReview()],
-      total: 1,
-      limit: 20,
-      offset: 0,
-    } as never)
-    Array.from(host!.querySelectorAll('button'))
-      .find((b) => b.textContent?.includes('Повторить'))!
-      .click()
+    vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(reviewsPage([attentionReview()]))
+    clickText('Повторить')
     await flush()
 
     expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
     expect(text()).toContain('Анна')
+  })
+
+  // FE-214: the block is the selected calendar period's, as the server bounds it
+  // (BE-228). The screen sends the period's name and cuts nothing by the clock.
+  describe('needs attention follows the selected period (FE-214)', () => {
+    it('asks for the week first, then for the period the slider names', async () => {
+      mount()
+      await flush()
+      expect(mastersApi.getMasterReviews).toHaveBeenLastCalledWith(undefined, 0, true, 'week')
+
+      clickText('Квартал')
+      await flush()
+
+      expect(mastersApi.getMasterReviews).toHaveBeenLastCalledWith(undefined, 0, true, 'quarter')
+    })
+
+    it('shows the answer for the selected period; the earlier period reviews do not stay under the new label', async () => {
+      const week = attentionReview({ reviewer_name: 'Анна' })
+      const quarter = attentionReview({ user_id: 'u2', reviewer_name: 'Борис' })
+      let answerQuarter: (v: ReturnType<typeof reviewsPage>) => void = () => {}
+      vi.mocked(mastersApi.getMasterReviews).mockImplementation(
+        (_limit, _offset, _attention, period) =>
+          period === 'week'
+            ? Promise.resolve(reviewsPage([week]))
+            : new Promise((resolve) => (answerQuarter = resolve)),
+      )
+      mount()
+      await flush()
+      expect(text()).toContain('Анна')
+
+      clickText('Квартал')
+      await flush()
+      expect(text()).not.toContain('Анна')
+
+      answerQuarter(reviewsPage([quarter]))
+      await flush()
+      expect(text()).toContain('Борис')
+      expect(text()).not.toContain('Анна')
+    })
+
+    it('reads the rest when the period holds more reviews than one page', async () => {
+      vi.mocked(mastersApi.getMasterReviews).mockImplementation((_limit, offset) =>
+        Promise.resolve(
+          offset === 0
+            ? reviewsPage([attentionReview({ reviewer_name: 'Анна' })], 2)
+            : reviewsPage([attentionReview({ user_id: 'u2', reviewer_name: 'Борис' })], 2),
+        ),
+      )
+      mount()
+      await flush()
+
+      expect(mastersApi.getMasterReviews).toHaveBeenLastCalledWith(undefined, 1, true, 'week')
+      expect(text()).toContain('Анна')
+      expect(text()).toContain('Борис')
+    })
+
+    it('a page that brings nothing ends the read, whatever `total` says', async () => {
+      vi.mocked(mastersApi.getMasterReviews).mockImplementation((_limit, offset) =>
+        Promise.resolve(
+          offset === 0
+            ? reviewsPage([attentionReview({ reviewer_name: 'Анна' })], 5)
+            : reviewsPage([], 5),
+        ),
+      )
+      mount()
+      await flush()
+
+      expect(mastersApi.getMasterReviews).toHaveBeenCalledTimes(2)
+      expect(text()).toContain('Анна')
+    })
+
+    it('a return to the app asks again: a new review appears, and a failed ask keeps the cards', async () => {
+      vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(
+        reviewsPage([attentionReview({ reviewer_name: 'Анна' })]),
+      )
+      mount()
+      await flush()
+      expect(text()).toContain('Анна')
+      expect(text()).not.toContain('Борис')
+
+      vi.mocked(mastersApi.getMasterReviews).mockResolvedValue(
+        reviewsPage([
+          attentionReview({ user_id: 'u2', reviewer_name: 'Борис' }),
+          attentionReview({ reviewer_name: 'Анна' }),
+        ]),
+      )
+      document.dispatchEvent(new Event('visibilitychange'))
+      await flush()
+      expect(text()).toContain('Борис')
+      expect(text()).toContain('Анна')
+
+      vi.mocked(mastersApi.getMasterReviews).mockRejectedValue(new TypeError('boom'))
+      document.dispatchEvent(new Event('visibilitychange'))
+      await flush()
+      expect(host?.querySelector('[data-testid="screen-error"]')).toBeNull()
+      expect(text()).toContain('Борис')
+      expect(text()).toContain('Анна')
+    })
   })
 })

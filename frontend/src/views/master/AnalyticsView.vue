@@ -16,8 +16,9 @@
     3. The feedback share (i18n:user.screens.schoolAnalytics.feedbackPercent):
        the shared DistributionCard, "N of M" on the heading line.
     4. Needs attention (i18n:masterScreens.analytics.sections.attention):
-       students whose review the server flagged (attention=true, BE-77); the
-       section is not shown when there are none.
+       students whose review the server flagged (attention=true, BE-77) in the
+       selected calendar period (period=, BE-228 -- the same practices as the
+       numbers above); the section is not shown when there are none.
     5. The period's conducted practices (the shared ConductedPracticeCard,
        first PAST_PREVIEW then the reveal), each with its before / after /
        came-left / reviews blocks. A tap opens the practice analytics screen.
@@ -83,10 +84,10 @@
           :empty-text="t('user.screens.schoolAnalytics.noFeedbacks')"
         />
 
-        <!-- Needs attention: the server already narrowed the page to the
-             attention reviews (attention=true: ratings 1-4, zones bad and low,
-             BE-77). The section (heading included) is NOT shown when there are
-             none. Card tap goes to the student's profile; the message button
+        <!-- Needs attention: the server already narrowed the reviews to the
+             attention ones (attention=true: ratings 1-4, zones bad and low,
+             BE-77) of the selected calendar period (BE-228). The section
+             (heading included) is NOT shown when there are none. Card tap goes to the student's profile; the message button
              is @click.stop -- it sends a message without navigating. -->
         <!-- A failed read must not pass for "nobody needs attention" (FE-242). -->
         <section v-if="reviewsFailed" class="analytics__section">
@@ -234,7 +235,7 @@ import { t, getLocale } from '@/locales'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@pinia/colada'
-import { masterAnalyticsQuery } from '@/composables/queries/master'
+import { masterAnalyticsQuery, masterAttentionReviewsQuery } from '@/composables/queries/master'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { VLoader, VButton, VStatCard, VCard, VSegmentTrack, VEmptyState } from '@/components/ui'
 import { VHeader } from '@/components/layout'
@@ -246,12 +247,7 @@ import SendMessageModal from '@/components/shared/SendMessageModal.vue'
 import { IconMessages } from '@/components/icons'
 import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatMoney, formatShortDate } from '@/utils/format'
-import {
-  getIncome,
-  getTransactions,
-  getMasterReviews,
-  type MasterAnalyticsPeriod,
-} from '@/api/masters'
+import { getIncome, getTransactions, type MasterAnalyticsPeriod } from '@/api/masters'
 import { extractApiError } from '@/composables/useApiError'
 import { PAYMENTS_TAB_ENABLED } from '@/views/master/analyticsFlags'
 import type { IncomeResponse, MasterTransactionItem, MasterReviewItem } from '@/api/types'
@@ -336,38 +332,22 @@ const hiddenPracticesCount = computed(() =>
 )
 
 // =========================================================================
-// Latest reviews (#3: GET /masters/me/reviews — cross-practice named feed)
+// Needs attention (#3: GET /masters/me/reviews?attention=true&period=)
 // =========================================================================
 
-const REVIEWS_PAGE = 20
-const reviews = ref<MasterReviewItem[]>([])
-const reviewsFailed = ref(false)
+// The server bounds the period (the master's own calendar, BE-228) and hands
+// over the attention reviews of exactly that period; the screen filters and
+// counts nothing. An entry per period and no placeholder from the previous
+// one: while a period loads, the section is not shown -- never another
+// period's reviews under the new label. Empty ⇒ the section + title are hidden.
+const reviewsQuery = useQuery(() => masterAttentionReviewsQuery(period.value))
+const attentionItems = computed((): MasterReviewItem[] => reviewsQuery.data.value ?? [])
+// A failed read must not pass for "nobody needs attention" (FE-242).
+const reviewsFailed = screenQueryState(reviewsQuery).failed
 
-async function loadReviews(): Promise<void> {
-  reviewsFailed.value = false
-  try {
-    // E1: fetch the attention reviews server-side (attention=true: ratings
-    // 1-4, BE-77) — the needs-attention block is the only consumer, so a
-    // full page of them beats a mixed page where they may be sparse. The
-    // server owns the threshold; the period cutoff still narrows client-side
-    // (no period param on the endpoint).
-    const res = await getMasterReviews(REVIEWS_PAGE, 0, true)
-    reviews.value = res.items
-  } catch {
-    reviewsFailed.value = true
-  }
+function loadReviews(): void {
+  void reviewsQuery.refetch()
 }
-
-// Needs attention: the server already narrowed the page to the attention
-// reviews (attention=true) -- no zone check here, a second copy of the
-// threshold would drift. Only the active period's cutoff is applied
-// client-side (the endpoint has no period param). Empty ⇒ the section + title
-// are hidden.
-const PERIOD_DAYS: Record<MasterAnalyticsPeriod, number> = { week: 7, month: 30, quarter: 90 }
-const attentionItems = computed((): MasterReviewItem[] => {
-  const cutoff = Date.now() - PERIOD_DAYS[period.value] * 86_400_000
-  return reviews.value.filter((r) => new Date(r.created_at).getTime() >= cutoff)
-})
 
 // E1 (PROMPT №229): tap an attention card → the reviewer's student profile
 // (user_id now on MasterReviewItem). Mirrors PracticeReviewsView.goStudent.
@@ -482,7 +462,6 @@ function openReviews(practiceId: string): void {
 
 onMounted(() => {
   if (PAYMENTS_TAB_ENABLED) void loadPayments()
-  void loadReviews()
 })
 </script>
 
