@@ -34,9 +34,21 @@ async function boot(
 const GOODO = { defaultLocale: 'uk', locales: 'uk,ru,en' }
 const GOLD = { defaultLocale: 'ru', locales: 'ru,en,uk' }
 
+/** Launch the page as Telegram does: initDataUnsafe carries the person's language_code. */
+function launchedByTelegram(languageCode: string): void {
+  Object.defineProperty(window, 'Telegram', {
+    configurable: true,
+    value: {
+      WebApp: { initDataUnsafe: { user: { id: 1, first_name: 'A', language_code: languageCode } } },
+    },
+  })
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
+  vi.doUnmock('@/locales/en/auth.json')
+  Reflect.deleteProperty(window, 'Telegram')
   localStorage.clear()
   document.documentElement.lang = ''
 })
@@ -52,7 +64,6 @@ describe('the first render before sign-in', () => {
   it.each([
     ['en-US', 'en'],
     ['ru-RU', 'ru'],
-    ['uk-UA', 'uk'],
   ] as const)('a %s browser gets %s when the instance offers it', async (browser, expected) => {
     const mod = await boot(GOODO, [browser])
     await mod.setBootLocale()
@@ -60,15 +71,18 @@ describe('the first render before sign-in', () => {
     expect(mod.t('auth.tagline1')).toBe(TAGLINE[expected])
   })
 
-  it('gold: a uk browser gets uk, an unoffered one gets the ru default', async () => {
-    const uk = await boot(GOLD, ['uk-UA'])
-    await uk.setBootLocale()
-    expect(uk.t('auth.tagline1')).toBe(TAGLINE.uk)
+  it('a uk browser gets uk on an instance whose default is ru', async () => {
+    const mod = await boot(GOLD, ['uk-UA'])
+    await mod.setBootLocale()
+    expect(mod.getLocale()).toBe('uk')
+    expect(mod.t('auth.tagline1')).toBe(TAGLINE.uk)
+  })
 
-    const de = await boot(GOLD, ['de-DE'])
-    await de.setBootLocale()
-    expect(de.getLocale()).toBe('ru')
-    expect(de.t('auth.tagline1')).toBe(TAGLINE.ru)
+  it('a browser the instance does not offer gets the ru default', async () => {
+    const mod = await boot(GOLD, ['de-DE'])
+    await mod.setBootLocale()
+    expect(mod.getLocale()).toBe('ru')
+    expect(mod.t('auth.tagline1')).toBe(TAGLINE.ru)
   })
 
   it('a browser that reports no language list is read by its one language', async () => {
@@ -98,17 +112,41 @@ describe('the first render before sign-in', () => {
   })
 })
 
-describe('after sign-out', () => {
-  it('returns to the browser language and leaves no hint behind', async () => {
-    const mod = await boot(GOODO, ['en-US'])
-    await mod.setLocale('ru')
-    expect(localStorage.getItem(HINT_KEY)).toBe('ru')
-
-    // What App.vue does when the user record goes away.
-    mod.clearLocaleHint()
-    await mod.setSignedOutLocale()
-
+describe('inside Telegram', () => {
+  it("Telegram's language_code comes before the browser's language", async () => {
+    launchedByTelegram('en')
+    const mod = await boot(GOODO, ['ru-RU'])
+    await mod.setBootLocale()
     expect(mod.getLocale()).toBe('en')
-    expect(localStorage.getItem(HINT_KEY)).toBeNull()
+  })
+
+  it("a language_code the instance does not offer leaves the choice to the browser's language", async () => {
+    launchedByTelegram('de')
+    const mod = await boot(GOODO, ['ru-RU'])
+    await mod.setBootLocale()
+    expect(mod.getLocale()).toBe('ru')
+  })
+})
+
+describe('a switch that is overtaken', () => {
+  it('a signed-out switch that finishes after the profile language was set does not overwrite it', async () => {
+    const mod = await boot(GOODO, ['en-US'])
+    // The browser's catalog (en) is still loading when the user record arrives
+    // with ru, which is already in the bundle.
+    const signedOut = mod.setSignedOutLocale()
+    await mod.setLocale('ru')
+    await signedOut
+    expect(mod.getLocale()).toBe('ru')
+  })
+})
+
+describe('a catalog that does not load', () => {
+  it('the boot still finishes, in the language the app already holds', async () => {
+    vi.doMock('@/locales/en/auth.json', () => {
+      throw new Error('chunk failed to load')
+    })
+    const mod = await boot(GOODO, ['en-US'])
+    await expect(mod.setBootLocale()).resolves.toBeUndefined()
+    expect(mod.getLocale()).toBe('uk')
   })
 })

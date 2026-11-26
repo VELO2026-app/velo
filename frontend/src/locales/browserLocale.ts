@@ -24,7 +24,8 @@ import type { Locale } from '@/platform/instance'
  * instance does not offer is skipped, not mapped to a near one. No entry
  * matches: the instance default.
  *
- * @param browserLanguages - navigator.languages, most preferred first
+ * @param browserLanguages - the person's languages, most preferred first
+ *  (inside Telegram its language_code, then navigator.languages)
  * @param offered - the instance's languages (INSTANCE.locales)
  * @param fallback - the instance default (INSTANCE.defaultLocale)
  * @returns the language the signed-out screens start in

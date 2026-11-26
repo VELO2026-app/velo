@@ -183,6 +183,16 @@ export function browserLanguages(): readonly string[] {
   return language ? [language] : []
 }
 
+/**
+ * The language Telegram reports for the person (initDataUnsafe.user
+ * .language_code), or null outside Telegram, before the SDK has the launch
+ * data, and where there is no window (plain node).
+ */
+export function telegramLanguageCode(): string | null {
+  if (typeof window === 'undefined') return null
+  return window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code ?? null
+}
+
 /** A duration token on the root (`--velo-dur-*`) in ms.
  *
  * @returns `fallback` where the token is not set or not parseable
