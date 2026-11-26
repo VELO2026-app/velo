@@ -558,7 +558,7 @@ function openMember(member: SchoolRosterItem): void {
   min-width: 0;
 }
 .school-members__blocked-name {
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
 }
 .school-members__blocked-meta {
   color: var(--velo-text-secondary);

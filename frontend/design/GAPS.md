@@ -11,7 +11,7 @@
 
 | Что | Где в коде | Почему не переносится |
 |---|---|---|
-| **Faux-bold 600** | `VButton.vue` (label), `VHeader.vue` (title) | У Marmelad одно начертание; браузер синтезирует weight 600, Figma — нет. Кнопки/заголовки в зеркале выглядят легче, чем в приложении. Это ожидаемо, не расхождение. |
+| **Вес Medium** | `VButton.vue` (label), `VHeader.vue` (title), заголовки `h1`–`h6` | В коде вес — токен `--velo-fw-medium`; у gold это начертание VELO Marmelad Medium (500, FE-278). В Figma кит остаётся на Marmelad Regular, пока шрифты VELO Marmelad не установлены на машинах дизайна и кит не переведён: кнопки и заголовки в зеркале выглядят легче, чем в приложении. |
 | Focus order, `:focus-visible`, ARIA | все компоненты; `useKeyboardFieldScroll` | Поведение, не статика. |
 | Поведение клавиатуры TMA | `platform/dom`, `.velo-kbd-scroll`, `--velo-vvh` | Скролл-контейнеры/заморозка высоты — рантайм. |
 | `env(safe-area-inset-bottom)` | `VTabBar.vue` | Figma не знает платформенные инсеты. |

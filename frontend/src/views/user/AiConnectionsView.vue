@@ -385,7 +385,7 @@ onMounted(load)
 .ai-conn__heading {
   margin: 0;
   font-size: var(--velo-fs-20);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
 }
 
 .ai-conn__text {
@@ -446,7 +446,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
 }
 
 .ai-conn__item-prefix {
@@ -493,7 +493,7 @@ onMounted(load)
 
 .ai-conn__warning {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--velo-fw-bold);
 }
 
 /* Selectable as a whole: the manual-copy fallback when the clipboard is

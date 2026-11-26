@@ -138,7 +138,7 @@ const dateLabel = computed(
 
 .dsr-row__title {
   font-size: var(--velo-fs-16);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -157,7 +157,7 @@ const dateLabel = computed(
 mark.dsr-row__hit {
   background: var(--velo-glass-blue-15);
   color: inherit;
-  font-weight: 700;
+  font-weight: var(--velo-fw-bold);
   border-radius: var(--velo-radius-4);
   padding: 0 var(--space-hairline);
 }

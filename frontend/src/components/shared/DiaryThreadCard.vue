@@ -300,12 +300,12 @@ function onTap(): void {
 }
 .tcard__banner-title {
   font-size: var(--velo-fs-12);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
   letter-spacing: calc(0.22px * var(--velo-de-k, 1));
 }
 .tcard__banner-subtitle {
   font-size: var(--velo-fs-12);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
   letter-spacing: calc(0.22px * var(--velo-de-k, 1));
   opacity: 0.85;
 }
@@ -367,7 +367,7 @@ function onTap(): void {
 }
 .tcard__bubble-title {
   font-size: var(--velo-fs-12);
-  font-weight: 700;
+  font-weight: var(--velo-fw-bold);
   color: var(--velo-text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -480,7 +480,7 @@ function onTap(): void {
   padding: 0 var(--velo-gap-6);
   border-radius: var(--velo-radius-4);
   font-size: var(--velo-fs-10);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
   white-space: nowrap;
 }
 
@@ -536,7 +536,7 @@ function onTap(): void {
 }
 .tcard__entry-title {
   font-size: var(--velo-fs-12);
-  font-weight: 700;
+  font-weight: var(--velo-fw-bold);
   color: var(--velo-text-primary);
   white-space: nowrap;
   overflow: hidden;

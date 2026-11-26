@@ -852,7 +852,7 @@ onMounted(load)
   padding: var(--space-4) 0;
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
   color: var(--velo-text-primary);
   text-align: left;
 }

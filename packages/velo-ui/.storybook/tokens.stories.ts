@@ -95,7 +95,7 @@ export const Registry: Story = {
           :style="{ background: 'var(' + token.name + ')' }"
         />
         <span style="min-width: 0;">
-          <code style="display: block; font-size: 12px; font-weight: 600;">{{ token.name }}</code>
+          <code style="display: block; font-size: 12px; font-weight: var(--velo-fw-medium);">{{ token.name }}</code>
           <code style="display: block; font-size: 11px; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ token.value }}</code>
         </span>
       </div>

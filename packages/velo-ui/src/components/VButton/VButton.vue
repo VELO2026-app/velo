@@ -79,9 +79,9 @@ const normalizedSize = computed(() => (props.size === 'lg' ? 'md' : props.size))
   justify-content: center;
   gap: var(--space-2);
   font-family: var(--font-body);
-  /* Button labels a touch heavier (operator 2026-06-17). Marmelad is single-
-     weight (400), so 600 is the lightest step the browser synthesizes heavier. */
-  font-weight: 600;
+  /* Button labels a touch heavier (operator 2026-06-17): the skin's medium
+     step (--velo-fw-medium). */
+  font-weight: var(--velo-fw-medium);
   border: 1px solid var(--velo-glass-border);
   cursor: pointer;
   /* Explicit list, never `all`: a state change (disabled -> enabled, a skin

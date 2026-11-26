@@ -15,6 +15,7 @@ import { chmodSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync 
 import { join } from 'node:path'
 
 import {
+  SKIN_CONTRACT,
   goldenTokenMap,
   loadSkinPackage,
   parseManifest,
@@ -288,6 +289,32 @@ describe("the brand record's supportMark (contract 2.2, FE-261)", () => {
   })
 })
 
+describe('weight tokens (contract 2.4, FE-278)', () => {
+  const withWeights = (contract: string): string =>
+    problemsOf(
+      writeSkinPackage({
+        manifest: `schema: 1\ncontract: "${contract}"\n`,
+        tokens: { velo: { fw: { medium: { $value: 500 }, bold: { $value: 700 } } } },
+        brand: {
+          displayName: 'X',
+          shortName: 'X',
+          themeColor: '#334d6e',
+          backgroundColor: '#ffffff',
+        },
+      }),
+    )
+
+  it('a 2.4 package sets velo.fw.medium and velo.fw.bold', () => {
+    expect(withWeights('2.4')).toBe('')
+  })
+
+  it('a 2.3 package may not: a 2.3 reader refuses the tokens as unknown, so the package must say 2.4', () => {
+    expect(withWeights('2.3')).toContain(
+      'tokens: velo.fw.medium needs contract "2.4" or later, got "2.3"',
+    )
+  })
+})
+
 describe('DTCG values -> CSS', () => {
   it('verbatim CSS, references, numbers and family lists', () => {
     const dir = writeSkinPackage({
@@ -341,6 +368,7 @@ describe('DTCG values -> CSS', () => {
       node.$value = token.value
     }
     const dir = writeSkinPackage({
+      manifest: `schema: 1\ncontract: "${SKIN_CONTRACT}"\n`,
       tokens: doc,
       brand: {
         displayName: 'X',
@@ -489,7 +517,7 @@ describe('skin-to-dtcg: generation 1 -> package, no pixel changes', () => {
     // the brand record moved into the package's data carrier
     const brand = JSON.parse(readFileSync(join(out, 'tokens', 'brand.tokens.json'), 'utf8'))
     expect(brand.$extensions['velo-skin'].displayName).toBe('Contrast')
-    expect(readFileSync(join(out, 'primer-package.yaml'), 'utf8')).toContain('contract: "2.3"')
+    expect(readFileSync(join(out, 'primer-package.yaml'), 'utf8')).toContain('contract: "2.4"')
     expect(pkg.files).toContain('assets/bg/background.png')
   })
 

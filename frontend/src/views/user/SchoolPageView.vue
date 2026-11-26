@@ -645,7 +645,7 @@ function onTransferDeclined(): void {
 }
 
 .cgp__nav-row :deep(.v-menu-row__text) {
-  font-weight: 600;
+  font-weight: var(--velo-fw-medium);
 }
 
 .cgp__nav-row :deep(.v-menu-row__arrow) {

@@ -158,7 +158,7 @@ const dayGroups = computed<DayGroup[]>(() => {
   /* Strong date node (thread-events reference): big bold label, one line. */
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
-  font-weight: 700;
+  font-weight: var(--velo-fw-bold);
   line-height: 1;
   color: var(--velo-text-primary);
   white-space: nowrap;

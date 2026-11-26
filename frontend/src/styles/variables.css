@@ -538,6 +538,10 @@
   --velo-divider-width: 3px; /* dashed divider stroke width */
   /* Typography */
   --velo-text-stroke-strong: 0.3px; /* faux-bold stroke width (single-weight display fonts) */
+  /* Weights of the emphasis steps: the core and Goodo (variable Manrope) keep 600 / 700; the
+     golden skin sets its own (Medium 500, Bold 700 -- FE-278). */
+  --velo-fw-medium: 600; /* headings, buttons, titles */
+  --velo-fw-bold: 700; /* strong accents */
   /* Component-size ramp — values reused across >=2 distinct components (avatars,
      icon circles, round + field controls). Value-named because each is cross-ROLE
      (e.g. 46 = avatar AND icon AND control), so a semantic name would mislead. */
@@ -760,6 +764,9 @@
    *                    names are aliases of --velo-fs-*, so a skin
    *                    overriding velo.font.size.* rethemes them too (step
    *                    4b removes the bare names).
+   *                    weights --velo-fw-medium/bold <-> velo.fw.medium/bold
+   *                    (FE-278): the emphasis steps (core 600/700); a skin
+   *                    maps them to the real faces it ships.
    *   radius           --velo-radius-* <-> velo.radius.*
    *   depth            --velo-shadow-glow(-sm)/glass/toast/switch/field-*,
    *                    --velo-write-shadow-*, --velo-effect-focus-glass

@@ -86,8 +86,9 @@ export const SKIN_CONTRACT_MAJOR = 2
  *  2.1 (FE-230): the brand record may carry contrastExceptions.
  *  2.2 (FE-251): the brand record may carry supportEmail.
  *      2.2 (FE-261): ... and supportMark (one minor, two fields).
- *  2.3 (FE-273): the package may carry the mood icon set (assets/mood/). */
-export const SKIN_CONTRACT = '2.3'
+ *  2.3 (FE-273): the package may carry the mood icon set (assets/mood/).
+ *  2.4 (FE-278): the package may set the weight tokens velo.fw.*. */
+export const SKIN_CONTRACT = '2.4'
 /** Optional brand-record fields and the first minor of contract 2 that
  *  knows each: a reader of an older minor refuses the field as unknown, so
  *  a package that carries it must declare that minor or later. */
@@ -95,6 +96,12 @@ const BRAND_FIELD_MINORS = [
   { field: 'contrastExceptions', minor: 1 }, // FE-230
   { field: 'supportEmail', minor: 2 }, // FE-251
   { field: 'supportMark', minor: 2 }, // FE-261
+]
+/** Token groups a package may set only from a given minor of contract 2: a
+ *  reader of an older minor refuses the token as unknown ("not a token of
+ *  the product"), so the package that sets one must declare that minor. */
+const TOKEN_MINORS = [
+  { prefix: 'velo.fw.', minor: 4 }, // FE-278: weight tokens
 ]
 /** supportMark values: the logo set (the default) or the brand's app icon. */
 export const SUPPORT_MARKS = ['logo', 'icon']
@@ -999,6 +1006,15 @@ export function loadSkinPackage(dir, tokensDoc) {
       })
   }
   decls.sort((a, b) => a.order - b.order)
+
+  // A token newer than the declared minor (TOKEN_MINORS).
+  if (contract !== null) {
+    const declared = contractMinor(contract)
+    for (const path of tokens.keys())
+      for (const { prefix, minor } of TOKEN_MINORS)
+        if (path.startsWith(prefix) && declared < minor)
+          problems.push(`tokens: ${path} needs contract "2.${minor}" or later, got "${contract}"`)
+  }
 
   // A reference cycle (velo.primary -> {velo.primary}, or through a golden
   // var() chain) makes the property invalid at computed-value time -- the

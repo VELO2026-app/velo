@@ -142,8 +142,8 @@ defineEmits<{
   font-family: var(--font-body);
   font-size: var(--velo-fs-18);
   /* Slightly heavier to match the section-heading reset (operator 2026-06-17);
-     Marmelad is single-weight, so 600 = the browser's synthesized heavier face. */
-  font-weight: 600;
+     the weight is the skin's medium step (--velo-fw-medium). */
+  font-weight: var(--velo-fw-medium);
   color: var(--velo-primary);
   white-space: nowrap;
   overflow: hidden;
