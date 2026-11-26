@@ -34,7 +34,7 @@
  * Layers inside the note (`Новое`, `Note …`) are not checked.
  */
 const HANDOFF_CHECK = async (nodeId, opts) => {
-  const o = Object.assign({ limit: 6, width: 402, kitPages: /^(Фронт|front)/i, tokenRequests: {} }, opts || {});
+  const o = Object.assign({ limit: 6, width: 402, kitPages: /^Kit и токены$/, tokenRequests: {} }, opts || {});
   const root = await figma.getNodeByIdAsync(nodeId);
   if (!root) return { error: 'node not found: ' + nodeId };
 

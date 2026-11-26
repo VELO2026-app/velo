@@ -101,6 +101,28 @@ function check(noteLines, tokenRequests, fillOpacity) {
 
 const TOKEN_LINE = 'Новые токены: accent/mint = #a1e0c7, gap 13px — FE-231'
 
+test('H-10: an instance of a master on «Kit и токены» passes; one from «User App» is an error', async () => {
+  /** @param {string} pageName */
+  const run = (pageName) => {
+    const sec = section([TOKEN_LINE], undefined)
+    const master = new Node('PAGE', pageName).appendChild(new Node('COMPONENT', 'VButton'))
+    /** @type {any} */
+    const inst = new Node('INSTANCE', 'VButton')
+    inst.getMainComponentAsync = () => Promise.resolve(master)
+    sec.children[0].appendChild(inst)
+    const figma = {
+      mixed: Symbol('mixed'),
+      getNodeByIdAsync: (id) => Promise.resolve(id === sec.id ? sec : null),
+      getStyleByIdAsync: () => Promise.resolve({ name: 'velo/fs-16' }),
+    }
+    const fn = runInNewContext(`${CHECK}\n;HANDOFF_CHECK`, { figma })
+    return fn(sec.id, { tokenRequests: { 'FE-231': 'Done' } })
+  }
+  assert.equal((await run('Kit и токены')).errors['H-10'], undefined)
+  assert.equal((await run('User App')).errors['H-10'], 1)
+  assert.equal((await run('Фронт · Kit и токены')).errors['H-10'], 1)
+})
+
 test('H-06/H-08: a raw value with no note line is an error', async () => {
   const r = await check(['Задача: FE-5'], {})
   assert.equal(r.ready, false)
@@ -428,7 +450,7 @@ test('DESIGNER.startExperiment: the copy keeps the mode its source showed (gold 
     resizeWithoutConstraints() {},
     ...extra,
   })
-  const front = mkNode('PAGE', 'Фронт · Экраны')
+  const front = mkNode('PAGE', 'Gold · Приложение')
   const sheet = mkNode('SECTION', 'Legacy screen / user.dashboard / Dashboard', {
     explicitVariableModes: { c1: 'g' },
   })

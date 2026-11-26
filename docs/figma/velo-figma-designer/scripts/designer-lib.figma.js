@@ -1,6 +1,6 @@
 /**
  * DESIGNER: the ONLY write helpers of the designer's agent (docs/figma-protocol.md §2, §9).
- * Writes only to the designer's pages: `Эксперименты · …`, `К разработке`, `Архив` and her working pages
+ * Writes only to the designer's pages: `Эксперименты · …`, `К разработке`, `Архив`, the concept pages `Веб-версия · концепт` and `Админка · цель (ждёт бэкенд)` (the front agent writes those too) and her working pages
  * `Icons`, `User App`, `Master App`, `Admin Panel` (protocol §2); refuses any other page.
  * figma-console `figma_execute`: <this file> + one call, e.g.
  *   return await DESIGNER.startExperiment('Сонник', '<frame id or empty>');
@@ -21,9 +21,9 @@
  * First run: in a copy of the file.
  */
 /** The skill version (yyyymmddnn): the agent names it when asked; pack.sh puts it in the archive name. */
-const DESIGNER_LIB_VERSION = 2026112401;
+const DESIGNER_LIB_VERSION = 2026112601;
 const DESIGNER = (() => {
-  const OWN = /^(Эксперименты · .+|К разработке|Архив|Icons|User App|Master App|Admin Panel)$/;
+  const OWN = /^(Эксперименты · .+|К разработке|Архив|Icons|User App|Master App|Admin Panel|Веб-версия · концепт|Админка · цель \(ждёт бэкенд\))$/;
   const STATUSES = ['эксперимент', 'на согласовании', 'к разработке', 'в работе', 'в коде', 'отменено'];
   const WHO = 'designer-agent';
   const options = { allowNoVersion: false }; // set true ONLY after the designer said «да, без версии»
