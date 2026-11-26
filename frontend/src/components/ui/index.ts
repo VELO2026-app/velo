@@ -200,8 +200,9 @@ export type { Toast, ToastApi, ToastVariant } from '@velo/ui'
 export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from '@velo/ui'
 // FE-215: the kit's Escape stack. One Escape closes only the top open layer;
 // a host layer that closes on Escape (DiarySearchBar) registers through it so
-// a kit overlay opened over it takes the key first.
-export { useEscapeLayer } from '@velo/ui'
+// a kit overlay opened over it takes the key first. FE-233: the native Back
+// button follows the same stack (hasOpenLayer, dismissTopLayer).
+export { useEscapeLayer, hasOpenLayer, dismissTopLayer } from '@velo/ui'
 export { inputKindAttrs } from '@velo/ui'
 export type { InputKind } from '@velo/ui'
 

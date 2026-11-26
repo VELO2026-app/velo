@@ -154,7 +154,9 @@
       :title="t('masterScreens.masterGroupDetail.renameCta')"
       compact-title
       :save-label="t('ui.save')"
+      :dismissible="renameGuard.dismissible.value"
       @save="onRenameSave"
+      @dismiss-attempt="renameGuard.ask"
       @close="renameOpen = false"
     >
       <VInput
@@ -170,6 +172,11 @@
         autogrow
       />
     </VBottomSheet>
+    <DiscardChangesDialog
+      :open="renameGuard.confirming.value"
+      @discard="renameGuard.discard"
+      @keep-editing="renameGuard.keepEditing"
+    />
 
     <!-- Delete confirm (G2, PROMPT №609 -- moved from MasterGroupsView's card menu) -->
     <VConfirmDialog
@@ -205,6 +212,7 @@ import {
   VBottomSheet,
 } from '@/components/ui'
 import { IconShare, IconPen } from '@/components/icons'
+import DiscardChangesDialog from '@/components/shared/DiscardChangesDialog.vue'
 // IconTrash is not re-exported from the icons barrel (same pattern as
 // EntryView.vue's delete action) -- import the component file directly.
 import { IconTrash } from '@/components/icons'
@@ -216,6 +224,7 @@ import { screenQueryState } from '@/composables/queries/screenState'
 import { ApiResponseError } from '@/api/client'
 import { useKeyboardFieldScroll } from '@/composables/useKeyboardFieldScroll'
 import { useToast } from '@/composables/useToast'
+import { useDiscardGuard } from '@/composables/useDiscardGuard'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { errorMessage, extractApiError } from '@/composables/useApiError'
 import type { GroupMemberItem, GroupListItem, GroupKind } from '@/api/groups'
@@ -399,12 +408,26 @@ function onHeaderInviteClick(close: () => void): void {
 const renameOpen = ref(false)
 const renameName = ref('')
 const renameDescription = ref('')
+// What the sheet opened with: a refetch of the group under it must not move
+// the line between "edited" and "not".
+const renameOpened = ref({ name: '', description: '' })
 function onRenameClick(close: () => void): void {
-  renameName.value = groupName.value
-  renameDescription.value = groupDescription.value
+  renameOpened.value = { name: groupName.value, description: groupDescription.value }
+  renameName.value = renameOpened.value.name
+  renameDescription.value = renameOpened.value.description
   renameOpen.value = true
   close()
 }
+// An edited name or description is unsaved work: leaving asks first (FE-233).
+const renameGuard = useDiscardGuard({
+  dirty: () =>
+    renameName.value !== renameOpened.value.name ||
+    renameDescription.value !== renameOpened.value.description,
+  onDiscard: () => {
+    renameOpen.value = false
+  },
+  open: () => renameOpen.value,
+})
 async function onRenameSave(): Promise<void> {
   const name = renameName.value.trim()
   if (!name) return

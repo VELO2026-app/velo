@@ -27,11 +27,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { ref } from 'vue'
+import { defineComponent, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import App from '@/App.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useEscapeLayer } from '@/components/ui'
 import { clearLocaleHint, getLocale, readLocaleHint, setLocale } from '@/locales'
 import type { UserResponse } from '@/api/types'
 
@@ -69,12 +70,17 @@ const initAuth = vi.fn()
 let schoolInviteStartParam = false
 let platformName: 'telegram' | 'standalone' = 'standalone'
 
+// FE-233: the native Back button the app root drives while an overlay is open.
+const backButton = vi.hoisted(() => ({ show: vi.fn(), hide: vi.fn() }))
+
 vi.mock('@/platform', () => ({
   get platform() {
     return {
       name: platformName,
       readSessionToken: () => null,
       writeSessionToken: () => {},
+      showBackButton: backButton.show,
+      hideBackButton: backButton.hide,
     }
   },
 }))
@@ -371,5 +377,37 @@ describe('App sign-out -- the signed-out language (FE-261)', () => {
 
     await vi.waitFor(() => expect(getLocale()).toBe('uk'))
     expect(readLocaleHint()).toBeNull()
+  })
+})
+
+describe('App root -- the native Back button while an overlay is open (FE-233)', () => {
+  it('shows Back for an open overlay and takes it down when the overlay closes', async () => {
+    backButton.show.mockReset()
+    backButton.hide.mockReset()
+    setAuthUser({ onboarding_completed: true })
+    await mountGate()
+    await flushPromises()
+    expect(backButton.show).not.toHaveBeenCalled()
+
+    // Any open kit overlay joins the layer stack; a bare layer stands in for one.
+    const open = ref(true)
+    const layer = mount(
+      defineComponent({
+        setup() {
+          useEscapeLayer(
+            () => open.value,
+            () => {},
+          )
+          return () => null
+        },
+      }),
+    )
+    await flushPromises()
+    expect(backButton.show).toHaveBeenCalledTimes(1)
+
+    open.value = false
+    await flushPromises()
+    expect(backButton.hide).toHaveBeenCalledTimes(1)
+    layer.unmount()
   })
 })

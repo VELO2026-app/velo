@@ -14,6 +14,7 @@ import { createApp, h, nextTick, ref, type App, type Component, type VNode } fro
 import VModal from './VModal/VModal.vue'
 import VBottomSheet from './VBottomSheet/VBottomSheet.vue'
 import VConfirmDialog from './VConfirmDialog/VConfirmDialog.vue'
+import { dismissTopLayer, hasOpenLayer } from '../escapeStack'
 
 type Kind = 'sheet' | 'modal' | 'confirm'
 
@@ -37,6 +38,13 @@ function overlay(kind: Kind, name: string, isOpen: { value: boolean }, slot?: ()
       ? { open: isOpen.value, message: name, onCancel: onClose }
       : { open: isOpen.value, onClose }
   return h(COMPONENTS[kind], props, slot ? { default: slot } : undefined)
+}
+
+/** The item at an index; a test that reaches past its fixture fails loudly. */
+function at<T>(items: readonly T[], index: number): T {
+  const item = items[index]
+  if (item === undefined) throw new Error(`no item at ${index}`)
+  return item
 }
 
 function mount(render: () => VNode): void {
@@ -79,9 +87,9 @@ describe('stacked overlays close one per Escape, top first (FE-215)', () => {
     const names = kinds.map((kind, i) => `${i}:${kind}`)
     const nested = (i: number): VNode =>
       overlay(
-        kinds[i]!,
-        names[i]!,
-        opens[i]!,
+        at(kinds, i),
+        at(names, i),
+        at(opens, i),
         i + 1 < kinds.length ? () => nested(i + 1) : undefined,
       )
     mount(() => nested(0))
@@ -146,5 +154,30 @@ describe('stacked overlays close one per Escape, top first (FE-215)', () => {
 
     await pressEscape()
     expect(closed).toEqual(['modal'])
+  })
+})
+
+// The host's native Back button reads the same stack (FE-233): the app shows it
+// while a layer is open and asks the top one to close on a tap.
+describe('the host Back button follows the stack (FE-233)', () => {
+  it('dismissTopLayer asks only the top layer, like Escape, and says whether it asked anyone', async () => {
+    const sheetOpen = ref(true)
+    const modalOpen = ref(true)
+    mount(() => overlay('sheet', 'sheet', sheetOpen, () => overlay('modal', 'modal', modalOpen)))
+    await flush()
+    expect(hasOpenLayer.value).toBe(true)
+
+    expect(dismissTopLayer()).toBe(true)
+    await flush()
+    expect(closed).toEqual(['modal'])
+    expect(hasOpenLayer.value).toBe(true)
+
+    expect(dismissTopLayer()).toBe(true)
+    await flush()
+    expect(closed).toEqual(['modal', 'sheet'])
+    expect(hasOpenLayer.value).toBe(false)
+
+    expect(dismissTopLayer()).toBe(false)
+    expect(closed).toEqual(['modal', 'sheet'])
   })
 })

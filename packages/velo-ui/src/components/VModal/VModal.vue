@@ -26,6 +26,13 @@
     overlay closes on one press. Focus, the inert page and the backdrop
     tap come from src/overlayA11y.ts (FE-233).
 
+  `dismissible` (FE-233): false turns every way a PERSON leaves (scrim tap,
+  Escape, the × button, the host's native Back) into a `dismissAttempt` event
+  instead of `close` -- for a form with unsaved edits, whose parent asks
+  "Discard changes?" first (the same pair VBottomSheet has). The parent's own
+  `open=false` and a screen kept alive off-stage (`onDeactivated`) still close
+  the dialog without asking. Default true = byte-identical to before.
+
   Usage:
     <VModal :open="showModal" close-label="Close" @close="showModal = false">
       <h2>Title</h2>
@@ -67,7 +74,7 @@
             v-if="showClose"
             class="v-modal__close"
             :aria-label="closeLabel"
-            @click="$emit('close')"
+            @click="requestDismiss"
           >
             <IconClose :size="16" />
           </button>
@@ -100,16 +107,34 @@ const props = withDefaults(
      *  P3 gives the kit its own i18n story, so the attribute is simply
      *  omitted for a pure kit consumer that passes none. */
     closeLabel?: string
+    /** False: every way a PERSON leaves (scrim, Escape, ×) emits
+     *  `dismissAttempt` instead of `close` -- for a form with unsaved edits
+     *  (FE-233). Does NOT guard the parent's own `open=false`, nor a tab
+     *  switch (`onDeactivated`). Default true = byte-identical to before. */
+    dismissible?: boolean
   }>(),
   {
     closeOnOverlay: true,
     showClose: true,
+    dismissible: true,
   },
 )
 
 const emit = defineEmits<{
   close: []
+  /** A dismissal was asked for while `dismissible` is false. */
+  dismissAttempt: []
 }>()
+
+/**
+ * A person asked to leave: scrim tap, Escape, the × button. A dismissible
+ * dialog closes; otherwise the parent hears `dismissAttempt` and decides (a
+ * form with unsaved edits asks first).
+ */
+function requestDismiss(): void {
+  if (props.dismissible) emit('close')
+  else emit('dismissAttempt')
+}
 
 // Its screen kept alive off-stage (TabRouterView, a dock tap while open):
 // an overlay must not stay over the next screen -- close it like a dismiss.
@@ -124,7 +149,7 @@ const containerEl = ref<HTMLElement | null>(null)
 // A backdrop tap closes only if the press began on the backdrop too (FE-233):
 // selecting text and releasing outside the dialog must not dismiss it.
 const backdrop = useBackdropDismiss(() => {
-  if (props.closeOnOverlay) emit('close')
+  if (props.closeOnOverlay) requestDismiss()
 })
 
 // Focus moves into the dialog and returns to the opener; the page under it
@@ -136,10 +161,7 @@ useOverlayLayer(
 )
 
 // Escape closes only the top open overlay, not every open one (FE-215).
-useEscapeLayer(
-  () => props.open,
-  () => emit('close'),
-)
+useEscapeLayer(() => props.open, requestDismiss)
 
 // Lock body scroll when modal is open. Ref-counted (W16, PROMPT №409) so a
 // second overlay (e.g. a VBottomSheet opened from inside this modal) closing

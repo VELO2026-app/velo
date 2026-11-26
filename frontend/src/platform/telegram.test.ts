@@ -214,3 +214,35 @@ describe('cameraBlockedByHost -- Telegram for iOS only', () => {
     expect(standalonePlatform.cameraBlockedByHost()).toBe(false)
   })
 })
+
+// FE-233: the first caller of the native Back button is the overlay layer
+// (composables/useOverlayBackButton.ts). Hiding must take down the very
+// handler that showing put up, or the next overlay's tap would fire twice.
+describe('telegramPlatform.showBackButton / hideBackButton (FE-233)', () => {
+  const onClick = vi.fn()
+  const offClick = vi.fn()
+  const show = vi.fn()
+  const hide = vi.fn()
+
+  beforeEach(() => {
+    ;(window as unknown as { Telegram: { WebApp: object } }).Telegram.WebApp = {
+      BackButton: { onClick, offClick, show, hide },
+    }
+  })
+
+  it('shows the button with its handler, and hiding removes that same handler', () => {
+    const handler = vi.fn()
+
+    telegramPlatform.showBackButton(handler)
+    expect(onClick).toHaveBeenCalledWith(handler)
+    expect(show).toHaveBeenCalledTimes(1)
+
+    telegramPlatform.hideBackButton()
+    expect(offClick).toHaveBeenCalledWith(handler)
+    expect(hide).toHaveBeenCalledTimes(1)
+
+    // A second hide has no handler left to remove.
+    telegramPlatform.hideBackButton()
+    expect(offClick).toHaveBeenCalledTimes(1)
+  })
+})

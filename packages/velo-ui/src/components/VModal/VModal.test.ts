@@ -191,7 +191,7 @@ describe('VModal (close events)', () => {
     await flush()
 
     expect(closeButton()?.getAttribute('aria-label')).toBe('Закрыть')
-    closeButton()!.click()
+    closeButton()?.click()
     await flush()
 
     expect(closed).toHaveBeenCalledTimes(1)
@@ -212,7 +212,7 @@ describe('VModal (close events)', () => {
     mountApp({ open: true })
     await flush()
 
-    liveModal()!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    liveModal()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flush()
 
     expect(closed).toHaveBeenCalledTimes(1)
@@ -222,7 +222,7 @@ describe('VModal (close events)', () => {
     mountApp({ open: true })
     await flush()
 
-    liveContainer()!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    liveContainer()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flush()
 
     expect(closed).not.toHaveBeenCalled()
@@ -232,7 +232,7 @@ describe('VModal (close events)', () => {
     mountApp({ open: true, props: { closeOnOverlay: false } })
     await flush()
 
-    liveModal()!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    liveModal()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flush()
 
     expect(closed).not.toHaveBeenCalled()
@@ -269,6 +269,40 @@ describe('VModal (close events)', () => {
     // happy-dom never ends the CSS leave transition, which is why "closed" is
     // asserted on the event and every live* query filters the leaving overlay.
     expect(liveModal()).toBeNull()
+  })
+})
+
+describe('VModal (dismissible=false -- a form with unsaved edits, FE-233)', () => {
+  const attempted = vi.fn()
+  beforeEach(() => attempted.mockReset())
+
+  it.each([
+    ['the × button', () => closeButton()?.click()],
+    [
+      'a tap on the overlay',
+      () => liveModal()?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    ],
+    ['Escape', () => pressEscape()],
+  ])('%s asks (dismissAttempt) instead of closing', async (_, leave) => {
+    mountApp({ open: true, props: { dismissible: false, onDismissAttempt: attempted } })
+    await flush()
+
+    leave()
+    await flush()
+
+    expect(attempted).toHaveBeenCalledTimes(1)
+    expect(closed).not.toHaveBeenCalled()
+  })
+
+  it('stays silent about attempts while dismissible (the default): the same Escape closes', async () => {
+    mountApp({ open: true, props: { onDismissAttempt: attempted } })
+    await flush()
+
+    pressEscape()
+    await flush()
+
+    expect(closed).toHaveBeenCalledTimes(1)
+    expect(attempted).not.toHaveBeenCalled()
   })
 })
 
