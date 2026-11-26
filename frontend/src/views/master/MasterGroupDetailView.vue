@@ -411,6 +411,8 @@ const renameDescription = ref('')
 // What the sheet opened with: a refetch of the group under it must not move
 // the line between "edited" and "not".
 const renameOpened = ref({ name: '', description: '' })
+/** The rename request is in flight. */
+const renaming = ref(false)
 function onRenameClick(close: () => void): void {
   renameOpened.value = { name: groupName.value, description: groupDescription.value }
   renameName.value = renameOpened.value.name
@@ -419,10 +421,13 @@ function onRenameClick(close: () => void): void {
   close()
 }
 // An edited name or description is unsaved work: leaving asks first (FE-233).
+// While the save is in flight the sheet closes as it always did -- the request
+// goes on with what was typed.
 const renameGuard = useDiscardGuard({
   dirty: () =>
-    renameName.value !== renameOpened.value.name ||
-    renameDescription.value !== renameOpened.value.description,
+    !renaming.value &&
+    (renameName.value !== renameOpened.value.name ||
+      renameDescription.value !== renameOpened.value.description),
   onDiscard: () => {
     renameOpen.value = false
   },
@@ -431,6 +436,7 @@ const renameGuard = useDiscardGuard({
 async function onRenameSave(): Promise<void> {
   const name = renameName.value.trim()
   if (!name) return
+  renaming.value = true
   try {
     await renameGroup(groupId.value, name, renameDescription.value.trim())
     renameOpen.value = false
@@ -440,6 +446,8 @@ async function onRenameSave(): Promise<void> {
     await invalidateAfter(queryCache, 'renameGroup')
   } catch (e) {
     toast.error(extractApiError(e, t('masterScreens.masterGroupDetail.toast.renameFailed')))
+  } finally {
+    renaming.value = false
   }
 }
 

@@ -761,6 +761,47 @@ describe('MasterGroupDetailView', () => {
         },
       )
 
+      it('a save in flight closes the sheet without asking, and the request still carries the edit', async () => {
+        let resolveSave: (g: Awaited<ReturnType<typeof groupsApi.renameGroup>>) => void = () => {}
+        await openRenameSheet()
+        vi.mocked(groupsApi.renameGroup).mockReturnValue(
+          new Promise((resolve) => {
+            resolveSave = resolve
+          }),
+        )
+        typeInto(sheetOverlay()?.querySelector<HTMLInputElement>('input'), 'Новое')
+        await flush()
+        sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+        await flush()
+
+        pressEscape()
+        await flush()
+
+        expect(asking()).toBe(false)
+        expect(sheetIsOpen()).toBe(false)
+        expect(groupsApi.renameGroup).toHaveBeenCalledWith('g1', 'Новое', 'Было')
+
+        resolveSave({ id: 'g1', name: 'Новое', members_count: 0, description: 'Было' })
+        await flush()
+        expect(groupsApi.renameGroup).toHaveBeenCalledTimes(1)
+      })
+
+      it('after a failed save the sheet guards the edit again', async () => {
+        await openRenameSheet()
+        vi.mocked(groupsApi.renameGroup).mockRejectedValue(new Error('Failed to fetch'))
+        typeInto(sheetOverlay()?.querySelector<HTMLInputElement>('input'), 'Новое')
+        await flush()
+        sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+        await flush()
+        expect(toastError).toHaveBeenCalledWith('Не удалось переименовать группу')
+
+        pressEscape()
+        await flush()
+
+        expect(asking()).toBe(true)
+        expect(sheetIsOpen()).toBe(true)
+      })
+
       it('typing the old text back makes the sheet untouched again', async () => {
         await openRenameSheet()
         const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')

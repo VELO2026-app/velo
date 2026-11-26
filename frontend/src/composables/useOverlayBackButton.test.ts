@@ -20,6 +20,8 @@ let app: App | null = null
 let host: HTMLElement | null = null
 const first = ref(false)
 const second = ref(false)
+/** The first modal is in the tree; false is a `v-if` taking it out. */
+const firstMounted = ref(true)
 const closed: string[] = []
 
 /** The app root: the composable plus two modals that close when asked to. */
@@ -30,13 +32,15 @@ function mountRoot(): void {
     setup() {
       useOverlayBackButton()
       return () => [
-        h(VModal, {
-          open: first.value,
-          onClose: () => {
-            closed.push('first')
-            first.value = false
-          },
-        }),
+        firstMounted.value
+          ? h(VModal, {
+              open: first.value,
+              onClose: () => {
+                closed.push('first')
+                first.value = false
+              },
+            })
+          : null,
         h(VModal, {
           open: second.value,
           onClose: () => {
@@ -67,6 +71,7 @@ beforeEach(() => {
   closed.length = 0
   first.value = false
   second.value = false
+  firstMounted.value = true
 })
 
 afterEach(() => {
@@ -111,6 +116,18 @@ describe('useOverlayBackButton', () => {
 
     expect(closed).toEqual(['second'])
     expect(first.value).toBe(true)
+  })
+
+  it('an overlay taken out of the tree while open (v-if) takes the button down', async () => {
+    mountRoot()
+    first.value = true
+    await flush()
+    expect(platform.showBackButton).toHaveBeenCalledTimes(1)
+
+    firstMounted.value = false
+    await flush()
+
+    expect(platform.hideBackButton).toHaveBeenCalledTimes(1)
   })
 
   it('the root going away takes the button down with it', async () => {
