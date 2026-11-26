@@ -37,7 +37,7 @@ export default defineConfig({
       fileName: () => 'index.js',
       cssFileName: 'velo-ui',
     },
-    rollupOptions: {
+    rolldownOptions: {
       external: ['vue'],
       output: {
         globals: { vue: 'Vue' },
