@@ -213,7 +213,7 @@ describe('MasterStudentsView', () => {
   })
 
   describe('search', () => {
-    it('filters the loaded page client-side, case-insensitively', async () => {
+    it('filters the loaded students client-side, case-insensitively', async () => {
       vi.mocked(mastersApi.getStudents).mockResolvedValue(
         page([student('s1', { name: 'Анна' }), student('s2', { name: 'Борис' })]),
       )
@@ -247,6 +247,63 @@ describe('MasterStudentsView', () => {
 
       expect(text()).toContain('Никого не найдено')
       expect(text()).not.toContain('Учеников пока нет')
+    })
+  })
+
+  describe('every page (FE-260)', () => {
+    /** `count` students on the server, served `limit` from `offset`. */
+    function serve(count: number, total = count): void {
+      const everyone = Array.from({ length: count }, (_, i) =>
+        student(`s${i}`, { name: `Ученик ${i}` }),
+      )
+      vi.mocked(mastersApi.getStudents).mockImplementation(async (limit = 50, offset = 0) => ({
+        items: everyone.slice(offset, offset + limit),
+        total,
+        limit,
+        offset,
+      }))
+    }
+
+    it('reads the pages to the total, so the search finds a student past the first', async () => {
+      serve(150)
+      mount()
+      await vi.waitFor(() => expect(rows().length).toBeGreaterThan(0))
+
+      expect(vi.mocked(mastersApi.getStudents).mock.calls.map(([, offset]) => offset)).toEqual([
+        0, 100,
+      ])
+      const input = host?.querySelector<HTMLInputElement>('input')
+      if (!input) throw new Error('no search input')
+      input.value = 'Ученик 149'
+      input.dispatchEvent(new Event('input'))
+      await flush()
+
+      expect(rows()).toHaveLength(1)
+      expect(text()).toContain('Ученик 149')
+      expect(text()).not.toContain('Показаны')
+    })
+
+    it('past the read cap says how many of the total it shows', async () => {
+      serve(2100, 2100)
+      mount()
+
+      await vi.waitFor(() => expect(text()).toContain('Показаны 2000 из 2100'))
+      expect(mastersApi.getStudents).toHaveBeenCalledTimes(20)
+    })
+
+    it('leaving the screen drops the read in flight', async () => {
+      let signal: AbortSignal | undefined
+      vi.mocked(mastersApi.getStudents).mockImplementation((_limit, _offset, s) => {
+        signal = s
+        return new Promise(() => {})
+      })
+      mount()
+      await flush()
+
+      app?.unmount()
+      app = null
+
+      expect(signal?.aborted).toBe(true)
     })
   })
 

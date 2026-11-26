@@ -700,7 +700,11 @@ describe('WithdrawalsPanel', () => {
       await flush()
     })
 
-    it('cancel closes the window and sends nothing; the next opening starts with an empty field', async () => {
+    function asking(): boolean {
+      return document.body.textContent?.includes('Сбросить изменения?') ?? false
+    }
+
+    it('cancel with a typed reason asks; discarding closes the window and sends nothing; the next opening starts with an empty field', async () => {
       await mount()
 
       button(/^Отклонить/).click()
@@ -709,12 +713,88 @@ describe('WithdrawalsPanel', () => {
       await flush()
       button('Отмена', dialog()).click()
       await flush()
+      expect(asking()).toBe(true)
+      expect(isDialogOpen()).toBe(true)
+      button('Сбросить', dialog()).click()
+      await flush()
       expect(isDialogOpen()).toBe(false)
 
       button(/^Отклонить/).click()
       await flush()
       expect(reasonField().value).toBe('')
       expect(adminApi.rejectWithdrawal).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('leaving the rejection window (FE-233)', () => {
+    function reasonInput(): HTMLTextAreaElement {
+      const field = dialog().querySelector('textarea')
+      if (!field) throw new Error('no reason field')
+      return field
+    }
+    function pressEscape(): void {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    }
+    function asking(): boolean {
+      return document.body.textContent?.includes('Сбросить изменения?') ?? false
+    }
+
+    it('an empty or blank reason closes at once, on Escape and on Отмена', async () => {
+      await mount()
+      button(/^Отклонить/).click()
+      await flush()
+      type(reasonInput(), '   ')
+      await flush()
+      pressEscape()
+      await flush()
+      expect(isDialogOpen()).toBe(false)
+
+      button(/^Отклонить/).click()
+      await flush()
+      button('Отмена', dialog()).click()
+      await flush()
+      expect(isDialogOpen()).toBe(false)
+      expect(asking()).toBe(false)
+    })
+
+    it('a typed reason: Escape asks, and keeping it returns to the field with the reason', async () => {
+      await mount()
+      button(/^Отклонить/).click()
+      await flush()
+      type(reasonInput(), 'Не тот IBAN')
+      await flush()
+
+      pressEscape()
+      await flush()
+      expect(asking()).toBe(true)
+      expect(isDialogOpen()).toBe(true)
+
+      button('Продолжить', dialog()).click()
+      await flush()
+      // The question's own window may still be parked mid-leave: read the field itself.
+      expect(document.body.querySelector('textarea')?.value).toBe('Не тот IBAN')
+      expect(adminApi.rejectWithdrawal).not.toHaveBeenCalled()
+    })
+
+    it('a refusal in flight keeps the window and asks nothing', async () => {
+      server.pending = [request('w_a')]
+      const inFlight = deferred<AdminWithdrawalResponse>()
+      vi.mocked(adminApi.rejectWithdrawal).mockImplementation(() => inFlight.promise)
+      await mount()
+      button(/^Отклонить/).click()
+      await flush()
+      type(reasonInput(), 'Не тот IBAN')
+      await flush()
+      button('Отклонить выплату', dialog()).click()
+      await flush()
+
+      pressEscape()
+      await flush()
+
+      expect(asking()).toBe(false)
+      expect(isDialogOpen()).toBe(true)
+      inFlight.resolve(decide('w_a', 'rejected', 'Не тот IBAN'))
+      await flush()
     })
   })
 

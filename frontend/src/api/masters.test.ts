@@ -42,7 +42,14 @@ vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>()
   return {
     ...actual,
-    api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
+    api: {
+      get: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      request: vi.fn(),
+    },
   }
 })
 
@@ -145,5 +152,17 @@ describe('getMasterReviews', () => {
   it('sends attention=true for the needs-attention feed', async () => {
     await getMasterReviews(20, 0, true)
     expect(api.get).toHaveBeenCalledWith(`${B}/me/reviews?limit=20&offset=0&attention=true`)
+  })
+})
+
+describe('getStudents with a signal (FE-260)', () => {
+  it('reads one page by its offset, cancellable, not shared', async () => {
+    const { signal } = new AbortController()
+    await getStudents(100, 200, signal)
+
+    expect(api.request).toHaveBeenCalledWith('GET', `${B}/me/students?limit=100&offset=200`, {
+      signal,
+    })
+    expect(api.get).not.toHaveBeenCalled()
   })
 })

@@ -10,8 +10,8 @@
 
   LIVE (E5): getStudent(id) → GET /api/v1/masters/me/students/{id} →
   StudentDetailResponse { name, avatar_url, practices_count, hours,
-  satisfaction_pct, recent_checkins[], feedbacks[], blocked }. Reuses the real
-  MoodAvatar (diary mood faces) for check-ins. The write-message action
+  satisfaction_pct, recent_checkins[], feedbacks[], blocked, can_add_to_group }.
+  Reuses the real MoodAvatar (diary mood faces) for check-ins. The write-message action
   (i18n:common.writeMessage)
   posts into the eternal DM with THIS student (SendMessageModal --
   REAL since the T3 chat backend: POST /chats/students).
@@ -75,7 +75,12 @@
               :ariaLabel="t('masterScreens.masterStudentProfile.tagAria')"
               @click="onTagClick(close)"
             />
+            <!-- BE-185 (FE-126): a contact reached only through a chat cannot be
+                 added to a group -- the POST answers 404 for them. The server says
+                 so up front (can_add_to_group === false); an answer without the
+                 field (an older server) keeps the item. -->
             <VMenuItem
+              v-if="detail.can_add_to_group !== false"
               :icon="IconPen"
               :ariaLabel="t('masterScreens.masterStudentProfile.addToGroup')"
               @click="onAddToGroupClick(close)"
@@ -357,7 +362,7 @@ import { moodKeyFromScore, moodLabelFromScore } from '@/utils/moodScale'
 import { MOOD_SCALE_ICON } from '@/utils/ratingIcons'
 import { formatShortDate } from '@/utils/format'
 import { getStudent } from '@/api/masters'
-import type { StudentDetailResponse } from '@/api/types'
+import type { StudentDetail } from '@/api/types'
 import { getStudentGroups, getGroups, blockStudent, unblockStudent } from '@/api/groups'
 import { useToast } from '@/composables/useToast'
 import { extractApiError } from '@/composables/useApiError'
@@ -385,7 +390,7 @@ const name = computed((): string => {
 const avatarUrl = computed((): string => detail.value?.avatar_url ?? '')
 
 // -- Per-student aggregate (E5: GET /masters/me/students/{id}). --
-const detail = ref<StudentDetailResponse | null>(null)
+const detail = ref<StudentDetail | null>(null)
 const loading = ref(true)
 const error = ref('')
 

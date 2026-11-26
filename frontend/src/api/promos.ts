@@ -21,10 +21,16 @@ export function createPromo(body: CreateMasterPromoRequest): Promise<PromoRespon
   return api.post<PromoResponse>('/api/v1/masters/me/promos', body)
 }
 
-/** List the current master's promo codes (newest first). */
-export function getMyPromos(limit = 50, offset = 0): Promise<PaginatedPromosResponse> {
-  const query = buildQuery({ limit, offset })
-  return api.get<PaginatedPromosResponse>(`/api/v1/masters/me/promos${query}`)
+/** One page of the current master's promo codes (newest first); a `signal` lets the caller drop the read. */
+export function getMyPromos(
+  limit = 50,
+  offset = 0,
+  signal?: AbortSignal,
+): Promise<PaginatedPromosResponse> {
+  const url = `/api/v1/masters/me/promos${buildQuery({ limit, offset })}`
+  return signal
+    ? api.request<PaginatedPromosResponse>('GET', url, { signal })
+    : api.get<PaginatedPromosResponse>(url)
 }
 
 /** Deactivate a promo code (soft -- sets is_active=false; no hard delete). */

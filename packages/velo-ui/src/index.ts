@@ -70,8 +70,9 @@ export * from './icons'
 export { lockBodyScroll, unlockBodyScroll, SCROLL_LOCK_CLASS } from './useBodyScrollLock'
 // The Escape stack (FE-215): one Escape closes only the top open layer.
 // VModal/VBottomSheet register through it; a host layer that also closes on
-// Escape (the app's diary search bar) joins the same stack.
-export { useEscapeLayer } from './escapeStack'
+// Escape (the app's diary search bar) joins the same stack. FE-233: the host's
+// native Back button reads the same stack (hasOpenLayer, dismissTopLayer).
+export { useEscapeLayer, hasOpenLayer, dismissTopLayer } from './escapeStack'
 export { inputKindAttrs } from './inputKind'
 export type { InputKind } from './inputKind'
 export { KEYBOARD_FIELD_SCROLL_INJECTION_KEY, useKeyboardFieldScroll } from './keyboardFieldScroll'
