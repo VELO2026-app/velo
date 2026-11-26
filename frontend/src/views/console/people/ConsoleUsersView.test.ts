@@ -186,6 +186,49 @@ describe('ConsoleUsersView', () => {
     })
   })
 
+  it('a first load shows the loader, then the users (FE-260)', async () => {
+    let answer: (page: Awaited<ReturnType<typeof serve>>) => void = () => {}
+    vi.mocked(adminApi.getUsersList).mockImplementation((role, limit, offset, isActive) =>
+      limit === 1
+        ? serve(role, limit, offset, isActive)
+        : new Promise((resolve) => {
+            answer = resolve
+          }),
+    )
+    await mount('/admin/users', false)
+    await vi.waitFor(() =>
+      expect(root?.querySelector('[data-testid="people-loading"]')).not.toBeNull(),
+    )
+    expect(rows()).toHaveLength(0)
+
+    answer(await serve())
+
+    await vi.waitFor(() => expect(rows()).toHaveLength(3))
+    expect(root?.querySelector('[data-testid="people-loading"]')).toBeNull()
+  })
+
+  it('cuts nothing: past one page the pager reaches every user (FE-260)', async () => {
+    vi.mocked(adminApi.getUsersList).mockImplementation(async (_role, limit = 100, offset = 0) => ({
+      items: limit === 1 ? [] : ALL,
+      total: 45,
+      limit,
+      offset,
+    }))
+    await mount()
+
+    const pages = Array.from(
+      root?.querySelectorAll<HTMLButtonElement>('.console-pager__page') ?? [],
+    )
+    expect(pages.map((b) => b.textContent?.trim())).toEqual(['1', '2', '3'])
+
+    pages[2]?.click()
+
+    await vi.waitFor(() =>
+      expect(adminApi.getUsersList).toHaveBeenCalledWith(undefined, 20, 40, undefined),
+    )
+    expect(router.currentRoute.value.query.page).toBe('3')
+  })
+
   it('tells a failed load with an error state, and Retry asks again', async () => {
     vi.mocked(adminApi.getUsersList).mockRejectedValue(new Error('down'))
     await mount('/admin/users', false)

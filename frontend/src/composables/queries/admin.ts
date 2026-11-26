@@ -79,6 +79,7 @@ import {
   type ReportStatusFilter,
   type AdminPracticeScope,
   type AdminPromoTypeFilter,
+  type UserResponse,
 } from '@/api/admin'
 import { getAdminSchools } from '@/api/schools'
 import {
@@ -93,6 +94,7 @@ import {
 } from '@/api/support'
 import { getFullTaxonomy } from '@/api/taxonomy'
 import type {
+  AdminPracticeListItem,
   AdminStatsOverviewResponse,
   AdminStatsResponse,
   CheckinMetricResponse,
@@ -104,6 +106,7 @@ import type {
 } from '@/api/types'
 import { adminKeys } from '@/composables/queries/adminKeys'
 import { nearestFirstWindow } from '@/utils/console/nearestFirst'
+import { relativeDayCode } from '@/utils/format'
 import { keys } from '@/composables/queries/keys'
 import { extractApiError } from '@/composables/useApiError'
 import { invalidateKeys } from '@/composables/queries/invalidation'
@@ -650,6 +653,46 @@ export const adminPracticesPageQuery = defineQueryOptions(
   }),
 )
 
+/** The practices of today the dashboard's "Today" lists at most; past it the count reads "N+". */
+export const ADMIN_TODAY_CAP = 100
+
+/** The practices still ahead today; `more` -- the read stopped at its cap, and today has more. */
+export interface TodayPractices {
+  items: AdminPracticeListItem[]
+  more: boolean
+}
+
+/**
+ * Query options for the practices still ahead today, nearest first
+ * (`GET /admin/practices?scope=upcoming`), the dashboard's "Today".
+ *
+ * @remarks
+ * A busy day has more practices than one page (FE-260): the pages are read
+ * nearest first until one holds a practice of another day or the scope
+ * ends. The list stops at ADMIN_TODAY_CAP; a day with more says "N+"
+ * (`more`). A practice is today in its own time zone, as the practices
+ * table dates it.
+ */
+export const adminTodayPracticesQuery = defineQueryOptions(() => ({
+  key: adminKeys.practicesToday(),
+  query: async (): Promise<TodayPractices> => {
+    const items: AdminPracticeListItem[] = []
+    // One page past the cap is read when needed, so a day of exactly
+    // ADMIN_TODAY_CAP practices is not called "N+".
+    for (let page = 1; items.length <= ADMIN_TODAY_CAP; page++) {
+      const slice = await loadPracticesPage('upcoming', page)
+      const today = slice.items.filter(
+        (p) => relativeDayCode(p.scheduled_at, p.timezone) === 'today',
+      )
+      items.push(...today)
+      const ended = page * ADMIN_PRACTICES_PAGE_SIZE >= slice.total
+      if (today.length < slice.items.length || ended) break
+    }
+    return { items: items.slice(0, ADMIN_TODAY_CAP), more: items.length > ADMIN_TODAY_CAP }
+  },
+  staleTime: 0,
+}))
+
 // =============================================================================
 // The catalogs
 // =============================================================================
@@ -1082,16 +1125,98 @@ export const adminSupportTicketQuery = defineQueryOptions((ticketId: string) => 
   query: () => getAdminTicket(ticketId),
 }))
 
+/** The API's largest page of a thread feed (`limit` le=100, support/router.py). */
+const SUPPORT_FEED_PAGE_SIZE = 100
+
+/** Pages of one feed read at most (10 000 messages): a cursor the API never ends stops here. */
+const MAX_FEED_PAGES = 100
+
+/**
+ * Every message of one support thread, newest first: the pages are read by
+ * their cursor until the API says there is no more (FE-260 -- the first page
+ * alone hid the start of a long conversation). An empty page, a cursor seen
+ * before or MAX_FEED_PAGES ends the read; `signal` drops it (another ticket
+ * opened).
+ */
+async function readWholeFeed(threadId: string, signal: AbortSignal): Promise<SupportMessage[]> {
+  const messages: SupportMessage[] = []
+  const seen = new Set<string>()
+  let cursor: string | undefined
+  for (let pages = 0; pages < MAX_FEED_PAGES; pages++) {
+    const page = await getAdminSupportMessages(threadId, SUPPORT_FEED_PAGE_SIZE, cursor, signal)
+    messages.push(...page.messages)
+    const next = page.next_cursor
+    if (page.messages.length === 0 || next === null || seen.has(next)) break
+    seen.add(next)
+    cursor = next
+  }
+  return messages
+}
+
+/** A message still on its way through translation (comms `preparing`, or `not_requested` before the job is taken). */
+export function translationInFlight(m: SupportMessage): boolean {
+  return m.translation?.state === 'preparing' || m.translation?.state === 'not_requested'
+}
+
+/**
+ * A held feed (oldest first) brought up to date by its newest page: the
+ * page's messages replace their older copies (a translation that came) and
+ * the new ones join at the end. The whole feed is read instead when the
+ * page cannot tell all that changed and there are older pages: it reaches
+ * no message already held (messages may lie between the two), or a held
+ * message older than the page waits for its translation (a retry on an old
+ * message, the backend's catch-up) -- the poll would never see it land.
+ */
+async function refreshFeed(
+  threadId: string,
+  held: SupportMessage[],
+  signal: AbortSignal,
+): Promise<SupportMessage[]> {
+  const head = await getAdminSupportMessages(threadId, SUPPORT_FEED_PAGE_SIZE, undefined, signal)
+  const fresh = [...head.messages].reverse()
+  const heldIds = new Set(held.map((m) => m.id))
+  const freshIds = new Set(fresh.map((m) => m.id))
+  const older = held.filter((m) => !freshIds.has(m.id))
+  const joins = fresh.some((m) => heldIds.has(m.id))
+  const waitingOutside = older.some(translationInFlight)
+  if (head.next_cursor !== null && (!joins || waitingOutside))
+    return (await readWholeFeed(threadId, signal)).reverse()
+  return [...older, ...fresh]
+}
+
+/** The entry's own data is a feed; Colada types it `unknown` inside the query. */
+function isFeed(data: unknown): data is SupportMessage[] {
+  return Array.isArray(data)
+}
+
+/** The first read of a feed takes every page; a held one is refreshed by its newest page. */
+async function readFeed(
+  threadId: string,
+  signal: AbortSignal,
+  held: SupportMessage[] | undefined,
+): Promise<SupportMessage[]> {
+  return held
+    ? refreshFeed(threadId, held, signal)
+    : (await readWholeFeed(threadId, signal)).reverse()
+}
+
 /**
  * Query options for one support thread's feed, oldest first (the API
- * answers newest first). Asked again on every visit; the detail screen
- * polls it while translations are on their way.
+ * answers newest first), all of it.
+ *
+ * @remarks
+ * The first read takes every page; every later one (a return to the
+ * screen, the translation poll every few seconds) reads the newest page
+ * only and merges it into what is held (refreshFeed), so a long thread
+ * costs one request a poll.
  */
 export const adminSupportMessagesQuery = defineQueryOptions(
   ({ threadId, enabled }: { threadId: string; enabled: boolean }) => ({
     key: adminKeys.supportMessages(threadId),
-    query: async (): Promise<SupportMessage[]> =>
-      [...(await getAdminSupportMessages(threadId)).messages].reverse(),
+    query: ({ signal, entry }) => {
+      const held = entry.state.value.data
+      return readFeed(threadId, signal, isFeed(held) ? held : undefined)
+    },
     staleTime: 0,
     enabled,
   }),
@@ -1108,12 +1233,29 @@ export function updateSupportFeed(
 }
 
 /**
+ * Every admin a ticket can be handed to (`GET /admin/users?role=admin`),
+ * page after page until the total is read (FE-260: one page of 100 would
+ * cut the rest silently).
+ */
+async function readAllAdmins(): Promise<UserResponse[]> {
+  const pages: { items: UserResponse[] }[] = []
+  let offset: number | null = 0
+  while (offset !== null) {
+    const page = await getUsersList('admin', 100, offset)
+    pages.push(page)
+    offset = page.items.length === 0 ? null : nextOffset(page, pages)
+  }
+  return pages.flatMap((page) => page.items)
+}
+
+/**
  * Query options for the admins a ticket can be handed to
- * (`GET /admin/users?role=admin`), read when the hand-over sheet opens.
+ * (`GET /admin/users?role=admin`), all of them, read when the hand-over
+ * sheet opens.
  */
 export const adminAdminsQuery = defineQueryOptions((enabled: boolean) => ({
   key: adminKeys.admins(),
-  query: async () => (await getUsersList('admin')).items,
+  query: readAllAdmins,
   staleTime: 0,
   enabled,
 }))

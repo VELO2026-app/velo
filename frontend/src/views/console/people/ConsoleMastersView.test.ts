@@ -215,6 +215,32 @@ describe('ConsoleMastersView', () => {
     expect(adminApi.getMastersList).toHaveBeenCalledWith('rejected', 20, 20)
   })
 
+  it('cuts nothing: past one page the pager reaches every master (FE-260)', async () => {
+    const everyone = Array.from({ length: 130 }, (_, i) =>
+      master({ id: `m_${i + 1}`, first_name: `Master${i + 1}`, last_name: null }),
+    )
+    vi.mocked(adminApi.getMastersList).mockImplementation(
+      async (_status, limit = 100, offset = 0) => ({
+        items: limit === 1 ? [] : everyone.slice(offset, offset + limit),
+        total: everyone.length,
+        limit,
+        offset,
+      }),
+    )
+    await mount()
+
+    const pages = () =>
+      Array.from(root?.querySelectorAll<HTMLButtonElement>('.console-pager__page') ?? [])
+    expect(pages().at(-1)?.textContent?.trim()).toBe('7')
+
+    pages().at(-1)?.click()
+
+    await vi.waitFor(() => expect(rows()[0]?.textContent).toContain('Master121'))
+    expect(rows()).toHaveLength(10)
+    expect(rows().at(-1)?.textContent).toContain('Master130')
+    expect(router.currentRoute.value.query.page).toBe('7')
+  })
+
   it('opens the master card of a clicked row', async () => {
     await mount()
 

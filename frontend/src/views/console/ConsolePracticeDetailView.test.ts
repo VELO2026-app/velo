@@ -270,6 +270,26 @@ describe('ConsolePracticeDetailView', () => {
     expect(statValues()).toEqual({ Записано: '4', Свободно: '6' })
   })
 
+  it('a first load shows the loader, then the participants (FE-260)', async () => {
+    let answer!: (value: AdminPracticeDetailResponse) => void
+    vi.mocked(adminApi.getAdminPracticeDetail).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve
+        }),
+    )
+    await mount()
+
+    expect(host?.querySelector('[data-testid="practice-loading"]')).not.toBeNull()
+    expect(host?.textContent).not.toContain('Пока никто не записался')
+
+    answer(detail({ status: 'upcoming', booked: 0, capacity: null, roster: [] }))
+    await flush()
+
+    expect(host?.querySelector('[data-testid="practice-loading"]')).toBeNull()
+    expect(host?.textContent).toContain('Пока никто не записался')
+  })
+
   it('a practice with no seat limit: free seats are the infinity sign; an empty roster says so', async () => {
     vi.mocked(adminApi.getAdminPracticeDetail).mockResolvedValue(
       detail({ status: 'upcoming', booked: 0, capacity: null, roster: [] }),

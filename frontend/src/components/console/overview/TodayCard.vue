@@ -2,11 +2,10 @@
   VELO Frontend -- TodayCard (FE-268)
 
   The dashboard's "today" block: the practices still to come today, nearest
-  first. The list is the nearest page of the upcoming scope of
-  `GET /admin/practices` (the entry the practices module reads, so a visit
-  there paints at once). The API's upcoming scope starts at "now": a practice
-  that has begun is in the past scope and is not here. A row opens the
-  practice.
+  first, every page of them up to a cap -- past it the count reads "N+"
+  (adminTodayPracticesQuery, FE-260). The API's upcoming scope starts at
+  "now": a practice that has begun is in the past scope and is not here. A
+  row opens the practice.
 -->
 
 <template>
@@ -62,18 +61,17 @@ import ConsoleTable, { type ConsoleTableColumn } from '@/components/console/Cons
 import CapacityBar from '@/components/console/content/CapacityBar.vue'
 import ConsoleLoading from '@/components/console/ConsoleLoading.vue'
 import OverviewEmpty from '@/components/console/overview/OverviewEmpty.vue'
-import { adminPracticesPageQuery, onFailedRequest } from '@/composables/queries/admin'
+import { adminTodayPracticesQuery, onFailedRequest } from '@/composables/queries/admin'
 import { screenQueryState } from '@/composables/queries/screenState'
 import { extractApiError } from '@/composables/useApiError'
 import { useToast } from '@/composables/useToast'
 import { consoleRouteName } from '@/utils/console/modules'
-import { formatTime, relativeDayCode } from '@/utils/format'
+import { formatTime } from '@/utils/format'
 
 const router = useRouter()
 const toast = useToast()
 
-// Page 1 of the upcoming scope is the nearest practices (queries/admin.ts).
-const listQuery = useQuery(() => adminPracticesPageQuery({ scope: 'upcoming', page: 1 }))
+const listQuery = useQuery(adminTodayPracticesQuery)
 const { loading, failed } = screenQueryState(listQuery)
 const errorText = computed(() => extractApiError(listQuery.error.value, t('common.loadError')))
 
@@ -87,17 +85,17 @@ function retry(): void {
   void listQuery.refetch()
 }
 
-// A practice is today in its own time zone, as the practices table dates it.
-const rows = computed(() =>
-  (listQuery.data.value?.items ?? [])
-    .filter((p) => relativeDayCode(p.scheduled_at, p.timezone) === 'today')
-    .map((p) => ({ ...p })),
-)
+const rows = computed(() => (listQuery.data.value?.items ?? []).map((p) => ({ ...p })))
 
-// The count after the title; an empty day says so in the table instead.
-const note = computed(() =>
-  rows.value.length === 0 ? undefined : t('console.dashboard.today.remaining', rows.value.length),
-)
+// The count after the title ("N+" when the read stopped at its cap); an
+// empty day says so in the table instead.
+const note = computed(() => {
+  const count = rows.value.length
+  if (count === 0) return undefined
+  return listQuery.data.value?.more
+    ? t('console.dashboard.today.remainingMore', { n: count })
+    : t('console.dashboard.today.remaining', count)
+})
 
 const columns = computed<ConsoleTableColumn[]>(() => [
   { key: 'time', label: t('console.dashboard.today.columns.time'), width: 72 },
