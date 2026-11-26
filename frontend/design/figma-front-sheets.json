@@ -1,54 +1,26 @@
 {
   "about": "Mirror sheets of the Figma \"Front\" pages (docs/figma-protocol.md §8). Generated from c2fInventory() in Figma; commits and seals stay in Figma. Read by frontend/scripts/front-sheets.mjs.",
   "file": "IV92js0q2cBHmHmDxB0zxM",
-  "generated": "2026-11-24",
+  "generated": "2026-11-26",
   "sheets": [
-    {
-      "key": "screen:user.dashboard",
-      "id": "3997:19031",
-      "page": "Фронт · Экраны",
-      "name": "Legacy screen / user.dashboard / Dashboard",
-      "sources": ["frontend/src/views/user/UserDashboardView.vue"]
-    },
-    {
-      "key": "screen:user.calendar",
-      "id": "3997:19056",
-      "page": "Фронт · Экраны",
-      "name": "Legacy screen / user.calendar / Practices",
-      "sources": ["frontend/src/views/user/CalendarView.vue"]
-    },
-    {
-      "key": "screen:user.diary",
-      "id": "3997:19081",
-      "page": "Фронт · Экраны",
-      "name": "Legacy screen / user.diary / Diary",
-      "sources": ["frontend/src/views/user/DiaryFeedView.vue"]
-    },
-    {
-      "key": "screen:master.practice-reviews",
-      "id": "3997:19106",
-      "page": "Фронт · Экраны",
-      "name": "Legacy screen / master.practice-reviews / Practice Analytics",
-      "sources": ["frontend/src/views/master/PracticeReviewsView.vue"]
-    },
     {
       "key": "registry:legacy",
       "id": "3997:17943",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Registry / legacy",
       "sources": []
     },
     {
       "key": "registry:velo",
       "id": "3997:18039",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Registry / velo",
       "sources": []
     },
     {
       "key": "component:Actions",
       "id": "3997:19145",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Actions",
       "sources": [
         "packages/velo-ui/src/components/VButton/VButton.vue",
@@ -58,14 +30,14 @@
     {
       "key": "component:Badges & tags",
       "id": "3997:19152",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Badges & tags",
       "sources": ["packages/velo-ui/src/components/VBadge", "packages/velo-ui/src/components/VTag"]
     },
     {
       "key": "component:Form controls",
       "id": "3997:19159",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Form controls",
       "sources": [
         "packages/velo-ui/src/components/VDayPicker",
@@ -78,7 +50,7 @@
     {
       "key": "component:Data display & identity",
       "id": "3997:19166",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Data display & identity",
       "sources": [
         "packages/velo-ui/src/components/VAvatar",
@@ -93,7 +65,7 @@
     {
       "key": "component:Forms",
       "id": "3997:19173",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Forms",
       "sources": [
         "frontend/src/components/ui/VCheckbox.vue",
@@ -105,7 +77,7 @@
     {
       "key": "component:Overlays",
       "id": "3997:19180",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Overlays",
       "sources": [
         "frontend/src/components/ui/VBottomSheet.vue",
@@ -116,7 +88,7 @@
     {
       "key": "component:States & skeletons",
       "id": "3997:19187",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / States & skeletons",
       "sources": [
         "frontend/src/components/ui/VEmptyState.vue",
@@ -129,7 +101,7 @@
     {
       "key": "component:Navigation & brand",
       "id": "3997:19194",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Navigation & brand",
       "sources": [
         "frontend/src/components/ui/VBackButton.vue",
@@ -141,7 +113,7 @@
     {
       "key": "component:Admin & analytics",
       "id": "3997:19201",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Admin & analytics",
       "sources": [
         "frontend/src/components/shared/DistributionCard.vue",
@@ -154,7 +126,7 @@
     {
       "key": "component:Screen building blocks",
       "id": "3997:19208",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Screen building blocks",
       "sources": [
         "frontend/src/components/layout/VHeader.vue",
@@ -165,7 +137,7 @@
     {
       "key": "component:Form fields — states",
       "id": "3997:19215",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Form fields — states",
       "sources": [
         "packages/velo-ui/src/components/VInput/VInput.vue",
@@ -175,14 +147,14 @@
     {
       "key": "component:Cards & rows",
       "id": "3997:19222",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Cards & rows",
       "sources": ["packages/velo-ui/src/components/VCard/VCard.vue"]
     },
     {
       "key": "component:Overlays — kit additions",
       "id": "3997:19229",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Overlays — kit additions",
       "sources": [
         "packages/velo-ui/src/components/VConfirmDialog/VConfirmDialog.vue",
@@ -194,7 +166,7 @@
     {
       "key": "component:Diary, sheets & modals",
       "id": "3997:19236",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Diary, sheets & modals",
       "sources": [
         "frontend/src/components/console/requests/SupportMessageBubble.vue",
@@ -225,7 +197,7 @@
     {
       "key": "component:Practices, bookings & chats",
       "id": "3997:19244",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Practices, bookings & chats",
       "sources": [
         "frontend/src/components/shared/Banner.vue",
@@ -255,7 +227,7 @@
     {
       "key": "component:School",
       "id": "3997:19252",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / School",
       "sources": [
         "frontend/src/components/shared/SchoolAvatarPicker.vue",
@@ -271,42 +243,42 @@
     {
       "key": "component:Icons",
       "id": "3997:19260",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Component / Icons",
       "sources": ["frontend/src/components/icons", "packages/velo-ui/src/icons"]
     },
     {
       "key": "templates",
       "id": "3999:19392",
-      "page": "Фронт · Kit и токены",
+      "page": "Kit и токены",
       "name": "Templates",
       "sources": []
     },
     {
       "key": "asset:app-background",
       "id": "4004:20936",
-      "page": "Фронт · Скины",
+      "page": "Скины",
       "name": "Asset / App background",
       "sources": []
     },
     {
       "key": "skin:gold",
       "id": "4179:1985",
-      "page": "Фронт · Скины",
+      "page": "Скины",
       "name": "Skin / gold",
       "sources": []
     },
     {
       "key": "skin:core",
       "id": "4245:2110",
-      "page": "Фронт · Скины",
+      "page": "Скины",
       "name": "Skin / core",
       "sources": []
     },
     {
       "key": "skin:goodo",
       "id": "4245:2419",
-      "page": "Фронт · Скины",
+      "page": "Скины",
       "name": "Skin / goodo",
       "sources": []
     }

@@ -6,7 +6,7 @@
  *   work against: `git -C ~/work/velo show origin/deploy-machine:docs/figma/front/<file>`.
  *   const FSS = makeFSS();
  *   const FRONT = makeFront({ thread: '<bb thread id>', task: 'FE-NNN' });
- *   return await FRONT.write(['Фронт · Экраны'], 'resnap user.dashboard', async () => {
+ *   return await FRONT.write(['Gold · Приложение'], 'resnap user.dashboard', async () => {
  *     await FSS.ensureTemplates();                // once per page, idempotent
  *     const r = await FSS.sheet({ key:'screen:user.dashboard', route:'user.dashboard', title:'Dashboard',
  *       source:'frontend/src/views/user/UserDashboardView.vue', states:[{ state:'Default', width:402, height:874 }],

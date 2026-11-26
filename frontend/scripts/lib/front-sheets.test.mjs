@@ -79,7 +79,7 @@ const FILES = [
 ]
 const repo = { files: new Set(FILES), read: (p) => (p in SRC ? SRC[p] : null) }
 
-const sheet = (key, id, sources, page = 'Фронт · Kit и токены') => ({
+const sheet = (key, id, sources, page = 'Kit и токены') => ({
   key,
   id,
   page,
@@ -87,14 +87,14 @@ const sheet = (key, id, sources, page = 'Фронт · Kit и токены') => 
   sources,
 })
 const SHEETS = [
-  sheet('screen:user.home', '1:1', ['frontend/src/views/user/HomeView.vue'], 'Фронт · Экраны'),
+  sheet('screen:user.home', '1:1', ['frontend/src/views/user/HomeView.vue'], 'Gold · Приложение'),
   sheet('component:Actions', '1:2', ['packages/velo-ui/src/components/VButton']),
   sheet('component:Overlays', '1:3', ['name:VModal']),
   // a source that moved into the kit keeps its file name
   sheet('component:Legacy', '1:4', ['frontend/src/components/ui/VButton.vue']),
   sheet('component:Icons', '1:5', ['frontend/src/components/icons']),
   sheet('registry:velo', '1:6', []),
-  sheet('asset:app-background', '1:7', [], 'Фронт · Скины'),
+  sheet('asset:app-background', '1:7', [], 'Скины'),
   sheet('templates', '1:8', []),
   sheet('component:Brand', '1:9', ['frontend/src/components/ui/VeloLogo.vue']),
 ]
@@ -316,7 +316,7 @@ test('staleSheets: sorts sheets by commit and seal and reports manifest drift', 
           'screen:user.new',
           '9:9',
           ['frontend/src/views/user/OtherView.vue'],
-          'Фронт · Экраны',
+          'Gold · Приложение',
         ),
         commit: 'aaa1111',
         seal: 'v2:1:3',

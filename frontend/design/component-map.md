@@ -1,5 +1,7 @@
 # Component map — Vue DS ↔ Figma
 
+> History: the `front` page named below no longer exists (deleted 26.11, DSGN-41). The mirror lives on the pages `Kit и токены`, `Скины` and `Gold · Приложение`; see `docs/figma-protocol.md` §2.
+
 > Generated from the barrels and component headers on 2026-09-18 (Phase 3c, spec items 11.2/11.6.1).
 > The source of each component's purpose is the header of the file itself (`src/components/ui/*.vue`); this is the short form.
 > The Figma column is filled from the Figma exports / component list (Level 0, item 11.5) — the values are nodes of the mirror on the `front` page (file "VELΘ App Актуальное").
