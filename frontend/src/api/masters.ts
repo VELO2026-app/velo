@@ -254,17 +254,24 @@ export function getMasterStats(
  * Fetch the master's cross-practice named reviews feed (newest first). Each
  * item carries the reviewer name/avatar, the rating bucket, the comment, and
  * the practice_title the review belongs to.
+ *
+ * `period` (BE-228) keeps the reviews of the practices of the master's own
+ * calendar period -- the same window and practices as `getMasterAnalytics`.
+ * `total` of the answer counts the whole narrowed feed. Leave `limit` out and
+ * the server picks the page: 20 without a period, the largest page (100) with
+ * one.
  */
 export function getMasterReviews(
-  limit = 20,
+  limit?: number,
   offset = 0,
   attention = false,
+  period?: MasterAnalyticsPeriod,
 ): Promise<PaginatedMasterReviewsResponse> {
   // attention=true narrows the feed to ratings 1-4 (zones bad and low,
   // BE-77) server-side (E1) so the needs-attention block
   // (i18n:masterScreens.analytics.sections.attention) sees a full page of
   // them, not only those that fall in the first mixed page.
-  const query = buildQuery({ limit, offset, attention: attention || undefined })
+  const query = buildQuery({ limit, offset, attention: attention || undefined, period })
   return api.get<PaginatedMasterReviewsResponse>(`/api/v1/masters/me/reviews${query}`)
 }
 

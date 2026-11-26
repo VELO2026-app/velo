@@ -146,4 +146,14 @@ describe('getMasterReviews', () => {
     await getMasterReviews(20, 0, true)
     expect(api.get).toHaveBeenCalledWith(`${B}/me/reviews?limit=20&offset=0&attention=true`)
   })
+
+  it.each(['week', 'month', 'quarter'] as const)(
+    'sends period=%s and leaves the page size to the server (BE-228)',
+    async (period) => {
+      await getMasterReviews(undefined, 0, true, period)
+      expect(api.get).toHaveBeenCalledWith(
+        `${B}/me/reviews?offset=0&attention=true&period=${period}`,
+      )
+    },
+  )
 })
