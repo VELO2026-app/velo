@@ -40,6 +40,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.chats.models import ChatThread
 from tests.helpers import auth_headers, full_cleanup_range
 from tests.test_be46_master_link import (
     GROUPS_URL,
@@ -50,7 +51,6 @@ from tests.test_be46_master_link import (
     _membership,
     _new_group,
     _person,
-    _thread,
     _waitlist,
 )
 
@@ -78,24 +78,44 @@ async def cleanup(db_session: AsyncSession) -> AsyncGenerator[None, None]:
 # ===================================================================
 
 
-async def _with_booking(client, db_session, master, person) -> None:
+async def _with_booking(
+    client: AsyncClient, db_session: AsyncSession, master: dict, person: dict,
+) -> None:
     # CANCELLED on purpose: the weakest status that still links.
     await _booking(db_session, _id(master), _id(person))
 
 
-async def _with_waitlist_entry(client, db_session, master, person) -> None:
+async def _with_waitlist_entry(
+    client: AsyncClient, db_session: AsyncSession, master: dict, person: dict,
+) -> None:
     await _waitlist(db_session, _id(master), _id(person))
 
 
-async def _with_group_membership(client, db_session, master, person) -> None:
+async def _with_group_membership(
+    client: AsyncClient, db_session: AsyncSession, master: dict, person: dict,
+) -> None:
     await _membership(db_session, _id(master), _id(person))
 
 
-async def _with_conversation_only(client, db_session, master, person) -> None:
-    await _thread(db_session, client_id=_id(person), operator_id=_id(master))
+async def _with_conversation_only(
+    client: AsyncClient, db_session: AsyncSession, master: dict, person: dict,
+) -> None:
+    # A thread of this file's own: be46's helper writes one fixed
+    # comms_thread_id, and a second file taking that same id would collide on
+    # it the day the two share a database run.
+    db_session.add(
+        ChatThread(
+            comms_thread_id=uuid4(),
+            client_user_id=_id(person),
+            operator_user_id=_id(master),
+        )
+    )
+    await db_session.commit()
 
 
-async def _with_lawful_block_only(client, db_session, master, person) -> None:
+async def _with_lawful_block_only(
+    client: AsyncClient, db_session: AsyncSession, master: dict, person: dict,
+) -> None:
     """Group membership is the only link, and the block deletes it.
 
     What stays is the block marked blocked_with_link: the dossier still opens

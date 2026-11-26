@@ -21,7 +21,7 @@
 # calendar week / month / quarter. The window comes from the same call as
 # GET /masters/me/analytics (calendar_period_bounds_in_tz on the master's
 # timezone) and the practices from the same predicate (stats_service.
-# _completed_in_window), so the "Требуют внимания" block and the numbers
+# completed_in_window), so the "Требуют внимания" block and the numbers
 # above it are about the same practices by construction. A review belongs to
 # the period of its PRACTICE (scheduled_at), not of the day it was written: a
 # Monday review of last Friday's practice is last week's, as it is in
@@ -42,8 +42,8 @@ from app.modules.diary.insights_service import (
     score_zone,
 )
 from app.modules.diary.models import Feedback
-from app.modules.masters.stats_service import _completed_in_window
-from app.modules.practices.models import Practice, PracticeStatus
+from app.modules.masters.stats_service import completed_in_window
+from app.modules.practices.models import Practice
 from app.modules.users.helpers import display_name
 from app.modules.users.models import User
 
@@ -89,25 +89,22 @@ async def list_master_reviews(
         Tuple of (items, total_count). Each item is a dict ready for
         MasterReviewItem (adds practice_title vs E1's ReviewItem).
     """
-    if period is None:
-        # Every period: the master's COMPLETED practices, no window.
-        scope = (
-            Practice.master_id == user.id,
-            Practice.status == PracticeStatus.COMPLETED.value,
-        )
-    else:
-        # The period's practices, by the predicate analytics counts them by
-        # (it already carries owner + COMPLETED + the scheduled_at window).
+    # No period: every COMPLETED practice of the master. With one: the period's
+    # practices, by the predicate analytics counts them by -- the same function
+    # with its window filled in (calendar_period_bounds_in_tz, the master's
+    # own calendar), so the two cannot differ in what a period's practice is.
+    window: tuple[datetime | None, datetime | None] = (None, None)
+    if period is not None:
         cur_start, cur_end, _prev_start = calendar_period_bounds_in_tz(
             period, datetime.now(UTC), user.timezone,
         )
-        scope = _completed_in_window(user.id, cur_start, cur_end)
+        window = (cur_start, cur_end)
 
     base = (
         select(Feedback, User, Practice.title)
         .join(Practice, Feedback.practice_id == Practice.id)
         .join(User, Feedback.user_id == User.id)
-        .where(*scope)
+        .where(*completed_in_window(user.id, *window))
     )
     if attention:
         base = base.where(Feedback.rating <= ATTENTION_RATING_MAX)
@@ -121,7 +118,10 @@ async def list_master_reviews(
 
     rows = (
         await session.execute(
-            base.order_by(Feedback.created_at.desc())
+            # id breaks ties: reviews created in one transaction share a
+            # created_at, and without a total order a page boundary may
+            # repeat one review and skip another between two requests.
+            base.order_by(Feedback.created_at.desc(), Feedback.id.desc())
             .limit(limit)
             .offset(offset)
         )

@@ -191,8 +191,8 @@ GET   /api/v1/masters/me/income?period=week|month   -- Доход за пери�
 GET   /api/v1/masters/me/stats?period=week|month     -- Стат-сетка дашборда: практики/участники/доход + дельты (E7)
 GET   /api/v1/masters/me/transactions               -- Лента транзакций (signed, пагинация, E2)
 GET   /api/v1/masters/me/students                    -- Мои ученики (поиск, пагинация, E5)
-GET   /api/v1/masters/me/students/{id}               -- Профиль ученика (E5; can_add_to_group — строгая связь, BE-185)
-GET   /api/v1/masters/me/reviews?attention=&period=  -- Cross-practice лента отзывов (+practice_title, #3; period=week|month|quarter — практики календарного периода мастера, как /me/analytics, BE-228)
+GET   /api/v1/masters/me/students/{id}              -- Профиль ученика (E5; can_add_to_group, BE-185)
+GET   /api/v1/masters/me/reviews?attention=&period= -- Cross-practice лента отзывов (+practice_title, #3; period, BE-228)
 ```
 
 > **E2 (доход/лента).** `income` = знаковая сумма title-помеченных DONE-движений
@@ -209,6 +209,17 @@ GET   /api/v1/masters/me/reviews?attention=&period=  -- Cross-practice лент�
 > needs_attention }` (needs_attention = последний отзыв в confused-бакете). Деталь:
 > `{ practices_count, hours, satisfaction_pct, recent_checkins, feedbacks }`, 404
 > если нет attended-брони (P-08).
+>
+> **E5 / BE-185: `can_add_to_group`.** Деталь возвращает ещё `blocked` и
+> `can_add_to_group: bool` — «примет ли `POST /masters/me/groups/{id}/members`
+> этого ученика». Значение — тот же `has_master_link(GRANT_ACCESS)`, что гейтит
+> POST: строгая связь, то есть бронь любого статуса, запись в листе ожидания или
+> членство в одной из групп мастера. Профиль открывается по более широкой связи
+> (`INTERNAL`: плюс переписка и собственный законный блок), поэтому контакт «только
+> по чату» открывается, но получает `false`; POST для него отвечает тем же 404, что
+> и для несуществующего id. Поле подсказывает экрану, показывать ли «Добавить в
+> группу», и не заменяет проверку в POST. Заблокированный ученик, у которого
+> осталась бронь, получает `true`: поле повторяет гейт и не смотрит на `blocked`.
 
 > **#3 (cross-practice отзывы).** `GET /masters/me/reviews?attention=true|false` —
 > именованные отзывы по всем COMPLETED-практикам мастера, `{ reviewer_name,
@@ -216,6 +227,19 @@ GET   /api/v1/masters/me/reviews?attention=&period=  -- Cross-practice лент�
 > пагинация. `attention=true` → confused-бакет (rating ≤ 3) для блока «Требуют
 > внимания». Бакет/имя-хелперы переиспользованы из `diary.service` (S-2). Имя схемы
 > `MasterReviewItem` уникально (без OpenAPI-коллизии с diary `ReviewItem`).
+>
+> **#3 / BE-228: `period`.** `GET /masters/me/reviews?period=week|month|quarter`
+> оставляет отзывы по практикам календарного периода мастера: границы —
+> `calendar_period_bounds_in_tz` по `User.timezone` (локальные полночи, начало
+> включительно, конец исключён), практики — тот же предикат
+> `stats_service.completed_in_window`, что у `GET /masters/me/analytics`, поэтому
+> блок «Требуют внимания» и цифры над ним говорят об одних практиках. Отзыв
+> относится к периоду своей практики (`scheduled_at`), а не ко дню написания.
+> Без `period` лента прежняя. `limit`/`offset` постраничат уже суженную ленту,
+> `total` — весь период. Размер страницы без `limit`: 20, а с `period` — 100
+> (максимум эндпоинта); явный `limit` (1..100) действует всегда. Порядок —
+> `created_at DESC, id DESC`: `id` разрывает ничьи, чтобы страницы не
+> пересекались.
 
 > **E7 (стат-сетка мастера).** `GET /masters/me/stats?period=week|month` ->
 > `MasterStatsResponse { practices_count, participants_count, income_cents }` плюс

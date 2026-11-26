@@ -33,6 +33,13 @@ from app.modules.users.models import User
 
 router = APIRouter(prefix="/api/v1/masters", tags=["master-reviews"])
 
+# The page when the caller names none (BE-228). The whole feed pages by 20, as
+# it always did; a period is read as ONE block ("Требуют внимания"), so it
+# defaults to the largest page the endpoint serves, and the screen no longer
+# has to know the number. An explicit limit wins in both cases.
+_DEFAULT_PAGE = 20
+_MAX_PAGE = 100
+
 
 @router.get("/me/reviews", response_model=PaginatedMasterReviewsResponse)
 async def list_my_reviews_endpoint(
@@ -40,7 +47,7 @@ async def list_my_reviews_endpoint(
     period: Literal["week", "month", "quarter"] | None = Query(default=None),
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int | None = Query(default=None, ge=1, le=_MAX_PAGE),
     offset: int = Query(default=0, ge=0),
 ) -> PaginatedMasterReviewsResponse:
     """Named reviews across the master's completed practices.
@@ -50,11 +57,13 @@ async def list_my_reviews_endpoint(
 
     period (BE-228) keeps only the reviews of practices scheduled in the
     master's own calendar week / month / quarter, bounded exactly as
-    /me/analytics bounds it. Paging is unchanged: limit and offset apply to
-    the narrowed feed, and `total` counts all of it, so a caller that asks
-    for the period can tell whether the page held everything.
+    /me/analytics bounds it. limit and offset page the narrowed feed and
+    `total` counts all of it, so a caller can tell whether a page held
+    everything. Without a limit the page is 20, or 100 when a period is given.
     """
     user, _profile = master_tuple
+    if limit is None:
+        limit = _MAX_PAGE if period is not None else _DEFAULT_PAGE
     items, total = await list_master_reviews(
         user, session,
         attention=attention, period=period, limit=limit, offset=offset,
