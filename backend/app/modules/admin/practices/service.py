@@ -8,12 +8,16 @@
 #   All platform practices except draft/deleted (matches the public
 #   practices_count definition), joined to their master for name + verified
 #   badge. scope filters on scheduled_at vs now; booked = non-cancelled
-#   bookings per practice (one grouped query for the page). Newest first.
+#   bookings per practice (one grouped query for the page). Newest first --
+#   except scope=upcoming, which is soonest first (BE-257): the nearest
+#   practice is the one an admin looks for, and it must stand on page one.
 #
 # DETAIL (GET /admin/practices/{id}):
 #   Practice + master + booked/attended counts + full non-cancelled roster
 #   (each entry carries its booking status; the frontend buckets attended /
-#   no_show for past practices). 404 when missing or soft-deleted.
+#   no_show for past practices) + the cancelled bookings in a list of their
+#   own, with the time of the cancellation (BE-257). 404 when missing or
+#   soft-deleted.
 #
 # SESSION RULES: read-only, no commit (P-01), ORM-only.
 # =============================================================================
@@ -27,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
 from app.modules.admin.practices.schemas import (
+    AdminCancelledBooking,
     AdminPracticeDetailResponse,
     AdminPracticeListItem,
     AdminRosterEntry,
@@ -73,7 +78,8 @@ async def list_admin_practices(
     limit: int = 20,
     offset: int = 0,
 ) -> PaginatedAdminPracticesResponse:
-    """List all platform practices (except draft/deleted), newest first."""
+    """List all platform practices (except draft/deleted), newest first;
+    scope=upcoming is soonest first (BE-257)."""
     now = datetime.now(UTC)
 
     conditions = [Practice.status.notin_(_HIDDEN_STATUSES)]
@@ -94,7 +100,14 @@ async def list_admin_practices(
             .join(MasterProfile, Practice.master_id == MasterProfile.user_id)
             .join(User, MasterProfile.user_id == User.id)
             .where(*conditions)
-            .order_by(Practice.scheduled_at.desc())
+            .order_by(
+                # The id breaks a tie of start times, so a page boundary
+                # never repeats or drops a practice.
+                Practice.scheduled_at.asc()
+                if scope == "upcoming"
+                else Practice.scheduled_at.desc(),
+                Practice.id,
+            )
             .limit(limit)
             .offset(offset)
         )
@@ -206,6 +219,43 @@ async def get_admin_practice_detail(
         in roster_rows
     ]
 
+    cancelled_rows = (
+        await session.execute(
+            select(
+                Booking.id,
+                Booking.user_id,
+                Booking.cancelled_at,
+                User.first_name,
+                User.last_name,
+                User.avatar_url,
+            )
+            .join(User, Booking.user_id == User.id)
+            .where(
+                Booking.practice_id == practice_id,
+                Booking.status == BookingStatus.CANCELLED.value,
+            )
+            # Earliest cancellation first; a time never recorded goes last.
+            .order_by(
+                Booking.cancelled_at.asc().nulls_last(),
+                Booking.created_at,
+                Booking.id,
+            )
+        )
+    ).all()
+
+    cancelled = [
+        AdminCancelledBooking(
+            booking_id=booking_id,
+            user_id=user_id,
+            name=display_name(first_name, last_name),
+            avatar_url=avatar_url,
+            status=BookingStatus.CANCELLED.value,
+            cancelled_at=cancelled_at,
+        )
+        for booking_id, user_id, cancelled_at, first_name, last_name, avatar_url
+        in cancelled_rows
+    ]
+
     return AdminPracticeDetailResponse(
         id=practice.id,
         title=practice.title,
@@ -220,6 +270,7 @@ async def get_admin_practice_detail(
         timezone=practice.timezone,
         attended=attended,
         roster=roster,
+        cancelled=cancelled,
     )
 
 
@@ -253,6 +304,7 @@ async def get_admin_zoom_attendance(
             zoom_meeting_status=None,
             report_ingested=False,
             bookings=[],
+            cancelled=[],
             unmatched=[],
             unmatched_count=0,
             last_sync_error=None,
@@ -262,25 +314,34 @@ async def get_admin_zoom_attendance(
         await session.execute(
             select(Booking, User.first_name, User.last_name)
             .join(User, Booking.user_id == User.id)
-            .where(
-                Booking.practice_id == practice_id,
-                Booking.status != BookingStatus.CANCELLED.value,
+            .where(Booking.practice_id == practice_id)
+            # BE-257: the live bookings have no cancellation time, so they
+            # keep their booking order; the cancelled ones come out earliest
+            # cancellation first, a time never recorded last.
+            .order_by(
+                Booking.cancelled_at.asc().nulls_last(),
+                Booking.created_at,
+                Booking.id,
             )
-            .order_by(Booking.created_at)
         )
     ).all()
 
-    bookings = [
-        AdminZoomBookingAttendance(
+    live: list[AdminZoomBookingAttendance] = []
+    cancelled: list[AdminZoomBookingAttendance] = []
+    for booking, first_name, last_name in booking_rows:
+        entry = AdminZoomBookingAttendance(
             booking_id=booking.id,
             user_id=booking.user_id,
             user_name=display_name(first_name, last_name),
             status=booking.status,
             zoom_minutes_present=booking.zoom_minutes_present,
             attendance_decided_via=booking.attendance_decided_via,
+            cancelled_at=booking.cancelled_at,
         )
-        for booking, first_name, last_name in booking_rows
-    ]
+        if booking.status == BookingStatus.CANCELLED.value:
+            cancelled.append(entry)
+        else:
+            live.append(entry)
 
     unmatched_rows = (
         await session.execute(
@@ -308,7 +369,8 @@ async def get_admin_zoom_attendance(
         practice_id=practice_id,
         zoom_meeting_status=zoom_meeting.status,
         report_ingested=zoom_meeting.report_ingested_at is not None,
-        bookings=bookings,
+        bookings=live,
+        cancelled=cancelled,
         unmatched=unmatched,
         unmatched_count=len(unmatched),
         last_sync_error=zoom_meeting.last_sync_error,

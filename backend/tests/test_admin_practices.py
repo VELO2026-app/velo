@@ -28,10 +28,12 @@ from app.modules.bookings.models import Booking, BookingStatus
 from app.modules.masters.models import MasterProfile
 from app.modules.practices.models import Practice, PracticeStatus, PracticeType
 from app.modules.users.models import User, UserRole
+from app.modules.zoom.models import ZoomMeeting, ZoomMeetingStatus
 from tests.helpers import auth_headers, login_user
 
 PRACTICES_URL = "/api/v1/admin/practices"
 DETAIL_URL = "/api/v1/admin/practices/{practice_id}"
+ZOOM_ATTENDANCE_URL = "/api/v1/admin/practices/{practice_id}/zoom-attendance"
 
 _TID_MIN = 94000
 _TID_MAX = 94999
@@ -151,18 +153,20 @@ async def _book(
     telegram_id: int,
     *,
     status: str = BookingStatus.CONFIRMED.value,
-) -> None:
+    cancelled_at: datetime | None = None,
+) -> Booking:
     auth = await login_user(
         client, telegram_id=telegram_id, first_name=f"P{telegram_id}",
     )
-    db_session.add(
-        Booking(
-            practice_id=practice.id,
-            user_id=auth["user"]["id"],
-            status=status,
-        )
+    booking = Booking(
+        practice_id=practice.id,
+        user_id=auth["user"]["id"],
+        status=status,
+        cancelled_at=cancelled_at,
     )
+    db_session.add(booking)
     await db_session.flush()
+    return booking
 
 
 # ===================================================================
@@ -271,6 +275,78 @@ async def test_practices_list_pagination(
     assert data["total"] >= len(data["items"])
 
 
+@pytest.mark.asyncio
+async def test_practices_list_upcoming_is_soonest_first(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """BE-257: scope=upcoming lists the nearest practice first, so it stands
+    on page one; a page taken from the start begins at the nearest."""
+    token = await _make_admin(client, db_session)
+    master_id = await _make_master(client, db_session)
+    now = datetime.now(UTC)
+    # Created out of order on purpose: the order is the list's, not the
+    # insertion's.
+    later = await _create_practice(
+        db_session, master_id, scheduled_at=now + timedelta(days=30),
+    )
+    soonest = await _create_practice(
+        db_session, master_id, scheduled_at=now + timedelta(days=10),
+    )
+    middle = await _create_practice(
+        db_session, master_id, scheduled_at=now + timedelta(days=20),
+    )
+    await db_session.commit()
+
+    full = await client.get(
+        PRACTICES_URL, params={"scope": "upcoming", "limit": 100},
+        headers=auth_headers(token),
+    )
+    first_page = await client.get(
+        PRACTICES_URL, params={"scope": "upcoming", "limit": 1, "offset": 0},
+        headers=auth_headers(token),
+    )
+
+    assert full.status_code == 200
+    items = full.json()["items"]
+    starts = [datetime.fromisoformat(it["scheduled_at"]) for it in items]
+    assert starts == sorted(starts)
+    mine = {str(later.id), str(soonest.id), str(middle.id)}
+    assert [it["id"] for it in items if it["id"] in mine] == [
+        str(soonest.id), str(middle.id), str(later.id),
+    ]
+    assert first_page.json()["items"][0]["id"] == items[0]["id"]
+
+
+@pytest.mark.asyncio
+async def test_practices_list_past_stays_newest_first(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """BE-257 turns only the upcoming scope around: the past stays newest
+    first (what the past tab reads)."""
+    token = await _make_admin(client, db_session)
+    master_id = await _make_master(client, db_session)
+    now = datetime.now(UTC)
+    for days in (30, 10, 20):
+        await _create_practice(
+            db_session, master_id,
+            scheduled_at=now - timedelta(days=days),
+            status=PracticeStatus.COMPLETED.value,
+        )
+    await db_session.commit()
+
+    resp = await client.get(
+        PRACTICES_URL, params={"scope": "past", "limit": 100},
+        headers=auth_headers(token),
+    )
+
+    assert resp.status_code == 200
+    starts = [datetime.fromisoformat(it["scheduled_at"]) for it in resp.json()["items"]]
+    assert len(starts) >= 3
+    assert starts == sorted(starts, reverse=True)
+
+
 # ===================================================================
 # GET /admin/practices/{id} -- detail
 # ===================================================================
@@ -343,6 +419,53 @@ async def test_practice_detail_past_split_excludes_cancelled(
 
 
 @pytest.mark.asyncio
+async def test_practice_detail_lists_cancelled_bookings_apart(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """BE-257: the cancelled bookings come in a list of their own, earliest
+    cancellation first (a time never recorded last), each with its time. The
+    roster and the head-count stay the live ones; a person who cancelled
+    twice shows twice, under two booking ids."""
+    token = await _make_admin(client, db_session)
+    master_id = await _make_master(client, db_session)
+    practice = await _create_practice(
+        db_session, master_id, scheduled_at=datetime.now(UTC) + timedelta(days=2),
+    )
+    cancelled = BookingStatus.CANCELLED.value
+    t1 = datetime(2026, 11, 20, 9, 0, tzinfo=UTC)
+    t2 = datetime(2026, 11, 21, 18, 30, tzinfo=UTC)
+    live = await _book(client, db_session, practice, 94020)
+    second = await _book(
+        client, db_session, practice, 94021, status=cancelled, cancelled_at=t2,
+    )
+    first = await _book(
+        client, db_session, practice, 94021, status=cancelled, cancelled_at=t1,
+    )
+    unrecorded = await _book(client, db_session, practice, 94022, status=cancelled)
+    await db_session.commit()
+
+    resp = await client.get(
+        DETAIL_URL.format(practice_id=practice.id), headers=auth_headers(token),
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["booked"] == 1
+    assert [str(live.user_id)] == [r["user_id"] for r in data["roster"]]
+    assert [(c["booking_id"], c["cancelled_at"]) for c in data["cancelled"]] == [
+        (str(first.id), "2026-11-20T09:00:00Z"),
+        (str(second.id), "2026-11-21T18:30:00Z"),
+        (str(unrecorded.id), None),
+    ]
+    assert {c["name"] for c in data["cancelled"]} == {"P94021", "P94022"}
+    assert {c["status"] for c in data["cancelled"]} == {"cancelled"}
+    assert set(data["cancelled"][0]) == {
+        "booking_id", "user_id", "name", "avatar_url", "status", "cancelled_at",
+    }
+
+
+@pytest.mark.asyncio
 async def test_practice_detail_404_missing(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -396,3 +519,87 @@ async def test_practices_non_admin(
     auth = await login_user(client, telegram_id=94050, first_name="Plain")
     resp = await client.get(PRACTICES_URL, headers=auth_headers(auth["session_token"]))
     assert resp.status_code == 403
+
+
+# ===================================================================
+# GET /admin/practices/{id}/zoom-attendance -- cancelled bookings (BE-257)
+# ===================================================================
+
+
+@pytest.mark.asyncio
+async def test_zoom_attendance_lists_cancelled_bookings_apart(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """BE-257: the cancelled bookings are not in `bookings` (the live
+    attendance) but in `cancelled`, with the time of the cancellation and
+    what Zoom recorded for them."""
+    token = await _make_admin(client, db_session)
+    master_id = await _make_master(client, db_session)
+    practice = await _create_practice(
+        db_session, master_id, scheduled_at=datetime.now(UTC) - timedelta(days=1),
+        status=PracticeStatus.COMPLETED.value,
+    )
+    db_session.add(
+        ZoomMeeting(
+            practice_id=practice.id, zoom_meeting_id="94100",
+            zoom_meeting_uuid="uuid-94100", status=ZoomMeetingStatus.ACTIVE.value,
+        )
+    )
+    attended = await _book(
+        client, db_session, practice, 94030, status=BookingStatus.ATTENDED.value,
+    )
+    cancelled_at = datetime(2026, 11, 22, 7, 15, tzinfo=UTC)
+    cancelled = await _book(
+        client, db_session, practice, 94031,
+        status=BookingStatus.CANCELLED.value, cancelled_at=cancelled_at,
+    )
+    cancelled.zoom_minutes_present = 12
+    await db_session.commit()
+
+    resp = await client.get(
+        ZOOM_ATTENDANCE_URL.format(practice_id=practice.id),
+        headers=auth_headers(token),
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert [b["booking_id"] for b in data["bookings"]] == [str(attended.id)]
+    assert data["bookings"][0]["cancelled_at"] is None
+    assert len(data["cancelled"]) == 1
+    row = data["cancelled"][0]
+    assert row["booking_id"] == str(cancelled.id)
+    assert row["status"] == "cancelled"
+    assert row["cancelled_at"] == "2026-11-22T07:15:00Z"
+    assert row["zoom_minutes_present"] == 12
+
+
+@pytest.mark.asyncio
+async def test_zoom_attendance_without_meeting_answers_empty_lists(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """A practice with no Zoom meeting answers with every list empty, the
+    new one included, even when it holds a cancelled booking."""
+    token = await _make_admin(client, db_session)
+    master_id = await _make_master(client, db_session)
+    practice = await _create_practice(
+        db_session, master_id, scheduled_at=datetime.now(UTC) + timedelta(days=2),
+    )
+    await _book(
+        client, db_session, practice, 94040,
+        status=BookingStatus.CANCELLED.value,
+        cancelled_at=datetime(2026, 11, 22, 7, 15, tzinfo=UTC),
+    )
+    await db_session.commit()
+
+    resp = await client.get(
+        ZOOM_ATTENDANCE_URL.format(practice_id=practice.id),
+        headers=auth_headers(token),
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["zoom_meeting_status"] is None
+    assert data["bookings"] == []
+    assert data["cancelled"] == []

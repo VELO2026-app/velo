@@ -22,7 +22,7 @@ import { adminKeys } from '@/composables/queries/adminKeys'
 import ConsoleModerationView from '@/views/console/ConsoleModerationView.vue'
 import * as adminApi from '@/api/admin'
 import { ApiResponseError } from '@/api/client'
-import type { AdminMethodChangeItem, ReportResponse } from '@/api/admin'
+import type { AdminMethodChangeItem, PaginatedReportsResponse } from '@/api/admin'
 
 vi.mock('@/api/admin')
 vi.mock('@/utils/methodTaxonomy', async (importOriginal) => {
@@ -43,6 +43,9 @@ vi.mock('@/composables/useToast', () => ({
 // Fixtures: texts differ between rows, so "the right one is open" proves itself
 // -----------------------------------------------------------------------------
 
+/** A report as the admin list answers it: the user-facing fields plus the names. */
+type ReportResponse = PaginatedReportsResponse['items'][number]
+
 function report(overrides: Partial<ReportResponse> = {}): ReportResponse {
   return {
     id: 'r_master_0001',
@@ -50,6 +53,8 @@ function report(overrides: Partial<ReportResponse> = {}): ReportResponse {
     target_type: 'master',
     target_id: 'target_master_0001',
     reason: 'The master was rude to the group',
+    reporter_name: 'Vera Reporter',
+    target_name: 'Anna Lebedeva',
     status: 'pending',
     created_at: new Date(Date.now() - 12 * 60000).toISOString(),
     ...overrides,

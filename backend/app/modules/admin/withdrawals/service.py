@@ -21,6 +21,7 @@
 #   No session.commit() (P-01). Router calls flush + refresh.
 # =============================================================================
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -46,6 +47,41 @@ from app.modules.users.models import User
 from app.modules.withdrawals.models import Withdrawal, WithdrawalStatus
 
 logger = structlog.get_logger()
+
+
+def _master_name(first_name: str | None, last_name: str | None) -> str:
+    """First + last name, else a neutral label (the withdrawing user is a
+    master). The same rule as admin/revenue's per-master names."""
+    name = " ".join(part for part in (first_name, last_name) if part).strip()
+    return name or "Мастер"
+
+
+async def to_admin_withdrawal_responses(
+    session: AsyncSession,
+    withdrawals: Sequence[Withdrawal],
+) -> list[AdminWithdrawalResponse]:
+    """Withdrawals as an admin reads them: the row plus the master's name
+    (BE-226). One query for all the names, whatever their number. Read-only:
+    the withdrawal's own fields are copied, nothing is written back."""
+    user_ids = {w.user_id for w in withdrawals}
+    names: dict[UUID, str] = {}
+    if user_ids:
+        name_rows = (
+            await session.execute(
+                select(User.id, User.first_name, User.last_name).where(
+                    User.id.in_(user_ids)
+                )
+            )
+        ).all()
+        names = {uid: _master_name(first, last) for uid, first, last in name_rows}
+    fields = [f for f in AdminWithdrawalResponse.model_fields if f != "master_name"]
+    return [
+        AdminWithdrawalResponse(
+            **{field: getattr(w, field) for field in fields},
+            master_name=names.get(w.user_id, _master_name(None, None)),
+        )
+        for w in withdrawals
+    ]
 
 
 async def _load_pending_withdrawal(
@@ -274,10 +310,7 @@ async def list_withdrawals_admin(
     rows = result.scalars().all()
 
     return PaginatedAdminWithdrawalsResponse(
-        items=[
-            AdminWithdrawalResponse.model_validate(w, from_attributes=True)
-            for w in rows
-        ],
+        items=await to_admin_withdrawal_responses(session, rows),
         total=total,
         limit=limit,
         offset=offset,

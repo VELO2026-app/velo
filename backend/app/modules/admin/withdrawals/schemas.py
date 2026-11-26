@@ -39,6 +39,10 @@ class AdminWithdrawalResponse(BaseModel):
 
     id: UUID
     user_id: UUID
+    # BE-226: the master's name, as the finance console reads it -- first
+    # and last name, "Мастер" when the account has neither (the rule of
+    # admin/revenue's per-master rows, so both lists name a master alike).
+    master_name: str
     amount_cents: int
     fee_cents: int
     currency: str

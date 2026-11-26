@@ -74,6 +74,7 @@ function detail(overrides: Partial<AdminPracticeDetailResponse> = {}): AdminPrac
     timezone: 'Europe/Moscow',
     attended: 1,
     roster: ROSTER,
+    cancelled: [],
     ...overrides,
   }
 }
@@ -119,6 +120,7 @@ function zoomAnswer(
         duration_seconds: null,
       },
     ],
+    cancelled: [],
     unmatched_count: 2,
     last_sync_error: null,
     ...overrides,

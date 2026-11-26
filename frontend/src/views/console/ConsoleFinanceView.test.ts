@@ -37,6 +37,7 @@ function request(id: string): AdminWithdrawalResponse {
   return {
     id,
     user_id: `user_${id}`,
+    master_name: 'Anna Lebedeva',
     amount_cents: 10000,
     fee_cents: 100,
     currency: 'EUR',
