@@ -13,7 +13,7 @@ import { MAX_MODES, MODES_FORMAT, modeDigest, normalizeSnapshot } from './figma-
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const LIB = readFileSync(join(root, 'docs/figma/front/modes-lib.figma.js'), 'utf8')
-const KIT = 'Фронт · Kit и токены'
+const KIT = 'Kit и токены'
 
 // --- a fake of the plugin API ----------------------------------------------------------
 /** @type {any} */
@@ -91,7 +91,7 @@ function fakeFile() {
     }),
     mk('font/body', 'STRING', 'cl', { '3905:1': 'Marmelad' }),
   )
-  const screens = page('Фронт · Экраны', [node('Legacy screen / user.dashboard / Dashboard')])
+  const screens = page('Gold · Приложение', [node('Legacy screen / user.dashboard / Dashboard')])
   const kit = page(KIT, [node('Component / Actions')])
   const designer = page('User App', [node('Tanya frame')])
   versions = []
@@ -168,7 +168,7 @@ const payload = () => ({
   ],
 })
 
-/** Pin every `Фронт · …` page and its top-level nodes, as MODES.pin would. */
+/** Pin every mirror page and its top-level nodes, as MODES.pin would. */
 function pinFront(mode = '3905:0') {
   for (const p of [file.screens, file.kit]) {
     p.explicitVariableModes = { cv: mode }
@@ -203,7 +203,7 @@ describe('modes-lib.figma.js', () => {
     await lib().apply(payload(), { createModes: true })
     const p = payload()
     await expect(lib().apply(p, { makeCoreDefault: true })).rejects.toThrow(
-      /not pinned.*page "Фронт · Экраны" \(no explicit mode\).*Dashboard/s,
+      /not pinned.*page "Gold · Приложение" \(no explicit mode\).*Dashboard/s,
     )
     expect(file.col.defaultModeId).toBe('3905:0')
     pinFront()
@@ -301,8 +301,8 @@ describe('modes-lib.figma.js', () => {
     const plan = await lib().plan(payload())
     expect(plan.ok).toBe(true)
     expect(plan.unpinned).toEqual([
-      'page "Фронт · Экраны" (no explicit mode)',
-      '"Фронт · Экраны" / "Legacy screen / user.dashboard / Dashboard" (no explicit mode)',
+      'page "Gold · Приложение" (no explicit mode)',
+      '"Gold · Приложение" / "Legacy screen / user.dashboard / Dashboard" (no explicit mode)',
       `page "${KIT}" (no explicit mode)`,
       `"${KIT}" / "Component / Actions" (no explicit mode)`,
     ])
@@ -318,7 +318,7 @@ describe('modes-lib.figma.js', () => {
     file.kit.children[1].explicitVariableModes = { cv: goodoId }
     const plan = await lib().plan(payload())
     expect(plan.unpinned).toEqual([
-      '"Фронт · Экраны" / "Legacy screen / user.dashboard / Dashboard" (mode core, expected gold)',
+      '"Gold · Приложение" / "Legacy screen / user.dashboard / Dashboard" (mode core, expected gold)',
     ])
     await expect(lib().apply(payload(), { makeCoreDefault: true })).rejects.toThrow(
       /mode core, expected gold/,

@@ -5,7 +5,7 @@
  *     <this file> + one line:  return await SIMILAR_TOKENS('#a1e0c7');   // colour
  *                              return await SIMILAR_TOKENS('#a1e0c780'); // colour with alpha (rrggbbaa)
  *                              return await SIMILAR_TOKENS(12);          // spacing or radius, px
- * The variables on the page «Фронт · Kit и токены» are the only approved tokens; they are
+ * The variables on the page «Kit и токены» are the only approved tokens; they are
  * synced from frontend/tokens.json. Never changes the file.
  * Result: { kind, value, exact: [...], near: [...], advice }
  *   exact  the same value: use this token, do not file a request

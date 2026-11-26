@@ -13,7 +13,7 @@
  *   const MODES = makeModes({ thread: '<the same thread>', task: 'FE-NNN' });
  *   return await MODES.snapshot();                    // read-only: the dump for --snapshot
  *   return await MODES.plan(PAYLOAD);                 // read-only: what apply would do, or why not
- *   await FRONT.acquire(['Фронт · Экраны', 'Фронт · Kit и токены', 'Фронт · Скины']);
+ *   await FRONT.acquire(['Gold · Приложение', 'Kit и токены', 'Скины']);
  *   await FRONT.write([...], 'pin gold', async () => MODES.pin(PAYLOAD, node, 'gold'));
  *   return await MODES.apply(PAYLOAD, { createModes: true });
  *   return await MODES.apply(PAYLOAD, { makeCoreDefault: true });
@@ -22,7 +22,7 @@
  *   - the file key is the payload's; the collection exists once; a mode the payload pins by id
  *     (gold = 3905:0) has that id AND that name -- so the core values never land in the gold mode;
  *   - the caller holds the live front lock (`f2c:lock`, FRONT.acquire of the same thread) on
- *     `Фронт · Kit и токены`, the page of the variables;
+ *     `Kit и токены`, the page of the variables;
  *   - Figma still holds what the snapshot held: the payload's digest of every existing mode matches
  *     the file (a hand edit between the snapshot and apply stops the call);
  *   - a Figma mode the payload does not name stops the call (allowExtraModes only with the owner's
@@ -32,18 +32,19 @@
  *     default one (gold), and a variable left out would keep the gold value in core;
  *   - no value of the screens mode (gold) changes, unless allowScreensModeChanges (a new package
  *     tag, the owner's yes): a change there is a hand edit or a stale payload;
- *   - makeCoreDefault refuses while a `Фронт · …` page or top-level node is not pinned to the mode
+ *   - makeCoreDefault refuses while a mirror page (`Kit и токены`, `Скины`, `Gold · Приложение`) or top-level node is not pinned to the mode
  *     it must show (gold; a `Skin / <mode>` card its own mode): those nodes would turn to core;
  *   - a named version is saved first; no version -> stop; only values that differ are written.
  */
 /** Numeric version (yyyymmddnn), compared as a number. */
-const MODES_LIB_VERSION = 2026112402;
+const MODES_LIB_VERSION = 2026112601;
 /** Same values as frontend/scripts/lib/figma-modes.mjs (pinned by modes-lib-figma.test.mjs). */
 const MODES_FORMAT = 'velo-figma-modes/1';
 const MODES_MAX = 4;
 /** The page whose lock covers the variables (they live on the kit page, protocol §2). */
-const MODES_LOCK_PAGE = 'Фронт · Kit и токены';
-const MODES_FRONT_PAGE = /^Фронт · /;
+const MODES_LOCK_PAGE = 'Kit и токены';
+/** The mirror pages whose nodes must show an explicit mode (the same set as FRONT_MIRROR_PAGES in front-lib.figma.js). */
+const MODES_FRONT_PAGE = /^(Kit и токены|Скины|Gold · Приложение)$/;
 
 /** Canonical text of one stored value: the same function as modeDigest in figma-modes.mjs. */
 function modesCanon(v) {
@@ -134,7 +135,7 @@ function makeModes(o) {
   }
 
   /**
-   * `Фронт · …` pages and top-level nodes whose explicit mode is not the one they must show:
+   * Mirror pages and top-level nodes whose explicit mode is not the one they must show:
    * the screens mode (gold), or for a skin card `Skin / <mode>` its own mode.
    */
   async function unpinned(payload, col) {

@@ -6,15 +6,16 @@
  * c2fNeedGuard). A read-only caller (the weekly check) pastes it too and calls only c2fInventory().
  *
  *   const FRONT = makeFront({ thread: '<bb thread id>', task: 'FE-NNN' });
- *   await FRONT.acquire(['Фронт · Экраны']);          // once per task: the lock outlives one call
- *   return await FRONT.write(['Фронт · Экраны'], 'resnap user.dashboard', async () => {
+ *   await FRONT.acquire(['Gold · Приложение']);          // once per task: the lock outlives one call
+ *   return await FRONT.write(['Gold · Приложение'], 'resnap user.dashboard', async () => {
  *     const r = await FSS.sheet({ …, replace: '<sheet id>' });   // rebuilds the section in place
  *     return Object.assign(r, await FRONT.stamp(r.id, { commit: '<sha>', committedAt: '<git %cI>' }));
  *   });
- *   await FRONT.release(['Фронт · Экраны']);           // end of the task (or let the lock expire)
+ *   await FRONT.release(['Gold · Приложение']);           // end of the task (or let the lock expire)
  *
  * What a write guarantees:
- *   - pages: only `Фронт · …` and `Обложка`; anything else stops the call before any change;
+ *   - pages: only the front agent's pages (FRONT_OWN_PAGES: `Обложка`, `Kit и токены`, `Скины`, `<Instance> · Приложение`,
+ *     `<Instance> · Библиотека`, `Админка · <Instance>`); anything else stops the call before any change;
  *   - lock `f2c:lock` = {who, task, until} (the designer's agent uses the same format); a live lock of
  *     another owner (the designer's agent, another front thread) stops the call before the version;
  *     `acquire` holds the lock across calls (TTL 60 min, every write extends it), a write without
@@ -32,9 +33,17 @@
  * Restoring a saved version rolls back the WHOLE file, the designer's pages included.
  */
 /** Numeric versions (yyyymmddnn): compared as numbers, never as strings. */
-const FRONT_LIB_VERSION = 2026112103;
+const FRONT_LIB_VERSION = 2026112601;
 /** The oldest fss-lib.figma.js (FSS_LIB_VERSION) a write accepts. */
 const FSS_LIB_MIN = 2026112101;
+/**
+ * Pages the front agent may write (protocol §2, restructure DSGN-41): the cover, the kit, the skins and,
+ * per instance, `<Instance> · Приложение`, `<Instance> · Библиотека`, `Админка · <Instance>`.
+ * The concept page `Админка · цель (ждёт бэкенд)`, the designer's pages and the archive are not here.
+ */
+const FRONT_OWN_PAGES = /^(Обложка|Kit и токены|Скины|[^·]+ · (Приложение|Библиотека)|Админка · (?!цель).+)$/;
+/** Pages whose top-level sheets carry `c2f:key` (the mirror of the code, read by c2fInventory). */
+const FRONT_MIRROR_PAGES = /^(Kit и токены|Скины|Gold · Приложение)$/;
 /** Prefix of the current c2fSeal; a stored seal with another prefix cannot be compared. */
 const C2F_SEAL_V = 'v2:';
 const C2F_FILE = 'IV92js0q2cBHmHmDxB0zxM';
@@ -114,7 +123,7 @@ function c2fSeal(root) {
 function makeFront(o) {
   o = o || {};
   const FILE = o.fileKey || C2F_FILE;
-  const OWN = /^(Фронт · .+|Обложка)$/;
+  const OWN = FRONT_OWN_PAGES;
   const TTL = 60 * 60e3;
   const fail = (m) => { throw new Error(m); };
   if (!o.thread) fail('FRONT: thread is required (the lock owner; two front threads must not share one)');
@@ -141,7 +150,7 @@ function makeFront(o) {
     for (const ref of list) {
       const p = figma.root.children.find((x) => x.id === ref || x.name === ref);
       if (!p) fail('FRONT: page not found: ' + ref);
-      if (!OWN.test(p.name)) fail('FRONT: the front agent may not write to page "' + p.name + '" (protocol §2): only «Фронт · …» and «Обложка»');
+      if (!OWN.test(p.name)) fail('FRONT: the front agent may not write to page "' + p.name + '" (protocol §2): only «Обложка», «Kit и токены», «Скины», «<Инстанс> · Приложение», «<Инстанс> · Библиотека», «Админка · <Инстанс>»');
       if (!out.includes(p)) out.push(p);
     }
     return out;
@@ -246,7 +255,7 @@ function makeFront(o) {
 /**
  * c2fInventory() — READ-ONLY list of the mirror sheets for `frontend/scripts/front-sheets.mjs`
  * (manifest `--write-manifest`, weekly check `--stale`). Top-level sections with `c2f:key` on the
- * `Фронт · …` pages. `sources` = what the sheet mirrors: a screen's view (`c2f:source`), the icon
+ * mirror pages (FRONT_MIRROR_PAGES). `sources` = what the sheet mirrors: a screen's view (`c2f:source`), the icon
  * folders, or the `Code:` paths of the kit masters (`name:<Component>` when a master has none);
  * registry, skin and asset sheets are mapped by key in the script.
  */
@@ -254,7 +263,7 @@ async function c2fInventory() {
   await figma.loadAllPagesAsync();
   const sheets = [];
   const codeRe = /(?:Code|Код):\s*((?:frontend|packages)\/[\w./@-]*[\w@-])/g;
-  for (const p of figma.root.children.filter((x) => /^Фронт · /.test(x.name))) {
+  for (const p of figma.root.children.filter((x) => FRONT_MIRROR_PAGES.test(x.name))) {
     await p.loadAsync();
     for (const s of p.children) {
       const key = s.getPluginData('c2f:key');

@@ -428,7 +428,7 @@ test('DESIGNER.startExperiment: the copy keeps the mode its source showed (gold 
     resizeWithoutConstraints() {},
     ...extra,
   })
-  const front = mkNode('PAGE', 'Фронт · Экраны')
+  const front = mkNode('PAGE', 'Kit и токены')
   const sheet = mkNode('SECTION', 'Legacy screen / user.dashboard / Dashboard', {
     explicitVariableModes: { c1: 'g' },
   })
