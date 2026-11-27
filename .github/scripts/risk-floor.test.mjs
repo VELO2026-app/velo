@@ -66,6 +66,9 @@ test('every sensitive zone is R3', () => {
     'frontend/.husky/pre-push',
     'frontend/scripts/lint-budget.mjs',
     'frontend/scripts/lib/token-audit.test.mjs',
+    'frontend/scripts/lib/token-audit.mjs',
+    'frontend/scripts/lib/build-log-gate.mjs',
+    'frontend/scripts/lib/bundle-budget.mjs',
     'frontend/e2e/support/layout-allowance.ts',
     'packages/velo-ui/vite.config.ts',
     'frontend/scripts/lib/texts-package.mjs',
@@ -90,12 +93,18 @@ test('an allowlist weakens a gate by growing, the sweep route list by shrinking'
   assert.equal(lvl(file('frontend/e2e/support/layout-allowlist.ts', entry)), 'R3')
   assert.equal(lvl(file('frontend/e2e/support/layout-allowlist.ts', [], { removed: entry })), 'R1')
   assert.equal(lvl(file('frontend/e2e/a11y/allowlist.ts', ['  // why the entry went away'], { removed: entry })), 'R1')
-  assert.equal(lvl(file('frontend/e2e/sweep/routes.ts', ["  { path: '/console/new' },"])), 'R1')
+  assert.equal(lvl(file('frontend/e2e/sweep/routes.ts', ["  { path: '/console/new' },"])), 'R3')
   assert.equal(lvl(file('frontend/e2e/sweep/routes.ts', [], { removed: ["  { path: '/console/old' },"] })), 'R3')
 })
 
 test('the rest of the e2e harness is R2', () => {
   assert.equal(lvl(file('frontend/e2e/support/fixtures.ts')), 'R2')
+})
+
+test('any edit to the sweep route list is R3: rows carry crash allowances', () => {
+  const allow = ["  { path: '/home', allow: () => [{ reason: 'flaky', console: [/./], errors: [/./] }] },"]
+  assert.equal(lvl(file('frontend/e2e/sweep/routes.ts', allow, { removed: ["  { path: '/home' },"] })), 'R3')
+  assert.equal(lvl(file('frontend/e2e/sweep/routes.ts', ['  if (row.path.startsWith("/home")) missing = true'])), 'R3')
 })
 
 test('a deleted gate list or a new filter over the routes is R3', () => {
@@ -274,6 +283,17 @@ test('CLI: the verdict goes to GITHUB_OUTPUT for the label step', () => {
   writeFileSync(out, '')
   spawnSync('node', [SCRIPT, 'HEAD^1', 'HEAD', '--body-file', 'body.md'], { cwd: r.cwd, env: { ...GIT_ENV, GITHUB_OUTPUT: out }, encoding: 'utf8' })
   assert.equal(readFileSync(out, 'utf8'), 'floor=R1\ndeclared=R2\nlevel=R2\nok=true\n')
+})
+
+test('CLI: removing one route row is R3', () => {
+  const r = run({ 'frontend/e2e/sweep/routes.ts': "export const ROUTES = []\n" }, '**Ревью:** R1')
+  assert.equal(r.status, 1)
+  assert.match(r.stdout, /gates: frontend\/e2e\/sweep\/routes\.ts\n/)
+})
+
+test('CLI: content lines that look like ---/+++ headers stay content', () => {
+  const r = run({ 'frontend/src/components/Row.vue': '--- a/x\n+++ b/y\n<p v-html="z" />\n' }, '**Ревью:** R3')
+  assert.match(r.stdout, /security: frontend\/src\/components\/Row\.vue \(added line\)/)
 })
 
 test('CLI: a raised lint budget is R3', () => {

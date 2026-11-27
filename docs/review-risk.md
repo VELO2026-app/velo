@@ -11,7 +11,7 @@ Ruling владельца 2026-11-27 (FE-279). Каждый PR несёт уро
 - `*.css`, тексты `frontend/src/locales/**/*.json`, `frontend/tokens.json`, картинки и шрифты `frontend/public/**`;
 - тесты (`*.test.ts`, `*.test.mjs`, `frontend/e2e/**/*.spec.ts`), кроме тестов гейтов в `.github/scripts`, `frontend/scripts`, `frontend/eslint-rules`;
 - правки `.vue` на 150 изменённых строк или меньше в сумме по PR;
-- сокращение allowlist e2e, расширение списка маршрутов обхода.
+- сокращение allowlist e2e.
 
 Ревью-треда нет. Перед мержем проверить:
 1. CI зелёный, `visual — verdict` зелёный.
@@ -48,7 +48,7 @@ Ruling владельца 2026-11-27 (FE-279). Каждый PR несёт уро
 | Безопасность | `frontend/index.html` (CSP), `frontend/nginx*`, `utils/textHighlight.ts`, добавленный `v-html` или `innerHTML` в `.vue` и `.ts` (кроме тестов) |
 | Секреты | добавленная строка с `*_TOKEN`, `*_PAT`, `*_KEY`, `*_SECRET` или `secrets.` вне исходников приложения (`frontend/src`, `packages/*/src`) и вне тестов |
 | Внешние пакеты скина и текстов | пин `.github/brand-skins.json`, `platform/{skin,skin-virtual,texts}.ts`, `locales/overlayShape.ts`, `scripts/{validate-skin,validate-texts}.mjs`, `scripts/lib/{skin-package,texts-package,brand-packages,brand-git}.mjs` |
-| Сами проверки | рост или удаление allowlist e2e; логика allowance e2e; удаление маршрута, удаление файла или новый фильтр в `e2e/sweep/routes.ts`; `{vitest,playwright}.config.ts`, `eslint.config.js`, `eslint-rules/**`, `frontend/.husky/**`; скрипты гейтов в `frontend/scripts` (бюджеты, `brand-grep`, `token-audit`, `build-log-gate`, `verify-quick`, `spec-coverage` и его baseline и др.) и тесты `frontend/scripts/lib/*.test.mjs`; рост `lint-budget.json` и `bundle-budget.json`, снижение `coverage-budget.json`, удалённое число, удалённый файл или битый JSON бюджета |
+| Сами проверки | рост или удаление allowlist e2e; логика allowance e2e; любая правка `e2e/sweep/routes.ts` (в строках маршрутов живут разрешения сбоев `allow:`, в `fillPath` — логика, которая выбрасывает маршрут); `{vitest,playwright}.config.ts`, `eslint.config.js`, `eslint-rules/**`, `frontend/.husky/**`; скрипты гейтов в `frontend/scripts` (бюджеты, `brand-grep`, `token-audit`, `build-log-gate`, `verify-quick`, `spec-coverage` и его baseline и др.), их логика в `frontend/scripts/lib/{token-audit,build-log-gate,bundle-budget,duration-shard}.mjs` и тесты `frontend/scripts/lib/*.test.mjs`; рост `lint-budget.json` и `bundle-budget.json`, снижение `coverage-budget.json`, удалённое число, удалённый файл или битый JSON бюджета |
 | CI, сборка, деплой | `.github/workflows/**`, `.github/scripts/**` (включая сам `risk-floor.mjs` и `review-risk.yml`), `frontend/Dockerfile`, `docker-compose*`, `primer.{yaml,lock}`, `editions.json`, `{frontend,packages/velo-ui}/vite.config.ts`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` |
 | Бэкенд | `backend/**` |
 

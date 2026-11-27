@@ -40,13 +40,12 @@ const LEVELS = ['R1', 'R2', 'R3']
 // Changed lines in .vue files that an R1 PR may carry in total.
 export const VUE_R1_LINES = 150
 
-// Lists that weaken a gate in one direction only. An allowlist (what the e2e
-// gates forgive) weakens by growing; the sweep's route list weakens by
-// shrinking or by a new filter over it. A change in the other direction is
-// not R3 (safeDirection below); a deleted list always is.
+// An allowlist (what the e2e gates forgive) weakens its gate by growing: a
+// change that only removes entries is not R3 (safeDirection below); a deleted
+// list always is. The sweep's route list has no safe direction: besides the
+// rows it carries crash allowances (`allow:`) and the fillPath logic that can
+// drop a route, so any edit to it is R3.
 const GROWS_WEAKER = /^frontend\/e2e\/.*allowlist[^/]*\.ts$/
-const SHRINKS_WEAKER = /^frontend\/e2e\/sweep\/routes\.ts$/
-const NARROWS = /\.filter\(|\.slice\(|\.only\b|\bskip\b|return\s*\[\s*\]/
 
 // Sensitive zones: a single changed file here makes the floor R3. Test files
 // do not count (testFile below): a test of a zone does not change the zone.
@@ -83,13 +82,14 @@ const SENSITIVE = {
   ],
   gates: [
     GROWS_WEAKER,
-    SHRINKS_WEAKER,
+    /^frontend\/e2e\/sweep\/routes\.ts$/,
     /^frontend\/e2e\/.*allowance[^/]*\.ts$/,
     /^frontend\/(vitest|playwright)\.config\.ts$/,
     /^frontend\/eslint\.config\.js$/,
     /^frontend\/eslint-rules\//,
     /^frontend\/\.husky\//,
     /^frontend\/scripts\/(lint-budget|coverage-budget|bundle-budget-guard|bundle-report|brand-grep|token-audit|build-log-gate|verify-quick|spec-coverage|doc-coverage|no-cyrillic|css-lint|key-audit|api-type-dupes)\.mjs$/,
+    /^frontend\/scripts\/lib\/(token-audit|build-log-gate|bundle-budget|duration-shard)\.mjs$/,
     /^frontend\/scripts\/spec-coverage\.baseline\.json$/,
     /^frontend\/scripts\/lib\/.*\.test\.mjs$/,
   ],
@@ -118,12 +118,9 @@ function testFile(path) {
 
 const hasCode = (lines) => lines.some((line) => line.trim() && !/^\s*(\/\/|\*|\/\*)/.test(line))
 
-/** Whether a one-direction gate list moved only the safe way. */
+/** Whether an allowlist only lost entries. */
 function safeDirection(f) {
-  if (f.deleted) return false
-  if (GROWS_WEAKER.test(f.path)) return !hasCode(f.added)
-  if (SHRINKS_WEAKER.test(f.path)) return !hasCode(f.removed) && !f.added.some((line) => NARROWS.test(line))
-  return false
+  return !f.deleted && GROWS_WEAKER.test(f.path) && !hasCode(f.added)
 }
 
 // Documents that agents execute as rules: never R1 (a wrong fact in them
