@@ -1,0 +1,78 @@
+# =============================================================================
+# VELO CI -- review risk floor (FE-279)
+#
+# The PR declares a review level in its description ("**Ревью:** R1|R2|R3",
+# policy: docs/review-risk.md). .github/scripts/risk-floor.mjs computes the
+# floor from the PR's own diff; this job fails when the declaration is below
+# it and puts the effective level on the PR as a `review:R1|R2|R3` label --
+# the label the orchestrator's merge gate reads to pick the review depth.
+#
+# Its own workflow, as bundle-budget.yml: the description is part of the
+# input, so an `edited` event must re-run the check, and ci.yml does not
+# listen to it. No install, no build, ~10 s.
+#
+# The label is written with the workflow token: events it causes start no
+# workflow runs, so Visual and the bundle guard are not re-triggered.
+# Dependabot PRs are skipped: they stay outside the merge gate.
+#
+# Concurrency: per PR, the newest event wins -- it carries the current body.
+# =============================================================================
+name: Review risk
+
+on:
+  pull_request:
+    branches: [test, deploy-machine]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: review-risk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review-risk:
+    name: review risk floor
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge commit + its first parent (the base tip), as the scope
+          # job of ci.yml: the diff between them is what the PR contributes.
+          fetch-depth: 2
+
+      - name: Test the floor rules
+        run: node --test .github/scripts/risk-floor.test.mjs
+
+      # The body comes from the event payload through env, never
+      # interpolated into the script.
+      - name: Floor of the diff vs the declared level
+        id: risk
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$BODY" > "$RUNNER_TEMP/body.md"
+          node .github/scripts/risk-floor.mjs HEAD^1 HEAD --body-file "$RUNNER_TEMP/body.md"
+
+      # Runs on a failed check too: the label then shows the floor the PR
+      # must be reviewed at, whatever the description says.
+      - name: Label the effective level
+        if: always() && steps.risk.outputs.level != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          LEVEL: ${{ steps.risk.outputs.level }}
+        run: |
+          for l in R1 R2 R3; do
+            gh label create "review:$l" --repo "$GITHUB_REPOSITORY" --color 5319e7 \
+              --description "Review depth $l (docs/review-risk.md)" 2>/dev/null || true
+          done
+          others=$(printf 'review:%s,' R1 R2 R3 | sed "s/review:$LEVEL,//; s/,\$//")
+          gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label "review:$LEVEL" --remove-label "$others"
