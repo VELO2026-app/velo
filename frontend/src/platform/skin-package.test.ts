@@ -315,6 +315,35 @@ describe('weight tokens (contract 2.4, FE-278)', () => {
   })
 })
 
+describe('the weight of headings and buttons (FE-278)', () => {
+  const headingWeightOf = (weights: Record<string, unknown>): number | null =>
+    loadSkinPackage(
+      writeSkinPackage({
+        manifest: `schema: 1\ncontract: "${SKIN_CONTRACT}"\n`,
+        tokens: { velo: { fw: weights } },
+        brand: {
+          displayName: 'X',
+          shortName: 'X',
+          themeColor: '#334d6e',
+          backgroundColor: '#ffffff',
+        },
+      }),
+      GOLDEN,
+    ).headingWeight
+
+  it('follows the token chain: the core default, the medium override, then its own override', () => {
+    expect(headingWeightOf({})).toBe(600)
+    expect(headingWeightOf({ medium: { $value: 500 } })).toBe(500)
+    expect(headingWeightOf({ bold: { $value: 700 }, heading: { $value: '{velo.fw.bold}' } })).toBe(
+      700,
+    )
+  })
+
+  it('a value that is no number gives null', () => {
+    expect(headingWeightOf({ heading: { $value: 'bolder' } })).toBeNull()
+  })
+})
+
 describe('DTCG values -> CSS', () => {
   it('verbatim CSS, references, numbers and family lists', () => {
     const dir = writeSkinPackage({

@@ -64,6 +64,10 @@ export interface SkinPackage {
    *  parsed SVG trees the mood places draw instead of the core faces. Null =
    *  the package ships none (and the core build): the core faces draw. */
   moodIcons: MoodIconSet | null
+  /** The weight headings and buttons are drawn in (FE-278): `--velo-fw-heading`
+   *  resolved over the package's overrides. The font preload follows it, so
+   *  the heading face is fetched with the first paint. Null = no number. */
+  headingWeight: number | null
 }
 
 /** The no-skin build: the neutral core (FE-230). Colors mirror
@@ -80,6 +84,7 @@ export const CORE_SKIN: SkinPackage = {
   supportEmail: null,
   supportMark: 'logo',
   moodIcons: null,
+  headingWeight: null,
 }
 
 /** Loads public/skin/ with the engine; throws on the first problems. */
@@ -119,6 +124,7 @@ export function readSkin(publicDir: string): SkinPackage | null {
     supportEmail,
     supportMark: brand.supportMark ?? 'logo',
     moodIcons: pkg.moodIcons,
+    headingWeight: pkg.headingWeight,
   }
 }
 

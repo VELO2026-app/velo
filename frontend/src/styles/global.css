@@ -237,11 +237,12 @@ h4,
 h5,
 h6 {
   font-family: var(--font-body);
-  /* Headings a touch heavier (operator 2026-06-17): the skin's medium step.
-     --velo-fw-medium is 600 in the core (system stack) and for Goodo
-     (variable Manrope); the golden skin maps it to its Medium face, 500
-     (FE-278). */
-  font-weight: var(--velo-fw-medium);
+  /* Headings a touch heavier (operator 2026-06-17): the heading step.
+     --velo-fw-heading is --velo-fw-medium, which is 600 in the core (system
+     stack) and for Goodo (variable Manrope), and the Medium face (500) of
+     the golden skin (FE-278). One place to move headings, header titles and
+     buttons together to bold: that token. */
+  font-weight: var(--velo-fw-heading);
   line-height: 1.3;
   color: var(--velo-text-primary);
 }

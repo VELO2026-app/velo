@@ -58,6 +58,9 @@ export interface LoadedSkinPackage {
   files: string[]
   /** Contract 2.3: the package's mood icons; null = it ships none. */
   moodIcons: MoodIconSet | null
+  /** The weight of headings and buttons: `--velo-fw-heading` resolved over the
+   *  package's overrides (FE-278); null = it comes to no number. */
+  headingWeight: number | null
 }
 
 export const SKIN_CONTRACT_MAJOR: number
@@ -85,4 +88,8 @@ export function skinnable(path: string): boolean
 export function parseManifest(text: string): { fields?: Record<string, string>; error?: string }
 export function loadSkinPackage(dir: string, tokensDoc: unknown): LoadedSkinPackage
 export function isSkinPackage(dir: string): boolean
+export function preloadedFonts<F extends { weight: number | string; style: string }>(
+  fonts: F[],
+  headingWeight: number | null,
+): F[]
 export function skinCss(pkg: LoadedSkinPackage, urlBase?: string): string

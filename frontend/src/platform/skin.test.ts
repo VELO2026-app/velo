@@ -58,6 +58,7 @@ describe('readSkin (tz-whitelabel §3)', () => {
       supportEmail: null,
       supportMark: 'logo',
       moodIcons: null,
+      headingWeight: 600,
     })
   })
 

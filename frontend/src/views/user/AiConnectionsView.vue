@@ -385,7 +385,7 @@ onMounted(load)
 .ai-conn__heading {
   margin: 0;
   font-size: var(--velo-fs-20);
-  font-weight: var(--velo-fw-medium);
+  font-weight: var(--velo-fw-heading);
 }
 
 .ai-conn__text {
