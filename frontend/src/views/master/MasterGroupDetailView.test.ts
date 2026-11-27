@@ -699,6 +699,124 @@ describe('MasterGroupDetailView', () => {
       expect(text()).toContain('Группа "Новое"')
     })
 
+    describe('leaving the rename sheet with edits (FE-233)', () => {
+      async function openRenameSheet(): Promise<void> {
+        routeParams.id = 'g1'
+        vi.mocked(groupsApi.getGroupMembers).mockResolvedValue(page([]))
+        vi.mocked(groupsApi.getGroups).mockResolvedValue(
+          customGroups([
+            { id: 'g1', kind: 'custom', name: 'Старое', description: 'Было', members_count: 0 },
+          ]),
+        )
+        mount()
+        await flush()
+        headerMenuTrigger()?.click()
+        await flush()
+        Array.from(host?.querySelectorAll<HTMLElement>('.v-menu-item') ?? [])[1]?.click()
+        await flush()
+      }
+      function sheetIsOpen(): boolean {
+        const overlay = sheetOverlay()
+        return overlay !== null && !overlay.className.includes('leave')
+      }
+      function pressEscape(): void {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      }
+      function asking(): boolean {
+        return document.body.textContent?.includes('Сбросить изменения?') ?? false
+      }
+
+      it('untouched, the sheet closes at once', async () => {
+        await openRenameSheet()
+
+        pressEscape()
+        await flush()
+
+        expect(sheetIsOpen()).toBe(false)
+        expect(asking()).toBe(false)
+      })
+
+      it.each([
+        { edit: 'the name', field: 'input', value: 'Новое' },
+        { edit: 'the description', field: 'textarea', value: 'Стало' },
+      ])(
+        'an edited %s: Escape asks and the sheet stays; discarding closes it',
+        async ({ field, value }) => {
+          await openRenameSheet()
+          typeInto(sheetOverlay()?.querySelector<HTMLInputElement>(field), value)
+          await flush()
+
+          pressEscape()
+          await flush()
+          expect(asking()).toBe(true)
+          expect(sheetIsOpen()).toBe(true)
+
+          const discard = Array.from(document.body.querySelectorAll('button')).find(
+            (b) => b.textContent?.trim() === 'Сбросить',
+          )
+          discard?.click()
+          await flush()
+          expect(sheetIsOpen()).toBe(false)
+          expect(groupsApi.renameGroup).not.toHaveBeenCalled()
+        },
+      )
+
+      it('a save in flight closes the sheet without asking, and the request still carries the edit', async () => {
+        let resolveSave: (g: Awaited<ReturnType<typeof groupsApi.renameGroup>>) => void = () => {}
+        await openRenameSheet()
+        vi.mocked(groupsApi.renameGroup).mockReturnValue(
+          new Promise((resolve) => {
+            resolveSave = resolve
+          }),
+        )
+        typeInto(sheetOverlay()?.querySelector<HTMLInputElement>('input'), 'Новое')
+        await flush()
+        sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+        await flush()
+
+        pressEscape()
+        await flush()
+
+        expect(asking()).toBe(false)
+        expect(sheetIsOpen()).toBe(false)
+        expect(groupsApi.renameGroup).toHaveBeenCalledWith('g1', 'Новое', 'Было')
+
+        resolveSave({ id: 'g1', name: 'Новое', members_count: 0, description: 'Было' })
+        await flush()
+        expect(groupsApi.renameGroup).toHaveBeenCalledTimes(1)
+      })
+
+      it('after a failed save the sheet guards the edit again', async () => {
+        await openRenameSheet()
+        vi.mocked(groupsApi.renameGroup).mockRejectedValue(new Error('Failed to fetch'))
+        typeInto(sheetOverlay()?.querySelector<HTMLInputElement>('input'), 'Новое')
+        await flush()
+        sheetOverlay()?.querySelector<HTMLElement>('.v-sheet__save')?.click()
+        await flush()
+        expect(toastError).toHaveBeenCalledWith('Не удалось переименовать группу')
+
+        pressEscape()
+        await flush()
+
+        expect(asking()).toBe(true)
+        expect(sheetIsOpen()).toBe(true)
+      })
+
+      it('typing the old text back makes the sheet untouched again', async () => {
+        await openRenameSheet()
+        const input = sheetOverlay()?.querySelector<HTMLInputElement>('input')
+        typeInto(input, 'Новое')
+        typeInto(input, 'Старое')
+        await flush()
+
+        pressEscape()
+        await flush()
+
+        expect(sheetIsOpen()).toBe(false)
+        expect(asking()).toBe(false)
+      })
+    })
+
     it('«Удалить группу» confirms, calls deleteGroup, and navigates away (nothing left to reload)', async () => {
       routeParams.id = 'g1'
       // Owner Q12 (PROMPT №611): the screen now resolves the CURRENT name

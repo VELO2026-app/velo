@@ -3,7 +3,8 @@
 
   Route /master/promocodes, «4 Promo codes» design. E10 (2026-07-01): wired to
   the delivered backend — GET /masters/me/promos (list) + PATCH .../deactivate.
-  Shows the master's ACTIVE promo codes; the delete CTA (i18n:ui.delete)
+  Shows the master's ACTIVE promo codes, out of every page of the list
+  (useAllPages, FE-260); the delete CTA (i18n:ui.delete)
   soft-deactivates (backend has no hard delete), which drops it from the
   active list. Create still routes to the create form; copy writes to the
   clipboard.
@@ -78,6 +79,9 @@
       </div>
     </div>
 
+    <p v-if="!complete" class="promo__partial">
+      {{ t('masterScreens.masterPromocodes.checkedOf', { shown: promos.length, total }) }}
+    </p>
     <Banner
       variant="warning"
       :body="t('masterScreens.masterPromocodes.description')"
@@ -97,6 +101,7 @@ import { VButton, VLoader, VEmptyState } from '@/components/ui'
 import Banner from '@/components/shared/Banner.vue'
 import { IconPlus, IconPromo, IconHint } from '@/components/icons'
 import { useToast } from '@/composables/useToast'
+import { useAllPages } from '@/composables/useAllPages'
 import { getMyPromos, deactivatePromo } from '@/api/promos'
 import { formatShortDate } from '@/utils/format'
 import type { PromoResponse } from '@/api/types'
@@ -104,27 +109,20 @@ import type { PromoResponse } from '@/api/types'
 const router = useRouter()
 const toast = useToast()
 
-// E10: real promo list. Show ACTIVE codes; deactivating one drops it from the
-// active list (backend soft-deactivate — no hard delete).
-const promos = ref<PromoResponse[]>([])
-const loading = ref(false)
-const error = ref(false)
+// E10: real promo list, every page of it (inactive codes come mixed in, so
+// one page could hide active ones). Show ACTIVE codes; deactivating one drops
+// it from the active list (backend soft-deactivate — no hard delete).
+const {
+  items: promos,
+  total,
+  complete,
+  loading,
+  failed: error,
+  load,
+} = useAllPages<PromoResponse>(getMyPromos)
 const deactivatingId = ref<string | null>(null)
 
 const activePromos = computed((): PromoResponse[] => promos.value.filter((p) => p.is_active))
-
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = false
-  try {
-    const res = await getMyPromos()
-    promos.value = res.items
-  } catch {
-    error.value = true
-  } finally {
-    loading.value = false
-  }
-}
 
 function usedLabel(p: PromoResponse): string {
   return t('masterScreens.masterPromocodes.usedOf', { used: p.used_count, max: p.max_uses ?? '∞' })
@@ -166,6 +164,14 @@ onMounted(load)
 </script>
 
 <style scoped>
+.promo__partial {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--velo-fs-14);
+  color: var(--velo-text-secondary);
+  text-align: center;
+}
+
 .promo {
   display: flex;
   flex-direction: column;

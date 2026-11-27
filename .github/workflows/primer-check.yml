@@ -55,11 +55,11 @@ jobs:
       PRIDEM_WHEEL_SHA256: "53724dd71efcf21f67368d2a4029ee7afe3115ab25252757c19f04436a35e24d"
       PRIDEM_LOCK_SHA256: "8c3a137cab01cdff7044b3caa1af3ad0d82b45e7df2917993a2d4338f243b85e"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: velo
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 

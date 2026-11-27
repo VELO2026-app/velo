@@ -1,6 +1,6 @@
 # Защита ветки `deploy-machine` (FE-222)
 
-> Состояние на 20.11.2026: у репозитория `VELO2026-app/velo` нет ни одного ruleset (`GET /rulesets` → `[]`), классической защиты `deploy-machine` тоже нет (404). Включены все три способа мержа: merge, squash, rebase. Ruleset применяет админ репозитория (`VeloApp2026` или `inzoddwetrust`), у `sstark21` права только write. Применять его можно после решения владельца по разделу «Прямые пуши бэка» и после согласования с Zodd.
+> Состояние на 27.11.2026: у репозитория `VELO2026-app/velo` нет ни одного ruleset (`GET /rulesets` → `[]`), классической защиты `deploy-machine` тоже нет (404). Включены все три способа мержа: merge, squash, rebase. Ruleset применяет админ репозитория (`VeloApp2026` или `inzoddwetrust`, роль admin), у `sstark21` права только write. Применять его можно после решения владельца по разделу «Прямые пуши бэка» и после согласования с Zodd.
 
 ## Обязательные проверки
 
@@ -9,12 +9,17 @@
 | `CI — gate` | `.github/workflows/ci.yml`, джоб `gate` | Сводный джоб. Ждёт все остальные джобы `ci.yml`: `scope`, lint, format, typecheck, три шарда vitest и `test — merge + coverage ratchet`, `test — @velo/ui`, build с бюджетом бандла, `e2e — Playwright smoke`, `e2e-stack` (sweep на настоящем бэке), `e2e-a11y` (axe-core на настоящем бэке, ячейки gold и goodo), матрицу редакций, `image`, `generated.ts drift`. Зелёный, если `scope` прошёл, а каждый остальной джоб прошёл или пропущен по размеру PR. |
 | `bundle budget guard` | `.github/workflows/bundle-budget.yml` | Правило меток бюджета бандла: поднятый бюджет требует метку `bundle-growth`, поднятый потолок — `bundle-ceiling`. Сам размер проверяет build внутри гейта. |
 | `visual — verdict` | `.github/workflows/visual.yml`, джоб `visual-verdict` | Вид на gold и goodo: красный при расхождении 19 экранов без метки `visual-change` (FE-234). Запускается всегда, без `paths`-фильтра. |
+| `commit subjects` | `.github/workflows/commit-msg.yml`, джоб `subjects` | Тема каждого коммита PR: `KEY-N: …` или `… (owner ГГГГ-ММ-ДД)` (`scripts/check-commit-msg.sh`, FE-226). По теме Linear двигает задачу после мержа. PR ботов и PR ствол → ствол джоб пропускает через `if:`, это засчитывается как успех. |
 
 Все проверки отвечают на любом PR в `deploy-machine`:
 
-- у `ci.yml`, `bundle-budget.yml` и `visual.yml` нет фильтра путей. Все три запускаются на `opened`, `synchronize` и `reopened`; `bundle-budget.yml` и `visual.yml` слушают ещё `labeled` и `unlabeled`;
-- гейт объявлен с `if: always()` и стоит под одним именем. Он запускается после успеха, падения, пропуска и отмены остальных джобов;
+- у `ci.yml`, `bundle-budget.yml`, `visual.yml` и `commit-msg.yml` нет фильтра путей. Все четыре запускаются на `opened`, `synchronize` и `reopened`; `bundle-budget.yml` и `visual.yml` слушают ещё `labeled` и `unlabeled`;
+- у каждой обязательной проверки одно статичное имя, без матрицы. Гейт объявлен с `if: always()`: он запускается после успеха, падения, пропуска и отмены остальных джобов;
 - пропуск по размеру PR (только `docs/**` или только `backend/**`) гейт засчитывает как пройденный. Падение выше по цепочке всегда видно как падение: `test` → `test-report`, `matrix-plan` / `matrix` → `matrix-gate`, `scope` проверяется отдельно.
+
+Это держит тест `.github/scripts/ruleset-checks.test.mjs` (джоб `scope`): для каждой проверки из [`deploy-machine-ruleset-gate.json`](deploy-machine-ruleset-gate.json) он ищет ровно один джоб с таким именем и падает, если джоб стал матрицей, а у его workflow на `pull_request` появились `paths`, `paths-ignore`, `branches-ignore` или список веток без `deploy-machine`.
+
+**Проверено на настоящих PR.** 27.11, PR #234 (BE-259, BE-260; только `backend/**`, 3 файла): `CI — gate`, `bundle budget guard`, `visual — verdict`, `commit subjects` — `pass`; фронтовые джобы `ci.yml` — `skipping`; в «Expected» ничего нет. 20.11 (#162): только бэк (#165), только docs (#166), красный формат (#167, гейт красный `not green: lint, format`).
 
 ### Почему не отдельные джобы
 
@@ -50,7 +55,7 @@
 **B. Мерж** — [`deploy-machine-ruleset-gate.json`](deploy-machine-ruleset-gate.json):
 
 - `pull_request` — изменения идут через PR, одобрение не требуется (`required_approving_review_count: 0`), разрешён только merge-коммит (`allowed_merge_methods: ["merge"]`, как сейчас). Squash и rebase в кнопке мержа пропадут.
-- `required_status_checks` — `CI — gate`, `bundle budget guard` и `visual — verdict` (FE-234) от GitHub Actions (`integration_id: 15368`: проверку с тем же именем от другого приложения GitHub не засчитает). `strict_required_status_checks_policy: false` — ветке PR не обязательно быть на вершине `deploy-machine`. Оркестратор и так делает update-branch перед мержем, а строгий режим выстраивал бы все мержи в очередь.
+- `required_status_checks` — `CI — gate`, `bundle budget guard`, `visual — verdict` (FE-234) и `commit subjects` (FE-226) от GitHub Actions (`integration_id: 15368`: проверку с тем же именем от другого приложения GitHub не засчитает). `strict_required_status_checks_policy: false` — ветке PR не обязательно быть на вершине `deploy-machine`. Оркестратор и так делает update-branch перед мержем, а строгий режим выстраивал бы все мержи в очередь.
 - `bypass_actors`:
   - роль Repository admin (`RepositoryRole` 5) и владельцы организации (`OrganizationAdmin`) в режиме `pull_request`. Они могут влить PR с красной проверкой, явно отметив обход в кнопке мержа (это пишется в журнал), но напрямую пушить не могут. Это аварийный выход для варианта (a), см. ниже;
   - deploy key (`DeployKey`, `always`). Машина на сервере роли test при расхождении типов коммитит `generated.ts` от имени `velo-types` (`primer.yaml`, `types.commit_as`) поверх выкаченного коммита и обычным push отправляет его в ветку сервера ключом записи (`pridem/steps/types.py`, DM-63). Без этого исключения push отклонится, и шаг `types` останется несделанным (`incomplete`).
@@ -61,12 +66,14 @@
 
 ## Прямые пуши бэка: решение владельца
 
-С 01.11 в `deploy-machine` было 50 прямых коммитов от `inzoddwetrust`, 2 от `velo-bot` и 2 от `sstark21` (02–03.11, до перехода фронта на PR). Через PR влито 45 мержей: 40 от фронта, 5 от бэка. Обязательные проверки в ruleset действуют на любое обновление ветки, а не только на PR: пуш коммита, у которого нет зелёного `CI — gate`, будет отклонён. Значит, прямые пуши без исключения перестанут работать.
+На 27.11, с 01.11 в `deploy-machine` было 54 прямых коммита от `inzoddwetrust`, 2 от `velo-bot` и 3 от `sstark21` (02–03.11, до перехода фронта на PR). После 21.11 (мерж #162): 4 прямых коммита бэка (22–23.11) и 75 мержей PR. Бэковые PR после 21.11 (#232–#234) открывал фронт по исключению владельца. Обязательные проверки в ruleset действуют на любое обновление ветки, а не только на PR: пуш коммита, у которого нет зелёного `CI — gate`, будет отклонён. Значит, прямые пуши без исключения перестанут работать.
+
+**`commit subjects` и бэк.** 13 из 54 прямых коммитов `inzoddwetrust` с 01.11 не проходят `scripts/check-commit-msg.sh` (нет `KEY-N:`). При варианте (a) у таких коммитов в PR `commit subjects` красный: тему нужно писать `BE-NNN: …` или `… (owner ГГГГ-ММ-ДД)`. Локальный хук `commit-msg` ставится вместе с хуками фронта (`frontend/.husky`).
 
 | | (a) бэк на PR | (b) бэк в исключениях (bypass) | (c) проверки только для PR, прямой пуш остаётся |
 | --- | --- | --- | --- |
 | Как задать | A и B как есть (админ в B в режиме `pull_request`) | A как есть; в B у админа режим `always` (команда ниже) | в ruleset нет «только для PR»: правило проверок действует и на пуш. Можно только дать в B обход роли Write, тогда красный PR сможет влить и фронт. Защиты нет |
-| Бэк | PR → гейт ~3 мин на PR только с `backend/**` (scope, drift, sweep) → мерж. `backend-tests` (~5–8 мин) идёт параллельно, но не обязателен | пушит как сейчас (fast-forward); CI запускается на пуше уже после факта | как сейчас |
+| Бэк | PR → гейт ~3 мин на PR только с `backend/**` (scope, drift, sweep, a11y) → мерж. `backend-tests` (~5–8 мин) идёт параллельно, но не обязателен. Тема коммита — `BE-NNN: …`. PR с `backend/**` мерж-гейт оркестратора не вливает: вливает Zodd | пушит как сейчас (fast-forward); CI запускается на пуше уже после факта | как сейчас |
 | Фронт | только через зелёный гейт | только через зелёный гейт | на деле не защищён |
 | Поломка API бэком | ловит sweep на PR бэка до мержа | доходит до ветки. Дальше sweep краснеет на **каждом** фронтовом PR (PR собирается вместе с текущим бэком), и очередь фронта стоит, пока бэк не починит | то же, что (b) |
 | force-push и удаление | запрещены всем (ruleset A) | запрещены всем (ruleset A): обход админа в B их не касается | запрещены всем (ruleset A) |
@@ -127,13 +134,13 @@ gh api --method PUT repos/VELO2026-app/velo/rulesets/<ID> -f enforcement=disable
 ## Проверка после применения
 
 1. Открыть черновой PR из ветки фронта с намеренно красным джобом (например, сломать формат одного файла). В кнопке мержа должно быть «Required statuses must pass», `gh pr merge` от `sstark21` должен отказать. Закрыть PR, удалить ветку.
-2. PR только с `docs/**`: `CI — gate`, `bundle budget guard` и `visual — verdict` зелёные за минуту, мерж доступен.
+2. PR только с `docs/**`: `CI — gate`, `bundle budget guard`, `visual — verdict` и `commit subjects` зелёные за минуту, мерж доступен.
 3. `git push --force` в `deploy-machine` отклоняется у всех, админа включительно (ruleset A).
 4. Вариант (a): прямой `git push` в `deploy-machine` отклоняется и у админа.
 
 ## Что изменится в работе
 
 - Стопки PR: CI не запускается на PR в ветку, отличную от `test` и `deploy-machine`. После смены базы на `deploy-machine` нужен новый пуш или update-branch, иначе гейт так и не появится. Скрипт `merge-stack.sh` оркестратора уже делает update-branch.
-- Скрипты мержа оркестратора ждут `CI — gate`. `e2e-stack` больше не считается информационным.
-- `visual` по-прежнему информационный.
+- Мерж-гейт оркестратора ждёт те же четыре статуса, что и ruleset: `CI — gate`, `visual — verdict`, `bundle budget guard`, `commit subjects`. `e2e-stack` не информационный: он внутри `CI — gate`.
+- `visual — base vs head (<скин>)` информационные: решает `visual — verdict`.
 - Красный экран в sweep отправляется в карантин только с задачей (`docs/testing.md`, правило 22).

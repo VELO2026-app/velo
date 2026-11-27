@@ -43,6 +43,7 @@ import {
 } from './scripts/lib/skin-package.mjs'
 import { validateSkin } from './scripts/validate-skin.mjs'
 import { featureDefineMap, resolveFeatureFlags, type EditionTable } from './src/platform/features'
+import { checkStartupLayout, startupChunkName } from './src/platform/startup-chunk'
 import type { Plugin } from 'vite'
 
 /** Modules of the Zoom Meeting SDK chunk: the SDK and its peer stack (its
@@ -140,13 +141,14 @@ function preloadAppChunk(): Plugin {
       handler(html, ctx) {
         const bundle = ctx.bundle
         if (!bundle) return
-        // Not facadeModuleId: Rollup merges app.ts into a chunk without a
-        // facade (it comes back null), so match on the module list instead.
+        // The dynamic entry of app.ts: under Rolldown a one-line facade
+        // (facadeModuleId) that imports the 'app' group chunk (FE-169), so the
+        // walk below preloads both.
         const app = Object.values(bundle).find(
           (out) =>
             out.type === 'chunk' &&
             out.isDynamicEntry &&
-            out.moduleIds.some((id) => id.endsWith('/src/app.ts')),
+            (out.facadeModuleId === SRC_APP || out.moduleIds.includes(SRC_APP)),
         )
         if (!app || app.type !== 'chunk') return
         const scripts = new Set<string>()
@@ -177,6 +179,62 @@ function preloadAppChunk(): Plugin {
   }
 }
 
+/** FE-169: the SFC wrapper modules of the app (any .vue file under src/, no
+ * query) carry no side effects of their own -- no SFC here has a module-level
+ * `<script>`; <script setup> runs per instance. Rolldown counts a wrapper's
+ * stylesheet import as a side effect, so a barrel that re-exports a component
+ * (components/ui, components/layout) loaded it, its styles and icons, on
+ * every start even when no startup screen renders it. Declared pure, as the
+ * kit's package.json does for its own (`sideEffects`), an unused wrapper
+ * drops out; a used one still brings its stylesheet. This goes past the
+ * Rollup build too: Rollup kept the styles of VHeader and VRatingBadges in
+ * the startup CSS, here they load with the screens that render them.
+ * STARTUP_CANARIES below fails the build when this stops working. */
+function pureSfcWrappers(srcDir: string): Plugin {
+  return {
+    name: 'velo-pure-sfc-wrappers',
+    apply: 'build',
+    enforce: 'post',
+    transform: {
+      filter: { id: /\.vue$/ },
+      handler(code, id) {
+        if (!id.startsWith(srcDir)) return null
+        return { code, map: null, moduleSideEffects: false }
+      },
+    },
+  }
+}
+
+/** Lazy-only components that a broken pureSfcWrappers would put on the start. */
+const STARTUP_CANARIES = [
+  /\/src\/components\/layout\/VHeader\.vue(\?|$)/,
+  /\/src\/components\/ui\/VRatingBadges\.vue(\?|$)/,
+]
+
+/** FE-169: fails the build when the startup layout drifts from the design of
+ * platform/startup-chunk.ts (checkStartupLayout: app.ts never in an entry's
+ * static closure, the app chunk importing only host and the runtime helpers,
+ * no STARTUP_CANARIES module on the start). Module ids are only known here,
+ * not in dist/, so the check lives in the build. */
+function guardStartupLayout(appEntry: string): Plugin {
+  return {
+    name: 'velo-guard-startup-layout',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const chunks = Object.values(bundle).filter((out) => out.type === 'chunk')
+      const problems = checkStartupLayout(chunks, appEntry, STARTUP_CANARIES)
+      if (problems.length > 0) {
+        this.error(
+          `startup layout (FE-169):\n- ${problems.join('\n- ')}\n` +
+            'If the change is intended, update STARTUP_CANARIES (vite.config.ts) or ' +
+            'startupChunkName (src/platform/startup-chunk.ts); find a module with ' +
+            "`node scripts/bundle-report.mjs --modules --find '<regex>'`.",
+        )
+      }
+    },
+  }
+}
+
 // tz-whitelabel F2 (§3): the skin package (when the deploy ships one in
 // public/skin/) materializes its derivatives -- the manifest identity
 // (pwaManifestFor), the brand name and colours; no package = the neutral
@@ -201,6 +259,38 @@ const precacheReadsOutDir: Plugin = {
     builtDir = resolve(config.root, config.build.outDir)
   },
 }
+
+/** resolve.alias (also read by the startup group's import parse, FE-169). */
+const ALIASES: Array<{ find: string | RegExp; replacement: string }> = [
+  // FE-117 batch A: @velo/ui resolves to the kit's SOURCES so the app
+  // bundles the SFCs exactly as it did before the move (chunk graph,
+  // cascade and CSS extraction unchanged -- package README §CSS).
+  // Exact-match regex, listed FIRST: the '@' prefix entry below would
+  // otherwise swallow '@velo/ui' into src/, and any deep subpath
+  // ('@velo/ui/...') stays unresolved on purpose -- the P8 boundary
+  // allows the barrel only.
+  {
+    find: /^@velo\/ui$/,
+    replacement: fileURLToPath(new URL('../packages/velo-ui/src/index.ts', import.meta.url)),
+  },
+  // Makes `@/stores/auth` resolve to `src/stores/auth`.
+  { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+]
+
+/** A specifier rewritten by ALIASES, as Vite's alias plugin does; else null. */
+function resolveAlias(spec: string): string | null {
+  for (const { find, replacement } of ALIASES) {
+    if (typeof find !== 'string') {
+      if (find.test(spec)) return spec.replace(find, replacement)
+    } else if (spec === find || spec.startsWith(`${find}/`)) {
+      return `${replacement}${spec.slice(find.length)}`
+    }
+  }
+  return null
+}
+
+const SRC_APP = fileURLToPath(new URL('./src/app.ts', import.meta.url))
+const SRC_MAIN = fileURLToPath(new URL('./src/main.ts', import.meta.url))
 
 export default defineConfig(({ mode }) => {
   const frontendDir = fileURLToPath(new URL('.', import.meta.url))
@@ -251,6 +341,8 @@ export default defineConfig(({ mode }) => {
         dropMessageCompiler: true,
       }),
       vue(),
+      pureSfcWrappers(join(frontendDir, 'src/')),
+      guardStartupLayout(SRC_APP),
       VitePWA({
         // Generate SW automatically from build output.
         strategies: 'generateSW',
@@ -397,21 +489,7 @@ export default defineConfig(({ mode }) => {
     define: defines,
 
     resolve: {
-      alias: [
-        // FE-117 batch A: @velo/ui resolves to the kit's SOURCES so the app
-        // bundles the SFCs exactly as it did before the move (chunk graph,
-        // cascade and CSS extraction unchanged -- package README §CSS).
-        // Exact-match regex, listed FIRST: the '@' prefix entry below would
-        // otherwise swallow '@velo/ui' into src/, and any deep subpath
-        // ('@velo/ui/...') stays unresolved on purpose -- the P8 boundary
-        // allows the barrel only.
-        {
-          find: /^@velo\/ui$/,
-          replacement: fileURLToPath(new URL('../packages/velo-ui/src/index.ts', import.meta.url)),
-        },
-        // Makes `@/stores/auth` resolve to `src/stores/auth`.
-        { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
-      ],
+      alias: ALIASES,
     },
 
     server: {
@@ -444,24 +522,60 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       // Target modern browsers (Telegram WebApp uses recent Chromium).
       target: 'es2022',
-      rollupOptions: {
+      // FE-169: Vite 8 minifies CSS with lightningcss by default. It rewrites
+      // token values: #ffffff -> #fff, 999ms -> .999s. platform/telegram.ts
+      // hands --velo-tg-* colours to Telegram's setHeaderColor (#RRGGBB),
+      // and the build matrix greps the skin's declarations verbatim. esbuild
+      // is the minifier Vite 7 used: the rules come out as they did there.
+      cssMinify: 'esbuild',
+      rolldownOptions: {
         output: {
-          // Standalone F4: the Zoom Meeting SDK and the React/redux stack it
-          // runs on go into ONE named chunk, 'zoom-sdk', loaded only by the
-          // practice screen's dynamic import (platform/zoom-sdk.ts). The fixed
-          // name is what lets the service worker keep it out of the precache
-          // (workbox globIgnores above). Nothing else in this app uses React.
-          //
-          // FE-167: the CORE catalog files of en and uk (every domain file
-          // except the zone catalogs and timezones.json) go into ONE chunk
-          // per locale, 'locale-en' / 'locale-uk': a non-ru start made ~16
-          // requests, one per file. ru stays out (its core is eager in the
-          // app chunk); master/admin keep their own chunks, they load with
-          // their zone (locales/index.ts ZONE_CATALOGS).
-          manualChunks(id: string): string | undefined {
-            if (ZOOM_SDK_MODULE.test(id)) return 'zoom-sdk'
-            const core = LOCALE_CORE_CATALOG.exec(id)
-            return core ? `locale-${core[1]}` : undefined
+          // FE-169: app.ts sits in the 'app' group chunk below, so Rolldown
+          // emits the dynamic entry of app.ts as a one-line facade that imports
+          // it. The facade would be a second assets/app-*.js; the budget and
+          // the precache shell read that name as THE app chunk.
+          chunkFileNames: (chunk) =>
+            chunk.facadeModuleId === SRC_APP && chunk.moduleIds.length === 0
+              ? 'assets/start-[hash].js'
+              : 'assets/[name]-[hash].js',
+          // FE-169: Rolldown (Vite 8) groups; `manualChunks` is deprecated
+          // there and ignored once codeSplitting is set.
+          codeSplitting: {
+            groups: [
+              // Standalone F4: the Zoom Meeting SDK and the React/redux stack it
+              // runs on go into ONE named chunk, 'zoom-sdk', loaded only by the
+              // practice screen's dynamic import (platform/zoom-sdk.ts). The fixed
+              // name is what lets the service worker keep it out of the precache
+              // (workbox globIgnores above). Nothing else in this app uses React.
+              { name: 'zoom-sdk', test: ZOOM_SDK_MODULE, priority: 3 },
+              // FE-167: the CORE catalog files of en and uk (every domain file
+              // except the zone catalogs and timezones.json) go into ONE chunk
+              // per locale, 'locale-en' / 'locale-uk': a non-ru start made ~16
+              // requests, one per file. ru stays out (its core is eager in the
+              // app chunk); master/admin keep their own chunks, they load with
+              // their zone (locales/index.ts ZONE_CATALOGS).
+              {
+                name: (id: string): string | null => {
+                  const core = LOCALE_CORE_CATALOG.exec(id)
+                  return core ? `locale-${core[1]}` : null
+                },
+                debugName: 'locale',
+                priority: 2,
+              },
+              // FE-169: the startup files as Rollup laid them out
+              // (platform/startup-chunk.ts): 'host' = what main.ts loads, 'app' =
+              // the startup closure of app.ts. Without the group Rolldown puts every
+              // module the startup shares with a lazy screen into its own common
+              // chunk: ~50 startup files, all of them precached. Each set is
+              // already closed over what startup uses; following dependencies
+              // again would pull whole barrels back in.
+              {
+                name: startupChunkName(SRC_APP, SRC_MAIN, resolveAlias),
+                debugName: 'startup',
+                priority: 1,
+                includeDependenciesRecursively: false,
+              },
+            ],
           },
         },
       },

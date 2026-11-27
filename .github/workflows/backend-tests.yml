@@ -115,7 +115,7 @@ jobs:
       # no release tag, the commit is the real one.
       RELEASE: ci-${{ github.run_number }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build the backend test image (backend/Dockerfile, stage test)
         run: |

@@ -788,12 +788,106 @@ describe('PromosPanel', () => {
       expect(isDialogOpen()).toBe(false)
     })
 
+    describe('leaving with edits (FE-233)', () => {
+      function pressEscape(): void {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      }
+      function asking(): boolean {
+        return document.body.textContent?.includes('Сбросить изменения?') ?? false
+      }
+
+      it.each([
+        { name: 'nothing typed', edit: () => {} },
+        { name: 'a code of spaces only', edit: () => fill('Код', '   ') },
+      ])('$name: Escape and Отмена close at once', async ({ edit }) => {
+        await mount()
+        await openForm()
+        edit()
+        pressEscape()
+        await flush()
+        expect(isDialogOpen()).toBe(false)
+        expect(asking()).toBe(false)
+
+        await openForm()
+        edit()
+        button('Отмена', dialog()).click()
+        await flush()
+        expect(isDialogOpen()).toBe(false)
+        expect(asking()).toBe(false)
+      })
+
+      it.each([
+        { field: 'the code', edit: () => fill('Код', 'DRAFT') },
+        { field: 'the discount', edit: () => fill('Скидка', '75') },
+        { field: 'the limit', edit: () => fill('Лимит', '5') },
+        { field: 'the last day', edit: () => fill('Действует до', '2027-03-31') },
+        {
+          field: 'the first-purchase flag',
+          edit: () => dialog().querySelector<HTMLButtonElement>('[role="checkbox"]')?.click(),
+        },
+      ])('an edited $field: Escape asks, and the form stays open', async ({ edit }) => {
+        await mount()
+        await openForm()
+        edit()
+        await flush()
+
+        pressEscape()
+        await flush()
+
+        expect(asking()).toBe(true)
+        expect(isDialogOpen()).toBe(true)
+      })
+
+      it('keeping the edits returns to the form with what was typed; discarding closes it', async () => {
+        await mount()
+        await openForm()
+        fill('Код', 'DRAFT')
+        button('Отмена', dialog()).click()
+        await flush()
+        expect(asking()).toBe(true)
+
+        button('Продолжить', dialog()).click()
+        await flush()
+        // The question's own window may still be parked mid-leave: read the form itself.
+        expect(document.body.querySelector<HTMLInputElement>('.promo-form input')?.value).toBe(
+          'DRAFT',
+        )
+        expect(adminApi.createCompanyPromo).not.toHaveBeenCalled()
+
+        pressEscape()
+        await flush()
+        button('Сбросить', dialog()).click()
+        await flush()
+        expect(isDialogOpen()).toBe(false)
+      })
+
+      it('a request in flight keeps the window and asks nothing', async () => {
+        const inFlight = deferred<AdminPromoResponse>()
+        vi.mocked(adminApi.createCompanyPromo).mockImplementation(() => inFlight.promise)
+        await mount()
+        await openForm()
+        fill('Код', 'WELCOME')
+        submit()
+        await flush()
+
+        pressEscape()
+        await flush()
+
+        expect(asking()).toBe(false)
+        expect(isDialogOpen()).toBe(true)
+        inFlight.resolve(promo('p_new', { code: 'WELCOME' }))
+        await flush()
+      })
+    })
+
     it('every opening starts with a clean form', async () => {
       await mount()
       await openForm()
       fill('Код', 'DRAFT')
       fill('Скидка', '75')
       button('Отмена', dialog()).click()
+      await flush()
+      button('Сбросить', dialog()).click()
       await flush()
 
       await openForm()

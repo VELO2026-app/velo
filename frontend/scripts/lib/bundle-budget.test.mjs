@@ -17,10 +17,20 @@ import {
 const BUDGET = {
   entryGzip: 100000,
   precacheBytes: 500000,
-  ceiling: { entryGzip: 150000, precacheBytes: 1000000 },
-  skinned: { package: 'brand 1.0.0', entryGzip: 100500, precacheBytes: 600000 },
+  startupGzip: 110000,
+  ceiling: { entryGzip: 150000, precacheBytes: 1000000, startupGzip: 150000 },
+  skinned: {
+    package: 'brand 1.0.0',
+    entryGzip: 100500,
+    precacheBytes: 600000,
+    startupGzip: 110500,
+  },
 }
-const at = (entryGzip, precacheBytes) => ({ entryGzip, precacheBytes })
+const at = (entryGzip, precacheBytes, startupGzip = 110000) => ({
+  entryGzip,
+  precacheBytes,
+  startupGzip,
+})
 
 test('a build equal to the budget passes', () => {
   const { failures, md } = checkBudget(at(100000, 500000), BUDGET)
@@ -68,6 +78,14 @@ test('the ceiling has no tolerance and fails even when the budget allows it', ()
   assert.match(failures[0], new RegExp(CEILING_LABEL))
   const pre = checkBudget(at(100000, 1000001), { ...BUDGET, precacheBytes: 1000001 })
   assert.match(pre.failures[0], /over the ceiling/)
+})
+
+test('the startup JS has its own window and ceiling (FE-169)', () => {
+  assert.deepEqual(checkBudget(at(100000, 500000, 112200), BUDGET).failures, [])
+  const [over] = checkBudget(at(100000, 500000, 112201), BUDGET).failures
+  assert.match(over, /startup JS gzip .* over the budget/)
+  const wide = { ...BUDGET, startupGzip: 152000 }
+  assert.match(checkBudget(at(100000, 500000, 150001), wide).failures[0], /over the ceiling/)
 })
 
 test('over the ceiling and over the budget reports both', () => {
@@ -135,11 +153,16 @@ test('both raised needs both labels', () => {
 })
 
 test('removing a value or the ceiling counts as a raise', () => {
-  const noCeiling = { entryGzip: 100000, precacheBytes: 500000, skinned: BUDGET.skinned }
-  assert.equal(checkBudgetRaise(BUDGET, noCeiling, []).length, 2)
+  const noCeiling = {
+    entryGzip: 100000,
+    precacheBytes: 500000,
+    startupGzip: 110000,
+    skinned: BUDGET.skinned,
+  }
+  assert.equal(checkBudgetRaise(BUDGET, noCeiling, []).length, 3)
   assert.equal(
     checkBudgetRaise(BUDGET, { ceiling: BUDGET.ceiling, skinned: BUDGET.skinned }, []).length,
-    2,
+    3,
   )
 })
 
@@ -169,9 +192,22 @@ test('raising the skinned line needs the growth label; a skinned build needs the
 test('a base without a ceiling has the FE-157 targets: introducing them is no raise, a higher ceiling is', () => {
   const base = { entryGzip: 100000, precacheBytes: 500000 }
   assert.deepEqual(checkBudgetRaise(base, BUDGET, []), [])
-  const higher = { ...BUDGET, ceiling: { entryGzip: 160000, precacheBytes: 1000000 } }
+  const higher = { ...BUDGET, ceiling: { ...BUDGET.ceiling, entryGzip: 160000 } }
   assert.equal(checkBudgetRaise(base, higher, []).length, 1)
   assert.deepEqual(checkBudgetRaise(base, higher, [CEILING_LABEL]), [])
+})
+
+test('introducing the startup metric at the FE-157 target is no raise (FE-169)', () => {
+  const {
+    startupGzip: _s,
+    ceiling: { startupGzip: _c, ...ceiling },
+    ...rest
+  } = BUDGET
+  const { startupGzip: _k, ...skinned } = BUDGET.skinned
+  const base = { ...rest, ceiling, skinned }
+  assert.deepEqual(checkBudgetRaise(base, BUDGET, []), [])
+  const higher = { ...BUDGET, ceiling: { ...BUDGET.ceiling, startupGzip: 150001 } }
+  assert.match(checkBudgetRaise(base, higher, [])[0], /ceiling\.startupGzip raised/)
 })
 
 test('a base without a budget file checks nothing', () => {

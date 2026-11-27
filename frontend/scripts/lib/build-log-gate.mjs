@@ -18,15 +18,25 @@
 //                      platform/passport-html.ts resolves them); a new
 //                      VITE_ one must not sneak back in.
 //
-// The patterns are the Rollup 4 / Vite 6-7 message texts verbatim (re-checked
-// in the vite 7.3.7 and rollup 4.63.3 sources on the vite 7 upgrade,
-// FE-157 5A.5). A bundler switch (rolldown, Vite 8+) may reword them --
-// re-capture the fixtures in build-log-gate.test.mjs then, or this gate
-// silently goes blind.
+// The patterns are the message texts verbatim (re-checked in the vite 7.3.7
+// and rollup 4.63.3 sources on the vite 7 upgrade, FE-157 5A.5). Re-checked
+// on the move to Vite 8.3.8 / Rolldown 1.2.19 (FE-169): the html-env text is
+// unchanged in the vite source. Rolldown has no cyclic-reexport warning: it
+// binds a re-exported name straight to the chunk that defines it, so the
+// barrel's own chunk is not on the path (checked on a fixture: a barrel
+// cycle split across groups builds without a warning). The rule stays for
+// a Rollup build and never fires under Rolldown. A later bundler change may
+// reword the texts -- re-capture the fixtures in build-log-gate.test.mjs
+// then, or this gate silently goes blind.
 //
 // Pure (string in, findings out) so a unit test pins it; the CLI wrapper is
-// scripts/build-log-gate.mjs. Other build notices (the locale catalogs'
-// dynamic+static import note) are out of scope on purpose.
+// scripts/build-log-gate.mjs. Other build notices are out of scope on purpose.
+// Known ones on Vite 8 (FE-169): four INEFFECTIVE_DYNAMIC_IMPORT notes --
+// @pinia/colada, stores/auth.ts and composables/queries/schools.ts imported
+// dynamically by router/dataPrefetch.ts (schools also by router/firstScreen.ts),
+// views/auth/LoadingErrorView.vue by router/routes/public.ts, while the
+// startup imports each of them statically. The import() is a lazy-load
+// habit there, not a chunk boundary; Vite 7 printed the same four notes.
 // =============================================================================
 
 /** @typedef {{ rule: string, line: string }} BuildLogFinding */

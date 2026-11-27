@@ -22,7 +22,13 @@
 -->
 
 <template>
-  <VModal :open="open" :show-close="false" @close="$emit('close')">
+  <VModal
+    :open="open"
+    :show-close="false"
+    :dismissible="guard.dismissible.value"
+    @dismiss-attempt="guard.ask"
+    @close="$emit('close')"
+  >
     <div class="send-msg">
       <div class="send-msg__chip">
         <VAvatar :name="name" size="md" />
@@ -38,7 +44,7 @@
         maxlength="4000"
       />
       <div class="send-msg__actions">
-        <VButton variant="danger" block :disabled="sending" @click="$emit('close')">
+        <VButton variant="danger" block :disabled="sending" @click="guard.leave">
           {{ t('ui.cancel') }}
         </VButton>
         <VButton variant="primary" block :loading="sending" @click="onSend">
@@ -47,13 +53,21 @@
       </div>
     </div>
   </VModal>
+
+  <DiscardChangesDialog
+    :open="guard.confirming.value"
+    @discard="guard.discard"
+    @keep-editing="guard.keepEditing"
+  />
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
 import { ref, watch } from 'vue'
 import { VModal, VAvatar, VTextarea, VButton } from '@/components/ui'
+import DiscardChangesDialog from '@/components/shared/DiscardChangesDialog.vue'
 import { useToast } from '@/composables/useToast'
+import { useDiscardGuard } from '@/composables/useDiscardGuard'
 import { extractApiError } from '@/composables/useApiError'
 import { openChat, openStudentChat, sendChatMessage } from '@/api/chats'
 import { createAttemptKeys } from '@/api/attemptKeys'
@@ -87,6 +101,14 @@ watch(
     if (isOpen) text.value = ''
   },
 )
+
+// A typed message is unsaved work: leaving asks first (FE-233). While the send
+// is in flight the dialog closes as it always did -- the request goes on.
+const guard = useDiscardGuard({
+  dirty: () => text.value.trim() !== '' && !sending.value,
+  onDiscard: () => emit('close'),
+  open: () => props.open,
+})
 
 async function onSend(): Promise<void> {
   // Two calls, in order: open-or-get the DM, then post the text. ONE flag

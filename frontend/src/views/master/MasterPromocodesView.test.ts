@@ -261,6 +261,51 @@ describe('MasterPromocodesView', () => {
     })
   })
 
+  describe('every page (FE-260)', () => {
+    /** Promo codes on the server, newest first, served `limit` from `offset`. */
+    function serve(all: PromoResponse[], total = all.length): void {
+      vi.mocked(promosApi.getMyPromos).mockImplementation(async (limit = 50, offset = 0) => ({
+        items: all.slice(offset, offset + limit),
+        total,
+        limit,
+        offset,
+      }))
+    }
+
+    it('an active code behind a page of inactive ones is shown', async () => {
+      const inactive = Array.from({ length: 120 }, (_, i) => promo(`old${i}`, { is_active: false }))
+      serve([...inactive, promo('live')])
+      mount()
+
+      await vi.waitFor(() => expect(codes()).toEqual(['CODElive']))
+      expect(vi.mocked(promosApi.getMyPromos).mock.calls.map(([, offset]) => offset)).toEqual([
+        0, 100,
+      ])
+      expect(text()).not.toContain('Показаны')
+    })
+
+    it('every code inactive, over two pages: the empty state, not a list', async () => {
+      serve(Array.from({ length: 130 }, (_, i) => promo(`old${i}`, { is_active: false })))
+      mount()
+
+      await vi.waitFor(() => expect(text()).toContain('Промокодов пока нет'))
+      expect(items()).toHaveLength(0)
+    })
+
+    it('past the read cap says how many of the total it read', async () => {
+      // One live code among inactive ones: the read is the same, the screen light.
+      serve(
+        Array.from({ length: 2050 }, (_, i) => promo(`p${i}`, { is_active: i === 0 })),
+        2050,
+      )
+      mount()
+
+      await vi.waitFor(() => expect(text()).toContain('Проверено промокодов: 2000 из 2050'))
+      expect(promosApi.getMyPromos).toHaveBeenCalledTimes(20)
+      expect(codes()).toEqual(['CODEp0'])
+    })
+  })
+
   describe('deactivate', () => {
     it('«Удалить» soft-deactivates by id and drops the code from the list', async () => {
       vi.mocked(promosApi.getMyPromos).mockResolvedValue(

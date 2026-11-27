@@ -26,6 +26,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createApp, h, type App } from 'vue'
 import VConfirmDialog from './VConfirmDialog.vue'
+import { dismissTopLayer } from '../../escapeStack'
 
 let app: App | null = null
 let host: HTMLElement | null = null
@@ -147,11 +148,11 @@ describe('VConfirmDialog (events + the loading guard)', () => {
     mountDialog({ props: { cancelLabel: 'Отмена', confirmLabel: 'Подтвердить' } })
     const [cancel, confirm] = actionButtons()
 
-    cancel!.click()
+    cancel?.click()
     expect(cancelled).toBe(1)
     expect(confirmed).toBe(0)
 
-    confirm!.click()
+    confirm?.click()
     expect(confirmed).toBe(1)
     expect(cancelled).toBe(1)
   })
@@ -162,14 +163,35 @@ describe('VConfirmDialog (events + the loading guard)', () => {
     expect(cancelled).toBe(1)
   })
 
-  it('loading guards BOTH buttons and turns the scrim tap into a no-op (close-on-overlay off)', () => {
+  it('loading guards BOTH buttons and turns the scrim tap into a no-op (not dismissible)', () => {
     mountDialog({ props: { cancelLabel: 'Отмена', confirmLabel: 'Подтвердить', loading: true } })
     const [cancel] = actionButtons()
     expect(cancel?.disabled).toBe(true)
 
     // The scrim (the overlay around the card) does not close either -- the
     // in-flight request owns the dialog.
-    liveModal()!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    liveModal()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     expect(cancelled).toBe(0)
+  })
+})
+
+// FE-233: Escape and the host's native Back button reach the dialog through
+// the same layer stack as a scrim tap. A request in flight owns the dialog.
+describe('VConfirmDialog (loading -- Escape and Back)', () => {
+  it.each([
+    ['Escape', () => pressEscape()],
+    ['the native Back button', () => dismissTopLayer()],
+  ])('%s cancels nothing while loading', (_, leave) => {
+    mountDialog({ props: { loading: true } })
+
+    leave()
+    expect(cancelled).toBe(0)
+  })
+
+  it('the native Back button cancels an idle dialog, like Escape', () => {
+    mountDialog()
+
+    dismissTopLayer()
+    expect(cancelled).toBe(1)
   })
 })

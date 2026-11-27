@@ -19,12 +19,17 @@
 // Escape in the CAPTURE phase and stops it (FE-213), so a menu inside an
 // overlay still closes first and the overlay never sees that key press.
 //
+// The same stack answers the host's native Back button (FE-233): the app
+// shows it while `hasOpenLayer` is true and calls `dismissTopLayer` on a tap,
+// so Back closes the top layer exactly as Escape does -- through its own
+// `onEscape`, which asks first when the layer guards unsaved edits.
+//
 // Document access goes through the kit's document seam (src/platform/dom.ts).
 // The body-scroll lock is separate (src/useBodyScrollLock.ts): it counts
 // holders, while this stack needs their order.
 // =============================================================================
 
-import { onUnmounted, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { onDocumentEvent, offDocumentEvent } from './platform/dom'
 
 interface EscapeLayer {
@@ -32,6 +37,12 @@ interface EscapeLayer {
 }
 
 const stack: EscapeLayer[] = []
+
+/** Reactive mirror of `stack.length`: the array itself is not observable. */
+const layerCount = ref(0)
+
+/** True while at least one layer is open. */
+export const hasOpenLayer = computed(() => layerCount.value > 0)
 
 function onDocumentKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape') return
@@ -44,6 +55,7 @@ function onDocumentKeydown(event: KeyboardEvent): void {
 function push(layer: EscapeLayer): void {
   if (stack.includes(layer)) return
   stack.push(layer)
+  layerCount.value = stack.length
   if (stack.length === 1) onDocumentEvent('keydown', onDocumentKeydown)
 }
 
@@ -51,6 +63,7 @@ function remove(layer: EscapeLayer): void {
   const index = stack.indexOf(layer)
   if (index === -1) return
   stack.splice(index, 1)
+  layerCount.value = stack.length
   if (stack.length === 0) offDocumentEvent('keydown', onDocumentKeydown)
 }
 
@@ -76,4 +89,23 @@ export function useEscapeLayer(isOpen: () => boolean, onEscape: () => void): voi
   const layer: EscapeLayer = { onEscape }
   watch(isOpen, (open) => (open ? push(layer) : remove(layer)), { immediate: true })
   onUnmounted(() => remove(layer))
+}
+
+/**
+ * Ask the top open layer to close, as an Escape press would.
+ *
+ * @remarks
+ * For a host control that means "go back / dismiss" -- the native Back
+ * button. The layer decides what that means: a plain overlay emits `close`, a
+ * guarded one emits `dismissAttempt` and the host asks before dropping edits.
+ *
+ * @returns True when a layer was asked; false when none is open.
+ *
+ * @see FE-233
+ */
+export function dismissTopLayer(): boolean {
+  const top = stack[stack.length - 1]
+  if (!top) return false
+  top.onEscape()
+  return true
 }

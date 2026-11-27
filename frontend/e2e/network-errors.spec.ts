@@ -31,6 +31,22 @@ function flaky(
 }
 
 test.describe('network failures: error state, then recovery', () => {
+  // The idle data prefetch (router/prefetch.ts -> dataPrefetch.ts warmTabData)
+  // re-asks the CURRENT tab's failed query about 100 ms after the screen
+  // mounts. A heal() in that window let it load the screen, and the Retry
+  // button the test was about to click went away (FE-169: Vite 8 moved the
+  // timing into the window; it flaked before too). The prefetch skips a
+  // constrained link (platform/dom.ts isConstrainedNetwork), so Data Saver
+  // leaves Retry as the only way back here.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'connection', {
+        configurable: true,
+        value: { saveData: true },
+      })
+    })
+  })
+
   test('my bookings: a 500 is an error with Retry, not "no bookings"', async ({
     page,
     crashes,

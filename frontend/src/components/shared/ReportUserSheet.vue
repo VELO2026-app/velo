@@ -88,23 +88,19 @@
     <p class="report-user__note">{{ t('report.note') }}</p>
   </VBottomSheet>
 
-  <VConfirmDialog
+  <DiscardChangesDialog
     :open="guard.confirming.value"
-    :title="t('shared.discardChanges.title')"
-    :message="t('shared.discardChanges.message')"
-    :confirm-label="t('shared.discardChanges.confirm')"
-    :cancel-label="t('shared.discardChanges.keepEditing')"
-    danger
-    @confirm="guard.discard"
-    @cancel="guard.keepEditing"
+    @discard="guard.discard"
+    @keep-editing="guard.keepEditing"
   />
 </template>
 
 <script setup lang="ts">
 import { t } from '@/locales'
 import { ref, watch } from 'vue'
-import { VBottomSheet, VConfirmDialog, VTextarea } from '@/components/ui'
+import { VBottomSheet, VTextarea } from '@/components/ui'
 import { IconCheck } from '@/components/icons'
+import DiscardChangesDialog from '@/components/shared/DiscardChangesDialog.vue'
 import TargetUserCard from '@/components/shared/TargetUserCard.vue'
 import { createReport } from '@/api/reports'
 import { useToast } from '@/composables/useToast'
@@ -157,6 +153,7 @@ watch(
 const guard = useDiscardGuard({
   dirty: () => selectedReasons.value.size > 0 || comment.value.trim() !== '',
   onDiscard: () => emit('close'),
+  open: () => props.open,
 })
 
 function toggleReason(r: ReasonCode): void {
