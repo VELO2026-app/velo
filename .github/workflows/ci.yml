@@ -146,9 +146,10 @@ jobs:
           fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
 
       # The classifier is the gate's size: its own test runs where it runs.
-      # FE-222: so does the check that the gate waits for every job.
-      - name: Test the classifier and the gate's needs
-        run: node --test .github/scripts/ci-scope.test.mjs .github/scripts/ci-gate.test.mjs .github/scripts/fetch-brand-skins.test.mjs .github/scripts/visual-decide.test.mjs
+      # FE-222: so does the check that the gate waits for every job, and
+      # that every status the ruleset requires answers on every PR.
+      - name: Test the classifier, the gate's needs and the required statuses
+        run: node --test .github/scripts/ci-scope.test.mjs .github/scripts/ci-gate.test.mjs .github/scripts/ruleset-checks.test.mjs .github/scripts/fetch-brand-skins.test.mjs .github/scripts/visual-decide.test.mjs
 
       - name: Classify the PR diff or the push range
         id: scope
@@ -170,7 +171,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           # Explicit version: the action's packageManager lookup is a
           # convenience, not a guarantee — see the failed first run.
@@ -227,7 +228,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
@@ -267,7 +268,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
@@ -315,7 +316,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
@@ -374,7 +375,7 @@ jobs:
 
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
@@ -408,7 +409,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
@@ -448,7 +449,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
@@ -564,7 +565,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
@@ -715,7 +716,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
