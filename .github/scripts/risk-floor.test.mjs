@@ -126,6 +126,8 @@ test('the declared level is read from the PR line', () => {
   assert.equal(declared('**Ревью:** <!-- R1 / R2 / R3 --> — почему'), null)
   assert.equal(declared('no line'), null)
   assert.equal(declared(undefined), null)
+  assert.equal(declared('template.md + строка «**Ревью:** R1/R2/R3»\n\n**Ревью:** R3 — CI'), 'R3')
+  assert.equal(declared('  **Ревью:** R1 — indented, quoted'), null)
 })
 
 test('effective level is the higher one; below the floor fails; none counts as R2', () => {

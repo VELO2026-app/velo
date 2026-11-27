@@ -179,10 +179,14 @@ export function floor(files) {
   return { floor: 'R1', reasons: [] }
 }
 
-/** The declared level from a PR description, or null. */
+/**
+ * The declared level from a PR description, or null. Only a line that starts
+ * with the marker counts, the last one wins: the description may quote the
+ * marker in prose or code above the "Риск мержа" section.
+ */
 export function declared(body) {
-  const m = /\*\*Ревью:\*\*\s*(R[123])\b/.exec(body ?? '')
-  return m ? m[1] : null
+  const all = [...(body ?? '').matchAll(/^\*\*Ревью:\*\*\s*(R[123])\b/gm)]
+  return all.length ? all.at(-1)[1] : null
 }
 
 /** declared vs floor -> the effective level and the verdict. */
