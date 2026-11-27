@@ -1,13 +1,13 @@
 {
   "_": "sha256 of every file under assets/ of velo-brand (the golden VELO skin), by path under assets/. validate-skin warns when another brand ships a byte-identical file. Hashes only: no brand file lives in this repo. Raise it with the velo-brand pin in .github/brand-skins.json.",
-  "source": "VELO2026-app/velo-brand@v0.3.0",
+  "source": "VELO2026-app/velo-brand@v0.3.1",
   "assets": {
     "apple-touch-icon-180.png": "448f866fc7ae0814bff7e54154bdfe47159d634cb95c2a6c683203364de4bca8",
     "bg/background.webp": "1dde39b76fb1537d8c5d42906fe9f525ade329d67139d18b698c1a071b7f8dda",
     "favicon.svg": "2fd312a1724f49efee3d71e05ec18bf02d1b33feae09884a915ba07d8b6a629c",
-    "fonts/velo-marmelad-bold.woff2": "f97d42bb38a286fc1223e93184cd329c94fb23e328a69ee8dbd88a4dafac8d01",
-    "fonts/velo-marmelad-medium.woff2": "07bd8a58511bac33027e4ea03f3a1ea56454c433b9e7e3d06602761ef82cbce9",
-    "fonts/velo-marmelad-regular.woff2": "bb4c065112d0ec075990a214eb3ccb33be655f49370daadc114cb37605c5ed43",
+    "fonts/velo-marmelad-bold.woff2": "b1966442d7f22c4d272647642b59c03ac5e886355769f53290a860db7f8fdfa7",
+    "fonts/velo-marmelad-medium.woff2": "27c16fb8e2914941980ee1e804034a34d09f3a67c9c9ce41fec66d83d2062fb5",
+    "fonts/velo-marmelad-regular.woff2": "29def202b74418d40ac967424f007e5842f3b0967b6d8cedde005c838212a34e",
     "icon-192.png": "c5482fe8a177af4ff0536ae66bcc90263f4bc5e903a6f5fca34faa448bc43655",
     "icon-512.png": "520eb5ce9845fc700ba8595dbe4f5877268dd6b6a4758b503dd6c9b70bfa7889",
     "icon-maskable-512.png": "3634452ad3e9403f2be8a6c079fadba3647760ca71bc8a5631e66f24a13cf962",
