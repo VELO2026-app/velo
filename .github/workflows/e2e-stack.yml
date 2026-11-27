@@ -177,7 +177,7 @@ jobs:
           export TELEGRAM_BOT_TOKEN="$token"
           sh frontend/e2e/stack/up.sh
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@v6
         with:
           version: 12.4.2
 
