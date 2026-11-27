@@ -2,17 +2,14 @@
 
 Ruling владельца 2026-11-27 (FE-279). Каждый PR несёт уровень ревью R1, R2 или R3. От уровня зависит, сколько читает ревьюер: от «проверено тем, что работает» до каждой строки. Минимальный уровень по диффу считает CI (`.github/scripts/risk-floor.mjs`, задание `review risk floor`), и понизить его нельзя.
 
-Основа — разбор 49 ревью-тредов и 80 PR (#156–#250). В мелкой вёрстке, тестах и пинах ревью блокирующих находок почти не дало. В логике, документах-правилах и чувствительных зонах дало (#171, #181, #191, #207, #229).
-
 ## Уровни
 
 ### R1 · проверено тем, что работает
 
 Входит, если **все** файлы диффа из этого списка:
-- проза в `docs/**`, `diagrams/**`, `Design_prototype/**`, `*.md` в корне — кроме документов-правил (ниже);
-- `*.css`, тексты `frontend/src/locales/**/*.json`, `frontend/tokens.json`, `frontend/public/**`;
-- тесты (`*.test.ts`, `*.test.mjs`, `frontend/e2e/**/*.spec.ts`), кроме тестов самих гейтов;
-- пин скина `.github/brand-skins.json` (мерж и так ждёт метку `visual-change` от человека);
+- проза и картинки в `docs/**`, `diagrams/**`, `Design_prototype/**`, `*.md` в корне — кроме документов-правил (ниже);
+- `*.css`, тексты `frontend/src/locales/**/*.json`, `frontend/tokens.json`, картинки и шрифты `frontend/public/**`;
+- тесты (`*.test.ts`, `*.test.mjs`, `frontend/e2e/**/*.spec.ts`), кроме тестов гейтов в `.github/scripts`, `frontend/scripts`, `frontend/eslint-rules`;
 - правки `.vue` на 150 изменённых строк или меньше в сумме по PR;
 - сокращение allowlist e2e, расширение списка маршрутов обхода.
 
@@ -31,7 +28,7 @@ Ruling владельца 2026-11-27 (FE-279). Каждый PR несёт уро
 
 ### R3 · построчно
 
-Входит, если дифф трогает чувствительную зону (таблица ниже) или изменение необратимо. Понизить уровень нельзя.
+Входит, если дифф трогает чувствительную зону (таблица ниже) или изменение необратимо: строка `**Дверь:** односторонняя` в PR сама поднимает минимум до R3. Понизить уровень нельзя.
 
 1. Ревьюер читает **каждую изменённую строку** в чувствительных файлах. В итоге ревью он перечисляет эти файлы. Остальной дифф он ревьюит как R2.
 2. Ревьюер сам запускает тесты и разбирает сценарий отказа: ошибка сети, повтор, чужая роль, пустой ответ.
@@ -41,18 +38,18 @@ Ruling владельца 2026-11-27 (FE-279). Каждый PR несёт уро
 
 ## Чувствительные зоны
 
-Источник правды — `SENSITIVE` в `risk-floor.mjs`. Таблица — его пересказ. Тест зоны (`*.test.ts`) уровень не поднимает. Исключение — тесты самих гейтов (`.github/scripts`, `frontend/eslint-rules`).
+Источник правды — `SENSITIVE` в `risk-floor.mjs`. Таблица — его пересказ. Тест зоны (`*.test.ts`, `*.test.mjs`, `e2e/**/*.spec.ts`) уровень не поднимает. Исключение — тесты гейтов (`.github/scripts`, `frontend/scripts`, `frontend/eslint-rules`). Маски вида `*payout*` действуют внутри `frontend/src/**` для `.vue` и `.ts`.
 
 | Зона | Что поднимает до R3 |
 |---|---|
 | Авторизация и сессия | `platform/{session,session-token,session-memo,browser-login,telegram,telegram-sdk,launch,standalone}.ts`, `stores/auth.ts`, `composables/{useAuth,useRoleFreshness}.ts`, `router/{guards,deepLinks}.ts`, `views/auth/TelegramLoginView.vue`, `api/{client,idempotent,mcpTokens}.ts` |
 | Деньги | `api/{payments,promos}.ts`, `stores/balance.ts`, `utils/{commission,currency}.ts`, `components/console/finance/**`, файлы `*payout*`, `*withdraw*`, `*payment*`, `*balance*`, `*promo*`, `*finance*`, `*revenue*`, `*wallet*` |
-| Данные пользователя | `platform/{error-reporter,sw-caches}.ts`, `composables/{persistedCache,useFormDraft}.ts`, `pwa/precache-shell.ts` |
-| Безопасность | `frontend/index.html` (CSP), `frontend/nginx*`, `utils/textHighlight.ts`, любой добавленный `v-html` |
-| Секреты | любая добавленная строка с `*_TOKEN` или `secrets.` |
-| Внешние пакеты скина и текстов | `platform/{skin,skin-virtual,texts}.ts`, `locales/overlayShape.ts`, `scripts/{validate-skin,validate-texts}.mjs`, `scripts/lib/{skin-package,texts-package,brand-packages}.mjs` |
-| Сами проверки | рост allowlist e2e, удаление маршрута из `e2e/sweep/routes.ts`, `{vitest,playwright}.config.ts`, `eslint.config.js`, `eslint-rules/**`, рост `lint-budget.json`, снижение `coverage-budget.json` |
-| CI, сборка, деплой | `.github/workflows/**`, `.github/scripts/**`, `frontend/Dockerfile`, `docker-compose*`, `primer.{yaml,lock}`, `editions.json`, `frontend/vite.config.ts`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` |
+| Данные пользователя | `platform/{error-reporter,sw-caches}.ts`, `composables/{persistedCache,useFormDraft}.ts`, `composables/queries/persist.ts`, `pwa/precache-shell.ts` |
+| Безопасность | `frontend/index.html` (CSP), `frontend/nginx*`, `utils/textHighlight.ts`, добавленный `v-html` или `innerHTML` в `.vue` и `.ts` (кроме тестов) |
+| Секреты | добавленная строка с `*_TOKEN`, `*_PAT`, `*_KEY`, `*_SECRET` или `secrets.` вне исходников приложения (`frontend/src`, `packages/*/src`) и вне тестов |
+| Внешние пакеты скина и текстов | пин `.github/brand-skins.json`, `platform/{skin,skin-virtual,texts}.ts`, `locales/overlayShape.ts`, `scripts/{validate-skin,validate-texts}.mjs`, `scripts/lib/{skin-package,texts-package,brand-packages,brand-git}.mjs` |
+| Сами проверки | рост или удаление allowlist e2e; логика allowance e2e; удаление маршрута, удаление файла или новый фильтр в `e2e/sweep/routes.ts`; `{vitest,playwright}.config.ts`, `eslint.config.js`, `eslint-rules/**`, `frontend/.husky/**`; скрипты гейтов в `frontend/scripts` (бюджеты, `brand-grep`, `token-audit`, `build-log-gate`, `verify-quick`, `spec-coverage` и его baseline и др.) и тесты `frontend/scripts/lib/*.test.mjs`; рост `lint-budget.json` и `bundle-budget.json`, снижение `coverage-budget.json`, удалённое число, удалённый файл или битый JSON бюджета |
+| CI, сборка, деплой | `.github/workflows/**`, `.github/scripts/**` (включая сам `risk-floor.mjs` и `review-risk.yml`), `frontend/Dockerfile`, `docker-compose*`, `primer.{yaml,lock}`, `editions.json`, `{frontend,packages/velo-ui}/vite.config.ts`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` |
 | Бэкенд | `backend/**` |
 
 Если ревьюер видит риск, которого таблица не ловит, он поднимает уровень вручную. Пример — экран, который сохраняет весь объект по PUT или PATCH (#191).
@@ -60,12 +57,12 @@ Ruling владельца 2026-11-27 (FE-279). Каждый PR несёт уро
 ## Кто ставит уровень и как он виден
 
 - **Исполнитель** пишет строку в разделе «Риск мержа» описания PR: `**Ревью:** R2 — почему`. Для R3 он называет зону.
-- **CI** (`review risk floor`) пересчитывает уровень на каждый push и на каждую правку описания. Он ставит метку `review:R1`, `review:R2` или `review:R3` — наибольший из заявленного и минимума. Он краснеет, если заявлено ниже минимума, и называет файлы, которые подняли уровень. Без строки PR считается R2.
-- **Ревьюер или оркестратор** поднимает уровень правкой строки и пишет причину комментарием в PR.
-- **Понизить** ниже минимума не может никто. Если путь попал в зону зря, зону правят отдельным PR в `risk-floor.mjs` и в этой таблице. Ниже заявленного, но не ниже минимума, понижает только владелец.
+- **CI** (`review risk floor`) пересчитывает уровень на каждый push, правку описания и смену меток. Правила он берёт из базовой ветки: PR, который правит `risk-floor.mjs`, оценивается прежними правилами. Он ставит метку `review:R1`, `review:R2` или `review:R3` — наибольший из заявленного и минимума; метку ставит CI, вручную её не меняют (ручная правка сразу перевыставляется). Он краснеет, если заявлено ниже минимума, и называет файлы, которые подняли уровень. Без строки PR считается R2.
+- **Мерж-гейт оркестратора** не верит метке на слово: он сам пересчитывает уровень правилами из `deploy-machine`, а красная `review risk floor` его останавливает.
+- **Поднять** уровень может исполнитель, ревьюер или оркестратор: правкой строки, с причиной комментарием в PR.
+- **Понизить** ниже минимума не может никто. Если путь попал в зону зря, зону правят отдельным PR в `risk-floor.mjs` и в этой таблице; такой PR сам уровня R3.
 
 ## Если уровень занизили
 
 - **До мержа.** Уровень поднимают, ревью начинается заново на новой глубине. В PR пишут строку «уровень поднят: причина».
 - **После мержа.** Баг из PR уровня R1 или R2 поймало бы ревью уровня выше. PR с исправлением добавляет путь или признак в `SENSITIVE` и в таблицу выше. Список зон учится на пропусках.
-- **Повторно у того же исполнителя.** На неделю его PR идут не ниже R2.

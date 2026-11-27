@@ -9,7 +9,14 @@
 #
 # Its own workflow, as bundle-budget.yml: the description is part of the
 # input, so an `edited` event must re-run the check, and ci.yml does not
-# listen to it. No install, no build, ~10 s.
+# listen to it. A label event re-runs it too, so a `review:R*` label set or
+# removed by hand is put back at once. No install, no build, ~10 s.
+#
+# The rules run from the BASE branch: the job takes risk-floor.mjs from
+# HEAD^1, so a PR that edits the rules is judged by the rules it would
+# replace. Only when the base has no copy yet (the PR that adds it) does the
+# PR's own copy run. The merge gate recomputes the level the same way, so a
+# PR that disables this job does not lower its level either.
 #
 # The label is written with the workflow token: events it causes start no
 # workflow runs, so Visual and the bundle guard are not re-triggered.
@@ -22,7 +29,7 @@ name: Review risk
 on:
   pull_request:
     branches: [test, deploy-machine]
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -47,8 +54,19 @@ jobs:
           # The merge commit + its first parent (the base tip), as the scope
           # job of ci.yml: the diff between them is what the PR contributes.
           fetch-depth: 2
+          # The label step holds a write token; the PR's code must not
+          # find it in .git/config.
+          persist-credentials: false
 
-      - name: Test the floor rules
+      - name: Rules from the base branch
+        run: |
+          if git cat-file -e HEAD^1:.github/scripts/risk-floor.mjs 2>/dev/null; then
+            git show HEAD^1:.github/scripts/risk-floor.mjs > "$RUNNER_TEMP/risk-floor.mjs"
+          else
+            cp .github/scripts/risk-floor.mjs "$RUNNER_TEMP/risk-floor.mjs"
+          fi
+
+      - name: Test the floor rules (the PR's copy, which must hold after the merge)
         run: node --test .github/scripts/risk-floor.test.mjs
 
       # The body comes from the event payload through env, never
@@ -59,17 +77,19 @@ jobs:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           printf '%s' "$BODY" > "$RUNNER_TEMP/body.md"
-          node .github/scripts/risk-floor.mjs HEAD^1 HEAD --body-file "$RUNNER_TEMP/body.md"
+          node "$RUNNER_TEMP/risk-floor.mjs" HEAD^1 HEAD --body-file "$RUNNER_TEMP/body.md"
 
       # Runs on a failed check too: the label then shows the floor the PR
-      # must be reviewed at, whatever the description says.
+      # must be reviewed at, whatever the description says. Not on a
+      # cancelled run: a newer event carries the current body and labels.
       - name: Label the effective level
-        if: always() && steps.risk.outputs.level != ''
+        if: ${{ !cancelled() && steps.risk.outputs.level != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           LEVEL: ${{ steps.risk.outputs.level }}
         run: |
+          [[ "$LEVEL" =~ ^R[123]$ ]] || { echo "unexpected level: $LEVEL"; exit 1; }
           for l in R1 R2 R3; do
             gh label create "review:$l" --repo "$GITHUB_REPOSITORY" --color 5319e7 \
               --description "Review depth $l (docs/review-risk.md)" 2>/dev/null || true

@@ -9,7 +9,7 @@
 // Node stdlib and git only.
 // =============================================================================
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,7 +22,7 @@ const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'risk-floor.mjs')
 const file = (path, added = ['x'], extra = {}) => ({ path, added, changed: added.length, ...extra })
 const lvl = (...files) => floor(files).floor
 
-test('docs, styles, locales, tests and a brand pin are R1', () => {
+test('docs, styles, locales and tests are R1', () => {
   assert.equal(
     lvl(
       file('docs/figma/guide.md'),
@@ -30,7 +30,6 @@ test('docs, styles, locales, tests and a brand pin are R1', () => {
       file('frontend/src/locales/ru.json'),
       file('frontend/src/views/user/HomeView.test.ts'),
       file('frontend/e2e/booking.spec.ts'),
-      file('.github/brand-skins.json'),
     ),
     'R1',
   )
@@ -62,6 +61,13 @@ test('every sensitive zone is R3', () => {
     'frontend/index.html',
     'frontend/nginx.conf',
     'frontend/src/locales/overlayShape.ts',
+    '.github/brand-skins.json',
+    'frontend/src/composables/queries/persist.ts',
+    'frontend/.husky/pre-push',
+    'frontend/scripts/lint-budget.mjs',
+    'frontend/scripts/lib/token-audit.test.mjs',
+    'frontend/e2e/support/layout-allowance.ts',
+    'packages/velo-ui/vite.config.ts',
     'frontend/scripts/lib/texts-package.mjs',
     'frontend/e2e/support/allowlist.ts',
     'frontend/e2e/a11y/allowlist.ts',
@@ -92,6 +98,25 @@ test('the rest of the e2e harness is R2', () => {
   assert.equal(lvl(file('frontend/e2e/support/fixtures.ts')), 'R2')
 })
 
+test('a deleted gate list or a new filter over the routes is R3', () => {
+  assert.equal(lvl(file('frontend/e2e/support/layout-allowlist.ts', [], { deleted: true })), 'R3')
+  assert.equal(lvl(file('frontend/e2e/sweep/routes.ts', ['  .filter((r) => r.role !== "admin")'])), 'R3')
+})
+
+test('allowance logic is R3 even when it only loses lines', () => {
+  assert.equal(lvl(file('frontend/e2e/support/allowance.ts', [], { removed: ['  if (x) return false'] })), 'R3')
+})
+
+test('a one-way door in the description is R3', () => {
+  assert.equal(floor([file('docs/a.md')], '**Дверь:** односторонняя — удаление данных').floor, 'R3')
+  assert.equal(floor([file('docs/a.md')], '**Дверь:** двусторонняя').floor, 'R1')
+})
+
+test('docs scripts and public scripts are not R1', () => {
+  assert.equal(lvl(file('docs/figma/velo-figma-designer/designer-lib.figma.js')), 'R2')
+  assert.equal(lvl(file('frontend/public/sw.js')), 'R2')
+})
+
 test('a test of a zone does not raise the floor, a test of a gate does', () => {
   assert.equal(lvl(file('frontend/src/router/guards.test.ts')), 'R1')
   assert.equal(lvl(file('frontend/src/views/master/MasterFinanceView.test.ts')), 'R1')
@@ -103,6 +128,9 @@ test('an added v-html or a secret name is R3 wherever it lands', () => {
   assert.equal(lvl(file('frontend/src/components/shared/Row.vue', ['<p v-html="x" />'])), 'R3')
   assert.equal(lvl(file('frontend/scripts/sync.mjs', ['const t = process.env.BRAND_REPO_TOKEN'])), 'R3')
   assert.equal(lvl(file('frontend/scripts/sync.mjs', ['const t = env(secrets.X)'])), 'R3')
+  assert.equal(lvl(file('frontend/scripts/sync.mjs', ['const k = process.env.FIGMA_PAT'])), 'R3')
+  assert.equal(lvl(file('frontend/src/composables/useDraft.ts', ['const DRAFT_STORAGE_KEY = "d"'])), 'R2')
+  assert.equal(lvl(file('frontend/src/utils/html.ts', ['el.innerHTML = s'])), 'R3')
   assert.equal(lvl(file('frontend/src/components/shared/Row.test.ts', ['<p v-html="x" />'])), 'R1')
 })
 
@@ -113,6 +141,11 @@ test('a budget is R3 only when it weakens the gate', () => {
   assert.equal(lvl(lint(700, 701)), 'R3')
   assert.equal(lvl(cov(90.5, 90.6)), 'R1')
   assert.equal(lvl(cov(90.5, 90.4)), 'R3')
+  const covGone = file('frontend/coverage-budget.json', ['x'], { base: { floors: { lines: 90, branches: 84 } }, head: { floors: { lines: 90 } } })
+  assert.equal(lvl(covGone), 'R3')
+  assert.equal(lvl(file('frontend/lint-budget.json', [], { base: { maxWarnings: 700 }, head: undefined, deleted: true })), 'R3')
+  const bundle = (b, h) => file('frontend/bundle-budget.json', ['x'], { base: { entryGzip: b }, head: { entryGzip: h } })
+  assert.equal(lvl(bundle(100, 101)), 'R3')
 })
 
 test('the reasons name the files that raised the floor', () => {
@@ -169,9 +202,14 @@ function run(files, body) {
   git('init', '-q', '-b', 'main')
   write('frontend/lint-budget.json', '{"maxWarnings": 700}\n')
   write('docs/a.md', 'a\n')
+  write('frontend/e2e/sweep/routes.ts', "export const ROUTES = ['/a']\n")
+  write('frontend/src/router/guards.ts', 'export const g = 1\n')
   git('add', '-A')
   git('commit', '-q', '-m', 'base')
-  for (const [path, text] of Object.entries(files)) write(path, text)
+  for (const [path, text] of Object.entries(files)) {
+    if (text === null) rmSync(join(dir, path))
+    else write(path, text)
+  }
   git('add', '-A')
   git('commit', '-q', '-m', 'head')
   write('body.md', body)
@@ -198,6 +236,44 @@ test('CLI: without --body-file the two revisions are read as given', () => {
   const r = run({ 'docs/a.md': 'b\n' }, '')
   const again = spawnSync('node', [SCRIPT, 'HEAD^1', 'HEAD'], { cwd: r.cwd, env: GIT_ENV, encoding: 'utf8' })
   assert.match(again.stdout, /floor=R1\ndeclared=none\nlevel=R2\nok=true/)
+})
+
+test('CLI: deleting the sweep route list is R3', () => {
+  const r = run({ 'frontend/e2e/sweep/routes.ts': null }, '**Ревью:** R1')
+  assert.equal(r.status, 1)
+  assert.match(r.stdout, /gates: frontend\/e2e\/sweep\/routes\.ts \(deleted\)/)
+})
+
+test('CLI: a renamed sensitive file is R3', () => {
+  const r = run({ 'frontend/src/router/guards.ts': null, 'frontend/src/router/guardz.ts': 'export const g = 1\n' }, '**Ревью:** R3')
+  assert.match(r.stdout, /auth: frontend\/src\/router\/guards\.ts/)
+})
+
+test('CLI: a content line that looks like a header does not hide the next line', () => {
+  const r = run({ 'frontend/src/components/Row.vue': '++ x\n<p v-html="y" />\n' }, '**Ревью:** R3')
+  assert.match(r.stdout, /security: frontend\/src\/components\/Row\.vue \(added line\)/)
+})
+
+test('CLI: a secret in a script and a non-ASCII money path are R3', () => {
+  const r = run(
+    { 'frontend/scripts/sync.mjs': 'const t = process.env.BRAND_REPO_TOKEN\n', 'frontend/src/views/выплаты/payoutForm.ts': 'x\n' },
+    '**Ревью:** R3',
+  )
+  assert.match(r.stdout, /secrets: frontend\/scripts\/sync\.mjs/)
+  assert.match(r.stdout, /money: frontend\/src\/views\/выплаты\/payoutForm\.ts/)
+})
+
+test('CLI: a deleted or broken lint budget is R3', () => {
+  assert.match(run({ 'frontend/lint-budget.json': null }, '').stdout, /lint-budget\.json weakened \(file deleted or not valid JSON\)/)
+  assert.match(run({ 'frontend/lint-budget.json': '{ 9999 \n' }, '').stdout, /lint-budget\.json weakened/)
+})
+
+test('CLI: the verdict goes to GITHUB_OUTPUT for the label step', () => {
+  const r = run({ 'docs/a.md': 'b\n' }, '**Ревью:** R2')
+  const out = join(r.cwd, 'out.txt')
+  writeFileSync(out, '')
+  spawnSync('node', [SCRIPT, 'HEAD^1', 'HEAD', '--body-file', 'body.md'], { cwd: r.cwd, env: { ...GIT_ENV, GITHUB_OUTPUT: out }, encoding: 'utf8' })
+  assert.equal(readFileSync(out, 'utf8'), 'floor=R1\ndeclared=R2\nlevel=R2\nok=true\n')
 })
 
 test('CLI: a raised lint budget is R3', () => {
