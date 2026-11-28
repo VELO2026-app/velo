@@ -36,9 +36,10 @@
 import base64
 import binascii
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import structlog
 from fastapi import HTTPException
@@ -50,6 +51,7 @@ from app.core.comms import comms_request, message_key, read_comms_page
 from app.core.config import settings
 from app.core.events import SECTION_SUPPORT_KEY, SECTION_SUPPORT_LABEL
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.core.timezones import UnknownTimezoneError, canonical_timezone
 from app.modules.support import translation
 from app.modules.support.purge import SUPPORT_SPAM_RETENTION_DAYS
 from app.modules.support.models import (
@@ -882,6 +884,7 @@ async def list_admin_tickets(
     created_to: datetime | None,
     limit: int,
     cursor: str | None,
+    claimed_by: UUID | None = None,
 ) -> dict[str, Any]:
     """Tickets, newest appeal first (BE-162, 6) -- from velo's own table:
     the filters and, later, the statistics are ours.
@@ -889,6 +892,9 @@ async def list_admin_tickets(
     `categories` is "any of these" (BE-162 fix 2); none -- every category.
     `ratings` likewise (BE-162 delivery 3): stars "1".."5", and "none" for
     a ticket nobody has rated.
+    `claimed_by` (BE-259) keeps the tickets this admin has taken -- the
+    "mine" tab; it is the caller's own id, which the router takes from the
+    session, never from the request.
     Without `status` the list is every ticket but SPAM (owner ruling 8: spam
     leaves the common list); `status=spam` is the spam tab. `created_from`
     is inclusive, `created_to` exclusive.
@@ -913,6 +919,8 @@ async def list_admin_tickets(
         stmt = stmt.where(SupportTicket.status != STATUS_SPAM)
     if categories:
         stmt = stmt.where(SupportTicket.category.in_(sorted(categories)))
+    if claimed_by is not None:
+        stmt = stmt.where(SupportTicket.claimed_by_user_id == claimed_by)
     if ratings:
         stars = sorted(int(r) for r in ratings if r != RATING_NONE)
         any_of = [SupportTicket.rating.in_(stars)] if stars else []
@@ -1484,8 +1492,59 @@ def _rating_figures(count: int, total: int | None, top: int | None) -> dict:
     }
 
 
+# The longest period the statistics answer (BE-260): the answer lists every
+# day of it, empty ones at zero, and a request that names both edges must not
+# be able to ask for a century of rows. A longer one is a 400.
+MAX_STATS_PERIOD = timedelta(days=366)
+
+
+def _stats_zone(name: str) -> str:
+    """The zone the days of the statistics are counted in: the admin's own
+    zone as Postgres knows it (canonical -- an old browser spelling is
+    rewritten), UTC when the stored name is not a zone."""
+    try:
+        return canonical_timezone(name)
+    except UnknownTimezoneError:
+        return "UTC"
+
+
+async def _tickets_by_day(
+    session: AsyncSession,
+    *,
+    created_from: datetime,
+    created_to: datetime,
+    zone: str,
+    conditions: tuple[Any, ...],
+) -> list[dict[str, Any]]:
+    """Tickets of the period per calendar day of `zone` (BE-260), oldest day
+    first: the day a ticket was opened, spam not counted -- the same set as
+    `total`, so the days add up to it. Every day of the period is listed, a
+    day with no tickets at zero: one shape of answer, a continuous series."""
+    local_day = func.date(func.timezone(zone, SupportTicket.created_at))
+    counted: dict[date, int] = {
+        day: count
+        for day, count in (
+            await session.execute(
+                select(local_day, func.count())
+                .where(*conditions)
+                .group_by(local_day)
+            )
+        ).all()
+    }
+    local = ZoneInfo(zone)
+    first = created_from.astimezone(local).date()
+    # created_to is exclusive: the last instant of the period is just before it.
+    last = (created_to - timedelta(microseconds=1)).astimezone(local).date()
+    days = [first + timedelta(days=n) for n in range((last - first).days + 1)]
+    return [{"date": day.isoformat(), "tickets": counted.get(day, 0)} for day in days]
+
+
 async def support_stats(
-    session: AsyncSession, *, created_from: datetime, created_to: datetime,
+    session: AsyncSession,
+    *,
+    created_from: datetime,
+    created_to: datetime,
+    timezone: str,
 ) -> dict[str, Any]:
     """Support over a period of APPEALS -- tickets created in
     [created_from, created_to), the list's own date filter, so the
@@ -1496,12 +1555,22 @@ async def support_stats(
                     them (rated, average, share of 4-5); spam left out,
                     its rating too.
       total      -- the sum of the categories.
+      by_day     -- (BE-260) the same tickets per calendar day, in the zone
+                    the answer names (`period.timezone`: the admin's own),
+                    oldest day first, every day of the period listed; the
+                    days add up to `total`.
       spam       -- the spam tickets of the period, one figure.
       resolvers  -- per admin a rating is about (rated_resolver), the same
                     rating figures, spam left out.
 
     History threads have no ticket and are not here (owner: statistics
     start with tickets).
+
+    `timezone` is the admin's own and is required, with no default: a
+    default would be UTC for every caller that forgot to decide (the rule of
+    core/periods.py).
+
+    A period longer than MAX_STATS_PERIOD (366 days) is a 400 (BadRequestError).
 
     SPAM THAT IS GONE STILL COUNTS (BE-162 delivery 2): the bin deletes a
     spam ticket after the retention and leaves a tombstone -- the date of
@@ -1510,6 +1579,10 @@ async def support_stats(
     the period's tombstones, by the date of the appeal like everything
     here.
     """
+    if created_to - created_from > MAX_STATS_PERIOD:
+        raise BadRequestError(
+            f"The period is longer than {MAX_STATS_PERIOD.days} days",
+        )
     in_period = (
         SupportTicket.created_at >= created_from,
         SupportTicket.created_at < created_to,
@@ -1591,13 +1664,22 @@ async def support_stats(
         ),
         key=lambda r: (-r["rated"], str((r["admin"] or {}).get("user_id"))),
     )
+    zone = _stats_zone(timezone)
     return {
         "period": {
             "created_from": created_from.isoformat(),
             "created_to": created_to.isoformat(),
+            "timezone": zone,
         },
         "categories": categories,
         "total": sum(c["tickets"] for c in categories),
+        "by_day": await _tickets_by_day(
+            session,
+            created_from=created_from,
+            created_to=created_to,
+            zone=zone,
+            conditions=(*in_period, not_spam),
+        ),
         "spam": spam,
         "resolvers": resolvers,
     }
