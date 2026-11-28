@@ -3,15 +3,21 @@
 # =============================================================================
 #
 # ENDPOINT:
-#   GET /api/v1/masters/me/reviews?attention=true|false&limit=&offset=
+#   GET /api/v1/masters/me/reviews?attention=true|false&period=&limit=&offset=
 #     -> paginated named reviews across the master's completed practices.
 #
 # attention=true serves the dashboard "Требуют внимания" block (ratings
 # 1-4, zones bad and low); attention=false serves the full cross-practice
 # feed. Mirrors E1's per-practice ?attention= switch.
 #
+# period=week|month|quarter (BE-228) narrows the feed to the practices of the
+# master's own calendar period -- the same window and the same practices as
+# GET /masters/me/analytics. Without it the feed is as it always was.
+#
 # AUTH: get_current_master (verified master only). SESSION: get_db_reader.
 # =============================================================================
+
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,23 +33,40 @@ from app.modules.users.models import User
 
 router = APIRouter(prefix="/api/v1/masters", tags=["master-reviews"])
 
+# The page when the caller names none (BE-228). The whole feed pages by 20, as
+# it always did; a period is read as ONE block ("Требуют внимания"), so it
+# defaults to the largest page the endpoint serves, and the screen no longer
+# has to know the number. An explicit limit wins in both cases.
+_DEFAULT_PAGE = 20
+_MAX_PAGE = 100
+
 
 @router.get("/me/reviews", response_model=PaginatedMasterReviewsResponse)
 async def list_my_reviews_endpoint(
     attention: bool = Query(default=False),
+    period: Literal["week", "month", "quarter"] | None = Query(default=None),
     master_tuple: tuple[User, MasterProfile] = Depends(get_current_master),
     session: AsyncSession = Depends(get_db_reader),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int | None = Query(default=None, ge=1, le=_MAX_PAGE),
     offset: int = Query(default=0, ge=0),
 ) -> PaginatedMasterReviewsResponse:
     """Named reviews across the master's completed practices.
 
     attention=true narrows to ratings 1-4 (zones bad and low) for the
     dashboard "needs attention" block; otherwise returns the full feed.
+
+    period (BE-228) keeps only the reviews of practices scheduled in the
+    master's own calendar week / month / quarter, bounded exactly as
+    /me/analytics bounds it. limit and offset page the narrowed feed and
+    `total` counts all of it, so a caller can tell whether a page held
+    everything. Without a limit the page is 20, or 100 when a period is given.
     """
     user, _profile = master_tuple
+    if limit is None:
+        limit = _MAX_PAGE if period is not None else _DEFAULT_PAGE
     items, total = await list_master_reviews(
-        user.id, session, attention=attention, limit=limit, offset=offset,
+        user, session,
+        attention=attention, period=period, limit=limit, offset=offset,
     )
     return PaginatedMasterReviewsResponse(
         items=items, total=total, limit=limit, offset=offset,

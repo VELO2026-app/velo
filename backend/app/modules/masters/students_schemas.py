@@ -85,6 +85,15 @@ class StudentDetailResponse(BaseModel):
                        blocked=True: its gate (has_master_link, INTERNAL --
                        BE-46 FIX) admits this master's lawful block, while
                        the derived "Ученики" list excludes blocked students.
+    can_add_to_group-- BE-185: True iff POST /masters/me/groups/{id}/members
+                       would accept this student, i.e. has_master_link
+                       (GRANT_ACCESS) -- the strict link: a booking at any
+                       status, a waitlist entry, or membership of one of this
+                       master's groups. The dossier opens on the wider
+                       INTERNAL link (a chat, a lawful block), so a contact
+                       reached only that way gets False here and the same 404
+                       from the POST. Informational: the POST re-checks the
+                       link itself and stays the only gate.
     """
 
     name: str
@@ -95,3 +104,4 @@ class StudentDetailResponse(BaseModel):
     recent_checkins: list[StudentCheckinItem]
     feedbacks: list[StudentFeedbackItem]
     blocked: bool
+    can_add_to_group: bool

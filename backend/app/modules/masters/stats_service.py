@@ -86,26 +86,38 @@ from app.modules.users.models import User
 logger = structlog.get_logger()
 
 
-def _completed_in_window(user_id: UUID, start: datetime, end: datetime):
+def completed_in_window(
+    user_id: UUID,
+    start: datetime | None = None,
+    end: datetime | None = None,
+):
     """Where-clause pieces: the master's COMPLETED practices in [start, end).
 
     THE PERIOD'S PRACTICES, written once. Every figure that is "about the
     period's sessions" -- the practices tile, the analytics counts and
-    distributions, the conducted-practices list (BE-222) -- reads this one
-    predicate, so the list's rows and the totals beside them are about the
-    same practices by construction, not by two copies agreeing.
+    distributions, the conducted-practices list (BE-222), and the master's
+    reviews feed when it is asked for a period (BE-228, reviews_service) --
+    reads this one predicate, so the list's rows and the totals beside them
+    are about the same practices by construction, not by two copies agreeing.
 
     COMPLETED and nothing else: draft, scheduled, live, cancelled and deleted
     are all "not a session that happened". The window is anchored on
     scheduled_at, not on the finalization time: a completed practice belongs
     to the period it ran in.
+
+    The window is optional because the reviews feed is also read without a
+    period: no bound means every COMPLETED practice of the master. Each bound
+    is applied only when given; [start, end) is half-open, the start inclusive.
     """
-    return (
+    clauses = [
         Practice.master_id == user_id,
         Practice.status == PracticeStatus.COMPLETED.value,
-        Practice.scheduled_at >= start,
-        Practice.scheduled_at < end,
-    )
+    ]
+    if start is not None:
+        clauses.append(Practice.scheduled_at >= start)
+    if end is not None:
+        clauses.append(Practice.scheduled_at < end)
+    return tuple(clauses)
 
 
 async def _count_practices(
@@ -118,10 +130,10 @@ async def _count_practices(
 
     The tile this feeds is labelled "Практик". A practice scheduled inside
     the window but still ahead is deliberately absent -- see the module
-    header for why that zero is honest; _completed_in_window for the rule.
+    header for why that zero is honest; completed_in_window for the rule.
     """
     stmt = select(func.count(Practice.id)).where(
-        *_completed_in_window(user_id, start, end),
+        *completed_in_window(user_id, start, end),
     )
     return (await session.execute(stmt)).scalar_one()
 
@@ -224,7 +236,7 @@ async def get_master_stats(
 # start disagreeing about what "good" means.
 #
 # THE CONDUCTED-PRACTICES LIST (BE-222). The current period's practices, by
-# _completed_in_window -- the predicate every total of this response reads
+# completed_in_window -- the predicate every total of this response reads
 # -- newest first. A row is the practice's own analytics summary
 # (PracticeAnalyticsSummary), computed by the same function the practice's
 # screen uses (practice_analytics_counts), for all rows at once: a row and
@@ -311,7 +323,7 @@ async def _count_bookings(
         .select_from(Booking)
         .join(Practice, Booking.practice_id == Practice.id)
         .where(
-            *_completed_in_window(user_id, start, end),
+            *completed_in_window(user_id, start, end),
             Booking.status.in_(_BOOKED_STATUSES),
         )
     )
@@ -343,7 +355,7 @@ async def _mood_distribution(
         .select_from(Checkin)
         .join(Practice, Checkin.practice_id == Practice.id)
         .where(
-            *_completed_in_window(user_id, start, end),
+            *completed_in_window(user_id, start, end),
             Checkin.check_type == CheckType.PRE.value,
         )
         .group_by(Checkin.mood)
@@ -365,7 +377,7 @@ async def _rating_distribution(
         select(Feedback.rating, func.count(Feedback.id))
         .select_from(Feedback)
         .join(Practice, Feedback.practice_id == Practice.id)
-        .where(*_completed_in_window(user_id, start, end))
+        .where(*completed_in_window(user_id, start, end))
         .group_by(Feedback.rating)
     )
     return zone_counts((await session.execute(stmt)).all())
@@ -421,7 +433,7 @@ async def _conducted_practices(
     practices = (
         await session.execute(
             select(Practice)
-            .where(*_completed_in_window(user_id, start, end))
+            .where(*completed_in_window(user_id, start, end))
             .order_by(Practice.scheduled_at.desc(), Practice.id.desc())
         )
     ).scalars().all()
